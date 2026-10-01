@@ -415,16 +415,16 @@
       const preset = (name, label) => h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); if (await PDM.ui.confirm(`타이틀 화면을 "${label}" 모양으로 바꿀까요? (지금 설정은 되돌리기로 복구할 수 있습니다)`)) store.edit(K, '타이틀 모양: ' + label, o => { const p = PRESETS[name](); Object.keys(o).forEach(k => delete o[k]); Object.assign(o, p); }); } }, label);
       return h('div', { class: 'page' },
         h('h1', {}, '🏰 타이틀 화면'),
-        h('p', { class: 'lead' }, '게임을 켰을 때 처음 나오는 화면입니다. 이 설정을 켜면 게임(원작·mod-2)의 원래 타이틀을 숨기고 아래 설정대로 새로 그립니다. 미리보기는 대략적인 모습이고, 정확한 모습은 ▶ 테스트 플레이로 확인하세요.'),
+        h('p', { class: 'lead' }, '게임을 켰을 때 처음 나오는 화면입니다. 이 설정을 켜면 게임의 원래 타이틀을 숨기고 아래 설정대로 새로 그립니다. 미리보기는 대략적인 모습이고, 정확한 모습은 ▶ 테스트 플레이로 확인하세요.'),
         row(F.bool(K, ['enabled'], { label: '이 설정 사용 (끄면 게임 원래 타이틀)', def: true, rerender: true }),
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '빠른 시작:'), preset('spd', '원작(SPD) 기본'), preset('mod2', 'mod-2(위츨링) 기본'))),
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '빠른 시작:'), preset('spd', '원작(SPD) 기본'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null)),
         h('div', { class: 'title-prev-wrap' }, sizeTabs, layoutWrap(t, st, pv, ctx)),
         section('음악',
-          h('p', { class: 'hint' }, '비워 두면 게임이 트는 곡 그대로 (원작: theme_1·theme_2, mod-2: title.mp3). 여러 곡이면 무작위, "(음악 끄기)"로 무음.'),
+          h('p', { class: 'hint' }, '비워 두면 게임이 트는 곡 그대로 (원작: theme_1·theme_2' + (PDM.isMod2() ? ', mod-2: title.mp3' : '') + '). 여러 곡이면 무작위, "(음악 끄기)"로 무음.'),
           listEditor(K, ['music', 'tracks'], { addLabel: '곡 추가', compact: true, make: () => '', render: (x, i, ip) => F.sound(K, ip, { kind: 'bgm', allowNone: true, mini: true }) })),
         section('배경',
           row(PDM.ui.field('배경 방식', (() => {
-              const s = h('select', {}, Object.entries(ARCH_STYLES).map(([k, v]) => h('option', { value: k, selected: archStyleOf(bg) === k }, v)));
+              const s = h('select', {}, Object.entries(ARCH_STYLES).map(([k, v]) => h('option', { value: k, selected: archStyleOf(bg) === k }, k === 'game' && !PDM.isMod2() ? '게임 배경 그대로 (원작 아치)' : v)));
               s.onchange = () => store.edit(K, '배경 방식', o => { o.background = o.background || {}; o.background.archs = s.value !== 'none'; if (s.value !== 'none') o.background.archStyle = s.value; });
               return s; })()),
             archStyleOf(bg) === 'game' ? F.bool(K, ['background', 'archReverse'], { label: '반대 방향으로 흐름', rerender: true }) : null,
@@ -436,11 +436,11 @@
             F.image(K, ['background', 'archImages', 'fg'], { label: '앞 아치 그림 (비우면 게임 arcs2.png, 2배 빠름)', sub: 'title', rerender: true })) : null,
           archStyleOf(bg) === 'game' ? h('p', { class: 'hint' }, '게임 배경 그림 자체를 바꾸려면 아래 "타이틀 스프라이트"에서 고치기 — 메뉴 화면(랭킹·일지 등)도 같은 그림을 씁니다.') : null,
           row(F.bool(K, ['background', 'gradient', 'enabled'], { label: '그라데이션 덮기', rerender: true }),
-            (bg.gradient || {}).enabled ? F.text(K, ['background', 'gradient', 'color'], { label: '색 (#0b1b3a = mod-2 밤하늘)', rerender: true }) : null,
+            (bg.gradient || {}).enabled ? F.text(K, ['background', 'gradient', 'color'], { label: '색 (예: #0b1b3a 밤하늘)', rerender: true }) : null,
             (bg.gradient || {}).enabled ? F.num(K, ['background', 'gradient', 'alpha'], { label: '진하기', step: 0.05, min: 0, max: 1, def: 0.55, rerender: true }) : null,
             (bg.gradient || {}).enabled ? F.select(K, ['background', 'gradient', 'from'], { top: '위에서', bottom: '아래에서', left: '왼쪽에서', right: '오른쪽에서' }, { label: '진한 쪽', rerender: true }) : null,
             F.bool(K, ['background', 'vignette'], { label: '아래쪽 어둡게', rerender: true })),
-          row(F.select(K, ['background', 'effect'], EFFECTS, { label: '날씨·입자 효과', rerender: true }), F.num(K, ['background', 'effectDensity'], { label: '양', step: 0.25, min: 0.1, def: 1, rerender: true }),
+          row(F.select(K, ['background', 'effect'], Object.fromEntries(Object.entries(EFFECTS).filter(([k]) => PDM.isMod2() || k !== 'mana' || (t.background || {}).effect === 'mana')), { label: '날씨·입자 효과', rerender: true }), F.num(K, ['background', 'effectDensity'], { label: '양', step: 0.25, min: 0.1, def: 1, rerender: true }),
             F.select(K, ['background', 'effectArea'], { screen: '화면 전체', logo: '로고 주변' }, { label: '위치', rerender: true }),
             F.text(K, ['background', 'effectColor'], { label: '색 (비우면 기본)', rerender: true }), F.bool(K, ['background', 'effectFront'], { label: '로고 위에', rerender: true })),
           h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '그림 레이어 (아래 것이 위에 그려짐) — 스프라이트 시트 애니메이션 · 가로/세로 흐름 · 흔들림 · 깜빡임 · 회전'),
@@ -467,7 +467,7 @@
             row(F.text(K, ['logo', 'text'], { label: '제목 글자 (\\n = 줄바꿈)', rerender: true }), F.num(K, ['logo', 'size'], { label: '글자 크기', int: true, min: 6, max: 40, def: 16, rerender: true }), F.text(K, ['logo', 'color'], { label: '색', rerender: true })),
             row(F.text(K, ['logo', 'subtitle'], { label: '부제', rerender: true }), F.text(K, ['logo', 'subColor'], { label: '부제 색', rerender: true }))) : null,
           (t.logo || {}).mode === 'game' || !(t.logo || {}).mode ? row(F.bool(K, ['logo', 'glow'], { label: '빛나는 글자', def: true, rerender: true }), F.bool(K, ['logo', 'torches'], { label: '횃불 (원작)', def: true, rerender: true })) : null),
-        section('"화면을 누르세요" (mod-2 방식)',
+        section('"화면을 누르세요"',
           row(F.bool(K, ['gate', 'enabled'], { label: '처음엔 로고만 — 누르면 메뉴가 나옴', rerender: true }),
             gate.enabled ? F.text(K, ['gate', 'text'], { label: '안내 글자', rerender: true }) : null,
             gate.enabled ? F.text(K, ['gate', 'color'], { label: '색', rerender: true }) : null,

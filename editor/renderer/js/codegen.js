@@ -172,8 +172,8 @@
   /** 게임 아이템 상속(kind game): 바탕 클래스 경로로 훅 종류 추측 */
   const gameBaseKind = base => /^weapon\.melee\./.test(base || '') ? 'melee' : /^weapon\.missiles\./.test(base || '') ? 'missile' : /^armor\.(?!glyphs)/.test(base || '') ? 'armor' : 'misc';
   const hookKind = it => it.kind === 'game' ? gameBaseKind(it.base) : (KIND_BASE[it.kind] ? it.kind : 'misc');
-  const itemNeedsClass = it => ['melee', 'missile', 'armor', 'game'].includes(it.kind) || has((it.code || {}).members)
-    || ITEM_HOOKS.some(h => has((it.code || {})[h.key])) || (it.actions || []).some(a => has(a.code));
+  // 모든 프로젝트 아이템에 클래스를 만듦 — 아이템마다 게임 클래스가 따로 있어야 아이템 도감(Catalog)에 하나씩 오르고 저장·불러오기도 정확함
+  const itemNeedsClass = it => !!(it && it.id);
 
   function itemSource(it) {
     if (it.kind === 'game') return gameItemSource(it);

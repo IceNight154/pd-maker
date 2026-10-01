@@ -193,13 +193,14 @@ PDM.ui = (function () {
     const snd = (((PDM.store.get('sounds') || {}).sounds) || []);
     const mine = snd.filter(s => !o.kind || (s.kind || 'se') === o.kind);
     const other = snd.filter(s => o.kind && (s.kind || 'se') !== o.kind);
-    const game = o.kind === 'se' ? PDM.GAME_SOUNDS : o.kind === 'bgm' ? PDM.GAME_MUSIC : [...PDM.GAME_MUSIC, ...PDM.GAME_SOUNDS];
+    const isM2 = g => (PDM.MOD2_SOUNDS || []).some(n => g === n || g.endsWith('/' + n + '.ogg') || g.endsWith('/' + n + '.mp3')) || /\/title\.mp3$/.test(g);
+    const game = (o.kind === 'se' ? PDM.GAME_SOUNDS : o.kind === 'bgm' ? PDM.GAME_MUSIC : [...PDM.GAME_MUSIC, ...PDM.GAME_SOUNDS]).filter(g => PDM.isMod2() || !isM2(g));   // mod-2 전용 소리는 그 저장소일 때만
     const s = h('select', {},
       h('option', { value: '' }, o.empty || '(없음)'),
       o.allowNone ? h('option', { value: 'none' }, o.noneLabel || '(음악 끄기)') : null,
       mine.length ? h('optgroup', { label: '프로젝트 사운드' }, mine.map(x => h('option', { value: 'sound:' + x.id }, `♪ ${x.name || x.id}`))) : null,
       other.length ? h('optgroup', { label: '프로젝트 사운드 (다른 종류)' }, other.map(x => h('option', { value: 'sound:' + x.id }, `${x.name || x.id}`))) : null,
-      h('optgroup', { label: o.kind === 'se' ? '게임 효과음' : '게임 음악' }, game.map(g => h('option', { value: g }, g.replace(/^game:(music|sounds)\//, '') + (PDM.MOD2_SOUNDS && PDM.MOD2_SOUNDS.includes(g) ? '  (mod-2)' : '')))));
+      h('optgroup', { label: o.kind === 'se' ? '게임 효과음' : '게임 음악' }, game.map(g => h('option', { value: g }, g.replace(/^game:(music|sounds)\//, '') + (isM2(g) ? '  (mod-2)' : '')))));
     s.value = cur || '';
     if (cur && s.value !== cur) { s.append(h('option', { value: cur }, `⚠ ${cur}`)); s.value = cur; }
     s.addEventListener('change', () => set(s.value));
@@ -395,7 +396,7 @@ PDM.ui = (function () {
   function itemOptions() {
     const s = PDM.store;
     const mine = s.all('item').map(i => ({ value: i.id, label: i.name || i.id, group: '프로젝트 아이템', sprite: i.sprite }));
-    const game = Object.entries(PDM.SPD_ITEM_GROUPS || {}).flatMap(([c, l]) => l.filter(x => !x.mod2 || PDM.gameMod2 !== false).map(x => ({ value: 'spd:' + x.p, label: x.n + (x.mod2 ? ' ◆' : ''), group: '게임 · ' + (PDM.ITEM_CATEGORIES[c] || c), sprite: { sheet: 'builtin:items', name: x.img } })));
+    const game = Object.entries(PDM.SPD_ITEM_GROUPS || {}).flatMap(([c, l]) => l.filter(x => !x.mod2 || PDM.isMod2()).map(x => ({ value: 'spd:' + x.p, label: x.n + (x.mod2 ? ' ◆' : ''), group: '게임 · ' + (PDM.ITEM_CATEGORIES[c] || c), sprite: { sheet: 'builtin:items', name: x.img } })));
     return [...mine, ...game];
   }
   // ---------------- 숫자 칸: 마우스를 올리고 휠로 올리고 내리기 ----------------

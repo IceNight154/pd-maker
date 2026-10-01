@@ -180,6 +180,10 @@ PDM.store = (function () {
     Object.entries(dw.data).forEach(([id, obj]) => { data['node:' + id] = obj; });
     // 원작과 같은 영웅 6명 · 몬스터 · 보스 · NPC (게임 원래 동작을 그대로 쓰는 항목으로)
     if (PDM.make.vanilla) Object.assign(data, PDM.make.vanilla());
+    // 영웅 선택 화면 순서: 원작 순서 (전사·마법사·도적·사냥꾼·결투가·성직자)
+    data.project.heroOrder = (PDM.SPD_HEROES || []).map(x => x.cls.toLowerCase()).filter(id => data['hero:' + id]);
+    // 확장 기능(이벤트·시스템)은 꺼진 채로 시작 — 도구 모음의 "확장 기능"에서 켬
+    data.project.extensions = { event: false, sys: false };
     Object.keys(data).forEach(k => dirty.add(k));
     em.emit('load');
     await save();

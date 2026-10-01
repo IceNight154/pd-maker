@@ -145,6 +145,8 @@ public class HeroRuntime {
 		String[] s = slotHero.get(info.slot);
 		if (s != null && !s[1].isEmpty() && h.get("subclasses") != null)
 			for (JsonValue x : h.get("subclasses")) if (s[1].equals(x.getString("id", ""))) return x.getString("name", s[1]);
+		String st = HeroSelect.sel(h, "title");
+		if (!st.trim().isEmpty()) return st;
 		if (!zeroBase(h) && h.getString("id", "").equalsIgnoreCase(h.getString("baseClass", ""))) return null;
 		String n = h.getString("name", "");
 		return n.isEmpty() ? null : n;

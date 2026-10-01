@@ -21,7 +21,7 @@ PDM.registerEditor({
         F.bool(key, ['heartButton'], { label: '게임 화면에 마음 창 버튼(하트) 표시' })),
       section('게임 저장소 연결',
         F.text(key, ['rpgMakerDir'], { label: 'RPG Maker MZ 설치 폴더 (리소스 가져오기)', hint: '비우면 프로젝트 위쪽 폴더에서 "RPG Maker MZ" 를 찾습니다. newdata 가 들어 있는 폴더' }),
-        F.text(key, ['gameRepo'], { label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon-mod-2 를 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
+        F.text(key, ['gameRepo'], { label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon 을 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
         status,
         (() => {
           const box = h('div', { style: { marginTop: '6px' } });
@@ -36,7 +36,7 @@ PDM.registerEditor({
             } else if (valid) {
               box.append(h('p', { class: 'hint' }, 'PDMaker 폴더 밖의 게임 저장소를 쓰고 있습니다. 다른 PC 로 PDMaker 를 옮기면 찾지 못하므로, PDMaker 폴더 안(game/)으로 옮겨 두는 것을 권장합니다.'),
                 h('button', { class: 'btn sm pri', onclick: () => PDM.app.bundleRepo(repo) }, '게임 저장소를 PDMaker 폴더 안으로 옮기기'));
-            } else box.append(h('p', { class: 'hint', style: { color: 'var(--bad)' } }, '게임 저장소가 없습니다. shattered-pixel-dungeon-mod-2 폴더를 PDMaker 폴더의 game/ 안에 넣거나 위 경로를 지정하세요: ' + P.gameRepoDefault));
+            } else box.append(h('p', { class: 'hint', style: { color: 'var(--bad)' } }, '게임 저장소가 없습니다. shattered-pixel-dungeon 폴더를 PDMaker 폴더의 game/ 안에 넣거나 위 경로를 지정하세요: ' + P.gameRepoDefault));
           }).catch(() => { });
           return box;
         })(),
@@ -57,6 +57,8 @@ PDM.registerEditor({
             h('button', { class: 'btn danger', onclick: async () => { if (!(await PDM.ui.confirm('게임 저장소에서 pdmaker 런타임을 제거할까요?'))) return; try { await pdm.runtimeUninstall(repo); toast('제거했습니다'); refresh(); } catch (e) { toast(e.message, 'bad'); } } }, '제거')));
       })()),
       section('테스트 플레이',
+        PDM.ui.F.select('project', ['settings', 'playTask'], [['playtest', 'PDMaker 테스트 실행 (기본 — 버전 -PLAYTEST, 저장 폴더 분리)'], ['debug', 'gradle desktop:debug (게임 원래 실행 작업 — 버전 -INDEV)']],
+          { label: '▶ 테스트 플레이 빌드 방식', hint: 'desktop:debug 는 게임 저장소의 원래 디버그 실행 작업입니다 (INDEV 버전으로 빌드·실행, 저장 폴더는 게임 원래 것). 두 방식 모두 이 프로젝트를 넘겨줍니다.' }),
         h('p', { class: 'hint' }, '▶ 테스트 플레이는 게임 저장소에서 gradle 로 게임을 실행하면서 이 프로젝트 폴더를 넘겨줍니다 (-Dpdmaker.project=…).',
           h('br'), '게임 쪽에 pdmaker 런타임 패키지가 들어가 있어야 프로젝트 데이터가 반영됩니다 (runtime/INTEGRATION.md 참고).'),
         h('p', { class: 'hint' }, '▶ 테스트 플레이를 누르면 런타임이 없거나 예전 것일 때 자동으로 설치·갱신합니다.'),

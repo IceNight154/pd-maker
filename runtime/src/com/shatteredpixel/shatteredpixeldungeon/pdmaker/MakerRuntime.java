@@ -70,6 +70,7 @@ public class MakerRuntime {
 			for (FileHandle f : list("heroes"))     if (f.extension().equals("json")) { JsonValue v = r.parse(f); heroes.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("events"))     if (f.extension().equals("json")) { JsonValue v = r.parse(f); events.put(v.getString("id", f.nameWithoutExtension()), v); }
 			PluginHost.loadAll(root);
+			MakerCatalog.register();   // 아이템 도감에 프로젝트 아이템
 			log("PDMaker 프로젝트 불러옴: " + project.getString("name", "?") + " (" + root.path() + ")"
 					+ " · 맵 노드 " + WorldGraph.ids.size() + " · 영웅 " + heroes.size() + " · 캐릭터 " + chars.size() + " · 아이템 " + items.size() + " · 이벤트 " + events.size());
 		} catch (Exception e) {

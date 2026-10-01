@@ -754,6 +754,17 @@ codegen 이 영웅 코드 클래스(H_<id>)에 `_<kind><i>_<id>_<훅>` 메서드
 
 **초상화** (영웅 편집기의 그림): `HeroSprite.avatar(hero)` 첫 줄 → `HeroRuntime.avatar` (상태 창 · 영웅 창 — 시트의 갑옷 단계 줄, idle 첫 프레임). 저장 슬롯은 어떤 영웅인지 기억: 저장할 때 `GamesInProgress.set(slot)` 첫 줄 `HeroRuntime.setSlot`, 파일에서 읽을 때 `Dungeon.preview` 뒤 `HeroRuntime.preview`(pdmaker_story 의 pdm_hero · pdm_subclass) → 시작 화면 슬롯(`StartScene` 의 `long diff = …` 앞)과 이어하기 창(`WndGameInProgress` 의 `title.label(` 앞)이 영웅 그림·이름(전직 이름 → 영웅 이름, 원작 영웅은 게임 그대로).
 
+**영웅 순서** (`project.heroOrder`): 리소스 목록 영웅 줄의 ▲▼(마우스를 올리면 보임)·우클릭 "위로/아래로" → 게임 영웅 선택 화면의 버튼 순서(`HeroSelect.entries`). 새 프로젝트는 원작 순서.
+**선택 화면 글자** (`select.title · desc · info`): 영웅 편집기 "캐릭터 선택 화면" — 이름(선택 화면·시작 버튼·저장 슬롯), 짧은 설명, 정보 창 설명. 비우면 영웅 이름·설명(원작 영웅은 게임 글자·직업 정보 창).
+**테스트 플레이 빌드** (`project.settings.playTask`): 'playtest'(기본, init 스크립트의 desktop:pdmakerPlaytest — -PLAYTEST, 저장 폴더 분리) | 'debug'(게임 원래 desktop:debug — -INDEV, init 스크립트가 pdmaker.project 를 넘겨줌). 프로젝트 메뉴에 둘 다 바로 실행하는 항목.
+**확장 기능** (도구 모음 "확장 기능"): 리소스 목록의 이벤트·시스템을 켜고 끔(`project.extensions.event · sys`, 없으면 켜짐 — 새 프로젝트는 꺼짐). 창에서 바로 열기·새로 만들기.
+**아이템**: 새 아이템 창에서 id(소문자로 바뀌는 것을 바로 보여 줌 — 이름도 같은 값)·분류·세부 종류를 고름. 세부 종류는 기본 + `project.itemSubs[분류][키] = 이름`(null = 숨김, "세부 종류 관리…"). 티어는 무기·갑옷·코덱스는 수치의 tier, 그 밖은 `tier`(목록 정렬·표시). "코드 파일 보기"(게임 저장소의 gen 파일 — 없으면 만들 코드) · 게임 아이템은 "게임 코드 파일 보기"(items/…java).
+모든 프로젝트 아이템에 클래스(gen/I_<id>)를 만들고(`itemNeedsClass` 항상), `MakerCatalog.register`(MakerRuntime.init 끝)가 아이템 도감 분류(무기·갑옷·물약·반지 …)에 올림(`catalog: false` 면 안 올림).
+게임 아이템 목록(`spd-items.js`)은 기준 저장소(game/shattered-pixel-dungeon)의 이름·설명·그림 — mod-2 전용은 ◆(mod-2 저장소일 때만 보임). `PDM.isMod2()`(PDM.gameMod2) 가 아니면 코덱스·그리모어 분류·종류, 아리아 직업·전직, mod-2 소리·타이틀 프리셋·마나 입자를 목록에서 뺌.
+
+**리소스 목록 끌어 놓기** (app.js drawTree): 노드의 `drag`(끄는 것) · `canDrop(끈 것)` → ['before','after','into'] · `drop(끈 것, 위치)`. 아이템 목록: 아이템을 다른 아이템 앞/뒤로(분류·세부 종류도 따라감 — `project.itemOrder`), 분류·세부 종류 줄에 놓으면 그 안으로, 분류 줄끼리(`project.itemCatOrder`)·세부 종류 줄끼리(`project.itemSubOrder[분류]`) 순서 바꾸기. 줄의 ▲▼·우클릭 "위로/아래로/다른 분류로 옮기기…"도 같음.
+**다시 그릴 때 스크롤**: 탭을 다시 그릴 때 페이지 스크롤뿐 아니라 안쪽 스크롤 칸(.sheet-view 아이템 시트 고르기 등)의 위치도 되돌림 — 스프라이트를 누르면 위로 밀리던 문제.
+
 **프로젝트 그림 텍스처**: `MakerRuntime.texture()` 는 캐시한 텍스처가 아직 `TextureCache` 에 있는지 확인 — 게임이 구역을 옮길 때(`InterlevelScene`) `TextureCache.clear()` 로 지우므로, 지워졌으면 다시 읽음(영웅 선택 화면에서 읽은 영웅 그림이 게임에서 검게 나오던 문제).
 
 **게임 저장소 위치**: 기준은 `pd-maker/game/shattered-pixel-dungeon` (없으면 `game/shattered-pixel-dungeon-mod-2`, PDMaker 폴더만 옮겨도 동작). 새 프로젝트의 `gameRepo` 는 기준 저장소. mod-2 전용 게임 아이템(코덱스 등 ◆)은 프로젝트 저장소가 mod-2 일 때만 목록에 보임(`PDM.gameMod2`). 빌드 전 모듈 build.gradle 이 빠졌으면 원작 저장소에서 채움(`repairRepo`). 에디터가 경로가 틀린 프로젝트를 자동으로 고치고(PDMaker 안 → 전에 쓴 곳 → 위쪽 폴더), 바깥 저장소는 프로젝트 설정의 "PDMaker 폴더 안으로 옮기기"로 옮김. Java 17+ 가 없으면 Temurin 21 을 userData/jdk 에 내려받음. 배포 zip: `make-release.bat`.

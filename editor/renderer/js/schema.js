@@ -102,6 +102,27 @@ PDM.ITEM_CATEGORY_INFO = {
   misc:     { name: '기타', icon: '•', dir: '(items 폴더 바로 아래: 앙크·이슬·횃불·물주머니 등)' }
 };
 PDM.ITEM_CATEGORIES = Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).map(([k, v]) => [k, v.name]));
+/** 지금 프로젝트의 게임 저장소가 mod-2 인지 (app 이 저장소를 찾을 때 PDM.gameMod2 를 정함 — 모르면 원작으로 봄)
+ *  원작(game/shattered-pixel-dungeon) 프로젝트에서는 mod-2 전용 분류·종류·직업·소리를 목록에서 뺌 */
+PDM.isMod2 = () => PDM.gameMod2 === true;
+PDM.itemCategories = () => Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([, v]) => PDM.isMod2() || v.note !== 'mod-2').map(([k, v]) => [k, v.name]));
+/** 분류의 세부 종류 = 기본(schema) + 프로젝트에서 더하거나 이름을 바꾼 것 (project.itemSubs[분류][키] = 이름, null = 숨김) */
+PDM.itemSubs = cat => {
+  const info = PDM.ITEM_CATEGORY_INFO[cat] || {};
+  const base = Object.assign({}, info.subs || {});
+  if (!PDM.isMod2()) delete base.grimoire;
+  const custom = (((PDM.store && PDM.store.isOpen && PDM.store.get('project')) || {}).itemSubs || {})[cat] || {};
+  Object.entries(custom).forEach(([k, v]) => { if (v === null) delete base[k]; else base[k] = v; });
+  if (!Object.keys(base).length) return null;
+  let out = !info.subs && base[''] === undefined ? Object.assign({ '': '일반' }, base) : base;   // 세부 종류가 없던 분류에 더했으면 "일반"도
+  // 순서: 리소스 목록에서 옮긴 순서 (project.itemSubOrder[분류])
+  const ord = (((PDM.store && PDM.store.isOpen && PDM.store.get('project')) || {}).itemSubOrder || {})[cat];
+  if (ord && ord.length) { const ks = Object.keys(out); ks.sort((x, y) => (ord.indexOf(x) < 0 ? 1000 + ks.indexOf(x) : ord.indexOf(x)) - (ord.indexOf(y) < 0 ? 1000 + ks.indexOf(y) : ord.indexOf(y))); out = Object.fromEntries(ks.map(k => [k, out[k]])); }
+  return out;
+};
+PDM.itemKinds = () => Object.fromEntries(Object.entries(PDM.ITEM_KINDS).filter(([k]) => PDM.isMod2() || !['codex', 'grimoire'].includes(k)));
+PDM.heroClasses = () => Object.fromEntries(Object.entries(PDM.HERO_CLASSES).filter(([k]) => PDM.isMod2() || k !== 'ARIA'));
+PDM.gameSubclasses = () => Object.fromEntries(Object.entries(PDM.GAME_SUBCLASSES).filter(([k]) => PDM.isMod2() || !k.startsWith('ARIA_')));
 PDM.BEHAVIOR_HOOKS = { onSpawn: '생성될 때', onInteract: '말을 걸었을 때', onSeeHero: '플레이어를 봤을 때', onTurn: '매 턴', onDamaged: '공격받았을 때', onDeath: '쓰러졌을 때' };
 
 // ---------- 이벤트 ----------

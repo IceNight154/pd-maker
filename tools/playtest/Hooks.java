@@ -179,6 +179,7 @@ public class Hooks {
 					break;
 				}
 				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
+				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
 				case "nointro": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro(false); break;
 				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
 				case "sfx": // 게임 효과음 설정이 실제로 어떤 파일로 풀리는지

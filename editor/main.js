@@ -235,6 +235,12 @@ function writeInitScript(userData, projectDir) {
     "        jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8', '-Dsun.stdout.encoding=UTF-8'",
     "        if (System.getProperty('os.name').toLowerCase().contains('mac')) jvmArgs '-XstartOnFirstThread'",
     '    }',
+    '    // desktop:debug (게임 원래 실행 작업 — INDEV 버전) 으로 테스트할 때도 이 프로젝트를 넘겨줌',
+    "    def dbg = d.tasks.findByName('debug')",
+    '    if (dbg != null) {',
+    `        dbg.systemProperty 'pdmaker.project', '${proj}'`,
+    "        dbg.jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8', '-Dsun.stdout.encoding=UTF-8'",
+    '    }',
     '}', ''].join('\n'), 'utf8');
   return f;
 }
@@ -261,7 +267,7 @@ function repairRepo(repo) {
   }
   if (left.length) throw new Error('게임 저장소에 빌드 파일이 없습니다: ' + left.join(', ') + ' — 원래 게임 저장소에서 복사해 넣으세요 (' + repo + ')');
 }
-ipcMain.handle('game:run', wrap(async ({ repo, project, task }) => {
+ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   if (gameProc) throw new Error('이미 실행 중입니다. 먼저 중지하세요.');
   if (!isRepoDir(repo) && bundledRepo()) repo = bundledRepo();
   const gradlew = path.join(repo, IS_WIN ? 'gradlew.bat' : 'gradlew');
@@ -281,7 +287,7 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task }) => {
   const init = writeInitScript(app.getPath('userData'), project);
   const args = task === 'compile'
     ? ['core:compileJava', '--console=plain']
-    : ['-I', init, 'desktop:pdmakerPlaytest', '--no-daemon', '--console=plain'];
+    : ['-I', init, mode === 'debug' ? 'desktop:debug' : 'desktop:pdmakerPlaytest', '--no-daemon', '--console=plain'];   // debug = 게임 원래 실행 작업 (버전 표시 -INDEV)
   const cmd = IS_WIN ? 'cmd.exe' : 'sh';
   const full = IS_WIN ? ['/c', 'gradlew.bat', ...args] : ['gradlew', ...args];
   const env = Object.assign({}, process.env);

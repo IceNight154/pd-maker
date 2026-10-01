@@ -31,6 +31,53 @@
     return PDM.ui.field('아이템', PDM.ui.combo(i, PDM.ui.itemOptions), hint);
   }
 
+  /** 영웅 순서 (게임 영웅 선택 화면의 버튼 순서) — project.heroOrder, 없는 영웅은 뒤에 */
+  function orderedHeroes() {
+    const all = store.all('hero'), ord = (store.get('project') || {}).heroOrder || [];
+    const idx = (c, i) => { const k = ord.indexOf(c.id); return k >= 0 ? k : 1000 + i; };
+    return all.map((c, i) => [c, idx(c, i)]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+  }
+  function moveHero(id, d) {
+    const ids = orderedHeroes().map(c => c.id), i = ids.indexOf(id), j = i + d;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    store.edit('project', '영웅 순서', p => { p.heroOrder = ids; });
+  }
+  PDM.heroOrder = { orderedHeroes, moveHero };
+  /** 원작 영웅 (id 가 바탕 직업 이름) — 선택 화면에서 게임 원래 글자·정보 창을 씀 */
+  const vanillaHero = c => !!String(c.baseClass || '').trim() && String(c.id).toUpperCase() === String(c.baseClass).toUpperCase();
+  /** 아이템 이름·그림 (프로젝트 아이템 / spd:게임 아이템) */
+  function itemInfo(v) {
+    if (store.has('item:' + v)) { const it = store.get('item:' + v); return { name: it.name || v, sprite: it.sprite, game: false }; }
+    const g = String(v).startsWith('spd:') ? Object.values(PDM.SPD_ITEM_GROUPS || {}).flat().find(x => 'spd:' + x.p === v) : null;
+    return g ? { name: g.n, sprite: { sheet: 'builtin:items', name: g.img }, game: true } : { name: v, sprite: null, missing: true };
+  }
+  /** 처음부터 아는 아이템 (감정됨): 목록에서 골라 + 로 추가, − 로 삭제 */
+  function knownItemsField(key) {
+    const list = (store.get(key).knownItems || []).slice();
+    const inp = h('input', { type: 'text', placeholder: '아이템을 고르고 + 를 누르세요 (물약·주문서·반지·마법봉 등)' });
+    const add = () => {
+      const v = inp.value.trim(); if (!v) return;
+      if (list.includes(v)) { toast('이미 목록에 있습니다', 'bad'); return; }
+      store.edit(key, '처음부터 아는 아이템 추가', o => { o.knownItems = (o.knownItems || []).concat([v]); });
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); setTimeout(add, 0); } });
+    const rows = list.map((v, i) => {
+      const inf = itemInfo(v);
+      const cv = h('canvas', { width: 16, height: 16, style: { imageRendering: 'pixelated', width: '24px', height: '24px' } });
+      if (inf.sprite) PDM.assets.drawItemSprite(cv, inf.sprite, 1);
+      return h('div', { class: 'known-row', style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 6px', borderBottom: '1px solid var(--line)' } },
+        cv, h('b', { style: inf.missing ? { color: 'var(--bad)' } : {} }, inf.name), h('code', { class: 'hint' }, v),
+        h('span', { style: { flex: 1 } }),
+        h('button', { class: 'btn xs danger', title: '목록에서 빼기', onclick: e => { e.preventDefault(); store.edit(key, '처음부터 아는 아이템 삭제', o => { o.knownItems.splice(i, 1); }); } }, '−'));
+    });
+    return h('div', { class: 'field' }, h('label', { class: 'fl' }, '처음부터 아는 아이템 (감정됨)'),
+      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('div', { style: { flex: 1 } }, PDM.ui.combo(inp, PDM.ui.itemOptions)),
+        h('button', { class: 'btn sm pri', title: '목록에 추가', onclick: e => { e.preventDefault(); add(); } }, '+')),
+      h('div', { style: { marginTop: '6px', border: '1px solid var(--line)', borderRadius: '4px' } }, rows.length ? rows : h('div', { class: 'hint', style: { padding: '6px' } }, '없음 — 게임을 시작할 때 감정된 상태로 아는 아이템이 없습니다')),
+      h('small', { class: 'hint' }, '게임을 시작할 때부터 이름·효과를 아는(감정된) 아이템입니다. 원작은 직업마다 물약·주문서 하나씩.'));
+  }
+
   function effectRow(key, p, e) {
     const { F, row } = PDM.ui;
     const def = PDM.SKILL_EFFECTS[e.type] || { fields: [] };
@@ -308,7 +355,7 @@ return damage + Special.get("combo");`,
           h('summary', { style: { cursor: 'pointer' } }, iconCanvas(x.icon || 0), h('b', {}, x.name || x.id), h('span', { class: 'hint' }, '  ' + (x.shortDesc || '') + (x.base ? ` · 게임 전직 ${x.base}` : '') + ((x.effects || []).length ? ' · ' + statsText(x.effects) : ''))),
           row(F.text(key, [...p, 'name'], { label: '이름', rerender: true }), F.text(key, [...p, 'id'], { label: 'id (조건식: hero.subclass)', transform: v => PDM.slugId(v), rerender: true }),
             F.icon(key, [...p, 'icon'], 'hero', { label: '아이콘 (게임 아이콘 · 파일 지정 · 그리기)', def: 0 }),
-            F.select(key, [...p, 'base'], PDM.GAME_SUBCLASSES, { label: '게임 전직 효과도 켜기', empty: '(없음)', rerender: true, hint: '예: BERSERKER 면 원작 광전사의 분노가 함께 동작. 바탕 직업에 맞는 것을 고르세요' })),
+            F.select(key, [...p, 'base'], PDM.gameSubclasses(), { label: '게임 전직 효과도 켜기', empty: '(없음)', rerender: true, hint: '예: BERSERKER 면 원작 광전사의 분노가 함께 동작. 바탕 직업에 맞는 것을 고르세요' })),
           F.text(key, [...p, 'shortDesc'], { label: '한 줄 설명 (고르는 창의 버튼)' }),
           F.textarea(key, [...p, 'desc'], { label: '설명', rows: 2 }),
           h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '전직하면 붙는 능력치'),
@@ -414,6 +461,12 @@ return damage + Special.get("combo");`,
     })();
     return [
       h('p', { class: 'hint' }, '게임의 영웅 선택 화면에서 이 영웅을 골랐을 때 오른쪽에 보이는 그림입니다. 비워 두면 ' + (String(c.baseClass || '').trim() && c.id.toUpperCase() === String(c.baseClass).toUpperCase() ? '게임 원래 일러스트' : '영웅 그림(위 시트의 첫 프레임)을 크게') + ' 보여 줍니다. 그림 한 장이나, 프레임 크기를 정하면 시트로 움직이는 그림도 됩니다.'),
+      h('div', { class: 'fl', style: { margin: '4px 0 2px' } }, '선택 화면 글자 (비우면 기본)'),
+      F.text(key, ['select', 'title'], { label: '이름 (선택 화면 · 시작 버튼 · 저장 슬롯)', placeholder: c.name || c.id }),
+      F.textarea(key, ['select', 'desc'], { label: '짧은 설명 (이름 아래)', rows: 2, placeholder: vanillaHero(c) ? '(게임 원래 짧은 설명)' : (c.desc || '(영웅 설명)') }),
+      F.textarea(key, ['select', 'info'], { label: '정보 창 설명 (ⓘ 버튼 · 선택된 영웅을 한 번 더 누를 때)', rows: 3, placeholder: vanillaHero(c) ? '(게임 원래 직업 정보 창)' : (c.desc || '(영웅 설명)') }),
+      h('small', { class: 'hint' }, '_밑줄_ 로 감싼 글자는 게임에서 노란색으로 강조됩니다. 줄바꿈은 그대로 나옵니다.'),
+      h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '일러스트'),
       F.image(key, ['select', 'illust'], { label: '일러스트 그림', sub: 'illustrations', rerender: true, placeholder: 'assets/illustrations/... (PNG)' }),
       row(F.select(key, ['select', 'fit'], [['right', '오른쪽에 맞춤 (전신 그림)'], ['full', '화면 높이 가득 (원작 일러스트처럼 — 가로로 긴 그림)']], { label: '배치', rerender: true }),
         F.num(key, ['select', 'frameW'], { label: '프레임 너비', int: true, min: 0, def: 0, hint: '0 = 그림 한 장', rerender: true }),
@@ -548,12 +601,14 @@ return damage + Special.get("combo");`,
     watch: (ck, tk) => ck === tk || ck === 'project',
     tree() {
       if (!store.isOpen) return [];
-      const all = store.all('hero');
+      const all = orderedHeroes();
       const start = (store.get('project') || {}).startHero;
       return [{ id: 'hero', label: '영웅 (플레이어블)', icon: '★', order: 15, count: all.length,
         menu: [{ label: '새 영웅…', run: newHero }],
-        children: all.map(c => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: '', open: 'hero:' + c.id,
-          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, { label: '복제', run: () => dupHero(c.id) }, '-',
+        children: all.map((c, i) => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: (i + 1) + '.', open: 'hero:' + c.id,
+          // 게임 영웅 선택 화면의 순서 — ▲▼ 를 누르면 한 칸씩 옮김
+          actions: [i > 0 ? { label: '▲', title: '위로 (게임 영웅 선택 화면에서 앞으로)', run: () => moveHero(c.id, -1) } : null, i < all.length - 1 ? { label: '▼', title: '아래로', run: () => moveHero(c.id, 1) } : null].filter(Boolean),
+          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, { label: '복제', run: () => dupHero(c.id) }, '-',
             { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${c.name}」 영웅을 삭제할까요?`)) store.remove('hero:' + c.id, '영웅 삭제'); } }] })) }];
     },
     render(key, ctx) {
@@ -580,7 +635,7 @@ return damage + Special.get("combo");`,
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용' })),
           F.textarea(key, ['desc'], { label: '설명', rows: 2 }),
-          row(field('바탕 직업 (선택)', PDM.ui.combo(clsIn, () => [['', '없음 — 완전히 새 영웅'], ...Object.entries(PDM.HERO_CLASSES).map(([k, v]) => [k, v + ' 물려받기'])], { minWidth: 220 }),
+          row(field('바탕 직업 (선택)', PDM.ui.combo(clsIn, () => [['', '없음 — 완전히 새 영웅'], ...Object.entries(PDM.heroClasses()).map(([k, v]) => [k, v + ' 물려받기'])], { minWidth: 220 }),
             '비워 두면 처음부터 새로 만드는 영웅입니다 (게임 직업에서 아무것도 물려받지 않음 — 그림이 비었을 때만 전사 그림). 원작 직업을 고치고 싶을 때만 고르세요. 모드 직업은 이름을 직접 입력'),
             F.ref(key, ['character'], 'char', { label: '연결된 캐릭터 (대사 화자·초상화)', empty: '(없음)' })),
           h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
@@ -590,7 +645,7 @@ return damage + Special.get("combo");`,
         section('그림 (영웅 시트)',
           h('p', { class: 'hint' }, '행 = 갑옷 단계(0~6), 열 = 프레임. 비워 두면 ' + (zero ? '게임 기본(전사) 그림' : '바탕 직업의 그림') + '을 씁니다. 프레임 번호는 첫 행 기준이고, 갑옷을 바꾸면 같은 열의 아래 행을 씁니다.'),
           ...PDM.spriteEditor(key, c, ctx, st)),
-        section('캐릭터 선택 화면 (일러스트)', ...selectSection(key, c, ctx)),
+        section('캐릭터 선택 화면 (글자 · 일러스트)', ...selectSection(key, c, ctx)),
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '시작 최대 체력', int: true, min: 1, hint: '게임 기본 20' }),
             F.num(key, ['stats', 'hpPerLevel'], { label: '레벨당 체력', int: true, min: 0, hint: '게임 기본 5' }),
@@ -605,7 +660,7 @@ return damage + Special.get("combo");`,
             F.num(key, ['stats', 'unarmedMax'], { label: '맨손 최대 피해', int: true, min: 0, def: 0, hint: '0 = 게임 기본 (4)' }),
             F.num(key, ['stats', 'speed'], { label: '이동 속도 배율', min: 0.1, step: 0.1, def: 1, hint: '1 = 보통, 2 = 두 배 빠름' }),
             F.num(key, ['stats', 'viewDistance'], { label: '시야', int: true, min: 1, max: 12, def: 8, hint: '기본 8' })),
-          F.list(key, ['knownItems'], { label: '처음부터 아는 아이템 (감정됨)', hint: '예: spd:PotionOfHealing, spd:ScrollOfIdentify, 프로젝트 아이템 id' })),
+          knownItemsField(key)),
         section('시작 인벤토리', ...(() => {
           const inv = c.inventory || {}, clear = !!inv.clearDefault;
           const items = inv.items || [];

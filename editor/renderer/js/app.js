@@ -65,8 +65,22 @@
       console.error(e);
       el = h('div', { class: 'page' }, h('h1', {}, '이 화면을 그리다 오류가 났습니다'), h('pre', { class: 'mono' }, e.stack || String(e)));
     }
+    // 다시 그릴 때 화면이 밀리지 않게: 그림·미리보기(비동기로 크기가 정해짐)가 아직 작아서 페이지가 잠깐 짧아지면
+    // 스크롤 위치가 잘려 위로 밀렸음 → 잠깐 예전 높이를 최소 높이로 잡아 두었다가 풂
+    // 안쪽 스크롤 칸(아이템 시트 고르기 등)의 위치도 그대로 — 다시 그리면 맨 위로 돌아가 밀려 보였음
+    const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view';
+    const inner = active === t ? [...t.el.querySelectorAll(INNER)].map(e => [e.scrollTop, e.scrollLeft]) : [];
+    const oldH = active === t ? t.el.offsetHeight : 0;
+    if (oldH) t.el.style.minHeight = oldH + 'px';
     t.el.innerHTML = ''; t.el.append(el);
     if (active === t) { body.innerHTML = ''; body.append(t.el); body.scrollTop = keep; }
+    clearTimeout(t._mh);
+    if (oldH) t._mh = setTimeout(() => { t.el.style.minHeight = ''; }, 1500);
+    if (inner.some(s => s[0] || s[1])) {
+      // 그림이 늦게 그려져 칸 크기가 나중에 정해지므로 몇 번 다시 맞춤 (사용자가 그사이 움직였으면 건드리지 않음)
+      const restore = () => [...t.el.querySelectorAll(INNER)].forEach((e, i) => { const s = inner[i]; if (!s || (!s[0] && !s[1])) return; if (e.scrollTop === 0 && e.scrollLeft === 0) { e.scrollTop = s[0]; e.scrollLeft = s[1]; } });
+      restore(); [20, 80, 200, 500].forEach(ms => setTimeout(restore, ms));
+    }
     drawTabbar();
   }
   function activate(t) {
@@ -111,11 +125,52 @@
 
   // ---------------- 리소스 트리 ----------------
   const expanded = new Set(['map', 'char', 'item', 'event', 'story', 'sys']);
-  function treeRoots() {
+  // ---------------- 확장 기능 (리소스 목록에서 켜고 끄는 부분) ----------------
+  //  project.extensions = { event: bool, sys: bool } — 꺼진 것은 리소스 목록에서 숨김 (데이터는 그대로, 확장 기능 창에서 열 수 있음)
+  //  예전 프로젝트(값 없음)는 모두 켜짐, 새 프로젝트는 꺼짐
+  const EXTENSIONS = [
+    { id: 'event', name: '이벤트', desc: '커먼 이벤트 · 장면(연출) · 이정표 · 층 이벤트 — 대화·연출·스위치로 게임 진행을 만듦' },
+    { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' }
+  ];
+  const extOn = id => { const x = (store.get('project') || {}).extensions; return !x || x[id] !== false; };
+  function allRoots() {
     const roots = [];
     PDM.registry.editors.forEach(e => { if (e.tree) { try { roots.push(...e.tree()); } catch (err) { console.error(err); } } });
+    return roots;
+  }
+  function showExtensions() {
+    if (!store.isOpen) return;
+    const roots = allRoots();
+    const box = h('div', { style: { minWidth: '520px', maxWidth: '640px' } });
+    const draw = () => {
+      box.replaceChildren(h('p', { class: 'hint' }, '켠 확장 기능만 왼쪽 리소스 목록에 보입니다. 꺼도 데이터는 지워지지 않고 게임에서도 그대로 동작합니다. 여기서 바로 열 수도 있습니다.'),
+        ...EXTENSIONS.map(x => {
+          const r = roots.find(n => n.id === x.id);
+          const cb = h('input', { type: 'checkbox', checked: extOn(x.id), onchange: () => { store.edit('project', (cb.checked ? '확장 기능 켜기: ' : '확장 기능 끄기: ') + x.name, p => { p.extensions = Object.assign({}, p.extensions || {}, { [x.id]: cb.checked }); }); drawTree(); draw(); } });
+          const kids = r && r.children ? r.children : [];
+          return h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '8px 10px', margin: '8px 0' } },
+            h('label', { class: 'check', style: { fontWeight: 600 } }, cb, h('span', {}, `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
+            h('div', { class: 'hint', style: { margin: '2px 0 6px 24px' } }, x.desc),
+            ...kids.map(k => {
+              const openBtn = n => h('button', { class: 'btn sm', onclick: () => { PDM.tabs.open(n.open); document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); } }, `${n.icon || ''} ${n.label}`);
+              const leafs = k.children ? k.children.filter(n => n.open) : [];
+              return h('div', { style: { margin: '4px 0 4px 24px' } },
+                k.open ? openBtn(k) : h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+                  h('b', {}, `${k.icon || ''} ${k.label}${k.count !== undefined ? ' (' + k.count + ')' : ''}`),
+                  ...(k.menu || []).filter(m => m && m.label && /^새 |추가/.test(m.label)).slice(0, 2).map(m => h('button', { class: 'btn xs', onclick: () => { document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); m.run(); } }, m.label)),
+                  ...leafs.slice(0, 30).map(openBtn)));
+            }));
+        }));
+    };
+    draw();
+    PDM.ui.modal('확장 기능', box, [['닫기', null, 'pri']]);
+  }
+  PDM.extensions = { list: EXTENSIONS, on: extOn, show: showExtensions };
+  function treeRoots() {
+    const roots = allRoots().filter(n => !EXTENSIONS.some(x => x.id === n.id) || extOn(n.id));
     return roots.sort((a, b) => (a.order || 50) - (b.order || 50));
   }
+  let treeDrag = null;   // 리소스 목록에서 끌고 있는 것
   function drawTree() {
     const body = $('#treeBody'); if (!body) return;
     const sc = body.scrollTop; body.innerHTML = '';
@@ -130,7 +185,28 @@
         ondblclick: () => { if (n.children && n.open) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         oncontextmenu: e => { e.preventDefault(); if (n.menu) PDM.ui.menu(e.clientX, e.clientY, typeof n.menu === 'function' ? n.menu() : n.menu); } },
         h('span', { class: 'tw', onclick: e => { if (hasKids) { e.stopPropagation(); open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } } }, hasKids ? (open ? '▾' : '▸') : ''),
-        h('span', { class: 'ti' }, n.icon || ''), h('span', { class: 'tl' }, n.label), n.count !== undefined ? h('span', { class: 'tc' }, n.count) : null);
+        h('span', { class: 'ti' }, n.icon || ''), h('span', { class: 'tl' }, n.label), n.count !== undefined ? h('span', { class: 'tc' }, n.count) : null,
+        // 줄에 마우스를 올리면 보이는 작은 버튼 (예: 영웅 순서 ▲▼)
+        n.actions && n.actions.length ? h('span', { class: 'tact' }, n.actions.map(a => h('button', { class: 'ib', title: a.title || '', onclick: e => { e.stopPropagation(); a.run(); } }, a.label))) : null);
+      // 끌어 놓기: n.drag = 끌 수 있는 것({ kind, id … }), n.drop(끈 것, 'before'|'after'|'into') = 여기에 놓았을 때 (true 를 돌려주면 처리함)
+      //   n.canDrop(끈 것) 이 가능한 위치 목록 ['before','after','into'] 을 돌려줌
+      if (n.drag) {
+        el.draggable = true;
+        el.addEventListener('dragstart', e => { treeDrag = n.drag; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', n.id); } catch (_) { /* 무시 */ } el.classList.add('dragging'); });
+        el.addEventListener('dragend', () => { treeDrag = null; body.querySelectorAll('.drop-before, .drop-after, .drop-into, .dragging').forEach(x => x.classList.remove('drop-before', 'drop-after', 'drop-into', 'dragging')); });
+      }
+      if (n.drop && n.canDrop) {
+        const where = e => {
+          const ok = treeDrag ? n.canDrop(treeDrag) : null; if (!ok || !ok.length) return null;
+          const r = el.getBoundingClientRect(), f = (e.clientY - r.top) / r.height;
+          let pos = ok.includes('into') && (f > 0.3 && f < 0.7 || (!ok.includes('before') && !ok.includes('after'))) ? 'into' : f < 0.5 ? 'before' : 'after';
+          if (!ok.includes(pos)) pos = ok.includes('into') ? 'into' : ok[0];
+          return pos;
+        };
+        el.addEventListener('dragover', e => { const pos = where(e); if (!pos) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.remove('drop-before', 'drop-after', 'drop-into'); el.classList.add('drop-' + pos); });
+        el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after', 'drop-into'));
+        el.addEventListener('drop', e => { const pos = where(e); el.classList.remove('drop-before', 'drop-after', 'drop-into'); if (!pos) return; e.preventDefault(); const d2 = treeDrag; treeDrag = null; n.drop(d2, pos); if (pos === 'into' && n.children) expanded.add(n.id); drawTree(); });
+      }
       body.append(el);
       if (hasKids && open) walk(n.children, d + 1);
     });
@@ -179,7 +255,9 @@
       { label: '프로젝트 설정', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
       { label: '검사 (끊어진 참조 찾기)', hint: 'F7', run: runCheck, disabled: !store.isOpen },
       '-',
-      { label: '▶ 테스트 플레이', hint: 'F5', run: playtest, disabled: !store.isOpen },
+      { label: '▶ 테스트 플레이', hint: 'F5', run: () => playtest(), disabled: !store.isOpen },
+      { label: '▶ 테스트 플레이 — desktop:debug (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen },
+      { label: '▶ 테스트 플레이 — PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen },
       { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen },
       { label: '빌드 정리 (gradlew clean)', run: cleanBuild, disabled: !store.isOpen || !pdm.isElectron },
       { label: '■ 중지', run: stopGame },
@@ -226,6 +304,7 @@
     play: 'M7 4v16l13-8z',
     stop: 'M6 6h12v12H6z',
     theme: 'M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18',
+    ext: 'M9 3h6v4a2 2 0 1 0 4 0V3h2v8h-4a2 2 0 1 0 0 4h4v6H3v-6h4a2 2 0 1 0 0-4H3V3h2v4a2 2 0 1 0 4 0z',
     settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'
   };
   function svgIcon(name) {
@@ -254,6 +333,7 @@
         tbBtn('exportGame', '게임 파일 내보내기', exportGame, { disabled: !open || !el, tip: '게임 파일 내보내기 — 친구에게 줄 수 있는 실행 파일 폴더(JAR 또는 Java 포함 실행 파일) 만들기' + webTip, key: 'Ctrl+Shift+E' })),
       grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: 'Ctrl+Z' }),
         tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: 'Ctrl+Y' })),
+      grp(tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
       h('span', { class: 'grow' }),
       grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: 'F7' }),
         tbBtn('clean', '정리', cleanBuild, { iconOnly: true, disabled: !open || !el || running, tip: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때' + webTip })),
@@ -508,18 +588,21 @@
     showBottom('check');
     return res;
   }
-  async function runGame(task) {
+  async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
-    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task }); setRunning(true); }
+    // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'playtest' 기본 | 'debug' = gradle desktop:debug, INDEV 버전)
+    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'playtest';
+    if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
+    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode }); setRunning(true); }
     catch (e) { PDM.log(e.message, 'err'); toast(e.message, 'bad'); }
   }
-  async function playtest() {
+  async function playtest(mode) {
     if (!store.isOpen) return;
     const errs = runCheck().filter(r => r.level === 'error');
     if (errs.length && !(await PDM.ui.confirm(`오류 ${errs.length}개가 있습니다. 그래도 실행할까요?`))) return;
     await saveAll();
-    runGame('play');
+    runGame('play', typeof mode === 'string' ? mode : undefined);
   }
   function stopGame() { pdm.stopGame().then(() => { PDM.log('중지 요청', 'dim'); setRunning(false); }); }
 

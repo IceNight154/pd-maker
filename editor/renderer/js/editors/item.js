@@ -5,15 +5,50 @@
   const { h } = PDM;
   const store = PDM.store;
   const CAT_ICON = Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).map(([k, v]) => [k, v.icon]));
+  /** 티어가 저장되는 곳: 무기·갑옷·코덱스는 수치의 tier, 그 밖은 아이템의 tier */
+  const tierPath = it => it.kind === 'melee' || it.kind === 'missile' ? ['weapon', 'tier'] : it.kind === 'armor' ? ['armor', 'tier'] : it.kind === 'codex' ? ['codex', 'tier'] : ['tier'];
+  const tierOf = it => PDM.deepGet(it, tierPath(it)) || 0;
+  /** 세부 종류 관리: 더하기 · 이름 바꾸기 · 지우기(직접 더한 것) / 숨기기(기본) — project.itemSubs */
+  async function manageSubs(cat) {
+    const info = PDM.ITEM_CATEGORY_INFO[cat] || {};
+    const base = info.subs || {};
+    const draw = () => {
+      const subs = PDM.itemSubs(cat) || {};
+      const custom = ((store.get('project').itemSubs || {})[cat]) || {};
+      const used = k => store.all('item').filter(i => i.category === cat && (i.subtype || '') === k).length;
+      const set = (k, v, label) => store.edit('project', label, p => { p.itemSubs = p.itemSubs || {}; p.itemSubs[cat] = p.itemSubs[cat] || {}; if (v === undefined) delete p.itemSubs[cat][k]; else p.itemSubs[cat][k] = v; });
+      const rows = Object.entries(subs).map(([k, v]) => h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } },
+        h('code', { style: { minWidth: '90px' } }, k || '(일반)'), h('b', { style: { flex: 1 } }, v), h('span', { class: 'hint' }, `아이템 ${used(k)}개`),
+        h('button', { class: 'btn xs', onclick: async () => { const n = await PDM.ui.prompt('세부 종류 이름', v); if (n != null && n.trim()) { set(k, n.trim(), '세부 종류 이름'); box.replaceChildren(draw()); } } }, '이름'),
+        base[k] !== undefined && custom[k] !== undefined ? h('button', { class: 'btn xs', title: '기본 이름으로', onclick: () => { set(k, undefined, '세부 종류 기본으로'); box.replaceChildren(draw()); } }, '기본') : null,
+        h('button', { class: 'btn xs danger', onclick: async () => {
+          if (used(k) && !(await PDM.ui.confirm(`이 세부 종류의 아이템 ${used(k)}개는 분류 바로 아래에 보이게 됩니다. 지울까요?`))) return;
+          set(k, base[k] !== undefined ? null : undefined, '세부 종류 지우기'); box.replaceChildren(draw());
+        } }, base[k] !== undefined ? '숨기기' : '지우기')));
+      const hidden = Object.keys(base).filter(k => custom[k] === null).map(k => h('button', { class: 'btn xs', onclick: () => { set(k, undefined, '세부 종류 다시 보이기'); box.replaceChildren(draw()); } }, '다시 보이기: ' + base[k]));
+      return h('div', {}, rows.length ? rows : h('p', { class: 'hint' }, '세부 종류가 없습니다'), hidden.length ? h('div', { style: { marginTop: '6px' } }, ...hidden) : null,
+        h('button', { class: 'btn sm', style: { marginTop: '8px' }, onclick: async () => {
+          const n = await PDM.ui.prompt('새 세부 종류 이름', '', '예: 단검, 대검, 활 — 키(영문)는 이름에서 자동으로 만듦'); if (!n || !n.trim()) return;
+          let k = PDM.slugId(n, ''); if (!k || /^\d/.test(k)) k = 'sub_' + Date.now().toString(36).slice(-4);
+          const exist = PDM.itemSubs(cat) || {}; while (exist[k] !== undefined) k += '_2';
+          set(k, n.trim(), '세부 종류 추가'); box.replaceChildren(draw());
+        } }, '+ 세부 종류'));
+    };
+    const box = h('div', {}, draw());
+    await PDM.ui.modal(`세부 종류 — ${info.name || cat}`, h('div', { style: { minWidth: '420px' } }, h('p', { class: 'hint' }, '아이템 목록(리소스)과 아이템의 "세부 종류" 선택에 쓰입니다. 기본 세부 종류는 이름만 바꾸거나 숨길 수 있습니다. 프로젝트 설정(project.json)에 저장됩니다.'), box), [['닫기', null, 'pri']]);
+  }
   /** 분류 · 세부 종류 · 사용 방식 + 게임의 같은 분류 아이템 (참고) */
   function categoryBlock(key, it) {
     const { F, row, field } = PDM.ui;
     const info = PDM.ITEM_CATEGORY_INFO[it.category] || PDM.ITEM_CATEGORY_INFO.misc;
-    const game = (PDM.SPD_ITEM_GROUPS[it.category] || []).filter(x => !info.subs || !it.subtype || x.sub === it.subtype);
+    const subs = PDM.itemSubs(it.category);
+    const game = (PDM.SPD_ITEM_GROUPS[it.category] || []).filter(x => !subs || !it.subtype || x.sub === it.subtype);
     const cons = it.consumable ?? !!info.consumable;
     return h('div', {},
-      row(F.select(key, ['category'], PDM.ITEM_CATEGORIES, { label: '분류 (게임 items 폴더 기준)', rerender: true }),
-        info.subs ? F.select(key, ['subtype'], info.subs, { label: '세부 종류', rerender: true }) : null,
+      row(F.select(key, ['category'], PDM.itemCategories(), { label: '분류 (게임 items 폴더 기준)', rerender: true, onchange: () => store.edit(key, '세부 종류 맞춤', o => { const s2 = PDM.itemSubs(o.category); o.subtype = s2 ? Object.keys(s2)[0] : ''; }) }),
+        h('div', {}, subs ? F.select(key, ['subtype'], subs, { label: '세부 종류', rerender: true }) : h('div', { class: 'hint', style: { marginTop: '18px' } }, '세부 종류 없음'),
+          h('button', { class: 'btn xs', style: { marginTop: '4px' }, onclick: e => { e.preventDefault(); manageSubs(it.category); } }, '세부 종류 관리…')),
+        F.num(key, tierPath(it), { label: '티어', int: true, min: 0, max: 9, def: 0, rerender: true, hint: tierPath(it).length > 1 ? '무기·갑옷 수치의 티어 (아래 "종류와 수치"와 같은 값)' : '0 = 없음 · 목록에서 정렬·표시' }),
         F.num(key, ['price'], { label: '가격', int: true, min: 0 })),
       (it.kind || 'misc') === 'misc' ? row(F.bool(key, ['consumable'], { label: '사용하면 1개 사라짐', def: !!info.consumable, rerender: true }),
         F.text(key, ['useLabel'], { label: '사용 버튼 이름', placeholder: info.use || '사용' }),
@@ -46,10 +81,33 @@
   const subOf = i => i.subtype !== undefined && i.subtype !== null ? i.subtype
     : i.kind === 'melee' ? 'melee' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
   async function newItem(cat, sub) {
-    const id = await PDM.ui.prompt('새 아이템 id (영문)', ''); if (!id) return;
+    // id 입력: 영문 소문자·숫자·밑줄로 바뀌는 것을 바로 보여 줌 (이름도 처음엔 바뀐 id 와 같게)
+    const inp = h('input', { type: 'text', placeholder: '예: TestWeapon' });
+    const out = h('div', { class: 'mono', style: { margin: '6px 0' } }, 'id · 이름 → ');
+    inp.addEventListener('input', () => { out.textContent = 'id · 이름 → ' + (inp.value.trim() ? PDM.slugId(inp.value) : ''); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); PDM.$('.modal-foot .pri').click(); } });
+    // 분류 · 세부 종류: 목록(리소스)의 그 자리에 들어감
+    const cats = PDM.itemCategories();
+    const catSel = h('select', {}, Object.entries(cats).map(([k, v]) => h('option', { value: k }, v)));
+    catSel.value = cats[cat] ? cat : 'misc';
+    const subSel = h('select', {});
+    const fillSubs = keep => {
+      const ss = PDM.itemSubs(catSel.value) || {};
+      subSel.replaceChildren(...Object.entries(ss).map(([k, v]) => h('option', { value: k }, v)));
+      subSel.disabled = !Object.keys(ss).length;
+      if (keep !== undefined && ss[keep] !== undefined) subSel.value = keep;
+    };
+    fillSubs(sub); catSel.addEventListener('change', () => fillSubs());
+    const id = await PDM.ui.modal('새 아이템', h('div', {}, h('div', { class: 'fl' }, 'id (영문)'), inp, out,
+      h('small', { class: 'hint' }, '대문자는 소문자로, 영문·숫자 말고는 밑줄(_)로 바뀝니다 — 예: TestWeapon → testweapon. 이름도 처음엔 이 id 와 같게 만들고, 만든 뒤 "이름" 칸에서 바꿀 수 있습니다.'),
+      h('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } },
+        h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel))),
+      [['취소', null], ['만들기', () => inp.value, 'pri']]);
+    if (!id || !String(id).trim()) return;
+    cat = catSel.value; sub = subSel.disabled ? undefined : subSel.value;
     const clean = PDM.slugId(id);
-    if (store.has('item:' + clean)) { toast('같은 id 가 있습니다', 'bad'); return; }
-    const it = PDM.make.item(clean); it.name = id; it.category = cat || 'misc';
+    if (store.has('item:' + clean)) { toast('같은 id 가 있습니다: ' + clean, 'bad'); return; }
+    const it = PDM.make.item(clean); it.name = clean; it.category = cat || 'misc';
     if (sub !== undefined) it.subtype = sub;
     if (cat === 'weapon' && (sub === 'melee' || sub === 'missile' || sub === 'dart')) { it.kind = sub === 'melee' ? 'melee' : 'missile'; it.weapon = PDM.make.weaponStats(it.kind, 1); it.stackable = it.kind === 'missile'; }
     if (cat === 'armor') { it.kind = 'armor'; it.armor = PDM.make.armorStats(1); it.stackable = false; }
@@ -195,7 +253,7 @@
   function statsSection(key, it) {
     const { F, row, field } = PDM.ui;
     const kind = it.kind || 'misc';
-    const kindSel = h('select', {}, Object.entries(PDM.ITEM_KINDS).map(([k, v]) => h('option', { value: k, selected: k === kind }, v)));
+    const kindSel = h('select', {}, Object.entries(Object.assign({}, PDM.itemKinds(), PDM.ITEM_KINDS[kind] && !PDM.itemKinds()[kind] ? { [kind]: PDM.ITEM_KINDS[kind] } : {})).map(([k, v]) => h('option', { value: k, selected: k === kind }, v)));
     kindSel.addEventListener('change', () => store.edit(key, '아이템 종류', o => {
       o.kind = kindSel.value;
       const tier = (o.stats && o.stats.tier) || 1;
@@ -307,10 +365,32 @@
       h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '행동 버튼'), acts,
       h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center' } },
         h('button', { class: 'btn sm', onclick: () => PDM.ui.codeView(cg.itemClass(it.id) + '.java', cg.itemSource(store.get(key))) }, '생성될 코드 보기'),
-        h('span', { class: 'hint' }, cg.itemNeedsClass(it) ? '클래스가 만들어집니다' : '코드·행동이 없으면 일반 MakerItem 그대로 씁니다')),
+        h('span', { class: 'hint' }, '아이템마다 게임 클래스가 하나씩 만들어집니다 (아이템 도감에도 오름)')),
       PDM.codeApiRef ? PDM.codeApiRef() : null
     ];
   }
+
+  /** 게임 저장소의 자바 파일 (core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/<rel>) */
+  async function javaPath(rel) {
+    const repo = PDM.app && PDM.app.resolveRepo ? await PDM.app.resolveRepo(true) : '';
+    return repo ? pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', ...rel.split('/')) : '';
+  }
+  /** 코드 파일 보기: 파일이 있으면 그 내용, 없으면 fallback(에디터가 만들 코드). 외부 편집기로 열기 버튼 */
+  async function showCodeFile(rel, title, fallback) {
+    const f = await javaPath(rel);
+    let txt = null;
+    try { if (f && await pdm.exists(f)) txt = await pdm.readText(f); } catch (_) { /* 무시 */ }
+    if (txt == null && fallback == null) { toast('파일이 없습니다: ' + (f || rel), 'bad'); return; }
+    const src = txt != null ? txt : fallback;
+    const lines = String(src).split('\n');
+    const pre = h('pre', { class: 'code-view' }, lines.map((l, i) => h('div', { class: /▼ \[/.test(l) ? 'mark' : '' }, h('i', {}, String(i + 1)), l || ' ')));
+    PDM.ui.modal(title, h('div', {},
+      h('p', { class: 'hint mono' }, txt != null ? f : '아직 파일이 없습니다 (▶ 테스트 플레이 때 만들어짐) — 에디터가 만들 코드를 보여 줍니다'),
+      txt != null && fallback != null && txt !== fallback ? h('p', { class: 'hint' }, '※ 파일은 마지막 테스트 플레이 때 만든 것입니다. 지금 에디터 내용과 다르면 다음 테스트 플레이 때 바뀝니다.') : null, pre),
+      [['복사', () => { navigator.clipboard && navigator.clipboard.writeText(src); return null; }],
+        ...(txt != null && pdm.isElectron ? [['외부 편집기로 열기', () => { pdm.openExternal(f); return null; }]] : []), ['닫기', null, 'pri']]);
+  }
+  PDM.showCodeFile = showCodeFile;
 
   PDM.registerEditor({
     id: 'item', icon: k => { const c = store.get(k); return (c && CAT_ICON[c.category]) || '🎁'; },
@@ -319,31 +399,94 @@
     tree() {
       if (!store.isOpen) return [];
       const all = store.all('item');
-      const G = Object.fromEntries(Object.entries(PDM.SPD_ITEM_GROUPS || {}).map(([c, l]) => [c, l.filter(x => !x.mod2 || PDM.gameMod2 !== false)]));   // mod-2 전용은 그 저장소일 때만
+      const proj = store.get('project') || {};
+      const G = Object.fromEntries(Object.entries(PDM.SPD_ITEM_GROUPS || {}).map(([c, l]) => [c, l.filter(x => !x.mod2 || PDM.isMod2())]));   // mod-2 전용은 그 저장소일 때만
       const total = Object.values(G).reduce((a, l) => a + l.length, 0);
-      const projNode = i => ({ id: 'i_' + i.id, label: `${i.name} (${i.id})`, icon: CAT_ICON[i.category] || '•', open: 'item:' + i.id,
-        menu: [{ label: '복제', run: () => { const c = PDM.clone(i); c.id = i.id + '_copy'; c.name += ' 사본'; if (!store.has('item:' + c.id)) store.add('item:' + c.id, c, '아이템 복제'); } },
+      // ---- 순서: 아이템(project.itemOrder) · 분류(project.itemCatOrder) · 세부 종류(project.itemSubOrder[분류])
+      //      끌어 놓기 또는 줄의 ▲▼ 로 옮김. 순서를 정하지 않은 아이템은 티어·이름 순으로 뒤에
+      const ord = proj.itemOrder || [];
+      const byTier = (a, b) => tierOf(a) - tierOf(b) || String(a.name).localeCompare(String(b.name));
+      const sortItems = l => { const t = l.slice().sort(byTier); return t.map((x, i) => [x, ord.indexOf(x.id) < 0 ? 100000 + i : ord.indexOf(x.id)]).sort((a, b) => a[1] - b[1]).map(x => x[0]); };
+      const allSorted = () => sortItems(store.all('item')).map(x => x.id);
+      /** 아이템을 다른 아이템의 앞/뒤로 (분류·세부 종류도 그 아이템과 같게) */
+      const placeItem = (id, targetId, pos) => store.transaction('아이템 옮기기', () => {
+        const tg = store.get('item:' + targetId); if (!tg || id === targetId) return;
+        store.edit('item:' + id, '아이템 분류', o => { o.category = tg.category || 'misc'; o.subtype = subOf(tg); });
+        const ids = allSorted().filter(x => x !== id); const k = ids.indexOf(targetId);
+        ids.splice(pos === 'before' ? k : k + 1, 0, id);
+        store.edit('project', '아이템 순서', p => { p.itemOrder = ids; });
+      });
+      /** 아이템을 분류(·세부 종류) 안으로 */
+      const intoGroup = (id, cat, sub) => store.transaction('아이템 분류 옮기기', () => {
+        store.edit('item:' + id, '아이템 분류', o => { o.category = cat; const ss = PDM.itemSubs(cat); o.subtype = sub !== undefined ? sub : ss ? (ss[subOf(o)] !== undefined ? subOf(o) : Object.keys(ss)[0]) : ''; });
+        const ids = allSorted().filter(x => x !== id); ids.push(id);
+        store.edit('project', '아이템 순서', p => { p.itemOrder = ids; });
+      });
+      const swapWith = (list, i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; placeItem(list[i].id, list[j].id, d < 0 ? 'before' : 'after'); };
+      const moveKey = (path, keys, k, targetK, pos) => store.edit('project', '순서 옮기기', p => {
+        const l = keys.filter(x => x !== k); const t = l.indexOf(targetK); l.splice(pos === 'before' ? t : t + 1, 0, k);
+        PDM.deepSet(p, path, l);
+      });
+      const arrows = (i, n, up, down) => [i > 0 ? { label: '▲', title: '위로', run: up } : null, i < n - 1 ? { label: '▼', title: '아래로', run: down } : null].filter(Boolean);
+
+      const projNode = (i, idx, list) => ({ id: 'i_' + i.id, label: `${i.name}${tierOf(i) ? ' · ' + tierOf(i) + '티어' : ''} (${i.id})`, icon: CAT_ICON[i.category] || '•', open: 'item:' + i.id,
+        drag: { kind: 'item', id: i.id },
+        canDrop: d => d.kind === 'item' && d.id !== i.id ? ['before', 'after'] : null,
+        drop: (d, pos) => placeItem(d.id, i.id, pos),
+        actions: list ? arrows(idx, list.length, () => swapWith(list, idx, -1), () => swapWith(list, idx, 1)) : [],
+        menu: [{ label: '위로 (순서)', run: () => swapWith(list, idx, -1), disabled: !list || idx === 0 }, { label: '아래로 (순서)', run: () => swapWith(list, idx, 1), disabled: !list || idx === list.length - 1 },
+          { label: '다른 분류로 옮기기…', run: () => moveDialog(i) }, '-',
+          { label: '복제', run: () => { const c = PDM.clone(i); c.id = i.id + '_copy'; c.name += ' 사본'; if (!store.has('item:' + c.id)) store.add('item:' + c.id, c, '아이템 복제'); } },
           { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${i.name}」 을(를) 삭제할까요?`)) store.remove('item:' + i.id, '아이템 삭제'); } }] });
       const gameNode = g => ({ id: 'g_' + g.p, label: `${g.n}${g.t ? ' · ' + g.t + '티어' : ''}${g.mod2 ? ' ◆' : ''}`, icon: '▫', open: 'spditem:' + g.p,
         menu: [{ label: '프로젝트 아이템으로 복사해서 고치기', run: () => copyGameItem(g) }, { label: 'id 복사 (spd:' + g.p + ')', run: () => { navigator.clipboard && navigator.clipboard.writeText('spd:' + g.p); toast('spd:' + g.p); } }] });
-      const leaf = (mine, game) => [...mine.map(projNode), ...game.map(gameNode)];
+      const leaf = (mine, game) => { const l = sortItems(mine); return [...l.map((x, k) => projNode(x, k, l)), ...game.map(gameNode)]; };
+      /** 다른 분류로 옮기기 (끌어 놓기 대신 고르기) */
+      const moveDialog = async it => {
+        const cats = PDM.itemCategories();
+        const catSel = h('select', {}, Object.entries(cats).map(([k, v]) => h('option', { value: k }, v))); catSel.value = cats[it.category] ? it.category : 'misc';
+        const subSel = h('select', {});
+        const fill = keep => { const ss = PDM.itemSubs(catSel.value) || {}; subSel.replaceChildren(...Object.entries(ss).map(([k, v]) => h('option', { value: k }, v))); subSel.disabled = !Object.keys(ss).length; if (keep !== undefined && ss[keep] !== undefined) subSel.value = keep; };
+        fill(subOf(it)); catSel.addEventListener('change', () => fill());
+        const ok = await PDM.ui.modal(`「${it.name}」 옮기기`, h('div', { style: { display: 'flex', gap: '8px' } }, h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), [['취소', null], ['옮기기', true, 'pri']]);
+        if (ok) intoGroup(it.id, catSel.value, subSel.disabled ? '' : subSel.value);
+      };
+
+      // 분류 순서
+      const catOrd = proj.itemCatOrder || [];
+      const catKeys = Object.keys(PDM.ITEM_CATEGORY_INFO).filter(cat => PDM.isMod2() || PDM.ITEM_CATEGORY_INFO[cat].note !== 'mod-2' || all.some(i => i.category === cat));
+      const cats = catKeys.map((k, i) => [k, catOrd.indexOf(k) < 0 ? 1000 + i : catOrd.indexOf(k)]).sort((a, b) => a[1] - b[1]).map(x => x[0])
+        .filter(cat => all.some(i => (i.category || 'misc') === cat) || (G[cat] || []).length);
       return [{ id: 'item', label: '아이템', icon: '🎁', order: 30, count: all.length,
         menu: [{ label: '새 아이템…', run: () => newItem() }],
-        children: Object.entries(PDM.ITEM_CATEGORY_INFO).map(([cat, info]) => {
+        children: cats.map((cat, ci) => {
+          const info = PDM.ITEM_CATEGORY_INFO[cat];
           const mine = all.filter(i => (i.category || 'misc') === cat), game = G[cat] || [];
-          if (!mine.length && !game.length) return null;
           let children;
-          if (info.subs) {
-            const known = Object.keys(info.subs);
-            children = Object.entries(info.subs).map(([sk, sl]) => {
+          const subs = PDM.itemSubs(cat);
+          if (subs) {
+            const known = Object.keys(subs);
+            const shown = known.filter(sk => mine.some(i => subOf(i) === sk) || game.some(x => (x.sub || '') === sk) || (proj.itemSubs || {})[cat] && (proj.itemSubs[cat][sk] !== undefined));
+            children = shown.map((sk, si) => {
               const m = mine.filter(i => subOf(i) === sk), gl = game.filter(x => (x.sub || '') === sk);
-              if (!m.length && !gl.length) return null;
-              return { id: `item_${cat}_${sk || 'base'}`, label: sl, count: m.length + gl.length, menu: [{ label: `새 ${sl}…`, run: () => newItem(cat, sk) }], children: leaf(m, gl) };
-            }).filter(Boolean);
-            children.push(...mine.filter(i => !known.includes(subOf(i))).map(projNode));
+              return { id: `item_${cat}_${sk || 'base'}`, label: subs[sk], count: m.length + gl.length, children: leaf(m, gl),
+                drag: { kind: 'sub', cat, sub: sk },
+                canDrop: d => d.kind === 'item' ? ['into'] : d.kind === 'sub' && d.cat === cat && d.sub !== sk ? ['before', 'after'] : null,
+                drop: (d, pos) => d.kind === 'item' ? intoGroup(d.id, cat, sk) : moveKey(['itemSubOrder', cat], known, d.sub, sk, pos),
+                actions: arrows(si, shown.length, () => moveKey(['itemSubOrder', cat], known, sk, shown[si - 1], 'before'), () => moveKey(['itemSubOrder', cat], known, sk, shown[si + 1], 'after')),
+                menu: [{ label: `새 ${subs[sk]}…`, run: () => newItem(cat, sk) }, { label: '세부 종류 관리…', run: () => manageSubs(cat) }] };
+            });
+            const rest = sortItems(mine.filter(i => !known.includes(subOf(i))));
+            children.push(...rest.map((x, k) => projNode(x, k, rest)));
           } else children = leaf(mine, game);
-          return { id: 'item_' + cat, label: info.name, icon: info.icon, count: mine.length + game.length, menu: [{ label: `새 ${info.name}…`, run: () => newItem(cat) }], children };
-        }).filter(Boolean).concat([{ id: 'item_help', label: `▫ = 게임 아이템 ${total}개 (보기 전용 · 우클릭 → 복사해서 고치기) · ◆ = mod-2 추가`, icon: 'ℹ' }]) }];
+          return { id: 'item_' + cat, label: info.name, icon: info.icon, count: mine.length + game.length, children,
+            drag: { kind: 'cat', cat },
+            canDrop: d => d.kind === 'item' ? ['into'] : d.kind === 'cat' && d.cat !== cat ? ['before', 'after'] : null,
+            drop: (d, pos) => d.kind === 'item' ? intoGroup(d.id, cat) : moveKey(['itemCatOrder'], cats, d.cat, cat, pos),
+            actions: arrows(ci, cats.length, () => moveKey(['itemCatOrder'], cats, cat, cats[ci - 1], 'before'), () => moveKey(['itemCatOrder'], cats, cat, cats[ci + 1], 'after')),
+            menu: [{ label: `새 ${info.name}…`, run: () => newItem(cat) }, { label: '세부 종류 관리…', run: () => manageSubs(cat) }] };
+        }).concat([{ id: 'item_help', label: `▫ = 게임 아이템 ${total}개 (보기 전용 · 우클릭 → 복사해서 고치기)${PDM.isMod2() ? ' · ◆ = mod-2 추가' : ''}`, icon: 'ℹ' },
+          { id: 'item_help2', label: '끌어 놓기 또는 ▲▼ 로 순서·분류 옮기기', icon: 'ℹ' }]) }];
     },
     render(key, ctx) {
       const it = store.get(key);
@@ -355,7 +498,10 @@
       const haters = store.all('char').filter(c => c.heart && c.heart.enabled && ((c.heart.dislikes || []).includes(it.id) || (it.tags || []).some(t => (c.heart.dislikes || []).includes('tag:' + t))));
       return h('div', { class: 'page' },
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' } }, prev,
-          h('div', {}, h('h1', {}, it.name), h('div', { class: 'hint' }, `${it.id} · ${PDM.ITEM_CATEGORIES[it.category]}`))),
+          h('div', {}, h('h1', {}, it.name), h('div', { class: 'hint' }, `${it.id} · ${PDM.ITEM_CATEGORIES[it.category] || it.category}${it.tier ? ' · ' + it.tier + '티어' : ''}`),
+            h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
+              h('button', { class: 'btn sm', title: '이 아이템으로 만들어지는 게임 클래스 (pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java)', onclick: () => showCodeFile('pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemSource(store.get(key))) }, '코드 파일 보기'),
+              it.kind === 'game' && it.base ? h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + it.base.replace(/\./g, '/') + '.java', '게임 코드 — items.' + it.base) }, '바탕 게임 코드 보기') : null))),
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true })),
           categoryBlock(key, it),
@@ -372,9 +518,9 @@
               if (out) store.edit(key, '스프라이트: 직접 그림', o => { o.sprite = { png: out }; });
             } }, custom ? '그림 편집…' : '직접 그리기…')),
           spriteTools(key, ['sprite'], it.sprite, it.id, it.kind === 'game' ? null : { sheet: 'builtin:items', index: 0 }),
-          h('p', { class: 'hint' }, 'PNG 그림은 게임에서 아이템 시트 아래에 붙여 씁니다 (가방·바닥·퀵슬롯 모두). 칸보다 크면 줄이고, 16px 그림은 mod-2(32px 칸)에서 두 배로 키웁니다.'),
+          h('p', { class: 'hint' }, 'PNG 그림은 게임에서 아이템 시트 아래에 붙여 씁니다 (가방·바닥·퀵슬롯 모두). 칸(16px)보다 크면 줄여서 씁니다.' + (PDM.isMod2() ? ' 16px 그림은 mod-2(32px 칸)에서 두 배로 키웁니다.' : '')),
           custom ? F.image(key, ['sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true })
-            : h('div', {}, row(F.text(key, ['sprite', 'name'], { label: '그림 이름 (ItemSpriteSheet 상수 — 원작·mod-2 모두 맞음)', rerender: true, transform: v => v.trim().toUpperCase() }), F.num(key, ['sprite', 'index'], { label: '번호 (이름이 없을 때)', int: true, min: 0, rerender: true, onchange: () => store.edit(key, '그림 번호', o => { delete o.sprite.name; }) })), sheetPicker(key, it))),
+            : h('div', {}, row(F.text(key, ['sprite', 'name'], { label: '그림 이름 (ItemSpriteSheet 상수)', rerender: true, transform: v => v.trim().toUpperCase() }), F.num(key, ['sprite', 'index'], { label: '번호 (이름이 없을 때)', int: true, min: 0, rerender: true, onchange: () => store.edit(key, '그림 번호', o => { delete o.sprite.name; }) })), sheetPicker(key, it))),
         section('종류와 수치', ...statsSection(key, it)),
         section('소리', ...itemSoundFields(key, it)),
         section('코드 (Java) — 세부 동작', ...codeSection(key, it, ctx)),
@@ -401,7 +547,8 @@
       return h('div', { class: 'page' },
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' } }, prev,
           h('div', {}, h('h1', {}, g.n, g.mod2 ? h('span', { class: 'badge', style: { marginLeft: '8px' } }, 'mod-2') : null),
-            h('div', { class: 'hint' }, `게임 아이템 · ${info.name || cat}${g.sub && info.subs ? ' › ' + info.subs[g.sub] : ''}${g.t ? ' · ' + g.t + '티어' : ''}`))),
+            h('div', { class: 'hint' }, `게임 아이템 · ${info.name || cat}${g.sub && info.subs ? ' › ' + info.subs[g.sub] : ''}${g.t ? ' · ' + g.t + '티어' : ''}`),
+            h('div', { style: { marginTop: '6px' } }, h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + g.p.replace(/\./g, '/') + '.java', '게임 코드 — items.' + g.p) }, '게임 코드 파일 보기')))),
         PDM.ui.section('설명', h('p', { style: { whiteSpace: 'pre-wrap' } }, (g.d || '(설명 없음)').replace(/\\n/g, '\n').replace(/_([^_]+)_/g, '$1'))),
         (() => {
           const gk = 'spd:' + g.p, cur = (((store.get('gameitems') || {}).items || {})[gk] || {}).sprite || null;

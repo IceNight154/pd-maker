@@ -47,6 +47,18 @@ public class HeroSelect {
 		String forced = MakerRuntime.project == null ? "" : MakerRuntime.project.getString("startHero", "");
 		if (!forced.isEmpty() && MakerRuntime.heroes.get(forced) != null) { out.add(MakerRuntime.heroes.get(forced)); return out; }
 		for (JsonValue h : MakerRuntime.heroes.values()) if (h.getBoolean("enabled", true)) out.add(h);
+		// 순서: project.json 의 heroOrder (에디터 리소스 목록에서 ▲▼ 로 정함), 없는 영웅은 뒤에
+		JsonValue ord = MakerRuntime.project == null ? null : MakerRuntime.project.get("heroOrder");
+		if (ord != null && ord.size > 0) {
+			final List<String> ids = new ArrayList<>();
+			for (JsonValue o : ord) ids.add(o.asString());
+			final List<JsonValue> orig = new ArrayList<>(out);
+			java.util.Collections.sort(out, (a, b) -> {
+				int ia = ids.indexOf(a.getString("id", "")), ib = ids.indexOf(b.getString("id", ""));
+				if (ia < 0) ia = 1000 + orig.indexOf(a); if (ib < 0) ib = 1000 + orig.indexOf(b);
+				return Integer.compare(ia, ib);
+			});
+		}
 		return out;
 	}
 
@@ -76,11 +88,18 @@ public class HeroSelect {
 		} catch (Throwable t) { MakerRuntime.log("영웅 선택 화면 오류: " + t); return false; }
 	}
 
+	/** 영웅 편집기 "캐릭터 선택 화면"의 글자 (select.title · desc · info) — 비면 "" */
+	static String sel(JsonValue h, String k) {
+		JsonValue s = h.get("select");
+		return s == null ? "" : s.getString(k, "").replace("\\n", "\n");
+	}
 	static String name(JsonValue h) {
+		if (!sel(h, "title").trim().isEmpty()) return sel(h, "title");
 		String n = h.getString("name", "");
 		return n.isEmpty() ? Messages.titleCase(classOf(h).title()) : n;
 	}
 	static String desc(JsonValue h) {
+		if (!sel(h, "desc").trim().isEmpty()) return sel(h, "desc");
 		if (vanilla(h)) return classOf(h).shortDesc();
 		String d = h.getString("desc", "").replace("\\n", "\n");
 		if (d.trim().isEmpty()) d = h.getString("title", "");
@@ -201,7 +220,7 @@ public class HeroSelect {
 	static void infoButton(Object sc, JsonValue h) throws Exception {
 		if (myInfo != null) { if (myInfo.parent != null) myInfo.parent.remove(myInfo); myInfo = null; }
 		Component info = (Component) field(sc, "infoButton");
-		if (info == null || vanilla(h)) return;
+		if (info == null || (vanilla(h) && sel(h, "info").trim().isEmpty())) return;   // 원작 영웅은 게임 정보 창 (정보 글자를 정하면 그것)
 		final JsonValue hh = h;
 		myInfo = new com.shatteredpixel.shatteredpixeldungeon.ui.IconButton(com.shatteredpixel.shatteredpixeldungeon.ui.Icons.get(com.shatteredpixel.shatteredpixeldungeon.ui.Icons.INFO)) {
 			@Override protected void onClick() {
@@ -216,6 +235,7 @@ public class HeroSelect {
 		((PixelScene) sc).add(myInfo);
 	}
 	static String fullDesc(JsonValue h) {
+		if (!sel(h, "info").trim().isEmpty()) return sel(h, "info");
 		String d = h.getString("desc", "").replace("\\n", "\n");
 		return d.trim().isEmpty() ? h.getString("title", " ") : d;
 	}
@@ -290,7 +310,7 @@ public class HeroSelect {
 			super.onClick();
 			if (locked()) { ShatteredPixelDungeon.scene().addToFront(new WndMessage(cl.unlockMsg())); return; }
 			if (id.equals(selected) && GamesInProgress.selectedClass == cl) {
-				Window w = vanilla(h) ? new WndHeroInfo(cl) : new WndTitledMessage(HeroSelect.icon(h), name(h), fullDesc(h));
+				Window w = vanilla(h) && sel(h, "info").trim().isEmpty() ? new WndHeroInfo(cl) : new WndTitledMessage(HeroSelect.icon(h), name(h), fullDesc(h));
 				if (PixelScene.landscape()) w.offset(Camera.main.width / 6, 0);
 				ShatteredPixelDungeon.scene().addToFront(w);
 			} else select(sc, h);
