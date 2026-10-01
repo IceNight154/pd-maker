@@ -1,0 +1,335 @@
+// ================================================================
+//  캐릭터 편집기 — NPC · 동료 · 몬스터 · 보스  (플레이어블 영웅은 영웅 편집기 hero.js)
+//   스프라이트/애니메이션, 초상화·표정, 능력치, AI·경로, 마음(era), 구상 대사, 행동 이벤트
+// ================================================================
+(function () {
+  const { h } = PDM;
+  const store = PDM.store;
+  const KIND_ICON = { npc: '☺', companion: '♥', mob: '☗', boss: '☠' };
+
+  async function newCharacter(kind) {
+    const id = await PDM.ui.prompt('새 캐릭터 id (영문, 파일 이름이 됩니다)', '');
+    if (!id) return;
+    const clean = PDM.slugId(id);
+    if (store.has('char:' + clean)) { toast('같은 id 가 있습니다', 'bad'); return; }
+    const c = PDM.make.character(clean, kind); c.name = id;
+    store.add('char:' + clean, c, '캐릭터 추가');
+    PDM.tabs.open('char:' + clean);
+  }
+  async function renameChar(id) {
+    const n = await PDM.ui.prompt('새 id', id, '다른 곳의 참조(맵 오브젝트, 이벤트)는 자동으로 바뀌지 않습니다. 검사(F7)로 확인하세요.');
+    if (!n || n === id) return;
+    try { store.rename('char:' + id, 'char:' + PDM.slugId(n)); } catch (e) { toast(e.message, 'bad'); }
+  }
+  function dupChar(id) {
+    const c = PDM.clone(store.get('char:' + id)); let n = id + '_copy', k = 2;
+    while (store.has('char:' + n)) n = id + '_copy' + (k++);
+    c.id = n; c.name += ' 사본'; store.add('char:' + n, c, '캐릭터 복제'); PDM.tabs.open('char:' + n);
+  }
+
+  /** 게임 sprites 폴더의 PNG 목록 (한 번만 읽음) */
+  let gameSpriteList = null;
+  async function gameSprites() {
+    if (gameSpriteList) return gameSpriteList;
+    const g = store.gameAssetsDir(); if (!g) return [];
+    try { gameSpriteList = (await pdm.list(pdm.join(g, 'sprites'))).filter(f => f.name.endsWith('.png')).map(f => 'game:sprites/' + f.name); }
+    catch (_) { gameSpriteList = []; }
+    return gameSpriteList;
+  }
+  store.on('load', () => { gameSpriteList = null; });
+
+  // ---------- 애니메이션 미리보기 ----------
+  //  실제 흐른 시간으로 프레임을 넘김 (예전에는 50ms 타이머에 맞춰 넘겨서 fps 10~19 가 모두 같은 속도로 보였음)
+  function animPreview(c, animKey, ctx, rowOf) {
+    const cv = h('canvas', { class: 'anim-prev', width: 72, height: 72 });
+    let img = null, acc = 0, frame = 0, last = performance.now(), raf = 0, alive = true, seen = false;
+    PDM.assets.load(c.sprite.sheet).then(i => { img = i; });
+    const tick = now => {
+      if (!alive) return;
+      if (cv.isConnected) seen = true; else if (seen) { alive = false; return; }   // 다시 그려져서 떨어져 나간 미리보기는 멈춤
+      raf = requestAnimationFrame(tick);
+      const dt = Math.min(250, now - last); last = now;
+      const a = (c.sprite.anims || {})[animKey]; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.clearRect(0, 0, 72, 72);
+      if (!img || !a || !a.frames || !a.frames.length) return;
+      const step = 1000 / Math.max(1, a.fps || 10);
+      acc += dt;
+      while (acc >= step) { acc -= step; frame++; if (frame >= a.frames.length) frame = a.loop ? 0 : a.frames.length - 1; }
+      if (frame >= a.frames.length) frame = 0;
+      const [fw, fh] = c.sprite.frame; const sc = Math.floor(64 / Math.max(fw, fh)) || 1;
+      let n = a.frames[frame] | 0;
+      if (rowOf) { const cols = Math.max(1, Math.floor(img.width / fw)); n = rowOf(img) * cols + Math.min(n, cols - 1); }
+      PDM.assets.drawFrame(g, img, fw, fh, n, (72 - fw * sc) / 2, (72 - fh * sc) / 2, sc);
+    };
+    raf = requestAnimationFrame(tick);
+    cv.addEventListener('click', () => { frame = 0; acc = 0; });
+    const prev = ctx._stop || (() => {}); ctx._stop = () => { prev(); alive = false; cancelAnimationFrame(raf); };
+    return cv;
+  }
+
+  // ---------- 스프라이트 시트 보기 (프레임 번호 클릭 → 현재 애니메이션에 추가) ----------
+  function sheetView(key, c, state) {
+    const cv = h('canvas', {});
+    const wrap = h('div', { class: 'sheet-view' }, cv);
+    PDM.assets.load(c.sprite.sheet).then(img => {
+      if (!img) { wrap.replaceChildren(h('div', { class: 'empty', style: { padding: '12px' } }, '시트 이미지를 불러오지 못했습니다')); return; }
+      const [fw, fh] = c.sprite.frame; const sc = Math.max(1, Math.min(3, Math.floor(48 / Math.max(fw, fh))));
+      cv.width = img.width * sc; cv.height = img.height * sc;
+      const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, cv.width, cv.height);
+      const cols = Math.floor(img.width / fw), rows = Math.floor(img.height / fh);
+      g.strokeStyle = 'rgba(165,139,255,.45)'; g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '10px monospace';
+      for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) { g.strokeRect(q * fw * sc + .5, r * fh * sc + .5, fw * sc, fh * sc); g.fillText(r * cols + q, q * fw * sc + 2, r * fh * sc + 10); }
+      cv.onclick = e => {
+        const b = cv.getBoundingClientRect(); const q = Math.floor((e.clientX - b.left) / (fw * sc)), r = Math.floor((e.clientY - b.top) / (fh * sc));
+        const n = r * cols + q;
+        store.edit(key, '프레임 추가', o => { const a = o.sprite.anims[state.anim] = o.sprite.anims[state.anim] || { frames: [], fps: 10, loop: true }; a.frames.push(n); });
+      };
+    });
+    return wrap;
+  }
+
+  // ---------- 경로 찍기 (층 미니맵) ----------
+  function pathPicker(key, c) {
+    const nodes = store.all('node').filter(f => f.mode !== 'procedural');
+    if (!nodes.length) return h('div', { class: 'hint' }, '직접 그린 맵(노드)이 있어야 지도에서 경로를 찍을 수 있습니다. 아래 목록에 좌표를 직접 넣어도 됩니다.');
+    const st = { node: c.ai.pathNode && store.get('node:' + c.ai.pathNode) ? c.ai.pathNode : nodes[0].id };
+    const sel = h('select', { onchange: () => { st.node = sel.value; store.edit(key, '경로 맵', o => { o.ai.pathNode = st.node; }, { silent: true }); draw(); } }, nodes.map(n => h('option', { value: n.id }, PDM.World.fullName(n.id))));
+    sel.value = st.node;
+    const cv = h('canvas', { style: { cursor: 'crosshair', imageRendering: 'pixelated', border: '1px solid var(--line)', borderRadius: '4px', maxWidth: '100%' } });
+    async function draw() {
+      const fl = store.get('node:' + st.node); const s = 10;
+      cv.width = fl.size.w * s; cv.height = fl.size.h * s;
+      const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+      const tiles = await PDM.assets.themeTiles((PDM.World.themeOf(fl.id) || '').replace('custom:', ''));
+      for (let y = 0; y < fl.size.h; y++) for (let x = 0; x < fl.size.w; x++) PDM.assets.drawTerrain(g, tiles, fl.layers.terrain[y * fl.size.w + x], x * s, y * s, s);
+      const pts = c.ai.path || [];
+      g.strokeStyle = '#ffde59'; g.lineWidth = 2; g.beginPath();
+      pts.forEach((p, i) => { const X = p.x * s + s / 2, Y = p.y * s + s / 2; i ? g.lineTo(X, Y) : g.moveTo(X, Y); }); g.stroke();
+      pts.forEach((p, i) => { g.fillStyle = i ? '#ffde59' : '#5fd6b4'; g.fillRect(p.x * s + 2, p.y * s + 2, s - 4, s - 4); });
+    }
+    cv.onclick = e => { const b = cv.getBoundingClientRect(); const sx = cv.width / b.width; const x = Math.floor((e.clientX - b.left) * sx / 10), y = Math.floor((e.clientY - b.top) * sx / 10); store.edit(key, '경로 점 추가', o => { o.ai.path = o.ai.path || []; o.ai.path.push({ x, y }); o.ai.pathNode = st.node; }); };
+    cv.oncontextmenu = e => { e.preventDefault(); store.edit(key, '경로 점 삭제', o => { (o.ai.path || []).pop(); }); };
+    draw();
+    return h('div', {}, h('div', { class: 'row' }, PDM.ui.field('맵', sel)), cv, h('div', { class: 'hint' }, '클릭 = 점 추가, 오른쪽 클릭 = 마지막 점 삭제. 초록 = 시작점'));
+  }
+
+  // ---------- 대사 테스트 ----------
+  function dialogueTester(c) {
+    const out = h('div', { class: 'sim-log' });
+    const sys = store.get('heart');
+    const rec = PDM.Heart.newRecord(c);
+    const favor = h('input', { type: 'number', value: rec.favor, style: { width: '90px' } });
+    const trust = h('input', { type: 'number', value: rec.trust, style: { width: '90px' } });
+    const topic = h('select', {}, (sys.topics || []).map(t => h('option', { value: t.key }, t.name)));
+    const run = () => {
+      rec.favor = +favor.value; rec.trust = +trust.value;
+      const line = PDM.Heart.pickLine(sys, rec, c, topic.value);
+      out.prepend(h('div', {}, `[${topic.value} · 호감 ${rec.favor} 신뢰 ${rec.trust}] `, line ? h('b', { style: { color: 'var(--fg)' } }, `${line.face ? '(' + line.face + ') ' : ''}${line.text}`) : h('i', {}, '맞는 대사 없음 → 공용 대사 사용')));
+    };
+    return h('div', {}, h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+      '토픽', topic, PDM.T('rel.favor'), favor, PDM.T('rel.trust'), trust, h('button', { class: 'btn sm', onclick: run }, '대사 뽑기'),
+      h('button', { class: 'btn sm', onclick: () => PDM.heartSim && PDM.heartSim(c.id) }, '마음 시뮬레이터…')), out);
+  }
+
+
+  /** 스프라이트 시트 · 프레임 · 배율 · 애니메이션 편집 (캐릭터 편집기와 영웅 편집기가 함께 씀) */
+  function spriteEditor(key, c, ctx, st) {
+    const { F, row } = PDM.ui;
+    st = st || (ctx.state = ctx.state || { anim: 'idle' });
+    if (!st.anim) st.anim = 'idle';
+    c.sprite.anims = c.sprite.anims || {};
+      // 게임 스프라이트 빠른 선택
+    const quick = h('select', { onchange: () => { if (quick.value) { store.edit(key, '시트 변경', o => { o.sprite.sheet = quick.value; }); } } }, h('option', { value: '' }, '게임 스프라이트에서 고르기…'));
+    gameSprites().then(list => list.forEach(p => quick.append(h('option', { value: p }, p.slice(13)))));
+
+    const isHero = key.startsWith('hero:');
+    const BASE = isHero ? PDM.ANIM_KEYS_HERO : PDM.ANIM_KEYS_CHAR;
+    const keys = [...BASE, ...Object.keys(c.sprite.anims || {}).filter(k => !BASE.includes(k))];
+    // 미리보기에서 보여 줄 갑옷 단계 행 (영웅 시트)
+    const armorRows = isHero && c.sprite.armorRows !== false;
+    const pvTier = st.pvTier || 0;
+    const rowOf = armorRows ? img => { const rows = Math.max(1, Math.floor(img.height / c.sprite.frame[1])); const tr = c.sprite.tierRows; const r = tr && tr.length ? tr[Math.min(pvTier, tr.length - 1)] : pvTier; return Math.max(0, Math.min(rows - 1, r | 0)); } : null;
+    const animRows = h('div', {});
+    const create = (ak, def) => { st.anim = ak; store.edit(key, '애니메이션 추가', o => { o.sprite.anims[ak] = def || { frames: [0], fps: 10, loop: ak === 'idle' || ak === 'run' || ak === 'fly' }; }); };
+    keys.forEach(ak => {
+      const a = (c.sprite.anims || {})[ak];
+      const custom = !BASE.includes(ak);
+      animRows.append(h('div', { class: 'li', style: { alignItems: 'center', marginBottom: '6px', outline: st.anim === ak ? '1px solid var(--accent)' : '' }, onclick: e => { if (st.anim !== ak && !/INPUT|BUTTON/.test(e.target.tagName)) { st.anim = ak; ctx.refresh(); } } },
+        a ? animPreview(c, ak, ctx, rowOf) : h('div', { style: { width: '72px' } }),
+        h('div', { style: { flex: 1 } },
+          h('b', {}, ak, ' ', h('span', { class: 'hint' }, custom ? '추가 애니메이션 (이벤트 "애니메이션 재생")' : (PDM.ANIM_NAMES[ak] || ''))),
+          st.anim === ak ? h('span', { class: 'badge good', style: { marginLeft: '6px' } }, '시트 클릭 → 여기에 추가') : null,
+          a ? row(PDM.ui.field('프레임 번호 (쉼표로 구분)', (() => { const fi = h('input', { type: 'text', value: (a.frames || []).join(', ') }); fi.addEventListener('change', () => store.edit(key, '프레임', o => { o.sprite.anims[ak].frames = fi.value.split(/[ ,]+/).filter(Boolean).map(Number).filter(n => !isNaN(n)); })); return fi; })()),
+            F.num(key, ['sprite', 'anims', ak, 'fps'], { label: 'fps', min: 1, max: 60, int: true }), F.bool(key, ['sprite', 'anims', ak, 'loop'], { label: '반복' }))
+            : h('button', { class: 'btn sm', onclick: () => create(ak) }, '+ 이 애니메이션 만들기')),
+        a ? h('button', { class: 'ib danger', title: '애니메이션 삭제', onclick: e => { e.stopPropagation(); if (st.anim === ak) st.anim = 'idle'; store.edit(key, '애니메이션 삭제', o => { delete o.sprite.anims[ak]; }); } }, '✕') : null));
+    });
+    animRows.append(h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+      h('button', { class: 'btn sm', onclick: async () => {
+        const n = await PDM.ui.prompt('새 애니메이션 이름 (영문)', '', '예: cast, dance, hurt, sit — 이벤트 명령 "애니메이션 재생"에서 이 이름으로 틉니다');
+        if (!n) return;
+        const id = PDM.slugId(n);
+        if ((c.sprite.anims || {})[id]) { st.anim = id; ctx.refresh(); return; }
+        create(id, { frames: [0], fps: 10, loop: false });
+      } }, '+ 새 애니메이션 추가'),
+      h('span', { class: 'hint' }, isHero ? 'fly = 공중부양·점프 중, read = 주문서 읽을 때. 비워 두면 가만히 / 조작 동작을 씁니다.' : 'fly = 날개가 있거나 떠 있는 캐릭터가 가만히·이동할 때.')));
+
+    // 갑옷 단계 → 시트 행 (영웅)
+    const tierBox = armorRows ? (() => {
+      const tr = c.sprite.tierRows && c.sprite.tierRows.length ? c.sprite.tierRows : null;
+      const TIERS = ['0 (갑옷 없음)', '1 (천)', '2 (가죽)', '3 (사슬)', '4 (비늘)', '5 (판금)', '6 (직업 갑옷)'];
+      const setRows = rows => store.edit(key, '갑옷 단계 행', o => { if (rows) o.sprite.tierRows = rows; else delete o.sprite.tierRows; });
+      const cur = t => tr ? tr[Math.min(t, tr.length - 1)] : t;
+      return h('div', { class: 'tier-rows', style: { margin: '6px 0 10px' } },
+        h('div', { class: 'fl' }, '갑옷 단계별로 쓸 시트 행'),
+        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', margin: '2px 0 6px' } },
+          h('button', { class: 'btn xs' + (!tr ? ' pri' : ''), onclick: () => setRows(null) }, '자동 (단계 = 행)'),
+          h('button', { class: 'btn xs', onclick: () => setRows([0, 0, 0, 0, 0, 0, 0]) }, '0행만 사용'),
+          ...[1, 2, 3, 4, 5].map(m => h('button', { class: 'btn xs', onclick: () => setRows([0, 1, 2, 3, 4, 5, 6].map(t => Math.min(t, m))) }, `${m}행까지`))),
+        h('div', { class: 'row', style: { flexWrap: 'wrap' } }, ...TIERS.map((nm, t) => {
+          const inp = h('input', { type: 'number', min: 0, max: 20, value: cur(t), style: { width: '60px' } });
+          inp.addEventListener('change', () => { const rows = [0, 1, 2, 3, 4, 5, 6].map(i => cur(i)); rows[t] = Math.max(0, inp.value | 0); setRows(rows); });
+          return PDM.ui.field('갑옷 ' + nm, inp);
+        })),
+        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '미리보기 단계:'),
+          ...[0, 1, 2, 3, 4, 5, 6].map(t => h('button', { class: 'chip' + (pvTier === t ? ' on' : ''), onclick: () => { st.pvTier = t; ctx.refresh(); } }, String(t)))),
+        h('p', { class: 'hint' }, '시트에 그린 행보다 큰 단계는 마지막 행을 씁니다. 예: 한 행만 그렸으면 "0행만 사용", 3단계까지 그렸으면 "3행까지".'));
+    })() : null;
+
+    return [
+
+          row(F.image(key, ['sprite', 'sheet'], { label: '스프라이트 시트', sub: PDM.assets.folderFor(key), rerender: true, rmCat: 'characters' }), h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), quick),
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', title: 'RPG Maker MZ 걷기 시트(3×4)를 잘라서 프레임·애니메이션을 자동으로 맞춥니다', onclick: async () => {
+              const sp = await PDM.rmmz.characterSprite(); if (!sp) return;
+              store.edit(key, 'RPG Maker 캐릭터 시트', o => { o.sprite = Object.assign({}, o.sprite, sp); }); toast('RPG Maker 캐릭터 시트를 적용했습니다');
+            } }, 'RPG Maker 캐릭터 시트…'))),
+          c.sprite.armorRows === false ? h('p', { class: 'hint' }, `RPG Maker 시트 (${(c.sprite.rmmz || {}).file || ''}): 프레임 번호는 시트 전체 기준, 영웅은 갑옷 단계에 따라 줄이 바뀌지 않습니다. 게임 배율 0 = 자동(높이 15px).`) : null,
+          row(F.num(key, ['sprite', 'frame', 0], { label: '프레임 가로(px)', int: true, min: 1, rerender: true }), F.num(key, ['sprite', 'frame', 1], { label: '프레임 세로(px)', int: true, min: 1, rerender: true }),
+            F.num(key, ['sprite', 'scale'], { label: '게임 배율 (0=자동)', step: 0.05, min: 0 }),
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: async () => {
+              let rel = c.sprite.sheet;
+              if (!rel || rel.startsWith('game:')) {
+                const dest = `assets/${PDM.assets.folderFor(key)}/${c.id}.png`;
+                if (rel) { try { await pdm.copy(PDM.assets.resolvePath(rel), store.abs(dest)); } catch (e) { toast('복사 실패', 'bad'); return; } }
+                rel = dest; store.edit(key, '시트 경로', o => { o.sprite.sheet = dest; }, { silent: true });
+              }
+              const out = await PDM.editPixelsModal('스프라이트 시트 편집 — ' + c.name, rel, c.sprite.frame[0] * 12, c.sprite.frame[1], c.sprite.frame[0], null, { rowStep: c.sprite.frame[1] });
+              if (out) ctx.refresh();
+            } }, '시트 그리기/편집…'))),
+          c.sprite.sheet ? sheetView(key, c, st) : h('div', { class: 'hint' }, '시트를 고르면 프레임 번호가 표시됩니다'),
+          tierBox, h('h3', {}, '애니메이션'), animRows];
+  }
+  PDM.spriteEditor = spriteEditor;
+
+  PDM.registerEditor({
+    id: 'character', icon: k => { const c = store.get(k); return (c && KIND_ICON[c.kind]) || '☺'; },
+    match: k => k.startsWith('char:'),
+    title: k => { const c = store.get(k); return c ? c.name : k; },
+    watch: (ck, tk) => ck === tk || ck === 'heart',
+    tree() {
+      if (!store.isOpen) return [];
+      const all = store.all('char');
+      return [{ id: 'char', label: '캐릭터', icon: '☺', order: 20, count: all.length,
+        menu: Object.entries(PDM.CHAR_KINDS).map(([k, v]) => ({ label: `새 ${v}…`, run: () => newCharacter(k) })),
+        children: Object.entries(PDM.CHAR_KINDS).map(([kind, label]) => {
+          const list = all.filter(c => c.kind === kind);
+          return { id: 'char_' + kind, label, icon: KIND_ICON[kind], count: list.length,
+            menu: [{ label: `새 ${label}…`, run: () => newCharacter(kind) }],
+            children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})`, icon: '', open: 'char:' + c.id,
+              menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, '-',
+                { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); } }] })) };
+        }) }];
+    },
+    render(key, ctx) {
+      const c = store.get(key);
+      const { F, section, row, listEditor } = PDM.ui;
+      const sys = store.get('heart') || PDM.defaults.heart();
+      const st = ctx.state = ctx.state || { anim: 'idle' };
+      ctx.onDispose(() => ctx._stop && ctx._stop());
+
+      const topics = [...new Set([...(sys.topics || []).map(t => t.key), ...Object.keys(c.dialogue || {})])];
+      const dlg = h('div', {});
+      topics.forEach(tk => {
+        const t = (sys.topics || []).find(x => x.key === tk);
+        const n = ((c.dialogue || {})[tk] || []).length;
+        dlg.append(h('details', { open: n > 0 && tk === 'greet' },
+          h('summary', { style: { cursor: 'pointer', padding: '4px 0' } }, h('b', {}, t ? t.name : tk), h('span', { class: 'hint' }, `  ${tk} · ${n}개`)),
+          listEditor(key, ['dialogue', tk], {
+            addLabel: '대사 추가', compact: true,
+            make: () => ({ when: '', face: '', text: '' }),
+            render: (it, i, p) => h('div', { class: 'dlg-line' },
+              F.cond(key, [...p, 'when'], { placeholder: '조건 (비우면 기본)' }),
+              F.ref(key, [...p, 'face'], 'face', { ctx: { char: c.id }, empty: '표정: 기본' }),
+              F.textarea(key, [...p, 'text'], { rows: 2 }))
+          })));
+      });
+
+      const behaviors = h('div', {});
+      Object.entries(PDM.BEHAVIOR_HOOKS).forEach(([hk, label]) => {
+        const n = ((c.behaviors || {})[hk] || []).length;
+        behaviors.append(h('details', { open: n > 0 }, h('summary', { style: { cursor: 'pointer', padding: '4px 0' } }, h('b', {}, label), h('span', { class: 'hint' }, `  ${hk} · 명령 ${n}개`)),
+          PDM.commandList(key, ['behaviors', hk], { defaultSpeaker: c.id })));
+      });
+
+      return h('div', { class: 'page' },
+        h('h1', {}, `${KIND_ICON[c.kind] || ''} ${c.name}`, h('span', { class: 'hint', style: { marginLeft: '8px' } }, c.id)),
+        c.game ? h('div', { class: 'banner', style: { border: '1px solid var(--line)', borderLeft: '3px solid var(--gold)', borderRadius: '6px', padding: '8px 10px', margin: '0 0 10px' } },
+          h('div', {}, h('b', {}, '원작 캐릭터'), h('span', { class: 'hint mono', style: { marginLeft: '6px' } }, 'actors.mobs.' + c.game)),
+          F.bool(key, ['useGame'], { label: '게임 원래 동작 그대로 쓰기 (AI·공격·특수 능력·퀘스트 모두 게임 코드) — 맵에 놓거나 이벤트로 소환하면 게임 클래스가 나옵니다', def: true, rerender: true }),
+          h('p', { class: 'hint', style: { margin: '4px 0 0' } }, c.useGame === false
+            ? '끔: 아래 능력치·그림·AI·대사로 동작하는 PDMaker 캐릭터가 됩니다 (게임의 특수 능력은 없음).'
+            : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.')) : null,
+        section('기본',
+          row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' })),
+          F.textarea(key, ['desc'], { label: '설명(도감)', rows: 2 })),
+        section('스프라이트 · 애니메이션', ...spriteEditor(key, c, ctx, st)),
+        section('초상화 · 표정 · 대사창 일러스트',
+          h('div', { class: 'dlg-prev-wrap' },
+            (() => { const stg = h('div', { class: 'scene-prev dlg-stage dlg-mini', title: '대사창 미리보기 (대사창 편집기 설정)' });
+              requestAnimationFrame(() => PDM.Dialogue && PDM.Dialogue.render(stg, PDM.Dialogue.line(c.id, st.pvFace || '', '', `${c.name}의 대사는 이렇게 보여요.`), { static: true }));
+              return stg; })(),
+            h('div', { class: 'dlg-prev-ctl' },
+              F.image(key, ['portrait', 'default'], { label: '기본 초상화 / 스탠딩 일러스트', sub: PDM.assets.folderFor(key, 'portrait'), rerender: true }),
+              row(F.num(key, ['portrait', 'scale'], { label: '크기 배율', step: 0.05, min: 0.1, def: 1, rerender: true }),
+                F.num(key, ['portrait', 'offsetX'], { label: '안쪽으로 이동 (화면 높이 %)', step: 1, def: 0, rerender: true }),
+                F.num(key, ['portrait', 'offsetY'], { label: '아래로 이동 (%)', step: 1, def: 0, rerender: true })),
+              row(F.select(key, ['portrait', 'side'], { left: '왼쪽', right: '오른쪽' }, { label: '서는 쪽', empty: '대사창 설정대로', rerender: true }),
+                F.bool(key, ['portrait', 'flip'], { label: '좌우 뒤집기', rerender: true })),
+              F.sound(key, ['voice'], { label: '목소리 (대사 글자가 나올 때 소리 — 비우면 대사창 설정)', kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty: '(대사창 설정대로)' }),
+              h('small', { class: 'hint' }, '투명 배경 PNG 를 쓰세요. 큰 그림(예: 세로 1000px)은 게임에서 부드럽게 줄여 보여 줍니다. 대사창 모양은 💬 대사창 편집기에서.'))),
+          listEditor(key, ['portrait', 'expressions'], {
+            addLabel: '표정 추가', compact: true, emptyText: '표정이 없습니다. 대사에서 표정을 쓰려면 추가하세요 (예: smile, angry, sad, shy)',
+            make: () => ({ key: 'smile', image: '' }),
+            render: (it, i, p) => row(F.text(key, [...p, 'key'], { label: '표정 키', transform: v => PDM.slugId(v) }), F.image(key, [...p, 'image'], { label: '이미지', sub: PDM.assets.folderFor(key, 'portrait') }),
+              h('button', { class: 'btn sm', style: { flex: '0 0 auto', alignSelf: 'flex-end' }, onclick: e => { e.preventDefault(); st.pvFace = it.key; ctx.refresh(); } }, '미리보기'))
+          })),
+        section('소리',
+          (() => {
+            const S = (label, f, hint) => F.sound(key, ['sounds', f], { label, kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty: '(게임 원래 소리)', hint, rerender: true });
+            const fighter = ['mob', 'boss'].includes(c.kind);
+            return h('div', {},
+              row(fighter ? S('공격할 때', 'attack', '공격이 맞을 때') : null, fighter ? S('다칠 때', 'hurt') : null, fighter ? S('쓰러질 때', 'die') : null, !fighter ? S('말 걸 때', 'talk', '영웅이 말을 걸 때') : null),
+              h('p', { class: 'hint' }, '목소리(대사 글자 소리)는 위의 "초상화 · 표정" 칸에 있습니다. 🎚 로 사운드 편집기에서 편집합니다.'));
+          })()),
+        section('능력치',
+          row(F.num(key, ['stats', 'hp'], { label: '체력', min: 1, int: true }), F.num(key, ['stats', 'attackMin'], { label: '공격 최소', int: true }), F.num(key, ['stats', 'attackMax'], { label: '공격 최대', int: true })),
+          row(F.num(key, ['stats', 'defense'], { label: '방어', int: true }), F.num(key, ['stats', 'accuracy'], { label: '명중', int: true }), F.num(key, ['stats', 'evasion'], { label: '회피', int: true }), F.num(key, ['stats', 'speed'], { label: '속도', step: 0.1 }))),
+        section('AI · 경로',
+          row(F.select(key, ['ai', 'mode'], PDM.AI_MODES, { label: '행동 방식' }), F.num(key, ['ai', 'wait'], { label: '점마다 쉬는 턴', int: true, min: 0 })),
+          ['patrol', 'schedule'].includes(c.ai.mode) ? pathPicker(key, c) : null,
+          ['patrol', 'schedule'].includes(c.ai.mode) ? listEditor(key, ['ai', 'path'], { addLabel: '점 추가', compact: true, make: () => ({ x: 1, y: 1 }),
+            render: (it, i, p) => row(F.num(key, [...p, 'x'], { label: 'x', int: true, rerender: true }), F.num(key, [...p, 'y'], { label: 'y', int: true, rerender: true }), c.ai.mode === 'schedule' ? F.num(key, [...p, 'turn'], { label: '도착 턴(하루=1000)', int: true }) : h('span')) }) : null),
+        section(PDM.T('sys.heart') + ' (era 방식)',
+          F.bool(key, ['heart', 'enabled'], { label: '이 캐릭터에 마음 시스템 사용' }),
+          c.heart.enabled ? h('div', {},
+            h('div', { class: 'fl', style: { margin: '6px 0 4px' } }, PDM.T('sys.trait')),
+            F.chips(key, ['heart', 'traits'], (sys.traits || []).map(t => [t.key, t.name, `호감 ${t.favorAdd >= 0 ? '+' : ''}${t.favorAdd} / 신뢰 ${t.trustAdd >= 0 ? '+' : ''}${t.trustAdd}`])),
+            row(F.list(key, ['heart', 'likes'], { label: '좋아하는 것', hint: '아이템 id 또는 tag:태그 (예: tag:herb)' }), F.list(key, ['heart', 'dislikes'], { label: '싫어하는 것' })),
+            row(F.num(key, ['heart', 'initial', 'favor'], { label: '처음 ' + PDM.T('rel.favor'), int: true }), F.num(key, ['heart', 'initial', 'trust'], { label: '처음 ' + PDM.T('rel.trust'), int: true }))) : null),
+        section(PDM.T('sys.dialogue') + ' — 상황(토픽)별 대사',
+          h('p', { class: 'hint' }, '조건이 맞는 대사 중 가장 구체적인(조건에 쓴 이름이 많은) 것을 고르고, 같으면 무작위입니다. 맞는 게 없으면 공용 대사를 씁니다.'),
+          dlg, h('h3', {}, '대사 테스트'), dialogueTester(c)),
+        section('행동 이벤트 (GameMaker 식)', h('p', { class: 'hint' }, '상황마다 실행할 이벤트 명령. 비워 두면 기본 동작을 합니다.'), behaviors));
+    }
+  });
+  PDM.characters = { newCharacter };
+})();

@@ -1,0 +1,93 @@
+{
+  "format": "pdmaker-event",
+  "version": 1,
+  "id": "ev_opening",
+  "kind": "scene",
+  "name": "오프닝 — 승급시험의 날",
+  "note": "",
+  "pages": [
+    {
+      "cond": "",
+      "trigger": "none",
+      "turnEvery": 10,
+      "heartCond": "",
+      "graphic": {},
+      "commands": [
+        {
+          "cmd": "if",
+          "cond": "switch.opening_seen",
+          "then": [
+            {
+              "cmd": "stop"
+            }
+          ],
+          "else": []
+        },
+        {
+          "cmd": "flash",
+          "color": "#ffffff",
+          "time": 4
+        },
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "수 년에 한 번 열리는 정식 마녀 승급시험."
+        },
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "시험의 내용은, 수백 년 전부터 생겨나기 시작한 탑을 올라 코어를 회수해 오는 것."
+        },
+        {
+          "cmd": "text",
+          "speaker": "aria",
+          "face": "",
+          "illust": "",
+          "text": "…불, 물, 바람, 땅. 하나만 고르라고? 난 네 가지 전부로 증명할 거야."
+        },
+        {
+          "cmd": "choice",
+          "options": [
+            "각오를 다진다",
+            "솔직히 조금 긴장된다"
+          ],
+          "branches": [
+            [
+              {
+                "cmd": "text",
+                "speaker": "aria",
+                "face": "smile",
+                "illust": "",
+                "text": "좋아. 이론은 완벽해. 남은 건 실전뿐."
+              },
+              {
+                "cmd": "var",
+                "id": "resolve",
+                "op": "add",
+                "value": 1
+              }
+            ],
+            [
+              {
+                "cmd": "text",
+                "speaker": "aria",
+                "face": "worried",
+                "illust": "",
+                "text": "…괜찮아. 긴장도 계산에 넣으면 돼."
+              }
+            ]
+          ]
+        },
+        {
+          "cmd": "switch",
+          "id": "opening_seen",
+          "value": true
+        }
+      ]
+    }
+  ]
+}

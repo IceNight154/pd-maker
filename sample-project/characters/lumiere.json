@@ -1,0 +1,76 @@
+{
+  "format": "pdmaker-character",
+  "version": 1,
+  "id": "lumiere",
+  "kind": "npc",
+  "name": "루미에르",
+  "title": "시간의 바늘",
+  "desc": "승급시험에 실패한 과거가 있어, 이번엔 과거를 바꾸겠다는 각오로 시험에 임한다.",
+  "sprite": {
+    "sheet": "game:sprites/wandmaker.png",
+    "frame": [
+      12,
+      14
+    ],
+    "anims": {
+      "idle": {
+        "frames": [
+          0,
+          1,
+          2,
+          3,
+          2,
+          1
+        ],
+        "fps": 6,
+        "loop": true
+      }
+    }
+  },
+  "portrait": {
+    "default": "",
+    "expressions": []
+  },
+  "stats": {
+    "hp": 20,
+    "attackMin": 1,
+    "attackMax": 4,
+    "defense": 0,
+    "accuracy": 10,
+    "evasion": 5,
+    "speed": 1
+  },
+  "ai": {
+    "mode": "stand",
+    "path": [],
+    "wait": 3
+  },
+  "heart": {
+    "enabled": true,
+    "traits": [
+      "PROUD",
+      "CALM"
+    ],
+    "likes": [],
+    "dislikes": [],
+    "initial": {
+      "favor": 0,
+      "trust": 30
+    }
+  },
+  "behaviors": {},
+  "dialogue": {
+    "greet": [
+      {
+        "when": "",
+        "face": "",
+        "text": "시간 낭비는 싫어. 용건만 말해."
+      },
+      {
+        "when": "trust>=100",
+        "face": "",
+        "text": "…이번엔 늦지 않았네."
+      }
+    ]
+  }
+}

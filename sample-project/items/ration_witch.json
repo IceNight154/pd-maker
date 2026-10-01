@@ -1,0 +1,22 @@
+{
+  "format": "pdmaker-item",
+  "version": 1,
+  "id": "ration_witch",
+  "category": "food",
+  "name": "견습 마녀 도시락",
+  "desc": "시험 전날 밤 싸 둔 도시락.",
+  "sprite": {
+    "sheet": "builtin:items",
+    "name": "RATION",
+    "index": 869
+  },
+  "stackable": true,
+  "price": 10,
+  "unique": false,
+  "tags": [],
+  "stats": {
+    "energy": 300
+  },
+  "onUse": [],
+  "giftValue": {}
+}

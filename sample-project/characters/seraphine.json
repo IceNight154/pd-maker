@@ -1,0 +1,157 @@
+{
+  "format": "pdmaker-character",
+  "version": 1,
+  "id": "seraphine",
+  "kind": "npc",
+  "name": "세라핀",
+  "title": "그림자와 계약한 자",
+  "desc": "과묵하고 무뚝뚝하지만 그림자에게는 다정하다.",
+  "sprite": {
+    "sheet": "game:sprites/ghost.png",
+    "frame": [
+      14,
+      15
+    ],
+    "anims": {
+      "idle": {
+        "frames": [
+          0,
+          1
+        ],
+        "fps": 5,
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          0,
+          1
+        ],
+        "fps": 10,
+        "loop": true
+      },
+      "attack": {
+        "frames": [
+          0,
+          2,
+          3
+        ],
+        "fps": 10,
+        "loop": false
+      },
+      "die": {
+        "frames": [
+          0,
+          4,
+          5,
+          6,
+          7
+        ],
+        "fps": 8,
+        "loop": false
+      }
+    }
+  },
+  "portrait": {
+    "default": "",
+    "expressions": []
+  },
+  "stats": {
+    "hp": 20,
+    "attackMin": 1,
+    "attackMax": 4,
+    "defense": 0,
+    "accuracy": 10,
+    "evasion": 5,
+    "speed": 1
+  },
+  "ai": {
+    "mode": "stand",
+    "path": [],
+    "wait": 3
+  },
+  "heart": {
+    "enabled": true,
+    "traits": [
+      "SHY",
+      "INDIFFERENT",
+      "JEALOUS"
+    ],
+    "likes": [
+      "tag:undead"
+    ],
+    "dislikes": [
+      "tag:herb"
+    ],
+    "initial": {
+      "favor": 0,
+      "trust": 0
+    }
+  },
+  "behaviors": {},
+  "dialogue": {
+    "greet": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…"
+      },
+      {
+        "when": "stage>=1",
+        "face": "",
+        "text": "…너였구나."
+      },
+      {
+        "when": "bond.admire",
+        "face": "",
+        "text": "그림자가 네 얘기를 해. …좋은 뜻으로."
+      }
+    ],
+    "gift_liked": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…고마워. 그림자도 좋아해."
+      }
+    ],
+    "gift_disliked": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…필요 없어."
+      }
+    ],
+    "jealous": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…그 애랑 즐거워 보이네."
+      },
+      {
+        "when": "bond.admire",
+        "face": "",
+        "text": "그림자가 시끄러워. …내 탓 아니야."
+      }
+    ],
+    "talk_tired": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…오늘은 여기까지."
+      }
+    ],
+    "request_no": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…싫어."
+      }
+    ],
+    "request_ok": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…응."
+      }
+    ]
+  }
+}

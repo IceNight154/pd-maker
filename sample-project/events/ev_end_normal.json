@@ -1,0 +1,33 @@
+{
+  "format": "pdmaker-event",
+  "version": 1,
+  "id": "ev_end_normal",
+  "kind": "scene",
+  "name": "엔딩 — 정식 마녀",
+  "note": "",
+  "pages": [
+    {
+      "cond": "",
+      "trigger": "none",
+      "turnEvery": 10,
+      "heartCond": "",
+      "graphic": {},
+      "commands": [
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "다섯 개의 코어를 제출한 날, 아리아는 정식 마녀가 되었다."
+        },
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "…어딘가 조금, 허전한 기분이 들었다."
+        }
+      ]
+    }
+  ]
+}

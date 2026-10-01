@@ -1,0 +1,33 @@
+{
+  "format": "pdmaker-event",
+  "version": 1,
+  "id": "ev_end_fail",
+  "kind": "scene",
+  "name": "엔딩 — 다음 시험을 기약하며",
+  "note": "",
+  "pages": [
+    {
+      "cond": "",
+      "trigger": "none",
+      "turnEvery": 10,
+      "heartCond": "",
+      "graphic": {},
+      "commands": [
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "탑은 너무 높았다."
+        },
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "하지만 수 년 뒤, 시험은 다시 열린다."
+        }
+      ]
+    }
+  ]
+}

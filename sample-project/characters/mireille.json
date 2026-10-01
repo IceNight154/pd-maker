@@ -1,0 +1,383 @@
+{
+  "format": "pdmaker-character",
+  "version": 1,
+  "id": "mireille",
+  "kind": "npc",
+  "name": "미레유",
+  "title": "약초와 독의 연금술사",
+  "desc": "마을 약초방의 딸. 호기심 많고 장난끼 심하지만 실험 중 폭발사고가 잦다.",
+  "sprite": {
+    "sheet": "game:sprites/wandmaker.png",
+    "frame": [
+      12,
+      14
+    ],
+    "anims": {
+      "idle": {
+        "frames": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          2,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          2,
+          1
+        ],
+        "fps": 10,
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          0
+        ],
+        "fps": 20,
+        "loop": true
+      },
+      "die": {
+        "frames": [
+          0
+        ],
+        "fps": 20,
+        "loop": false
+      }
+    }
+  },
+  "portrait": {
+    "default": "assets/portraits/mireille/default.png",
+    "expressions": [
+      {
+        "key": "smile",
+        "image": "assets/portraits/mireille/smile.png"
+      },
+      {
+        "key": "worried",
+        "image": "assets/portraits/mireille/worried.png"
+      }
+    ],
+    "scale": 1,
+    "offsetX": 0,
+    "offsetY": 0,
+    "side": "",
+    "flip": false
+  },
+  "stats": {
+    "hp": 20,
+    "attackMin": 1,
+    "attackMax": 4,
+    "defense": 0,
+    "accuracy": 10,
+    "evasion": 5,
+    "speed": 1
+  },
+  "ai": {
+    "mode": "patrol",
+    "path": [
+      {
+        "x": 11,
+        "y": 7
+      },
+      {
+        "x": 14,
+        "y": 7
+      },
+      {
+        "x": 14,
+        "y": 5
+      }
+    ],
+    "wait": 4,
+    "pathNode": "f1"
+  },
+  "heart": {
+    "enabled": true,
+    "traits": [
+      "CHEERFUL",
+      "CURIOUS"
+    ],
+    "likes": [
+      "tag:herb",
+      "potion_ember"
+    ],
+    "dislikes": [
+      "tag:undead"
+    ],
+    "initial": {
+      "favor": 0,
+      "trust": 0
+    }
+  },
+  "behaviors": {},
+  "dialogue": {
+    "greet": [
+      {
+        "when": "bond.close",
+        "face": "",
+        "text": "왔어? …기다렸다고는 안 했어!"
+      },
+      {
+        "when": "favor>=600 && trust>=200",
+        "face": "",
+        "text": "아리아! 마침 새 약초를 말리던 참이야. 같이 볼래?"
+      },
+      {
+        "when": "stage>=1",
+        "face": "",
+        "text": "오, 또 만났네. 이 층 약초들 꽤 쓸 만해."
+      },
+      {
+        "when": "sulk",
+        "face": "",
+        "text": "…흥. 지금은 말 걸지 마."
+      },
+      {
+        "when": "",
+        "face": "",
+        "text": "어, 안녕? 너도 승급시험 보러 왔구나."
+      }
+    ],
+    "talk": [
+      {
+        "when": "exp.talked<3",
+        "face": "",
+        "text": "탑의 이끼는 밤에만 빛나. 그래서 수확은 늘 새벽이지."
+      },
+      {
+        "when": "favor>=100",
+        "face": "",
+        "text": "있잖아, 내가 만든 물약이 또 터졌어. 이번엔 무지개색이었다니까?"
+      },
+      {
+        "when": "att.trusting || att.devoted",
+        "face": "",
+        "text": "시험이 끝나면… 우리 약초방에 한번 와. 차 대접할게."
+      },
+      {
+        "when": "",
+        "face": "",
+        "text": "응? 그냥 얘기하고 싶었어?"
+      }
+    ],
+    "gift_liked": [
+      {
+        "when": "",
+        "face": "",
+        "text": "와아! 이거 정말 갖고 싶었어! 고마워!"
+      },
+      {
+        "when": "bond.admire",
+        "face": "",
+        "text": "…이런 거 기억해 줬구나. 고마워, 진짜로."
+      }
+    ],
+    "gift_normal": [
+      {
+        "when": "",
+        "face": "",
+        "text": "고마워. 잘 쓸게."
+      }
+    ],
+    "gift_disliked": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…이걸 왜 나한테? 으, 냄새."
+      }
+    ],
+    "sulk": [
+      {
+        "when": "",
+        "face": "",
+        "text": "아직 화 안 풀렸거든."
+      }
+    ],
+    "stage_up": [
+      {
+        "when": "",
+        "face": "",
+        "text": "있잖아… 너랑 있으면 실험이 덜 무서워."
+      }
+    ],
+    "low_hp": [
+      {
+        "when": "abl.intimacy>=3",
+        "face": "",
+        "text": "피 나잖아! 잠깐, 해독초 찧어 줄게!"
+      },
+      {
+        "when": "",
+        "face": "",
+        "text": "괜찮아? 너무 무리하지 마!"
+      }
+    ],
+    "hero_kill": [
+      {
+        "when": "",
+        "face": "",
+        "text": "우와, 방금 그 마법 뭐야?"
+      }
+    ],
+    "talk_tired": [
+      {
+        "when": "",
+        "face": "",
+        "text": "으음… 오늘은 말 많이 했다. 목 아파. 다음 층에서 또 얘기하자!"
+      },
+      {
+        "when": "bond.partner",
+        "face": "",
+        "text": "…너랑은 계속 얘기해도 안 지치네. 신기하다."
+      }
+    ],
+    "praise": [
+      {
+        "when": "",
+        "face": "",
+        "text": "에, 에헤헤… 갑자기 왜 그래?"
+      },
+      {
+        "when": "temper>0",
+        "face": "",
+        "text": "정말? 이 조합, 사흘 밤 새서 찾은 거야!"
+      }
+    ],
+    "praise_fail": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…그거, 비꼬는 거지?"
+      }
+    ],
+    "comforted": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…고마워. 조금 나아졌어."
+      },
+      {
+        "when": "stage>=2",
+        "face": "",
+        "text": "무서운 건 무서운 거지만… 네가 있으니까 괜찮아."
+      }
+    ],
+    "apology_ok": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…흥. 이번만 봐줄게."
+      },
+      {
+        "when": "trust>=150",
+        "face": "",
+        "text": "알았어, 알았다고. 나도 너무 화냈어."
+      }
+    ],
+    "apology_fail": [
+      {
+        "when": "",
+        "face": "",
+        "text": "사과하면 다야?"
+      },
+      {
+        "when": "",
+        "face": "",
+        "text": "…지금은 듣고 싶지 않아."
+      }
+    ],
+    "jealous": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…다른 애랑은 참 잘 지내네."
+      },
+      {
+        "when": "bond.admire",
+        "face": "",
+        "text": "흥, 나한테는 그런 표정 안 짓더니."
+      }
+    ],
+    "request_ok": [
+      {
+        "when": "",
+        "face": "",
+        "text": "좋아! 어디든 따라갈게."
+      },
+      {
+        "when": "acceptLv>=2",
+        "face": "",
+        "text": "…너니까 말해 주는 거야."
+      }
+    ],
+    "request_no": [
+      {
+        "when": "",
+        "face": "",
+        "text": "에… 그건 좀. 아직은 아니야."
+      },
+      {
+        "when": "sulk",
+        "face": "",
+        "text": "지금 그런 말 할 기분 아니거든!"
+      }
+    ],
+    "bad_temper": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…오늘은 좀 건드리지 마."
+      }
+    ],
+    "good_temper": [
+      {
+        "when": "",
+        "face": "",
+        "text": "오늘 왠지 기분 좋아! 뭐든 잘 될 것 같아!"
+      }
+    ],
+    "ignored": [
+      {
+        "when": "",
+        "face": "",
+        "text": "…나 여기 있는데."
+      }
+    ],
+    "diary": [
+      {
+        "when": "gauge.relief>=300",
+        "face": "",
+        "text": "오늘 아리아가 날 구해줬다. 심장이 아직도 쿵쾅거린다."
+      },
+      {
+        "when": "gauge.joy>=200",
+        "face": "",
+        "text": "아리아랑 새 약초 얘기를 했다. 재밌었다!"
+      },
+      {
+        "when": "gauge.fear>=200",
+        "face": "",
+        "text": "오늘은 조금 무서웠다. 탑이 점점 깊어진다."
+      },
+      {
+        "when": "",
+        "face": "",
+        "text": "평범한 하루. 약초 세 뿌리 채집."
+      }
+    ]
+  }
+}

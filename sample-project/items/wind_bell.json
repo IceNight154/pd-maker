@@ -1,0 +1,31 @@
+{
+  "format": "pdmaker-item",
+  "version": 1,
+  "id": "wind_bell",
+  "category": "trinket",
+  "name": "바람 방울",
+  "desc": "흔들면 주변의 적이 잠시 멈칫한다. (코드로 만든 사용 버튼)",
+  "sprite": {
+    "sheet": "builtin:items",
+    "name": "DUST",
+    "index": 929
+  },
+  "stackable": true,
+  "price": 20,
+  "unique": false,
+  "tags": [],
+  "stats": {},
+  "onUse": [],
+  "giftValue": {},
+  "actions": [
+    {
+      "id": "ring",
+      "name": "흔들기",
+      "cond": "",
+      "default": true,
+      "consume": false,
+      "time": 1,
+      "code": "for (Mob m : Dungeon.level.mobs.toArray(new Mob[0])) {\n    if (m.alignment == Char.Alignment.ENEMY && Dungeon.level.distance(hero.pos, m.pos) <= 3) {\n        Buff.affect(m, Paralysis.class, 1f);\n    }\n}\nMakerAudio.playSe(\"sound:bell\");   // 사운드 편집기에서 만든 효과음\nGLog.i(\"딸랑—\");"
+    }
+  ]
+}

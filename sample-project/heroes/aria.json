@@ -1,0 +1,1155 @@
+{
+  "format": "pdmaker-hero",
+  "version": 1,
+  "id": "aria",
+  "name": "아리아",
+  "title": "원소의 서기",
+  "desc": "원리주의적인 공부벌레. 불·물·바람·땅을 모두 다루는 길을 택한 견습 마녀.",
+  "enabled": true,
+  "baseClass": "ARIA",
+  "character": "aria",
+  "sprite": {
+    "sheet": "assets/sprites/heroes/aria.png",
+    "frame": [
+      48,
+      60
+    ],
+    "scale": 0.25,
+    "anims": {
+      "idle": {
+        "frames": [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          1,
+          1
+        ],
+        "fps": 1,
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "fps": 20,
+        "loop": true
+      },
+      "attack": {
+        "frames": [
+          20,
+          21,
+          22,
+          23
+        ],
+        "fps": 15,
+        "loop": false
+      },
+      "zap": {
+        "frames": [
+          24,
+          25,
+          26,
+          27
+        ],
+        "fps": 15,
+        "loop": false
+      },
+      "operate": {
+        "frames": [
+          28,
+          29,
+          28,
+          29
+        ],
+        "fps": 8,
+        "loop": false
+      },
+      "die": {
+        "frames": [
+          8,
+          9,
+          10,
+          11
+        ],
+        "fps": 20,
+        "loop": false
+      }
+    }
+  },
+  "stats": {
+    "hp": 18,
+    "hpPerLevel": 4,
+    "str": 10,
+    "attackSkill": 10,
+    "defenseSkill": 5,
+    "accPerLvl": 1,
+    "evaPerLvl": 1,
+    "unarmedMin": 1,
+    "unarmedMax": 3,
+    "speed": 1,
+    "viewDistance": 8
+  },
+  "knownItems": [
+    "spd:PotionOfHealing"
+  ],
+  "startGold": 30,
+  "inventory": {
+    "clearDefault": false,
+    "items": [
+      {
+        "item": "ration_witch",
+        "count": 1,
+        "level": 0,
+        "equip": false,
+        "quickslot": false,
+        "identify": true
+      },
+      {
+        "item": "spd:PotionOfHealing",
+        "count": 1,
+        "level": 0,
+        "equip": false,
+        "quickslot": true,
+        "identify": true
+      },
+      {
+        "item": "ember_staff",
+        "count": 1,
+        "level": 0,
+        "equip": true,
+        "quickslot": false,
+        "identify": true
+      },
+      {
+        "item": "moss_cloak",
+        "count": 1,
+        "level": 0,
+        "equip": false,
+        "quickslot": false,
+        "identify": true
+      },
+      {
+        "item": "seed_knife",
+        "count": 3,
+        "level": 0,
+        "equip": false,
+        "quickslot": true,
+        "identify": true
+      },
+      {
+        "item": "wind_bell",
+        "count": 1,
+        "level": 0,
+        "equip": false,
+        "quickslot": true,
+        "identify": true
+      },
+      {
+        "item": "aria_grimoire",
+        "count": 1,
+        "level": 0,
+        "equip": false,
+        "quickslot": false,
+        "identify": true
+      },
+      {
+        "item": "codex_slash",
+        "count": 3,
+        "level": 0,
+        "equip": false,
+        "quickslot": true,
+        "identify": true
+      },
+      {
+        "item": "codex_arrow",
+        "count": 3,
+        "level": 0,
+        "equip": false,
+        "quickslot": true,
+        "identify": true
+      },
+      {
+        "item": "codex_manafield",
+        "count": 2,
+        "level": 0,
+        "equip": false,
+        "quickslot": false,
+        "identify": true
+      }
+    ]
+  },
+  "spellbook": {
+    "enabled": true,
+    "name": "원소의 서",
+    "desc": "아리아가 직접 필사한 원소 마법서. 네 원소의 주문이 적혀 있다.",
+    "image": 246,
+    "charges": 3,
+    "rechargeTurns": 35
+  },
+  "spells": [
+    {
+      "id": "fire_bolt",
+      "icon": 19,
+      "name": "불꽃 화살",
+      "desc": "적 하나에게 불꽃을 날려 피해를 주고 불태운다.",
+      "tier": 1,
+      "unlockLevel": 1,
+      "cost": 1,
+      "cooldown": 0,
+      "target": "enemy",
+      "range": 6,
+      "projectile": true,
+      "visual": "fire",
+      "time": 1,
+      "shout": "",
+      "heat": 4,
+      "sound": "game:sounds/zap.mp3",
+      "hitSound": "game:sounds/burning.mp3",
+      "effects": [
+        {
+          "type": "damage",
+          "on": "target",
+          "min": 3,
+          "max": 7,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "target",
+          "buff": "Burning",
+          "turns": 3
+        }
+      ]
+    },
+    {
+      "id": "earth_ward",
+      "icon": 42,
+      "name": "대지의 방벽",
+      "desc": "자신에게 보호막을 두른다.",
+      "tier": 1,
+      "unlockLevel": 1,
+      "cost": 1,
+      "cooldown": 20,
+      "target": "self",
+      "range": 0,
+      "projectile": false,
+      "visual": "earth",
+      "time": 1,
+      "shout": "",
+      "heat": 2,
+      "effects": [
+        {
+          "type": "shield",
+          "on": "self",
+          "amount": 6
+        }
+      ]
+    },
+    {
+      "id": "wind_step",
+      "icon": 21,
+      "name": "바람 걸음",
+      "desc": "보이는 칸으로 순간 이동한다.",
+      "tier": 1,
+      "unlockLevel": 2,
+      "cost": 1,
+      "cooldown": 15,
+      "target": "cell",
+      "range": 5,
+      "projectile": false,
+      "visual": "none",
+      "time": 1,
+      "shout": "",
+      "heat": 2,
+      "effects": [
+        {
+          "type": "blink"
+        }
+      ]
+    },
+    {
+      "id": "arcane_spark",
+      "icon": 20,
+      "name": "비전 불꽃",
+      "desc": "코드로 만든 주문: 레벨에 비례한 피해 + 가끔 마비.",
+      "tier": 1,
+      "unlockLevel": 1,
+      "cost": 1,
+      "cooldown": 5,
+      "target": "enemy",
+      "range": 5,
+      "projectile": true,
+      "visual": "magic",
+      "time": 1,
+      "shout": "",
+      "heat": 4,
+      "effects": [
+        {
+          "type": "code",
+          "code": "if (target != null) {\n    target.damage(Random.NormalIntRange(2, 4) + hero.lvl / 2, hero);\n    if (target.isAlive() && Random.Int(4) == 0) Buff.affect(target, Paralysis.class, 2f);\n}"
+        }
+      ]
+    },
+    {
+      "id": "frost_ring",
+      "icon": 25,
+      "name": "서리 고리",
+      "desc": "대상 주변 2칸의 적을 얼린다.",
+      "tier": 2,
+      "unlockLevel": 3,
+      "cost": 2,
+      "cooldown": 10,
+      "target": "cell",
+      "range": 5,
+      "projectile": true,
+      "visual": "frost",
+      "time": 1,
+      "shout": "",
+      "heat": 6,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "area",
+          "radius": 2,
+          "min": 2,
+          "max": 4
+        },
+        {
+          "type": "buff",
+          "on": "area",
+          "radius": 2,
+          "buff": "Chill",
+          "turns": 4
+        }
+      ]
+    },
+    {
+      "id": "storm_lance",
+      "icon": 51,
+      "name": "폭풍의 창",
+      "desc": "번개 창으로 대상과 그 주변 1칸의 적을 꿰뚫는다. 절반 확률로 마비시킨다.",
+      "tier": 2,
+      "unlockLevel": 1,
+      "cost": 2,
+      "cooldown": 12,
+      "target": "enemy",
+      "range": 6,
+      "projectile": true,
+      "visual": "light",
+      "time": 1,
+      "shout": "꿰뚫어라!",
+      "heat": 6,
+      "sound": "game:sounds/lightning.mp3",
+      "requiresTalent": "storm_study",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "target",
+          "radius": 1,
+          "min": 4,
+          "max": 9,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "target",
+          "buff": "Paralysis",
+          "turns": 2,
+          "chance": 50
+        }
+      ]
+    },
+    {
+      "id": "harmony_chord",
+      "icon": 45,
+      "name": "원소 화음",
+      "desc": "네 원소를 맞춰 상처를 아물게 하고 보호막을 두른다.",
+      "tier": 3,
+      "unlockLevel": 1,
+      "subclass": "harmony",
+      "cost": 2,
+      "cooldown": 0,
+      "target": "self",
+      "range": 0,
+      "projectile": false,
+      "visual": "none",
+      "time": 1,
+      "shout": "",
+      "heat": -10,
+      "effects": [
+        {
+          "type": "heal",
+          "on": "self",
+          "amount": 0,
+          "percent": 20
+        },
+        {
+          "type": "shield",
+          "on": "self",
+          "amount": 4
+        }
+      ]
+    },
+    {
+      "id": "inferno",
+      "icon": 17,
+      "name": "백열 폭발",
+      "desc": "고른 칸 주변 2칸을 태워 버린다. 과열이 크게 오른다.",
+      "tier": 3,
+      "unlockLevel": 1,
+      "subclass": "overheat",
+      "cost": 2,
+      "cooldown": 0,
+      "target": "cell",
+      "range": 5,
+      "projectile": true,
+      "visual": "fire",
+      "time": 1,
+      "shout": "타올라라!",
+      "heat": 15,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "area",
+          "radius": 2,
+          "min": 6,
+          "max": 12,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "area",
+          "radius": 2,
+          "buff": "Burning",
+          "turns": 4
+        }
+      ]
+    },
+    {
+      "id": "ink_seal",
+      "icon": 26,
+      "name": "잉크 봉인",
+      "desc": "적에게 잉크 표식을 새겨 약하게 만든다.",
+      "tier": 3,
+      "unlockLevel": 1,
+      "subclass": "grimoire_ink",
+      "cost": 1,
+      "cooldown": 0,
+      "target": "enemy",
+      "range": 6,
+      "projectile": true,
+      "visual": "shadow",
+      "time": 1,
+      "shout": "",
+      "heat": 4,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "target",
+          "min": 2,
+          "max": 5,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "target",
+          "buff": "Weakness",
+          "turns": 5
+        },
+        {
+          "type": "buff",
+          "on": "target",
+          "buff": "Vulnerable",
+          "turns": 5
+        }
+      ]
+    }
+  ],
+  "subclasses": [
+    {
+      "id": "harmony",
+      "name": "조화의 서기",
+      "icon": 45,
+      "base": "ARIA_HARMONY",
+      "shortDesc": "네 원소를 고르게 다뤄 주문이 강해지고 몸이 가벼워진다.",
+      "desc": "원소 사이의 균형을 좇는 길. 주문 피해 +10%, 회피 +2. 3단계 주문 「원소 화음」을 배운다.",
+      "effects": [
+        {
+          "stat": "castPct",
+          "value": 10
+        },
+        {
+          "stat": "evasion",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "overheat",
+      "name": "백열의 마녀",
+      "icon": 17,
+      "base": "ARIA_OVERHEAT",
+      "shortDesc": "과열을 두려워하지 않고 코덱스의 위력을 끌어올린다.",
+      "desc": "과열을 힘으로 바꾸는 길. 코덱스 피해 +15%, 받는 피해 +5%. 3단계 주문 「백열 폭발」을 배운다.",
+      "effects": [
+        {
+          "stat": "codexPct",
+          "value": 15
+        },
+        {
+          "stat": "takenPct",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "id": "grimoire_ink",
+      "name": "잉크 그리모어",
+      "icon": 26,
+      "base": "ARIA_GRIMOIRE_INK",
+      "shortDesc": "원소의 서를 잉크로 덧써 주문을 더 자주 쓴다.",
+      "desc": "필사로 주문을 늘리는 길. 주문서 최대 충전 +1, 충전 속도 +20%. 3단계 주문 「잉크 봉인」을 배운다.",
+      "effects": [
+        {
+          "stat": "charges",
+          "value": 1
+        },
+        {
+          "stat": "recharge",
+          "value": 20
+        }
+      ]
+    }
+  ],
+  "abilities": [
+    {
+      "id": "elemental_chord",
+      "name": "원소 공명",
+      "icon": 45,
+      "chargeUse": 35,
+      "shortDesc": "네 원소의 힘으로 체력을 되찾고 주변 적을 밀쳐낸다.",
+      "desc": "원소를 한꺼번에 공명시켜 몸을 감싸고 주변을 밀어낸다.",
+      "target": "self",
+      "range": 0,
+      "projectile": false,
+      "visual": "none",
+      "time": 1,
+      "shout": "공명하라!",
+      "heat": -20,
+      "effects": [
+        {
+          "type": "heal",
+          "on": "self",
+          "amount": 5,
+          "percent": 15
+        },
+        {
+          "type": "knockback",
+          "on": "area",
+          "radius": 2,
+          "power": 2
+        }
+      ]
+    },
+    {
+      "id": "white_heat",
+      "name": "백열",
+      "icon": 19,
+      "chargeUse": 25,
+      "shortDesc": "고른 곳에 백열 폭발을 일으킨다. 과열이 크게 오른다.",
+      "desc": "과열을 한 점에 모아 터뜨린다.",
+      "target": "cell",
+      "range": 6,
+      "projectile": true,
+      "visual": "fire",
+      "time": 1,
+      "shout": "",
+      "heat": 25,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "area",
+          "radius": 2,
+          "min": 10,
+          "max": 20,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "area",
+          "radius": 2,
+          "buff": "Burning",
+          "turns": 5
+        }
+      ]
+    },
+    {
+      "id": "ink_flood",
+      "name": "잉크 범람",
+      "icon": 26,
+      "chargeUse": 35,
+      "shortDesc": "적 하나를 잉크로 묶고 주문서를 채운다.",
+      "desc": "그리모어의 잉크를 쏟아 적을 옭아맨다.",
+      "target": "enemy",
+      "range": 6,
+      "projectile": true,
+      "visual": "shadow",
+      "time": 1,
+      "shout": "",
+      "heat": 5,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "target",
+          "min": 6,
+          "max": 12,
+          "perLevel": 1
+        },
+        {
+          "type": "buff",
+          "on": "target",
+          "buff": "Roots",
+          "turns": 5
+        }
+      ]
+    }
+  ],
+  "gauge": {
+    "enabled": true,
+    "name": "과열",
+    "max": 100,
+    "buffIcon": 2,
+    "perTurn": 0,
+    "sameElement": 2,
+    "afterUse": 2,
+    "idle": 1,
+    "recentTurns": 3,
+    "levels": [
+      {
+        "at": 1,
+        "name": "1단계",
+        "desc": "",
+        "effects": []
+      },
+      {
+        "at": 25,
+        "name": "2단계",
+        "desc": "코덱스 피해 +10%",
+        "effects": [
+          {
+            "stat": "codexPct",
+            "value": 10
+          }
+        ]
+      },
+      {
+        "at": 50,
+        "name": "3단계",
+        "desc": "코덱스 피해 +20%, 받는 피해 +10%",
+        "effects": [
+          {
+            "stat": "codexPct",
+            "value": 20
+          },
+          {
+            "stat": "takenPct",
+            "value": 10
+          }
+        ]
+      },
+      {
+        "at": 75,
+        "name": "4단계",
+        "desc": "코덱스 피해 +30%, 받는 피해 +20%",
+        "effects": [
+          {
+            "stat": "codexPct",
+            "value": 30
+          },
+          {
+            "stat": "takenPct",
+            "value": 20
+          }
+        ]
+      }
+    ],
+    "overflow": {
+      "enabled": true,
+      "delay": 4,
+      "resetTo": 60,
+      "effects": [
+        {
+          "type": "damage",
+          "on": "area",
+          "radius": 3,
+          "min": 6,
+          "max": 12,
+          "perLevel": 1
+        },
+        {
+          "type": "damage",
+          "on": "self",
+          "min": 0,
+          "max": 0,
+          "percent": 25
+        },
+        {
+          "type": "buff",
+          "on": "self",
+          "buff": "Paralysis",
+          "turns": 1
+        }
+      ]
+    },
+    "elements": [
+      {
+        "id": "fire",
+        "name": "불",
+        "color": "#E24F2E",
+        "icon": 19,
+        "desc": "공격 피해 +10%",
+        "effects": [
+          {
+            "stat": "damagePct",
+            "value": 10
+          }
+        ],
+        "onSwitch": []
+      },
+      {
+        "id": "water",
+        "name": "물",
+        "color": "#05AAD3",
+        "icon": 25,
+        "desc": "받는 피해 -10%",
+        "effects": [
+          {
+            "stat": "takenPct",
+            "value": -10
+          }
+        ],
+        "onSwitch": []
+      },
+      {
+        "id": "earth",
+        "name": "땅",
+        "color": "#F5CB3F",
+        "icon": 42,
+        "desc": "방어 +1, 바꾸면 최대 체력 5% 보호막",
+        "effects": [
+          {
+            "stat": "armor",
+            "value": 1
+          }
+        ],
+        "onSwitch": [
+          {
+            "type": "shield",
+            "on": "self",
+            "amount": 0,
+            "percent": 5
+          }
+        ]
+      },
+      {
+        "id": "wind",
+        "name": "바람",
+        "color": "#14EA83",
+        "icon": 21,
+        "desc": "회피 +3",
+        "effects": [
+          {
+            "stat": "evasion",
+            "value": 3
+          }
+        ],
+        "onSwitch": []
+      }
+    ],
+    "switchCool": 25,
+    "switchCooldown": 0,
+    "replaceNative": [
+      "NewOverHeat"
+    ]
+  },
+  "code": {
+    "imports": "",
+    "members": "// 이 영웅만의 변수·함수를 여기에 (저장은 Bundle 로 직접 해야 함)\nprivate int kills = 0;",
+    "onLevelUp": "GLog.p(\"원소의 이해가 깊어졌다! (Lv %d)\", lvl);",
+    "onTalentUp": "if (talent.equals(\"storm_study\") && points == 1) GLog.h(\"폭풍의 창을 익혔다!\");",
+    "attackProc": "// 5번에 1번 적을 불태움\nif (Random.Int(5) == 0) Buff.affect(enemy, Burning.class).reignite(enemy);",
+    "onKill": "kills++;\n// 3마리마다 체력 1 회복\nif (kills % 3 == 0 && hero.HP < hero.HT) {\n    hero.HP++;\n    hero.sprite.showStatus(CharSprite.POSITIVE, \"+1\");\n}"
+  },
+  "talentTiers": [
+    {
+      "name": "견습",
+      "unlockLevel": 2,
+      "points": 5
+    },
+    {
+      "name": "숙련",
+      "unlockLevel": 7,
+      "points": 6
+    },
+    {
+      "name": "대가",
+      "unlockLevel": 13,
+      "points": 8,
+      "requires": "subclass"
+    },
+    {
+      "name": "원소의 서기",
+      "unlockLevel": 21,
+      "points": 10,
+      "requires": "ability"
+    }
+  ],
+  "talents": [
+    {
+      "id": "ember_focus",
+      "icon": 50,
+      "name": "불씨 집중",
+      "tier": 1,
+      "maxPoints": 2,
+      "desc": "불꽃 화살의 피해가 늘어난다.",
+      "pointText": [
+        "불꽃 화살 피해 +1",
+        "불꽃 화살 피해 +2, 불태우는 시간 +2턴"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "spell",
+          "spell": "fire_bolt",
+          "field": "damage",
+          "perPoint": 1
+        },
+        {
+          "type": "spell",
+          "spell": "fire_bolt",
+          "field": "turns",
+          "perPoint": 1
+        }
+      ]
+    },
+    {
+      "id": "sturdy_study",
+      "icon": 0,
+      "name": "밤샘 공부",
+      "tier": 1,
+      "maxPoints": 2,
+      "desc": "체력이 늘어난다.",
+      "pointText": [
+        "최대 체력 +4",
+        "최대 체력 +8"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "hp",
+          "perPoint": 4
+        }
+      ]
+    },
+    {
+      "id": "quick_notes",
+      "icon": 207,
+      "name": "속기",
+      "tier": 1,
+      "maxPoints": 2,
+      "desc": "원소의 서가 더 빨리 충전된다.",
+      "pointText": [
+        "충전 속도 +20%",
+        "충전 속도 +40%"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "recharge",
+          "perPoint": 20
+        }
+      ]
+    },
+    {
+      "id": "storm_study",
+      "icon": 173,
+      "name": "폭풍 연구",
+      "tier": 2,
+      "maxPoints": 2,
+      "desc": "새 주문 「폭풍의 창」을 배운다. 2포인트면 재사용 대기가 줄어든다.",
+      "pointText": [
+        "폭풍의 창을 배운다",
+        "폭풍의 창 재사용 대기 -4턴"
+      ],
+      "requires": "ember_focus",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "unlockSpell",
+          "spell": "storm_lance"
+        },
+        {
+          "type": "spell",
+          "spell": "storm_lance",
+          "field": "cooldown",
+          "perPoint": -2
+        }
+      ]
+    },
+    {
+      "id": "elemental_guard",
+      "icon": 3,
+      "name": "원소 수호",
+      "tier": 2,
+      "maxPoints": 3,
+      "desc": "방어와 대지의 방벽이 강해진다.",
+      "pointText": [
+        "방어 +1, 보호막 +2",
+        "방어 +2, 보호막 +4",
+        "방어 +3, 보호막 +6"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "armor",
+          "perPoint": 1
+        },
+        {
+          "type": "spell",
+          "spell": "earth_ward",
+          "field": "amount",
+          "perPoint": 2
+        }
+      ]
+    },
+    {
+      "id": "codex_drill",
+      "icon": 110,
+      "name": "코덱스 숙련",
+      "tier": 2,
+      "maxPoints": 2,
+      "desc": "코덱스를 더 세게 휘두른다.",
+      "pointText": [
+        "코덱스 피해 +5%",
+        "코덱스 피해 +10%"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "codexPct",
+          "perPoint": 5
+        }
+      ]
+    },
+    {
+      "id": "element_affinity",
+      "icon": 34,
+      "name": "원소 친화",
+      "tier": 3,
+      "maxPoints": 3,
+      "desc": "모든 원소와 친해져 몸이 단단해진다.",
+      "pointText": [
+        "최대 체력 +3",
+        "최대 체력 +6",
+        "최대 체력 +9"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "hp",
+          "perPoint": 3
+        }
+      ]
+    },
+    {
+      "id": "harmony_resonance",
+      "icon": 60,
+      "name": "화음 공명",
+      "tier": 3,
+      "maxPoints": 3,
+      "subclass": "harmony",
+      "desc": "주문의 위력이 늘어난다.",
+      "pointText": [
+        "주문 피해 +5%",
+        "주문 피해 +10%",
+        "주문 피해 +15%"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "castPct",
+          "perPoint": 5
+        }
+      ]
+    },
+    {
+      "id": "overheat_core",
+      "icon": 61,
+      "name": "백열 심화",
+      "tier": 3,
+      "maxPoints": 3,
+      "subclass": "overheat",
+      "desc": "과열이 오를수록 코덱스가 강해진다.",
+      "pointText": [
+        "코덱스 피해 +8%",
+        "코덱스 피해 +16%",
+        "코덱스 피해 +24%"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "stat",
+          "stat": "codexPct",
+          "perPoint": 8
+        }
+      ]
+    },
+    {
+      "id": "ink_spread",
+      "icon": 62,
+      "name": "잉크 번짐",
+      "tier": 3,
+      "maxPoints": 3,
+      "subclass": "grimoire_ink",
+      "desc": "잉크 봉인이 오래 남는다.",
+      "pointText": [
+        "잉크 봉인 +2턴",
+        "+4턴",
+        "+6턴"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "spell",
+          "spell": "ink_seal",
+          "field": "turns",
+          "perPoint": 2
+        }
+      ]
+    },
+    {
+      "id": "chord_efficiency",
+      "icon": 90,
+      "name": "공명 효율",
+      "tier": 4,
+      "maxPoints": 3,
+      "ability": "elemental_chord",
+      "desc": "원소 공명의 갑옷 충전 소모가 줄어든다.",
+      "pointText": [
+        "충전 -4%",
+        "충전 -8%",
+        "충전 -12%"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "spell",
+          "spell": "elemental_chord",
+          "field": "chargeUse",
+          "perPoint": -4
+        }
+      ]
+    },
+    {
+      "id": "white_heat_radius",
+      "icon": 91,
+      "name": "백열 확산",
+      "tier": 4,
+      "maxPoints": 2,
+      "ability": "white_heat",
+      "desc": "백열 폭발이 더 넓어진다.",
+      "pointText": [
+        "반경 +1",
+        "반경 +2"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "spell",
+          "spell": "white_heat",
+          "field": "radius",
+          "perPoint": 1
+        }
+      ]
+    },
+    {
+      "id": "ink_flood_bind",
+      "icon": 92,
+      "name": "끈적한 잉크",
+      "tier": 4,
+      "maxPoints": 3,
+      "ability": "ink_flood",
+      "desc": "잉크 범람의 속박이 길어진다.",
+      "pointText": [
+        "+2턴",
+        "+4턴",
+        "+6턴"
+      ],
+      "requires": "",
+      "requiresPoints": 1,
+      "effects": [
+        {
+          "type": "spell",
+          "spell": "ink_flood",
+          "field": "turns",
+          "perPoint": 2
+        }
+      ]
+    }
+  ],
+  "passives": [
+    {
+      "id": "scholar",
+      "name": "공부벌레",
+      "desc": "주문서 최대 충전 +1",
+      "unlockLevel": 4,
+      "cond": "",
+      "effects": [
+        {
+          "stat": "charges",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": "calm_breath",
+      "name": "고른 호흡",
+      "desc": "8턴마다 체력 1 회복",
+      "unlockLevel": 1,
+      "cond": "",
+      "effects": [
+        {
+          "stat": "regen",
+          "value": 8
+        }
+      ]
+    }
+  ],
+  "note": "바탕 직업 ARIA 는 mod-2 의 직업. project.json 의 startHero 가 aria 라서 원본 게임(직업 선택 무관)에서도 적용됩니다."
+}

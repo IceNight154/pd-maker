@@ -1,0 +1,368 @@
+/** 테스트 스크립트용 명령 (eval:<name>) */
+public class Hooks {
+	/** 대상이 있는 시전이면 가장 가까운 적 옆으로 순간이동하고 그 적의 칸을 돌려줌 */
+	static int nearEnemy(com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h, String target) {
+		if (target.equals("self")) return h.pos;
+		com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob best = null;
+		for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY && !(m instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.NPC)) { best = m; break; }
+		if (best == null) { System.out.println("[TEST] no enemy"); return h.pos; }
+		for (int o : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c2 = best.pos + o; if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.passable[c2] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c2) == null) { com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfTeleportation.appear(h, c2); break; } }
+		com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe();
+		System.out.println("[TEST] target " + best.name() + " HP " + best.HP);
+		return best.pos;
+	}
+	static void walk(com.watabou.noosa.Gizmo g, java.util.List<com.watabou.noosa.Gizmo> out) {
+		if (g == null || !g.exists) return;
+		out.add(g);
+		if (g instanceof com.watabou.noosa.Group) try {
+			java.lang.reflect.Field f = com.watabou.noosa.Group.class.getDeclaredField("members"); f.setAccessible(true);
+			for (Object o : new java.util.ArrayList<>((java.util.List<?>) f.get(g))) if (o instanceof com.watabou.noosa.Gizmo) walk((com.watabou.noosa.Gizmo) o, out);
+		} catch (Exception e) { e.printStackTrace(); }
+	}
+	static void eval(final String code) {
+		try {
+			if (code.startsWith("event:")) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.run(new com.badlogic.gdx.utils.JsonReader().parse(code.substring(6).replace(";", ",")), null, null); return; }
+			String[] p = code.split(",");
+			switch (p[0]) {
+				case "interact": { // interact,<캐릭터id>[,menu] — 게임(actor) 스레드처럼 다른 스레드에서 말 걸기
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
+						if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m).charId.equals(p[1])) {
+							final com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob mm = m;
+							Thread t = new Thread(() -> { try { if (p.length > 2) System.out.println("[TEST] heartMenu " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartMenu.show((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) mm)); else mm.interact(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] interact ok " + p[1]); } catch (Throwable e) { System.out.println("[TEST] interact FAIL " + e); } });
+							t.start(); t.join();
+						}
+					break;
+				}
+				case "press": case "slot": { // press,<글자 일부> — 화면·창의 버튼 누르기 / slot,<n> — 저장 슬롯 누르기
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					int si = 0;
+					for (com.watabou.noosa.Gizmo g : all) {
+						if (!(g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Button) || !g.visible || !((com.shatteredpixel.shatteredpixeldungeon.ui.Button) g).active) continue;
+						String label = g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton ? String.valueOf(((com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton) g).text()) : g.getClass().getSimpleName();
+						boolean hit = p[0].equals("slot") ? g.getClass().getSimpleName().equals("SaveSlotButton") && ++si == Integer.parseInt(p[1]) : (label + " " + g.getClass().getName()).contains(p[1]);
+						if (!hit) continue;
+						System.out.println("[TEST] press " + g.getClass().getName() + " '" + label + "'");
+						java.lang.reflect.Method m = com.shatteredpixel.shatteredpixeldungeon.ui.Button.class.getDeclaredMethod("onClick"); m.setAccessible(true); m.invoke(g);
+						break;
+					}
+					break;
+				}
+				case "buttons": { // 보이는 버튼 목록
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Button && g.visible)
+						System.out.println("[TEST] button " + g.getClass().getName() + (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton ? " '" + ((com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton) g).text() + "'" : ""));
+					break;
+				}
+				case "savetitle": // 게임 메뉴의 "메인 메뉴"처럼: 저장하고 타이틀로
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.saveAll();
+					com.watabou.noosa.Game.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.TitleScene.class);
+					break;
+				case "leavetalk": { // 층을 떠나는 순간 대사 이벤트 (층 이동 화면에서 창이 뜨려는 경우 확인)
+					com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getTransition(com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition.Type.REGULAR_EXIT);
+					if (t == null) t = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getTransition(com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition.Type.REGULAR_ENTRANCE);
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos = t.cell();
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.activateTransition(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, t);
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.run(new com.badlogic.gdx.utils.JsonReader().parse("[{\"cmd\":\"text\",\"speaker\":\"mireille\",\"text\":\"층을 옮기는 중에 나온 대사\"}]"), null, null);
+					System.out.println("[TEST] leavetalk scene=" + com.watabou.noosa.Game.scene().getClass().getSimpleName());
+					break;
+				}
+				case "touch": { // touch,<화면x>,<화면y> — 진짜 마우스 누르기처럼 (입력 처리기로 보냄)
+					int x = Integer.parseInt(p[1]), y = Integer.parseInt(p[2]);
+					com.badlogic.gdx.InputProcessor ip = com.badlogic.gdx.Gdx.input.getInputProcessor();
+					ip.touchDown(x, y, 0, 0); ip.touchUp(x, y, 0, 0);
+					System.out.println("[TEST] touch " + x + "," + y);
+					break;
+				}
+				case "wnds": { // 떠 있는 창 정보 (보이는지 · 카메라 위치)
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window) {
+						com.watabou.noosa.Camera c = g.camera;
+						System.out.println("[TEST] wnd " + g.getClass().getName() + " visible=" + g.visible + " alive=" + g.alive + " cam=" + (c == null ? null : c.x + "," + c.y + " " + c.width + "x" + c.height + " z" + c.zoom + " vis=" + c.visible));
+					}
+					java.lang.reflect.Field cf = com.watabou.noosa.Camera.class.getDeclaredField("all"); cf.setAccessible(true);
+					java.util.List<?> cams = (java.util.List<?>) cf.get(null);
+					for (Object o : cams) { com.watabou.noosa.Camera c = (com.watabou.noosa.Camera) o; System.out.println("[TEST] camera " + c.x + "," + c.y + " " + c.width + "x" + c.height + " z" + c.zoom + " vis=" + c.visible); }
+					java.lang.reflect.Field mf = com.watabou.noosa.Group.class.getDeclaredField("members"); mf.setAccessible(true);
+					for (Object o : (java.util.List<?>) mf.get(com.watabou.noosa.Game.scene())) if (o != null) System.out.println("[TEST] member " + o.getClass().getName() + " vis=" + ((com.watabou.noosa.Gizmo) o).visible + " cam=" + (((com.watabou.noosa.Gizmo) o).camera == null ? "-" : ((com.watabou.noosa.Gizmo) o).camera.x + "," + ((com.watabou.noosa.Gizmo) o).camera.y));
+					System.out.println("[TEST] scene=" + com.watabou.noosa.Game.scene().getClass().getSimpleName());
+					break;
+				}
+				case "stair": { // stair,<칸> — 그 칸의 계단으로 층 이동 (밟은 것처럼)
+					com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getTransition(Integer.parseInt(p[1]));
+					if (t == null) { System.out.println("[TEST] no stair at " + p[1]); break; }
+					System.out.println("[TEST] take stair " + p[1] + " " + t.type + " -> d" + t.destDepth + " b" + t.destBranch);
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos = t.cell();
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.activateTransition(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, t);
+					break;
+				}
+				case "door": { // door,<연결id>,<out|in> — 현재 층에서 그 통로 계단으로 이동
+					int c = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.portCell(com.shatteredpixel.shatteredpixeldungeon.Dungeon.level, p[1], p[2]);
+					System.out.println("[TEST] door " + p[1] + " " + p[2] + " cell=" + c);
+					if (c >= 0) eval("stair," + c);
+					break;
+				}
+				case "itemimg": { // 가방 아이템들의 그림 번호 · 시트 칸
+					com.watabou.noosa.TextureFilm film = com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.film;
+					com.watabou.gltextures.SmartTexture tx = com.watabou.gltextures.TextureCache.get(com.shatteredpixel.shatteredpixeldungeon.Assets.Sprites.ITEMS);
+					System.out.println("[TEST] items tex " + tx.width + "x" + tx.height);
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.belongings) {
+						com.watabou.utils.RectF r = film.get(it.image());
+						System.out.println("[TEST] item " + it.getClass().getSimpleName() + " '" + it.name() + "' img=" + it.image() + " rect=" + (r == null ? null : r.left * tx.width + "," + r.top * tx.height + " " + film.width(r) + "x" + film.height(r)));
+					}
+					com.shatteredpixel.shatteredpixeldungeon.items.Item f = new com.shatteredpixel.shatteredpixeldungeon.items.food.Food();
+					System.out.println("[TEST] Food img=" + f.image() + " rect=" + film.get(f.image()));
+					com.watabou.utils.RectF r0 = film.get(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.SEED_SUNGRASS);
+					System.out.println("[TEST] sungrass rect=" + r0.left * tx.width + "," + r0.top * tx.height + " " + film.width(r0) + "x" + film.height(r0));
+					break;
+				}
+				case "dropitems": { // 영웅 옆에 아이템 떨어뜨리기: dropitems,<id>,<id>… (프로젝트 id 또는 spd:경로)
+					int base = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos, w = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width();
+					int[] offs = {1, -1, w, -w, w + 1, w - 1, -w + 1, -w - 1};
+					for (int i = 1; i < p.length; i++) {
+						com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[i]);
+						if (it == null) continue;
+						final com.shatteredpixel.shatteredpixeldungeon.items.Item fit = it; final int c = base + offs[(i - 1) % offs.length];
+						com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.drop(fit, c).sprite.drop(c);
+					}
+					break;
+				}
+				case "buffs": { System.out.println("[TEST] buffs " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.buffs() + " action=" + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action + " ready=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerActive.isReady()); break; }
+				case "iconidx": { // 직접 지정한 아이콘 번호 · hero_icons 크기
+					com.watabou.gltextures.SmartTexture tx = com.watabou.gltextures.TextureCache.get(com.shatteredpixel.shatteredpixeldungeon.Assets.Interfaces.HERO_ICONS);
+					com.badlogic.gdx.utils.JsonValue hd = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data();
+					System.out.println("[TEST] heroicons " + tx.width + "x" + tx.height + " sub0=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.iconOf(hd.get("subclasses").get(0), 0) + " active=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.iconOf(hd.get("subclasses").get(0).get("active"), 0) + " abil0=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.iconOf(hd.get("abilities").get(0), 0));
+					break;
+				}
+				case "herospr": { // 영웅 스프라이트 크기
+					com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite sp = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite;
+					System.out.println("[TEST] herospr tier=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.tier() + " tex=" + sp.texture.width + "x" + sp.texture.height + " frame=" + sp.frame() + " w=" + sp.width + " h=" + sp.height + " scale=" + sp.scale.x + " flying=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.flying);
+					break;
+				}
+				case "wear": { // wear,<갑옷 클래스 armor.PlateArmor> — 갑옷 입기 (updateArmor 확인)
+					try {
+						com.shatteredpixel.shatteredpixeldungeon.items.armor.Armor a = (com.shatteredpixel.shatteredpixeldungeon.items.armor.Armor) Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p[1]).getDeclaredConstructor().newInstance();
+						a.identify(); a.collect(); a.doEquip(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero);
+						System.out.println("[TEST] wore " + p[1]);
+					} catch (Exception e) { System.out.println("[TEST] wear FAIL " + e); }
+					break;
+				}
+				case "hud": { // uiCamera 로 그리는 것들의 보임 여부
+					java.lang.reflect.Field mf = com.watabou.noosa.Group.class.getDeclaredField("members"); mf.setAccessible(true);
+					int vis = 0, hid = 0; StringBuilder sb = new StringBuilder();
+					for (Object o : (java.util.List<?>) mf.get(com.watabou.noosa.Game.scene())) if (o != null && ((com.watabou.noosa.Gizmo) o).camera == com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene.uiCamera) {
+						if (((com.watabou.noosa.Gizmo) o).visible) { vis++; sb.append(o.getClass().getSimpleName()).append(' '); } else { hid++; sb.append('!').append(o.getClass().getSimpleName()).append(' '); }
+					}
+					System.out.println("[TEST] hud visible=" + vis + " hidden=" + hid + " : " + sb);
+					break;
+				}
+				case "spawn": { // 몬스터 스폰 정보
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					int n = 0; StringBuilder sb = new StringBuilder();
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : l.mobs) if (!(m instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.NPC)) { n++; sb.append(m.name()).append('@').append(m.pos % l.width()).append(',').append(m.pos / l.width()).append(' '); }
+					System.out.println("[TEST] spawn limit=" + l.mobLimit() + " cooldown=" + l.respawnCooldown() + " mobs=" + n + " : " + sb);
+					if (p.length > 1) for (int i = 0; i < Integer.parseInt(p[1]); i++) { int c = l.randomRespawnCell(null); System.out.print((c < 0 ? "-" : (c % l.width()) + "," + (c / l.width())) + " "); }
+					System.out.println();
+					if (p.length > 2) for (int i = 0; i < Integer.parseInt(p[2]); i++) System.out.println("[TEST] spawnMob " + l.spawnMob(0));
+					break;
+				}
+				case "itemsnd": { // itemsnd,<게임 아이템 경로 wands.WandOfX 또는 프로젝트 id>,<행동>
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it;
+					try { it = (com.shatteredpixel.shatteredpixeldungeon.items.Item) Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p[1]).getDeclaredConstructor().newInstance(); }
+					catch (Exception e) { it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); }
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = "";
+					if (p[2].equals("PICKUP")) System.out.println("[TEST] pickup replaced=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemPickup(it));
+					else com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemAction(it, p[2]);
+					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
+					break;
+				}
+				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
+				case "sfx": // 게임 효과음 설정이 실제로 어떤 파일로 풀리는지
+					for (String[] k : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.SFX) System.out.println("[TEST] sfx " + k[0] + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.sfxRef(k[0]));
+					break;
+				case "click": { // click,<x>,<y> 또는 click,<캐릭터id> — 맵 칸 누르기 (사람이 누른 것처럼)
+					int cell = -1;
+					if (p.length > 2) cell = Integer.parseInt(p[1]) + Integer.parseInt(p[2]) * com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width();
+					else for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
+						if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m).charId.equals(p[1])) cell = m.pos;
+					System.out.println("[TEST] click " + cell + " hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + " busy=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.busy() + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready);
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(cell);
+					break;
+				}
+				case "adv": case "pick": { // 대사창: 다음(글자 다 보이기 → 선택지 → 닫기) · pick,<n> 선택지 고르기
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd d = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w;
+						System.out.println("[TEST] dialogue '" + d.line.name + "' " + d.line.text + " illust=" + d.line.illust);
+						if (p[0].equals("pick")) d.choose(Integer.parseInt(p[1])); else d.advance();
+					}
+					break;
+				}
+				case "switch": com.shatteredpixel.shatteredpixeldungeon.pdmaker.StoryState.setSw(p[1], true); System.out.println("[TEST] switch " + p[1]); break;
+				case "heart": com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartUI.show(null); break;
+				case "spells": {
+					com.shatteredpixel.shatteredpixeldungeon.items.Item s = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.belongings.getItem(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.MakerSpellbook.class);
+					System.out.println("[TEST] spellbook " + (s == null ? null : s.name() + " " + s.status()) + " learned " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.learned(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero).size());
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.WndMakerSpells((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.MakerSpellbook) s, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, false));
+					break;
+				}
+				case "cast": { // cast,<spellIndex>
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					final com.badlogic.gdx.utils.JsonValue sk = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data().get("spells").get(Integer.parseInt(p[1]));
+					int cell = nearEnemy(h, sk.getString("target", "self"));
+					System.out.println("[TEST] cast " + sk.getString("id", "") + " blocked=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.blocked(h, sk) + " charge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.charge + " gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value());
+					final java.lang.reflect.Method om = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.class.getDeclaredMethod("onSpellCast", com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.class, com.badlogic.gdx.utils.JsonValue.class); om.setAccessible(true);
+					final com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = h;
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCast.perform(h, sk, cell, c -> { try { om.invoke(null, hh, sk); } catch (Exception e) { e.printStackTrace(); } });
+					System.out.println("[TEST] after cast charge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.charge + " cd " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSpells.cooldowns + " gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value());
+					break;
+				}
+				case "subclass": { // subclass,<id>  (가면 없이 바로 고르기)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.badlogic.gdx.utils.JsonValue sc = null;
+					for (com.badlogic.gdx.utils.JsonValue x : com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data().get("subclasses")) if (x.getString("id", "").equals(p[1])) sc = x;
+					java.lang.reflect.Method cm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.class.getDeclaredMethod("choose", com.shatteredpixel.shatteredpixeldungeon.items.TengusMask.class, com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.class, com.badlogic.gdx.utils.JsonValue.class); cm.setAccessible(true);
+					cm.invoke(null, null, h, sc);
+					System.out.println("[TEST] subclass " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.subclassId() + " native " + h.subClass + " className " + h.className() + " castPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("castPct") + " codexPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("codexPct") + " tier3avail " + h.talentPointsAvailable(3));
+					break;
+				}
+				case "subwin": { com.shatteredpixel.shatteredpixeldungeon.items.TengusMask m = new com.shatteredpixel.shatteredpixeldungeon.items.TengusMask(); m.collect(); m.execute(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, "WEAR"); break; }
+				case "abiwin": { com.shatteredpixel.shatteredpixeldungeon.items.KingsCrown k = new com.shatteredpixel.shatteredpixeldungeon.items.KingsCrown(); k.collect(); k.execute(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, "WEAR"); break; }
+				case "ability": { // ability,<id>  (왕관으로 고른 것처럼)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					new com.shatteredpixel.shatteredpixeldungeon.items.KingsCrown().upgradeArmor(h, h.belongings.armor(), new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.MakerArmorAbility(p[1]));
+					System.out.println("[TEST] ability " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.abilityId() + " armor " + h.belongings.armor() + " name " + h.armorAbility.name() + " tier4avail " + h.talentPointsAvailable(4));
+					break;
+				}
+				case "useab": {
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor ca = (com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor) h.belongings.armor();
+					ca.charge = 100;
+					com.badlogic.gdx.utils.JsonValue d = null;
+					for (com.badlogic.gdx.utils.JsonValue x : com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data().get("abilities")) if (x.getString("id", "").equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.abilityId())) d = x;
+					int cell = nearEnemy(h, d.getString("target", "self"));
+					java.lang.reflect.Method am = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.MakerArmorAbility.class.getDeclaredMethod("activate", com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor.class, com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.class, Integer.class); am.setAccessible(true);
+					am.invoke(h.armorAbility, ca, h, cell);
+					System.out.println("[TEST] useab charge " + ca.charge + " gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value());
+					break;
+				}
+				case "codex": { // codex,<itemId>
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex cx = null;
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings) if (it instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex) it).makerId.equals(p[1])) cx = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex) it;
+					if (cx == null) { System.out.println("[TEST] codex not found " + p[1]); break; }
+					java.lang.reflect.Method dm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex.class.getDeclaredMethod("castDef", com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.class); dm.setAccessible(true);
+					com.badlogic.gdx.utils.JsonValue d = (com.badlogic.gdx.utils.JsonValue) dm.invoke(cx, h);
+					int cell = nearEnemy(h, d.getString("target", "self"));
+					final java.lang.reflect.Method um = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex.class.getDeclaredMethod("afterUse"); um.setAccessible(true);
+					final com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCodex fc = cx;
+					System.out.println("[TEST] codex targeting=" + cx.usesTargeting + " " + cx.name() + " qty " + cx.quantity() + " uses " + cx.usesLeft() + " in " + (h.belongings.backpack.items.contains(cx) ? "backpack" : "bag") + " def " + d.toJson(com.badlogic.gdx.utils.JsonWriter.OutputType.minimal));
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCast.perform(h, d, cell, c -> { try { um.invoke(fc); } catch (Exception e) { e.printStackTrace(); } });
+					System.out.println("[TEST] after codex qty " + cx.quantity() + " uses " + cx.usesLeft() + " gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value());
+					break;
+				}
+				case "gauge": { if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.add(Integer.parseInt(p[1]));
+					System.out.println("[TEST] gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value() + " element " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.element() + " codexPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("codexPct") + " takenPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("takenPct") + " action " + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action); break; }
+				case "element": { System.out.println("[TEST] element set " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.setElement(p[1]) + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.element() + " takenPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("takenPct")); break; }
+				case "abinfo": { com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoArmorAbility(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass.armorAbilities()[1])); break; }
+				case "rest": { com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.rest(false); break; }
+				case "elemwin": { ((com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.Action) com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action).doAction(); break; }
+				case "eat": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Hunger hg = h.buff(com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Hunger.class);
+					hg.affectHunger(-250); System.out.println("[TEST] hunger before " + hg.hunger());
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings.backpack.items) if (it instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem) it).makerId.equals(p[1])) {
+						System.out.println("[TEST] actions " + it.actions(h) + " name " + it.actionName("USE", h) + " qty " + it.quantity());
+						it.execute(h, "USE"); System.out.println("[TEST] hunger after " + hg.hunger() + " qty " + it.quantity()); break; }
+					break; }
+				case "herowin": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.openHeroWindow(); break;
+				case "action": System.out.println("[TEST] action " + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action); break;
+				case "title": System.out.println("[TEST] title buttons " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.describe()); break;
+				case "tap": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.tap(); break;
+				case "talk": for (int i = 0; i < 12; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.onFloorLeave(com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth);
+					for (int i = 0; i < 5; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartUI.show(p[1]); break;
+				case "hp": for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) System.out.println("[TEST] mob " + m.name() + " HP " + m.HP + " buffs " + m.buffs()); break;
+				case "tp": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					int c = Integer.parseInt(p[1]); com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfTeleportation.appear(h, c); com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe(); break; }
+				case "inv": {
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.KindOfWeapon w = h.belongings.weapon();
+					System.out.println("[TEST] weapon " + (w == null ? null : w.getClass().getSimpleName() + " '" + w.name() + "' " + w.min() + "-" + w.max() + " img " + w.image));
+					com.shatteredpixel.shatteredpixeldungeon.items.armor.Armor a = h.belongings.armor();
+					System.out.println("[TEST] armor " + (a == null ? null : a.getClass().getSimpleName() + " '" + a.name() + "' DR " + a.DRMin() + "-" + a.DRMax()));
+					System.out.println("[TEST] acc " + h.attackSkill(null) + " eva " + h.defenseSkill(null) + " lvl " + h.lvl + " HP " + h.HP + "/" + h.HT + " speed " + h.speed());
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings.backpack.items) System.out.println("[TEST]   bag " + it.getClass().getSimpleName() + " '" + it.name() + "' x" + it.quantity() + " actions " + it.actions(h));
+					if (w != null) System.out.println("[TEST] weapon desc: " + w.desc().replace("\n", " / "));
+					break;
+				}
+				case "equip": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings.backpack.items.toArray(new com.shatteredpixel.shatteredpixeldungeon.items.Item[0]))
+						if (it instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.GenSupport.Coded && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.GenSupport.Coded) it).makerId().equals(p[1]))
+							System.out.println("[TEST] equip " + p[1] + " -> " + ((com.shatteredpixel.shatteredpixeldungeon.items.EquipableItem) it).doEquip(h));
+					break; }
+				case "act": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings.backpack.items.toArray(new com.shatteredpixel.shatteredpixeldungeon.items.Item[0]))
+						if (it instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.GenSupport.Coded && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.GenSupport.Coded) it).makerId().equals(p[1])) { it.execute(h, p[2]); System.out.println("[TEST] act " + p[2] + " default " + it.defaultAction()); }
+					break; }
+				case "fight": { // fight,<마리수> : 옆에 쥐를 놓고 영웅이 직접 때림
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					int n = Integer.parseInt(p[1]);
+					for (int k = 0; k < n; k++) {
+						com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Rat r = new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Rat();
+						int c = -1; for (int o : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c2 = h.pos + o; if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.passable[c2] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c2) == null) { c = c2; break; } }
+						if (c < 0) break;
+						r.pos = c; r.HP = r.HT = 12; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(r);
+						int hits = 0;
+						while (r.isAlive() && hits < 40) { hits++; int before = r.HP; h.attack(r); if (r.isAlive() && r.buff(com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Burning.class) != null) System.out.println("[TEST]   burning!"); }
+						System.out.println("[TEST] rat " + k + " dead=" + !r.isAlive() + " hits " + hits + " heroHP " + h.HP + "/" + h.HT);
+					}
+					break; }
+				case "hit": { // hit,<횟수> : 쥐가 영웅을 때림 (갑옷 proc)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Rat r = new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Rat();
+					for (int o : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c2 = h.pos + o; if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.passable[c2] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c2) == null) { r.pos = c2; break; } }
+					r.HP = r.HT = 999; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(r);
+					int roots = 0; for (int k = 0; k < Integer.parseInt(p[1]); k++) { r.attack(h); if (r.buff(com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Roots.class) != null) roots++; h.HP = h.HT; }
+					System.out.println("[TEST] rat rooted " + roots + " times"); r.die(null); break; }
+				case "hs": { com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.Record r = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.rec(p[1]);
+					System.out.println("[TEST] heart " + p[1] + " favor " + r.favor + " trust " + r.trust + " mood " + r.mood + " anger " + r.anger + " sulk " + r.sulk + " displeased " + r.displeased + " temper " + r.temper + " fatigue " + r.fatigue + " jealousy " + r.jealousy + " accept " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.acceptance(r) + " lv " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.acceptLevel(r) + " att " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.attitude(p[1]) + " bonds " + r.bonds + " stress " + r.stress);
+					break; }
+				case "hact": { com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.Result rs = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], p[2], p.length > 3 ? Integer.parseInt(p[3]) : -1);
+					System.out.println("[TEST] hact " + p[2] + " -> " + (rs == null ? null : rs.outcome + " fav " + rs.fav + " tru " + rs.tru + " mood " + rs.mood + " anger " + rs.anger + " sulk " + rs.gotSulk + " calmed " + rs.calmed + " jealous " + rs.jealous + " topic " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.topicFor(p[2], rs)));
+					break; }
+				case "req": System.out.println("[TEST] req " + p[2] + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.request(p[1], p[2])); break;
+				case "npcnear": { // npcnear,<char> : 그 NPC 를 영웅 옆으로
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC n = null;
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC && (((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m).charId.equals(p[1]))) n = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m;
+					if (n == null) { n = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC.create(p[1]); n.pos = -1; }
+					for (int o : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c2 = h.pos + o; if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.passable[c2] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c2) == null) {
+						if (n.pos == -1) { n.pos = c2; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(n); } else { n.pos = c2; n.sprite.place(c2); } break; } }
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe(); System.out.println("[TEST] npcnear " + p[1] + " at " + n.pos + " fov " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.heroFOV[n.pos]);
+					break; }
+				case "menu": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC && (((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m).charId.equals(p[1]))) m.interact(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break; }
+				case "music": { try { java.lang.reflect.Field f = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); f.setAccessible(true); Object pl = f.get(com.watabou.noosa.audio.Music.INSTANCE);
+					java.lang.reflect.Field lp = com.watabou.noosa.audio.Music.class.getDeclaredField("lastPlayed"); lp.setAccessible(true);
+					System.out.println("[TEST] music player=" + (pl == null ? null : pl.getClass().getSimpleName()) + " playing=" + com.watabou.noosa.audio.Music.INSTANCE.isPlaying() + " last=" + lp.get(com.watabou.noosa.audio.Music.INSTANCE) + " audio=" + com.badlogic.gdx.Gdx.audio.getClass().getSimpleName());
+					} catch (Exception e) { e.printStackTrace(); } break; }
+				case "se": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playSe(p[1]); System.out.println("[TEST] se " + p[1]); break;
+				case "sethp": com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.HP = Integer.parseInt(p[1]); break;
+				case "tal": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					System.out.println("[TEST] talents lvl " + h.lvl + " avail " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.availableAll(h) + " HT " + h.HT + " armor " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.stat("armor") + " recharge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.stat("recharge"));
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.show(h); break; }
+				case "talup": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					java.lang.reflect.Method tm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.class.getDeclaredMethod("talent", String.class); tm.setAccessible(true);
+					Object t = tm.invoke(null, p[1]);
+					java.lang.reflect.Method um = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.class.getDeclaredMethod("upgrade", com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.class, com.badlogic.gdx.utils.JsonValue.class); um.setAccessible(true);
+					um.invoke(null, h, t);
+					System.out.println("[TEST] talup " + p[1] + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.get(p[1]) + " HT " + h.HT + " fire dmg+ " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.mod("fire_bolt", "damage") + " storm cd+ " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.mod("storm_lance", "cooldown") + " code " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.talent(p[1]));
+					break; }
+				case "lvl": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					h.earnExp(h.maxExp(), null); System.out.println("[TEST] lvl -> " + h.lvl); break; }
+				default: System.out.println("[TEST] unknown eval " + code);
+			}
+		} catch (Throwable t) { t.printStackTrace(); }
+	}
+}

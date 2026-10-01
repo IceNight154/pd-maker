@@ -1,0 +1,185 @@
+/*
+ * 데이터로 정의되는 아이템.
+ *   · 이름·설명·가격·겹침 여부를 items/<id>.json 에서 읽음
+ *   · 스프라이트: builtin:items 의 번호 (직접 그린 PNG 는 M5 에서 지원, 지금은 대체 그림)
+ *   · "사용" : onUse 이벤트 명령 실행. 분류(게임 items 폴더 기준)에 따라 버튼 이름(마시기·읽기·먹기)과 소모 여부가 정해짐 (consumable 로 바꿈)
+ *   · 음식: stats.energy 만큼 배고픔 해소
+ *   · "선물하기" : 옆에 마음 시스템을 쓰는 NPC 가 있으면 선물 → 좋아함/보통/싫어함 반응
+ */
+package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
+
+import com.badlogic.gdx.utils.JsonValue;
+import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
+import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
+import com.shatteredpixel.shatteredpixeldungeon.actors.Char;
+import com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero;
+import com.shatteredpixel.shatteredpixeldungeon.items.Item;
+import com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet;
+import com.watabou.noosa.Game;
+import com.watabou.utils.Bundle;
+import com.watabou.utils.PathFinder;
+import com.watabou.utils.Reflection;
+
+import java.util.ArrayList;
+
+public class MakerItem extends Item {
+
+	public static final String AC_USE = "USE";
+	public static final String AC_GIFT = "GIFT";
+
+	public String makerId = "";
+
+	{
+		image = ItemSpriteSheet.SOMETHING;
+		stackable = true;
+	}
+
+	/** 프로젝트 아이템 id → MakerItem,  'spd:ClassName' → 게임 기본 아이템 */
+	public static Item create(String id) {
+		if (id == null || id.isEmpty()) return null;
+		if (id.startsWith("spd:")) return spdItem(id.substring(4));
+		JsonValue d = MakerRuntime.item(id);
+		if (d == null) { MakerRuntime.log("없는 아이템: " + id); return null; }
+		// 무기·갑옷이나 코드가 있는 아이템은 에디터가 만든 클래스(gen/I_<id>)로
+		Item gen = GenSupport.item(id);
+		if (gen != null) {
+			if (gen instanceof MakerCodex) ((MakerCodex) gen).initQuantity();
+			if (d.getInt("level", 0) > 0 && gen.isUpgradable()) gen.upgrade(d.getInt("level", 0));
+			return gen;
+		}
+		String kind = d.getString("kind", "misc");
+		if (kind.equals("grimoire")) { MakerCodex.MakerGrimoire g = new MakerCodex.MakerGrimoire(); g.makerId = id; g.applyData(); return g; }
+		if (kind.equals("codex")) {
+			MakerCodex c = new MakerCodex(); c.makerId = id; c.applyData(); c.initQuantity();
+			if (d.getInt("level", 0) > 0) c.upgrade(d.getInt("level", 0));
+			return c;
+		}
+		if (kind.equals("game")) {   // 게임 아이템 상속인데 생성 코드가 아직 없으면 바탕 게임 아이템으로
+			MakerRuntime.warnOnce("아이템 " + id + " 의 코드가 게임에 없습니다 — 에디터에서 테스트 플레이(또는 런타임 설치)를 한 번 하세요");
+			return spdItem(d.getString("base", ""));
+		}
+		if (!kind.equals("misc")) MakerRuntime.warnOnce("아이템 " + id + " 의 코드가 게임에 없습니다 — 에디터에서 테스트 플레이(또는 런타임 설치)를 한 번 하세요");
+		MakerItem it = new MakerItem();
+		it.makerId = id;
+		it.applyData();
+		return it;
+	}
+	/** 게임 items 폴더 (spd:짧은이름 도 찾도록) — mod-2 의 코덱스·그리모어 포함 */
+	static final String[] PKGS = { "", "potions.", "potions.exotic.", "potions.brews.", "potions.elixirs.", "scrolls.", "scrolls.exotic.", "food.",
+			"weapon.", "weapon.melee.", "weapon.missiles.", "weapon.missiles.darts.", "weapon.codices.melee.", "weapon.codices.ranged.", "weapon.codices.cast.",
+			"armor.", "wands.", "rings.", "artifacts.", "stones.", "bags.", "bags.grimoire.", "keys.", "quest.", "spells.", "bombs.", "trinkets.", "journal.", "remains." };
+	static Item spdItem(String cls) {
+		if (cls.startsWith("items.")) cls = cls.substring(6);
+		for (String p : PKGS) {
+			try {
+				Class<?> c = Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p + cls);
+				if (Item.class.isAssignableFrom(c)) return (Item) Reflection.newInstance(c);
+			} catch (ClassNotFoundException ignored) { }
+		}
+		MakerRuntime.log("게임 아이템 클래스를 찾지 못함: " + cls);
+		return null;
+	}
+
+	protected JsonValue data() { return MakerRuntime.item(makerId); }
+	protected void applyData() {
+		JsonValue d = data(); if (d == null) return;
+		JsonValue sp = d.get("sprite");
+		if (sp != null && !sp.getString("png", "").isEmpty()) image = MakerAssets.customItemImage(sp.getString("png"), image);
+		else if (sp != null && (sp.has("index") || sp.has("name"))) image = GenSupport.spriteIndex(sp, image);
+		stackable = d.getBoolean("stackable", true);
+		unique = d.getBoolean("unique", false);
+	}
+	ArrayList<String> tags() {
+		ArrayList<String> t = new ArrayList<>();
+		JsonValue d = data();
+		if (d != null && d.get("tags") != null) for (JsonValue v : d.get("tags")) t.add(v.asString());
+		return t;
+	}
+
+	@Override public String name() { JsonValue d = data(); return d == null ? "?" : d.getString("name", makerId); }
+	@Override public String desc() { JsonValue d = data(); return d == null ? "" : d.getString("desc", ""); }
+	@Override public boolean isUpgradable() { return false; }
+	@Override public boolean isIdentified() { return true; }
+	@Override public int value() { JsonValue d = data(); return (d == null ? 0 : d.getInt("price", 0)) * quantity; }
+
+	@Override
+	public boolean isSimilar(Item item) {
+		return item instanceof MakerItem && makerId.equals(((MakerItem) item).makerId);
+	}
+
+	@Override
+	public ArrayList<String> actions(Hero hero) {
+		ArrayList<String> a = super.actions(hero);
+		JsonValue d = data();
+		if (usable(d)) a.add(AC_USE);
+		if (giftTarget(hero) != null) a.add(AC_GIFT);
+		return a;
+	}
+	@Override
+	public String actionName(String action, Hero hero) {
+		if (action.equals(AC_USE)) { JsonValue d = data(); String l = d == null ? "" : d.getString("useLabel", ""); return l.isEmpty() ? defaultUse(d == null ? "" : d.getString("category", "")) : l; }
+		if (action.equals(AC_GIFT)) { MakerNPC n = giftTarget(hero); return n == null ? "선물하기" : n.name() + "에게 선물"; }
+		return super.actionName(action, hero);
+	}
+	@Override public String defaultAction() { JsonValue d = data(); return usable(d) ? AC_USE : super.defaultAction(); }
+	/** 사용 명령이 있거나 음식이면 "사용(먹기)" 버튼 */
+	static boolean usable(JsonValue d) {
+		return d != null && ((d.get("onUse") != null && d.get("onUse").size > 0) || d.getString("category", "").equals("food"));
+	}
+
+	@Override
+	public void execute(Hero hero, String action) {
+		super.execute(hero, action);
+		if (action.equals(AC_USE)) {
+			JsonValue d = data();
+			String cat = d == null ? "" : d.getString("category", "");
+			if (d != null && d.getBoolean("consumable", consumableCat(cat))) detach(hero.belongings.backpack);
+			if (cat.equals("food")) {
+				float energy = d.get("stats") != null ? d.get("stats").getFloat("energy", 300f) : 300f;
+				com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff.affect(hero, com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Hunger.class).satisfy(energy);
+				MakerAudio.playSe(d.getString("sound", "").isEmpty() ? "sfx:item.eat" : d.getString("sound", ""));
+				if (hero.sprite != null) hero.sprite.operate(hero.pos);
+			} else if (cat.equals("potion")) {
+				MakerAudio.playSe(d.getString("sound", "").isEmpty() ? "sfx:item.drink" : d.getString("sound", ""));
+				if (hero.sprite != null) hero.sprite.operate(hero.pos);
+			} else if (cat.equals("scroll") || cat.equals("journal")) {
+				MakerAudio.playSe(d.getString("sound", "").isEmpty() ? "sfx:item.read" : d.getString("sound", ""));
+			} else if (d != null) {
+				MakerAudio.playSe(d.getString("sound", "").isEmpty() ? "sfx:item.use" : d.getString("sound", ""));
+			}
+			hero.spend(Actor.TICK); hero.busy();
+			if (d != null && d.get("onUse") != null) EventInterpreter.run(d.get("onUse"), null, null);
+			hero.next();
+		} else if (action.equals(AC_GIFT)) {
+			final MakerNPC n = giftTarget(hero);
+			if (n == null) return;
+			detach(hero.belongings.backpack);
+			String topic = HeartSystem.giftTopic(n.charId, makerId, tags());
+			hero.spend(Actor.TICK); hero.busy();
+			String cmds = "[{\"cmd\":\"topic\",\"char\":\"" + n.charId + "\",\"topic\":\"" + topic + "\"}]";
+			EventInterpreter.run(new com.badlogic.gdx.utils.JsonReader().parse(cmds), null, n.charId);
+			hero.next();
+		}
+	}
+
+	/** 분류별 기본값 (에디터 PDM.ITEM_CATEGORY_INFO 와 같음) */
+	static boolean consumableCat(String cat) {
+		switch (cat) { case "potion": case "scroll": case "stone": case "spell": case "bomb": case "food": return true; default: return false; }
+	}
+	static String defaultUse(String cat) {
+		switch (cat) { case "potion": return "마시기"; case "scroll": case "journal": return "읽기"; case "food": return "먹기"; case "spell": return "시전"; default: return "사용"; }
+	}
+
+	/** 영웅 바로 옆의 마음 시스템 NPC */
+	static MakerNPC giftTarget(Hero hero) {
+		if (hero == null || Dungeon.level == null) return null;
+		for (int o : PathFinder.NEIGHBOURS8) {
+			Char c = Actor.findChar(hero.pos + o);
+			if (c instanceof MakerNPC && HeartSystem.enabled(((MakerNPC) c).charId)) return (MakerNPC) c;
+		}
+		return null;
+	}
+
+	@Override public void storeInBundle(Bundle bundle) { super.storeInBundle(bundle); bundle.put("pdm_item", makerId); }
+	@Override public void restoreFromBundle(Bundle bundle) { super.restoreFromBundle(bundle); makerId = bundle.getString("pdm_item"); applyData(); }
+}

@@ -1,0 +1,33 @@
+{
+  "format": "pdmaker-event",
+  "version": 1,
+  "id": "ev_end_true",
+  "kind": "scene",
+  "name": "엔딩 — 약초방 뒤뜰",
+  "note": "",
+  "pages": [
+    {
+      "cond": "",
+      "trigger": "none",
+      "turnEvery": 10,
+      "heartCond": "",
+      "graphic": {},
+      "commands": [
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "다섯 개의 코어를 제출한 날, 아리아는 정식 마녀가 되었다."
+        },
+        {
+          "cmd": "text",
+          "speaker": "",
+          "face": "",
+          "illust": "",
+          "text": "그리고 약속대로, 뒤뜰에는 달빛 잎이 자라기 시작했다."
+        }
+      ]
+    }
+  ]
+}

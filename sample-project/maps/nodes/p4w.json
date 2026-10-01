@@ -1,0 +1,32 @@
+{
+  "format": "pdmaker-node",
+  "version": 1,
+  "id": "p4w",
+  "mode": "procedural",
+  "name": "물에 잠긴 층",
+  "label": "",
+  "depth": 0,
+  "boss": false,
+  "entranceTo": "",
+  "theme": "CAVES",
+  "size": {
+    "w": 32,
+    "h": 32
+  },
+  "procedural": {
+    "sizeScale": 1,
+    "standardRooms": [
+      4,
+      6
+    ],
+    "specialRooms": 1,
+    "mobCap": 0,
+    "feeling": "WATER"
+  },
+  "layers": {
+    "terrain": []
+  },
+  "objects": [],
+  "onEnter": "",
+  "note": ""
+}

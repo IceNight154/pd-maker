@@ -1,0 +1,19 @@
+{
+  "id": "screen-fx",
+  "name": "화면 효과 (예제 플러그인)",
+  "version": "0.1.0",
+  "author": "PDMaker",
+  "description": "플러그인 시스템 예제. 날씨(비·눈·반딧불) 명령과 '효과 미리보기' 편집기를 추가합니다. 나중에 이펙트 메이커를 이 구조로 만들면 됩니다.",
+  "pdmaker": ">=0.1",
+  "dependencies": [],
+  "editor": { "main": "editor.js" },
+  "runtime": { "jar": "runtime/screen-fx.jar", "entry": "com.pdmaker.plugins.ScreenFxPlugin" },
+  "contributes": {
+    "eventCommands": [
+      { "id": "fx.weather", "name": "날씨", "params": [
+        { "key": "kind", "type": "select", "name": "종류", "options": { "none": "없음", "rain": "비", "snow": "눈", "firefly": "반딧불" } },
+        { "key": "power", "type": "number", "name": "세기(1~10)" } ] }
+    ],
+    "resourceTypes": [ { "id": "effect", "name": "이펙트", "folder": "effects" } ]
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "format": "pdmaker-story",
+  "version": 1,
+  "synopsis": "탑 등반물. 수 년에 한 번 열리는 정식 마녀 승급시험. 견습 마녀들은 수백 년 전부터 생겨난 탑을 올라, 탑마다 하나씩 있는 코어를 회수해야 한다.\n주인공 아리아는 가문의 압박을 거스르고 모든 원소를 다루는 길을 택했다. 같은 시험에 참가한 미레유, 세라핀, 루미에르와 얽히며 탑을 오른다.",
+  "switches": [
+    {
+      "id": "opening_seen",
+      "name": "오프닝 봄",
+      "group": "시스템",
+      "note": ""
+    },
+    {
+      "id": "read_notice",
+      "name": "게시판 읽음",
+      "group": "1장",
+      "note": ""
+    },
+    {
+      "id": "met_mireille",
+      "name": "미레유와 만남",
+      "group": "미레유",
+      "note": ""
+    },
+    {
+      "id": "mireille_joined",
+      "name": "미레유 동료 합류",
+      "group": "미레유",
+      "note": ""
+    },
+    {
+      "id": "promise_garden",
+      "name": "뒤뜰 약속",
+      "group": "미레유",
+      "note": "트루 엔딩 조건"
+    },
+    {
+      "id": "ember_seal",
+      "name": "잿불 봉인 해제",
+      "group": "갈림길",
+      "note": "1구역 3층의 잿불 갈림길 계단 조건"
+    }
+  ],
+  "variables": [
+    {
+      "id": "cores",
+      "name": "회수한 코어",
+      "initial": 0,
+      "group": "진행",
+      "note": "보스 처치마다 +1"
+    },
+    {
+      "id": "resolve",
+      "name": "각오",
+      "initial": 0,
+      "group": "아리아",
+      "note": ""
+    },
+    {
+      "id": "notes",
+      "name": "주운 연구 노트",
+      "initial": 0,
+      "group": "수집",
+      "note": ""
+    }
+  ],
+  "routes": [
+    {
+      "id": "main",
+      "name": "기본 루트",
+      "when": "",
+      "note": ""
+    },
+    {
+      "id": "ember",
+      "name": "원소 폭주 루트",
+      "when": "",
+      "note": "조건식 route=='ember' 로 연결을 갈라 쓸 수 있음"
+    }
+  ],
+  "beats": [
+    {
+      "id": "b1",
+      "node": "f1",
+      "event": "ev_opening",
+      "required": true,
+      "note": "오프닝"
+    },
+    {
+      "id": "b2",
+      "node": "f1",
+      "event": "ev_talk_mireille",
+      "required": false,
+      "note": "미레유 첫 만남"
+    }
+  ],
+  "endings": [
+    {
+      "id": "true_end",
+      "name": "약초방 뒤뜰",
+      "priority": 100,
+      "when": "var.cores>=5 && switch.promise_garden",
+      "scene": "ev_end_true",
+      "note": ""
+    },
+    {
+      "id": "normal_end",
+      "name": "정식 마녀",
+      "priority": 50,
+      "when": "var.cores>=5",
+      "scene": "ev_end_normal",
+      "note": ""
+    },
+    {
+      "id": "fail_end",
+      "name": "다음 시험을 기약하며",
+      "priority": 0,
+      "when": "",
+      "scene": "ev_end_fail",
+      "note": ""
+    }
+  ],
+  "startEvent": ""
+}

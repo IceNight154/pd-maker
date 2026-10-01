@@ -1,0 +1,199 @@
+// ================================================================
+//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 15개 파일에 연결 줄 32개를 추가합니다.
+//  · 추가한 줄에는 모두 "// >>> pdmaker" 표시가 붙어 있어서, 제거(uninstall)하면 깨끗이 되돌아갑니다.
+//  · 원본 줄은 고치거나 지우지 않습니다 (줄을 "추가"만 함).
+//  사용: node runtime-installer.js <게임저장소> [--uninstall]   또는 main.js 에서 require
+// ================================================================
+const fs = require('fs');
+const path = require('path');
+
+const PKG = 'com.shatteredpixel.shatteredpixeldungeon.pdmaker';
+const MARK = '// >>> pdmaker';
+const JAVA_ROOT = ['core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon'];
+
+/** anchor(정규식) 을 찾아 그 앞/뒤에 줄을 넣습니다. indent 는 anchor 줄의 들여쓰기를 따름 */
+const PATCHES = [
+  { file: 'Dungeon.java', name: '새 게임 시작 시 스토리 초기화',
+    anchor: /public static void init\(\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.StoryState.reset();` },
+  { file: 'Dungeon.java', name: '영웅 편집기의 영웅 적용 (시작 아이템·주문서·능력치) · 시작 층',
+    anchor: /\n([ \t]*)GamesInProgress\.selectedClass\.initHero\(\s*hero\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.afterInit(hero);` },
+  { file: 'Dungeon.java', name: '직접 그린 층 · 층 사이 맵으로 바꾸기',
+    // 층 기록(generatedLevels) 전에 바꿔야 사이 맵이 "생성된 층"으로 기억됨. 못 찾으면 level.create() 앞
+    anchor: [/\n([ \t]*)\/\/dead end levels get cleared/, /\n([ \t]*)level\.create\(\);/], where: 'before',
+    line: `{ Level pdmLevel = ${PKG}.MakerRuntime.createLevel(depth, branch); if (pdmLevel != null) level = pdmLevel; }` },
+  { file: 'Dungeon.java', name: '절차 생성 층에 오브젝트 넣기',
+    anchor: /\n([ \t]*)level\.create\(\);[^\n]*\n/, where: 'after', line: `${PKG}.LevelHooks.afterCreate(level);` },
+  { file: 'Dungeon.java', name: '저장',
+    anchor: /\n([ \t]*)FileUtils\.bundleToFile\(\s*GamesInProgress\.gameFile\(\s*save\s*\),\s*bundle\s*\);/, where: 'before', line: `${PKG}.StoryState.store(bundle);` },
+  { file: 'Dungeon.java', name: '불러오기',
+    anchor: /\n([ \t]*)Bundle bundle = FileUtils\.bundleFromFile\(\s*GamesInProgress\.gameFile\(\s*save\s*\)\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.StoryState.restore(bundle);` },
+  { file: 'scenes/GameScene.java', name: '층 입장 이벤트',
+    anchor: /\n([ \t]*)fadeIn\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.onFloorEnter();` },
+  { file: 'levels/RegularLevel.java', name: '자동 생성 층에 직접 만든 방 추가',
+    anchor: /\n([ \t]*)return initRooms;/, where: 'before', line: `${PKG}.LevelHooks.addRooms(this, initRooms);` },
+  { file: 'scenes/GameScene.java', name: '진행 방향(탑 모드) 계단 그림',
+    anchor: /\n([ \t]*)Dungeon\.level\.playLevelMusic\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.beforeScene();` },
+  { file: 'levels/Level.java', name: '칸을 밟았을 때 이벤트',
+    anchor: /public void occupyCell\(\s*Char ch\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.LevelHooks.onOccupy(this, ch);` },
+  // ---- 영웅 코드 (영웅 편집기의 "코드" 칸 · 세부 능력치) ----
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 명중', anchor: /public int attackSkill\(\s*Char target\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(1)) return ${PKG}.HeroRuntime.attackSkill(this, target, attackSkill(target));` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 회피', anchor: /public int defenseSkill\(\s*Char enemy\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(2)) return ${PKG}.HeroRuntime.defenseSkill(this, enemy, defenseSkill(enemy));` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 피해', anchor: /public int damageRoll\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(3)) return ${PKG}.HeroRuntime.damageRoll(this, damageRoll());` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 방어', anchor: /public int drRoll\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(4)) return ${PKG}.HeroRuntime.drRoll(this, drRoll());` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 속도', anchor: /public float speed\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(5)) return ${PKG}.HeroRuntime.speed(this, speed());` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 적중', anchor: /public int attackProc\(\s*final Char enemy,\s*int damage\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `damage = ${PKG}.HeroRuntime.attackProc(this, enemy, damage);` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 받음', anchor: /public int defenseProc\(\s*Char enemy,\s*int damage\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `damage = ${PKG}.HeroRuntime.defenseProc(this, enemy, damage);` },
+  { file: 'actors/mobs/Mob.java', name: '영웅 코드: 몬스터 처치', anchor: /public void die\(\s*Object cause\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `${PKG}.HeroRuntime.onMobDie(this, cause);` },
+  { file: 'windows/WndHero.java', name: '영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문',
+    anchor: /\n([ \t]*)pane = new TalentsPane\(\s*TalentButton\.Mode\.UPGRADE\s*\);[^\n]*\n/, where: 'after',
+    line: `{ TalentsPane pdmPane = ${PKG}.MakerTalentsPane.forHero(); if (pdmPane != null) { pane.destroy(); pane = pdmPane; } }` },
+  { file: 'actors/hero/Hero.java', name: '특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)',
+    anchor: /public int talentPointsAvailable\(\s*int tier\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ int pdmT = ${PKG}.MakerTalents.nativeOverride(tier); if (pdmT >= 0) return pdmT; }` },
+  // ---- 전직 · 직업 능력 (영웅 편집기의 subclasses · abilities) ----
+  { file: 'actors/hero/HeroClass.java', name: '직업 능력: 왕관으로 고르는 목록 → 영웅 편집기의 직업 능력',
+    anchor: /public ArmorAbility\[\] armorAbilities\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ ArmorAbility[] pdmA = ${PKG}.MakerAbilities.armorAbilities(this); if (pdmA != null) return pdmA; }` },
+  { file: 'items/TengusMask.java', name: '전직: 텐구의 가면 → 영웅 편집기의 전직',
+    anchor: /\n([ \t]*)GameScene\.show\(\s*new WndChooseSubclass\(\s*this,\s*hero\s*\)\s*\);/, where: 'before',
+    line: `if (${PKG}.MakerAbilities.chooseSubclass(this, hero)) return;` },
+  { file: 'actors/hero/Hero.java', name: '전직 이름 (영웅 정보 창)',
+    anchor: /public String className\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ String pdmN = ${PKG}.MakerAbilities.className(this); if (pdmN != null) return pdmN; }` },
+  { file: 'scenes/PixelScene.java', name: '게임 그림 바꾸기(assets/game) · 메뉴 화면 배경·음악',
+    anchor: /\n([ \t]*)float minWidth, minHeight, scaleFactor;/, where: 'before', line: `${PKG}.MakerAssets.onSceneCreate(this);` },
+  { file: 'scenes/TitleScene.java', name: '타이틀 화면 (배경·로고·버튼·음악)',
+    anchor: /\n([ \t]*)fadeIn\(\);/, where: 'before', line: `${PKG}.MakerTitle.apply(this);` },
+  { file: 'sprites/HeroSprite.java', name: '영웅 시트: 갑옷을 바꿔도 영웅 편집기의 그림·프레임 크기 유지',
+    anchor: /public void updateArmor\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.updateArmor(this)) return;` },
+  { file: 'items/Item.java', name: '게임 아이템 그림 바꾸기 (gameitems.json)',
+    anchor: /public int image\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ int pdmI = ${PKG}.MakerAssets.itemImage(this); if (pdmI >= 0) return pdmI; }` },
+  { file: 'items/Item.java', name: '아이템 소리: 행동 버튼 (사용·던지기·장착)',
+    anchor: /public void execute\(\s*Hero hero,\s*String action\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerAudio.onItemAction(this, action);` },
+  { file: 'items/Item.java', name: '아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)',
+    anchor: /\n([ \t]*)Sample\.INSTANCE\.play\(\s*Assets\.Sounds\.ITEM\s*\);/, where: 'before',
+    line: `if (!${PKG}.MakerAudio.onItemPickup(this))` },
+  { file: 'levels/Level.java', name: '통로 연결: 도착 층에서 짝 계단 고르기',
+    anchor: /public LevelTransition getTransition\(\s*LevelTransition\.Type type\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ LevelTransition pdmT = ${PKG}.WorldGraph.pickArrival(this, type); if (pdmT != null) return pdmT; }` },
+  // 저장소 최상위 파일 (root: true). 안드로이드 SDK 가 없는 PC 에서도 데스크톱 빌드가 되도록 :android 모듈은 SDK 가 있을 때만 포함
+  { file: 'settings.gradle', root: true, name: '안드로이드 SDK 가 없으면 android 모듈 건너뛰기 (다른 PC 에서 테스트 플레이)',
+    anchor: /\n([ \t]*)include ':android'/, where: 'before',
+    line: `if ({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }())` },
+  { file: 'scenes/InterlevelScene.java', name: '층을 떠날 때 (감정 결정화·일기)',
+    anchor: /public void create\(\)\s*\{\s*\n([ \t]*)super\.create\(\);[^\n]*\n/, where: 'after',
+    line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` }
+];
+
+function javaDir(repo) { return path.join(repo, ...JAVA_ROOT); }
+/** 연결 줄을 넣을 파일의 실제 경로 (root: true 면 저장소 최상위 기준) */
+function patchFile(repo, file) { return PATCHES.some(p => p.file === file && p.root) ? path.join(repo, file) : path.join(javaDir(repo), file); }
+
+function applyPatch(src, p) {
+  let m = null;
+  for (const a of [].concat(p.anchor)) { m = a.exec(src); if (m) break; }
+  if (!m) return { src, ok: false };
+  // 들여쓰기: 캡처 그룹이 있으면 그것, 없으면 다음 줄 기준 두 탭
+  let indent = m[1] !== undefined ? m[1] : '\t\t';
+  if (p.where === 'before') {
+    const at = m.index + (m[0].startsWith('\n') ? 1 : 0);
+    return { src: src.slice(0, at) + `${indent}${p.line} ${MARK}\n` + src.slice(at), ok: true };
+  }
+  const at = m.index + m[0].length;
+  if (m[1] === undefined) { const next = src.slice(at).match(/^[ \t]*/); indent = next && next[0] ? next[0] : '\t\t'; }
+  return { src: src.slice(0, at) + `${indent}${p.line} ${MARK}\n` + src.slice(at), ok: true };
+}
+
+function uninstall(repo, log = console.log) {
+  const jd = javaDir(repo);
+  const files = [...new Set(PATCHES.map(p => p.file))];
+  for (const f of files) {
+    const fp = patchFile(repo, f);
+    if (!fs.existsSync(fp)) continue;
+    const src = fs.readFileSync(fp, 'utf8');
+    const out = src.split('\n').filter(l => !l.includes(MARK)).join('\n');
+    if (out !== src) { fs.writeFileSync(fp, out, 'utf8'); log(`연결 줄 제거: ${f}`); }
+    if (fs.existsSync(fp + '.pdmaker-backup')) fs.rmSync(fp + '.pdmaker-backup');
+  }
+  const pkgDir = path.join(jd, 'pdmaker');
+  if (fs.existsSync(pkgDir)) { fs.rmSync(pkgDir, { recursive: true }); log('pdmaker 패키지 제거'); }
+}
+
+/** 프로젝트의 영웅·아이템 → pdmaker/gen/*.java (바뀐 파일만 씀). 돌려줌: 파일 수 */
+function generate(repo, projectDir, log = console.log) {
+  const codegen = require('./renderer/js/codegen');
+  const gen = path.join(javaDir(repo), 'pdmaker', 'gen');
+  const readAll = dir => { const d = path.join(projectDir, dir); if (!fs.existsSync(d)) return []; return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')); } catch (e) { log(`읽기 실패 ${dir}/${f}: ${e.message}`); return null; } }).filter(Boolean); };
+  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items')) : {};
+  fs.mkdirSync(gen, { recursive: true });
+  for (const f of fs.readdirSync(gen)) if (f.endsWith('.java') && !files[f]) fs.rmSync(path.join(gen, f));
+  let changed = 0;
+  for (const [f, src] of Object.entries(files)) {
+    const fp = path.join(gen, f);
+    if (fs.existsSync(fp) && fs.readFileSync(fp, 'utf8') === src) continue;
+    fs.writeFileSync(fp, src, 'utf8'); changed++;
+  }
+  log(`코드 생성: ${Object.keys(files).length}개 파일 (${changed}개 바뀜) → pdmaker/gen`);
+  return Object.keys(files).length;
+}
+
+function install(repo, runtimeSrc, log = console.log, projectDir = null) {
+  const jd = javaDir(repo);
+  if (!fs.existsSync(path.join(jd, 'Dungeon.java'))) throw new Error('게임 저장소가 아닙니다 (Dungeon.java 없음): ' + repo);
+  // 1) 패키지 복사 (항상 최신으로 덮어씀)
+  const from = path.join(runtimeSrc, 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
+  const to = path.join(jd, 'pdmaker');
+  fs.mkdirSync(to, { recursive: true });
+  // 예전 버전에만 있던 파일은 지움 (남아 있으면 컴파일 오류)
+  // 내용이 빈(클래스가 없는) 파일은 "지워진 파일" 표시로 보고 복사하지 않음
+  const want = new Set(fs.readdirSync(from).filter(f => f.endsWith('.java') && /\bclass\s/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
+  for (const f of fs.readdirSync(to)) if (f.endsWith('.java') && !want.has(f)) { fs.rmSync(path.join(to, f)); log(`예전 파일 지움: ${f}`); }
+  let n = 0;
+  for (const f of want) { fs.copyFileSync(path.join(from, f), path.join(to, f)); n++; }
+  log(`pdmaker 패키지 복사: ${n}개 파일 → ${to}`);
+  // 2) 연결 줄 (이미 있으면 건너뜀)
+  const results = [];
+  const byFile = {};
+  for (const p of PATCHES) (byFile[p.file] = byFile[p.file] || []).push(p);
+  for (const [f, list] of Object.entries(byFile)) {
+    const fp = patchFile(repo, f);
+    if (!fs.existsSync(fp)) { list.forEach(p => results.push({ file: f, name: p.name, status: '파일 없음 — INTEGRATION.md 참고' })); continue; }
+    const before = fs.readFileSync(fp, 'utf8');
+    // 예전에 넣은 연결 줄은 지우고 새 위치에 다시 넣음 (에디터 업데이트 시 위치가 바뀔 수 있음)
+    let src = before.split('\n').filter(l => !l.includes(MARK)).join('\n');
+    let changed = src !== before;
+    for (const p of list) {
+      const had = before.includes(p.line);
+      const r = applyPatch(src, p);
+      if (r.ok) { src = r.src; changed = true; results.push({ file: f, name: p.name, status: had ? '갱신함' : '추가함' }); }
+      else results.push({ file: f, name: p.name, status: '위치를 찾지 못함 — INTEGRATION.md 를 보고 직접 추가하세요' });
+    }
+    if (changed && src !== before) {
+      if (!fs.existsSync(fp + '.pdmaker-backup')) fs.writeFileSync(fp + '.pdmaker-backup', before.split('\n').filter(l => !l.includes(MARK)).join('\n'), 'utf8');
+      fs.writeFileSync(fp, src, 'utf8');
+    }
+  }
+  results.forEach(r => log(`  [${r.status}] ${r.file} — ${r.name}`));
+  if (projectDir) generate(repo, projectDir, log);
+  return results;
+}
+
+module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK };
+
+if (require.main === module) {
+  const [repo, flag] = process.argv.slice(2);
+  if (!repo) { console.log('사용법: node runtime-installer.js <게임저장소> [--uninstall | --install <프로젝트폴더>]'); process.exit(1); }
+  if (flag === '--uninstall') uninstall(path.resolve(repo));
+  else install(path.resolve(repo), path.join(__dirname, '..', 'runtime', 'src'), console.log, process.argv[4] ? path.resolve(process.argv[4]) : null);
+}

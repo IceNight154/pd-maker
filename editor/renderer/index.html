@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PDMaker — 픽셀 던전 메이커</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="topline">
+      <div class="brand"><canvas id="logo" width="24" height="24"></canvas><b>PDMaker</b><span id="projName" class="muted"></span></div>
+      <nav id="menubar"></nav>
+    </div>
+    <div id="toolbar"></div>
+  </header>
+  <div id="work">
+    <aside id="tree" class="panel"><div class="panel-title">리소스<button class="ib" id="treeCollapse" title="모두 접기">⊟</button></div><div id="treeBody"></div></aside>
+    <div class="split-v" data-target="tree"></div>
+    <main id="center">
+      <div id="tabbar"></div>
+      <div id="tabbody"></div>
+    </main>
+    <div class="split-v" data-target="inspector" data-right="1"></div>
+    <aside id="inspector" class="panel"><div class="panel-title" id="inspTitle">인스펙터</div><div id="inspBody"></div></aside>
+  </div>
+  <div class="split-h"></div>
+  <footer id="bottom" class="panel">
+    <div class="panel-title"><span class="btab on" data-b="log">출력</span><span class="btab" data-b="check">검사</span><span class="grow"></span><button class="ib" id="logClear" title="지우기">⌫</button></div>
+    <div id="logBody" class="bbody"></div>
+    <div id="checkBody" class="bbody" hidden></div>
+  </footer>
+  <div id="status"><span id="stDirty"></span><span id="stAssets"></span><span class="grow"></span><span id="stMode"></span></div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/terms.js"></script>
+<script src="js/cond.js"></script>
+<script src="js/schema.js"></script>
+<script src="js/spd-items.js"></script>
+<script src="js/spd-chars.js"></script>
+<script src="js/world.js"></script>
+<script src="js/codegen.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/defaults.js"></script>
+<script src="js/store.js"></script>
+<script src="js/heart-core.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/rmmz.js"></script>
+<script src="js/pixel.js"></script>
+<script src="js/commands.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/plugin-api.js"></script>
+<script src="js/editors/project.js"></script>
+<script src="js/editors/map.js"></script>
+<script src="js/editors/world.js"></script>
+<script src="js/editors/character.js"></script>
+<script src="js/editors/hero.js"></script>
+<script src="js/editors/item.js"></script>
+<script src="js/editors/event.js"></script>
+<script src="js/editors/story.js"></script>
+<script src="js/editors/heart.js"></script>
+<script src="js/editors/sound.js"></script>
+<script src="js/editors/title.js"></script>
+<script src="js/editors/dialogue.js"></script>
+<script src="js/editors/sprites.js"></script>
+<script src="js/editors/terms.js"></script>
+<script src="js/editors/plugins.js"></script>
+<script src="js/editors/legacy.js"></script>
+<script src="js/validate.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

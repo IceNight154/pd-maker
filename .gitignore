@@ -1,0 +1,43 @@
+# ===== PDMaker .gitignore =====
+
+# --- Node / Electron: npm install 로 다시 받음 (start-editor.bat 가 처음 실행 때 자동 설치) ---
+node_modules/
+npm-debug.log*
+
+# --- 빌드 결과 ---
+# build-exe.bat (electron-builder) 결과
+editor/dist/
+# make-release.bat 결과
+pd-maker-release.zip
+*.zip
+
+# --- 게임 저장소(game/*)의 빌드 결과·로컬 설정 ---
+build/
+.gradle/
+release/
+# 내 PC 의 Android SDK 경로 — 올리면 안 됨
+local.properties
+.idea/
+*.iml
+*.class
+*.apk
+*.dex
+
+# --- PDMaker 가 게임 저장소에 설치·생성하는 것 (runtime/ 에서 다시 설치됨) ---
+game/*/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/pdmaker/
+*.pdmaker-backup
+
+# --- 임시 파일 ---
+game/_*
+*.tgz
+*.tmp
+*.pdmaker-tmp/
+*.log
+
+# --- OS ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 지울 파일 모아 두는 곳
+_to_delete/

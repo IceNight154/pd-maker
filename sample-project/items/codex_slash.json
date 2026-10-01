@@ -1,0 +1,49 @@
+{
+  "format": "pdmaker-item",
+  "version": 1,
+  "id": "codex_slash",
+  "category": "codex",
+  "name": "마법 베기 코덱스",
+  "desc": "펼치면 마력의 칼날이 옆의 적을 벤다.",
+  "sprite": {
+    "sheet": "builtin:items",
+    "name": "CODEX_SLASH",
+    "index": 1152
+  },
+  "stackable": true,
+  "price": 20,
+  "unique": false,
+  "tags": [],
+  "stats": {},
+  "onUse": [],
+  "giftValue": {},
+  "subtype": "melee",
+  "kind": "codex",
+  "codex": {
+    "type": "melee",
+    "tier": 1,
+    "min": 2,
+    "max": 7,
+    "minPerLvl": 1,
+    "maxPerLvl": 2,
+    "str": 0,
+    "baseUses": 10,
+    "quantity": 3,
+    "castTime": 1,
+    "range": 1,
+    "radius": 0,
+    "target": "cell",
+    "projectile": true,
+    "visual": "none",
+    "heat": 8,
+    "effects": [],
+    "magicImage": {
+      "sheet": "builtin:items",
+      "name": "MAGIC_SLASH",
+      "index": 1184
+    },
+    "anim": "alternate",
+    "hits": 2,
+    "hitDelay": 0.1
+  }
+}

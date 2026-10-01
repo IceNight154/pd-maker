@@ -1,0 +1,40 @@
+{
+  "format": "pdmaker-node",
+  "version": 1,
+  "id": "f4a",
+  "mode": "procedural",
+  "name": "",
+  "label": "",
+  "depth": 4,
+  "boss": false,
+  "entranceTo": "",
+  "theme": "",
+  "size": {
+    "w": 32,
+    "h": 32
+  },
+  "procedural": {
+    "sizeScale": 1,
+    "standardRooms": [
+      4,
+      6
+    ],
+    "specialRooms": 1,
+    "mobCap": 0,
+    "feeling": "any",
+    "rooms": [
+      {
+        "room": "hidden_library",
+        "count": 1,
+        "chance": 100,
+        "cond": ""
+      }
+    ]
+  },
+  "layers": {
+    "terrain": []
+  },
+  "objects": [],
+  "onEnter": "",
+  "note": ""
+}

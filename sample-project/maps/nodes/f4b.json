@@ -1,0 +1,32 @@
+{
+  "format": "pdmaker-node",
+  "version": 1,
+  "id": "f4b",
+  "mode": "procedural",
+  "name": "잿불 샛길",
+  "label": "",
+  "depth": 4,
+  "boss": false,
+  "entranceTo": "",
+  "theme": "CITY",
+  "size": {
+    "w": 32,
+    "h": 32
+  },
+  "procedural": {
+    "sizeScale": 1,
+    "standardRooms": [
+      4,
+      6
+    ],
+    "specialRooms": 1,
+    "mobCap": 0,
+    "feeling": "any"
+  },
+  "layers": {
+    "terrain": []
+  },
+  "objects": [],
+  "onEnter": "",
+  "note": "마을의 봉인석을 풀면 3층에 갈림길 계단이 생김"
+}

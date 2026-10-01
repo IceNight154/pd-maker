@@ -1,0 +1,25 @@
+{
+  "name": "pd-maker",
+  "productName": "PDMaker",
+  "version": "0.1.0",
+  "description": "픽셀 던전 메이커 (가제) - Shattered Pixel Dungeon 기반 게임 제작 도구",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "dist:dir": "electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.witchlingpixel.pdmaker",
+    "productName": "PDMaker",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "runtime-installer.js", "zip.js", "renderer/**/*", "builtin-plugins/**/*"],
+    "extraResources": [{ "from": "../sample-project", "to": "sample-project" }, { "from": "../runtime", "to": "runtime" }, { "from": "../DESIGN.md", "to": "DESIGN.md" }],
+    "win": { "target": "portable" }
+  }
+}

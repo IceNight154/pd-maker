@@ -1,0 +1,71 @@
+{
+  "format": "pdmaker-event",
+  "version": 1,
+  "id": "ev_mireille_close",
+  "kind": "milestone",
+  "name": "미레유 — 약초방의 약속",
+  "note": "",
+  "pages": [
+    {
+      "cond": "",
+      "trigger": "none",
+      "turnEvery": 10,
+      "heartCond": "",
+      "graphic": {},
+      "commands": [
+        {
+          "cmd": "text",
+          "speaker": "mireille",
+          "face": "",
+          "illust": "",
+          "text": "있잖아, 아리아."
+        },
+        {
+          "cmd": "text",
+          "speaker": "mireille",
+          "face": "",
+          "illust": "",
+          "text": "시험이 끝나면… 우리 약초방 뒤뜰에 달빛 잎 심자. 둘이서."
+        },
+        {
+          "cmd": "choice",
+          "options": [
+            "약속할게",
+            "…생각해 볼게"
+          ],
+          "branches": [
+            [
+              {
+                "cmd": "heart",
+                "char": "mireille",
+                "stat": "rel.trust",
+                "value": 100
+              },
+              {
+                "cmd": "switch",
+                "id": "promise_garden",
+                "value": true
+              },
+              {
+                "cmd": "text",
+                "speaker": "mireille",
+                "face": "smile",
+                "illust": "",
+                "text": "헤헤. 약속이다!"
+              }
+            ],
+            [
+              {
+                "cmd": "text",
+                "speaker": "mireille",
+                "face": "worried",
+                "illust": "",
+                "text": "…응. 기다릴게."
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

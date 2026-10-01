@@ -1,0 +1,33 @@
+{
+  "format": "pdmaker-item",
+  "version": 1,
+  "id": "moss_cloak",
+  "category": "armor",
+  "name": "이끼 망토",
+  "desc": "탑의 이끼를 엮은 망토. 맞으면 가끔 뿌리가 적을 붙잡는다.",
+  "sprite": {
+    "sheet": "builtin:items",
+    "name": "ARMOR_LEATHER",
+    "index": 353
+  },
+  "stackable": false,
+  "price": 0,
+  "unique": false,
+  "tags": [],
+  "stats": {},
+  "onUse": [],
+  "giftValue": {},
+  "subtype": "armor",
+  "kind": "armor",
+  "armor": {
+    "tier": 2,
+    "drMin": 1,
+    "drMax": 5,
+    "drMinPerLvl": 0,
+    "drMaxPerLvl": 2,
+    "str": 11
+  },
+  "code": {
+    "armorProc": "if (Random.Int(5) == 0) Buff.affect(attacker, Roots.class, 2f);"
+  }
+}

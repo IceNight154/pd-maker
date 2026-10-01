@@ -1,0 +1,40 @@
+{
+  "format": "pdmaker-item",
+  "version": 1,
+  "id": "ember_staff",
+  "category": "weapon",
+  "name": "잿불 지팡이",
+  "desc": "끝에 잿불이 맺힌 지팡이. 맞힌 적을 가끔 불태운다.",
+  "sprite": {
+    "sheet": "builtin:items",
+    "name": "MAGES_STAFF",
+    "index": 197
+  },
+  "stackable": false,
+  "price": 0,
+  "unique": false,
+  "tags": [],
+  "stats": {},
+  "onUse": [],
+  "giftValue": {},
+  "subtype": "melee",
+  "kind": "melee",
+  "weapon": {
+    "tier": 2,
+    "min": 2,
+    "max": 12,
+    "minPerLvl": 1,
+    "maxPerLvl": 3,
+    "str": 12,
+    "delay": 1.0,
+    "reach": 1,
+    "accuracy": 1.1
+  },
+  "code": {
+    "imports": "",
+    "members": "",
+    "proc": "// 맞힐 때 25% 확률로 불태움\nif (Random.Int(4) == 0) {\n    Buff.affect(defender, Burning.class).reignite(defender);\n}",
+    "onEquip": "GLog.i(\"지팡이 끝의 잿불이 살아난다.\");",
+    "desc": "return value + \"\\n\\n강화할수록 최대 피해가 3씩 오릅니다.\";"
+  }
+}
