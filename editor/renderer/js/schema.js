@@ -257,13 +257,14 @@ PDM.make = {
   /** 플레이어블 영웅 (heroes/<id>.json) — 영웅 편집기 */
   hero(id) {
     return { format: 'pdmaker-hero', version: PDM.FORMAT_VERSION, id, name: '새 영웅', title: '', desc: '', enabled: true,
-      baseClass: 'WARRIOR', character: '',
+      baseClass: '', character: '',   // '' = 완전히 새 영웅 (게임 직업에서 아무것도 물려받지 않음)
+      select: { illust: '', fit: 'right', frameW: 0, frameH: 0, frames: '', fps: 8, icon: '' },   // 캐릭터 선택 화면
       sprite: { sheet: '', frame: [12, 15], scale: 0, anims: {} },
       stats: { hp: 20, hpPerLevel: 5, str: 10, attackSkill: 10, defenseSkill: 5, accPerLvl: 1, evaPerLvl: 1, unarmedMin: 0, unarmedMax: 0, speed: 1, viewDistance: 8 },
       startGold: 0, knownItems: [],
       inventory: { clearDefault: false, items: [] },
       code: { imports: '', members: '' },
-      spellbook: { enabled: true, name: '주문서', desc: '', image: 246, charges: 3, rechargeTurns: 40 },
+      spellbook: { enabled: true, name: '주문서', desc: '', charges: 3, rechargeTurns: 40 },   // image 없음 = 게임의 마스터리 책 그림
       spells: [], subclasses: [], abilities: [], gauge: PDM.make.gauge(),
       passives: [], talentTiers: PDM.clone(PDM.TALENT_TIERS_DEFAULT), talents: [], note: '' };
   },

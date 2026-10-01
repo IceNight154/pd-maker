@@ -62,6 +62,7 @@ public class WndGameInProgress extends Window {
 		
 		IconTitle title = new IconTitle();
 		title.icon( HeroSprite.avatar(info.heroClass, info.armorTier) );
+		{ com.watabou.noosa.Image pdmA = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.slotAvatar(info); if (pdmA != null) title.icon(pdmA); String pdmN = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.slotName(info); if (pdmN != null) className = pdmN; } // >>> pdmaker
 		title.label((Messages.get(this, "title", info.level, className)).toUpperCase(Locale.ENGLISH));
 		title.color(Window.TITLE_COLOR);
 		title.setRect( 0, 0, WIDTH, 0 );

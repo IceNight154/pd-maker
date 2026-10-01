@@ -324,11 +324,12 @@ PDM.ui = (function () {
     const cv = drawIcon(h('canvas', { style: { imageRendering: 'pixelated', verticalAlign: 'middle', background: 'var(--stage)', borderRadius: '3px' } }), sheet, cur ?? o.def, 2);
     const btn = h('button', { class: 'btn sm', title: '게임 아이콘 시트에서 고르기', onclick: async e => { e.preventDefault(); const v = await pickIcon(sheet, custom ? o.def : cur ?? o.def); if (v != null) commit(key, path, v, o.label || '아이콘', true); } }, '게임 아이콘…');
     // 파일 지정·그리기는 게임이 붙여 쓰는 능력 아이콘(hero_icons)만
-    const fileBtn = sheet === 'hero' ? h('button', { class: 'btn sm', title: '영웅 시트처럼 아이콘 그림 파일을 직접 지정 (한 장 또는 시트의 칸)', onclick: async e => { e.preventDefault(); const v = await pickIconFile(custom ? cur : null); if (v != null) commit(key, path, v, o.label || '아이콘 파일', true); } }, '파일 지정…') : null;
-    const drawBtn = sheet === 'hero' ? h('button', { class: 'btn sm', title: '16×16 아이콘 직접 그리기 (작업 영역 크기는 편집기에서 바꿀 수 있음)', onclick: async e => {
+    const fileBtn = sheet === 'hero' ? h('button', { class: 'btn sm', title: '영웅 시트처럼 아이콘 그림 파일을 직접 지정 (한 장 또는 시트의 칸)', onclick: async e => { e.preventDefault(); const v = await pickIconFile(custom ? cur : null); if (v != null) commit(key, path, v, o.label || '아이콘 파일', true); } }, '파일 지정…')
+      : sheet === 'item' ? h('button', { class: 'btn sm', title: 'PNG 그림 파일을 직접 지정 (프로젝트 assets/items 로 복사 — 게임에서 아이템 칸 크기에 맞춰 씀)', onclick: async e => { e.preventDefault(); const v = await pickImage('items'); if (v) { PDM.assets.invalidate(v); commit(key, path, v, o.label || '그림 파일', true); } } }, '파일 지정…') : null;
+    const drawBtn = sheet === 'hero' || sheet === 'item' ? h('button', { class: 'btn sm', title: '16×16 아이콘 직접 그리기 (작업 영역 크기는 편집기에서 바꿀 수 있음)', onclick: async e => {
       e.preventDefault();
       let rel = typeof cur === 'string' ? cur : null;
-      if (!rel) { rel = `assets/icons/${PDM.slugId(String(path[path.length - 2] ?? 'icon'))}_${Date.now().toString(36).slice(-4)}.png`; }
+      if (!rel) { rel = `assets/${sheet === 'item' ? 'items' : 'icons'}/${PDM.slugId(String(path[path.length - 2] ?? 'icon'))}_${Date.now().toString(36).slice(-4)}.png`; }
       const out = await PDM.editPixelsModal('아이콘 그리기', rel, 16, 16);
       if (out) { PDM.assets.invalidate(out); commit(key, path, out, o.label || '아이콘 그림', true); }
     } }, typeof cur === 'string' ? '그림 편집…' : '그리기…') : null;

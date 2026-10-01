@@ -187,7 +187,13 @@ public class MakerSpells {
 			defaultAction = AC_CAST;
 		}
 		JsonValue b() { return book(); }
-		@Override public int image() { JsonValue s = b(); return s != null && s.has("image") ? s.getInt("image", image) : image; }
+		@Override public int image() {
+			JsonValue s = b();
+			if (s == null || s.get("image") == null) return image;
+			JsonValue im = s.get("image");
+			if (im.isString()) return MakerAssets.customItemImage(im.asString(), image);   // 직접 지정한 PNG
+			return im.isNumber() ? im.asInt() : image;
+		}
 		@Override public String name() { JsonValue s = b(); return s == null ? "주문서" : s.getString("name", "주문서"); }
 		@Override public String desc() {
 			JsonValue s = b();

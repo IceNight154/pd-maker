@@ -72,12 +72,91 @@ public class HeroRuntime {
 	/** 코드에서: 특성 포인트 수 */
 	public static int talent(String id) { return MakerTalents.get(id); }
 	public static JsonValue data() { return heroId.isEmpty() ? null : MakerRuntime.heroes.get(heroId); }
+	/** 완전히 새 영웅 (바탕 직업 없음): 게임 직업에서 아무것도 물려받지 않음 — 시작 아이템·감정·특성·전직·직업 능력 모두 영웅 편집기 것만.
+	 *  게임은 직업이 꼭 있어야 하므로 안에서는 WARRIOR 로 돌지만 그 직업 것은 모두 걷어 냄 */
+	public static boolean zeroBase() { return zeroBase(data()); }
+	/** 코드에서: 이 패시브가 열렸는지 */
+	public static boolean passive(String id) { return unlocked.contains(id); }
+	/** 전직·직업 능력·특성·패시브를 얻었을 때 → 항목 코드 onGain */
+	public static void gain(String kind, String id) {
+		if (code == null || !code.overrides(MakerHeroCode.GAIN) || Dungeon.hero == null) return;
+		try { code.onGain(kind, id, Dungeon.hero); } catch (Throwable t) { GenSupport.error("영웅 " + heroId + " · " + kind + " " + id, "onGain", t); }
+	}
+	/** 직업 능력을 쓸 때 → 항목 코드 onUse */
+	public static void use(String kind, String id, Hero hero, int cell) {
+		if (code == null || !code.overrides(MakerHeroCode.USE)) return;
+		try { code.onUse(kind, id, hero, cell, Actor.findChar(cell)); } catch (Throwable t) { GenSupport.error("영웅 " + heroId + " · " + kind + " " + id, "onUse", t); }
+	}
+	static String lastAbility = "";
+
+	// ------------------------------------------------------------ 초상화 (상태 창 · 영웅 창 · 저장 슬롯)
+
+	/** HeroSprite.avatar(hero) 첫 줄: 영웅 편집기의 그림이면 그 그림의 첫 프레임 (갑옷 단계 줄) */
+	public static com.watabou.noosa.Image avatar(Hero hero) {
+		try { return MakerRuntime.isActive() && hero == Dungeon.hero ? avatarOf(data(), hero.tier()) : null; }
+		catch (Throwable t) { MakerRuntime.log("초상화 오류: " + t); return null; }
+	}
+	public static com.watabou.noosa.Image avatarOf(JsonValue h, int tier) {
+		if (h == null || h.get("sprite") == null) return null;
+		JsonValue sp = h.get("sprite");
+		String sheet = sp.getString("sheet", "");
+		if (sheet.isEmpty()) return null;
+		Object tx = MakerRuntime.texture(sheet);
+		if (tx == null) return null;
+		com.watabou.noosa.Image img = new com.watabou.noosa.Image(tx);
+		int fw = 12, fh = 15;
+		JsonValue fr = sp.get("frame");
+		if (fr != null && fr.size >= 2) { fw = fr.getInt(0); fh = fr.getInt(1); }
+		int cols = Math.max(1, img.texture.width / fw), rows = Math.max(1, img.texture.height / fh);
+		int f = 0;
+		JsonValue idle = sp.get("anims") == null ? null : sp.get("anims").get("idle");
+		if (idle != null && idle.get("frames") != null && idle.get("frames").size > 0) f = Math.max(0, idle.get("frames").getInt(0));
+		int cell = sp.getBoolean("armorRows", true) ? rowFor(sp, tier, rows) * cols + Math.min(f, cols - 1) : f;
+		img.frame((cell % cols) * fw, (cell / cols) * fh, fw, fh);
+		return img;
+	}
+	/** 저장 슬롯 → 영웅 id · 전직 id (Dungeon.preview 에서 저장 파일을 읽을 때) */
+	static final java.util.Map<Integer, String[]> slotHero = new java.util.HashMap<>();
+	public static void preview(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info, Bundle bundle) {
+		try {
+			Bundle st = bundle.contains("pdmaker_story") ? bundle.getBundle("pdmaker_story") : null;
+			if (st == null || !st.contains("pdm_hero")) { slotHero.remove(info.slot); return; }
+			slotHero.put(info.slot, new String[]{ st.getString("pdm_hero"), st.contains("pdm_subclass") ? st.getString("pdm_subclass") : "" });
+		} catch (Throwable t) { MakerRuntime.log("저장 슬롯 읽기 오류: " + t); }
+	}
+	/** GamesInProgress.set(slot) 첫 줄: 지금 게임을 저장하는 슬롯 = 지금 영웅 */
+	public static void setSlot(int slot) {
+		if (heroId.isEmpty()) slotHero.remove(slot);
+		else slotHero.put(slot, new String[]{ heroId, MakerAbilities.subclassId() });
+	}
+	static JsonValue slotData(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info) {
+		if (info == null || !MakerRuntime.isActive()) return null;
+		String[] s = slotHero.get(info.slot);
+		return s == null || s[0].isEmpty() ? null : MakerRuntime.heroes.get(s[0]);
+	}
+	/** 저장 슬롯의 초상화 (시작 화면 · 이어하기 창) */
+	public static com.watabou.noosa.Image slotAvatar(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info) {
+		try { return avatarOf(slotData(info), info.armorTier); } catch (Throwable t) { MakerRuntime.log("저장 슬롯 초상화 오류: " + t); return null; }
+	}
+	/** 저장 슬롯의 이름: 영웅 편집기의 전직 이름 → 영웅 이름 (원작 영웅이면 null = 게임 그대로) */
+	public static String slotName(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info) {
+		JsonValue h = slotData(info);
+		if (h == null) return null;
+		String[] s = slotHero.get(info.slot);
+		if (s != null && !s[1].isEmpty() && h.get("subclasses") != null)
+			for (JsonValue x : h.get("subclasses")) if (s[1].equals(x.getString("id", ""))) return x.getString("name", s[1]);
+		if (!zeroBase(h) && h.getString("id", "").equalsIgnoreCase(h.getString("baseClass", ""))) return null;
+		String n = h.getString("name", "");
+		return n.isEmpty() ? null : n;
+	}
+	static boolean restoredAbility = false;
+	public static boolean zeroBase(JsonValue h) { return h != null && h.getString("baseClass", "").trim().isEmpty(); }
 
 	// ------------------------------------------------------------ 새 게임
 
 	/** Dungeon.init() 에서 직업 기본 장비를 준 직후 */
 	public static void afterInit(Hero hero) {
-		heroId = ""; hpApplied = 0; unlocked.clear(); code = null; lastLvl = 1; MakerTalents.reset(); MakerAbilities.reset(); MakerSpells.reset();
+		heroId = ""; hpApplied = 0; unlocked.clear(); code = null; lastAbility = ""; restoredAbility = false; lastLvl = 1; MakerTalents.reset(); MakerAbilities.reset(); MakerSpells.reset();
 		if (!MakerRuntime.isActive()) return;
 		// 시작 노드 (맵 그래프의 start → depth/branch)
 		int[] sw = WorldGraph.whereOf(WorldGraph.start);
@@ -86,7 +165,8 @@ public class HeroRuntime {
 		JsonValue h = pick(hero);
 		if (h == null) return;
 		heroId = h.getString("id", "");
-		MakerRuntime.log("영웅 적용: " + h.getString("name", heroId) + " (바탕 직업 " + hero.heroClass.name() + ")");
+		MakerRuntime.log("영웅 적용: " + h.getString("name", heroId) + (zeroBase(h) ? " (새 영웅 — 바탕 직업 없음)" : " (바탕 직업 " + hero.heroClass.name() + ")"));
+		if (zeroBase(h)) stripClass(hero);
 
 		code = GenSupport.hero(heroId);
 		JsonValue st = h.get("stats");
@@ -98,7 +178,7 @@ public class HeroRuntime {
 
 		// 시작 아이템
 		JsonValue inv = h.get("inventory");
-		boolean clear = inv != null && inv.getBoolean("clearDefault", false);
+		boolean clear = zeroBase(h) || (inv != null && inv.getBoolean("clearDefault", false));
 		if (clear) clearInventory(hero);
 		int slot = 0;
 		if (inv != null && inv.get("items") != null) {
@@ -257,11 +337,38 @@ public class HeroRuntime {
 			if (h != null) return h;
 			MakerRuntime.log("시작 영웅을 찾지 못함: " + forced);
 		}
+		// 영웅 선택 화면에서 고른 영웅 (같은 직업을 바탕으로 한 영웅이 여럿일 때 구분)
+		if (HeroSelect.selected != null) {
+			JsonValue h = MakerRuntime.heroes.get(HeroSelect.selected);
+			if (h != null && HeroSelect.classOf(h) == hero.heroClass) return h;
+		}
 		for (JsonValue h : MakerRuntime.heroes.values()) {
 			if (!h.getBoolean("enabled", true)) continue;
-			if (hero.heroClass.name().equalsIgnoreCase(h.getString("baseClass", ""))) return h;
+			if (HeroSelect.classOf(h) == hero.heroClass) return h;   // baseClass 가 비면 WARRIOR
 		}
 		return null;
+	}
+
+	/** 새 영웅: 게임 직업(WARRIOR)이 준 것 걷어 내기 — 장비·가방·퀵슬롯, 감정해 둔 아이템, 직업 특성 */
+	private static void stripClass(Hero hero) {
+		clearInventory(hero);
+		// 직업이 감정해 둔 물약·주문서 (initHero + initWarrior) 를 모르는 상태로
+		forget(com.shatteredpixel.shatteredpixeldungeon.items.potions.Potion.class, com.shatteredpixel.shatteredpixeldungeon.items.potions.PotionOfHealing.class);
+		forget(com.shatteredpixel.shatteredpixeldungeon.items.scrolls.Scroll.class, com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfRage.class);
+		forget(com.shatteredpixel.shatteredpixeldungeon.items.scrolls.Scroll.class, com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfIdentify.class);
+		// 직업 버프 (전사의 인장 보호막 등)
+		for (Buff b : hero.buffs()) if (b instanceof com.shatteredpixel.shatteredpixeldungeon.items.BrokenSeal.WarriorShield) b.detach();
+		// 직업 특성 (Talent.initClassTalents) 비우기 — 특성은 영웅 편집기의 특성만
+		for (java.util.LinkedHashMap<com.shatteredpixel.shatteredpixeldungeon.actors.hero.Talent, Integer> tier : hero.talents) tier.clear();
+	}
+	@SuppressWarnings("unchecked")
+	static void forget(Class<?> base, Class<?> item) {
+		try {
+			java.lang.reflect.Field hf = base.getDeclaredField("handler"); hf.setAccessible(true);
+			Object handler = hf.get(null); if (handler == null) return;
+			java.lang.reflect.Field kf = handler.getClass().getDeclaredField("known"); kf.setAccessible(true);
+			((java.util.Set<Object>) kf.get(handler)).remove(item);
+		} catch (Throwable t) { MakerRuntime.log("감정 되돌리기 실패: " + item.getSimpleName() + " " + t); }
 	}
 
 	private static void clearInventory(Hero hero) {
@@ -322,6 +429,7 @@ public class HeroRuntime {
 			String id = p.getString("id", p.getString("name", ""));
 			if (unlocked.contains(id) || !passiveOn(hero, p)) continue;
 			unlocked.add(id);
+			gain("passive", id);
 			if (p.get("effects") != null) for (JsonValue e : p.get("effects")) {
 				switch (e.getString("stat", "")) {
 					case "str":  hero.STR += e.getInt("value", 0); break;
@@ -464,6 +572,9 @@ public class HeroRuntime {
 			Hero hero = Dungeon.hero;
 			if (hero != null && target == hero && data() != null) {
 				MakerSpells.tick(hero);
+				String ab = MakerAbilities.abilityId();
+				if (restoredAbility) { lastAbility = ab; restoredAbility = false; }
+				if (!ab.equals(lastAbility)) { lastAbility = ab; if (!ab.isEmpty()) gain("ability", ab); }
 				checkLevel(hero);
 				MakerTalents.checkNew(hero);
 				syncHP(hero, false);
@@ -510,6 +621,8 @@ public class HeroRuntime {
 		code = heroId.isEmpty() ? null : GenSupport.hero(heroId);
 		MakerTalents.restore(b);
 		MakerAbilities.restore(b);
+		lastAbility = "";   // 첫 턴에 지금 능력으로 맞춤 (불러온 능력은 다시 "얻음" 처리하지 않도록 아래에서)
+		restoredAbility = true;
 		restoredSpells = MakerSpells.restore(b);
 	}
 }

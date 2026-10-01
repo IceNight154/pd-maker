@@ -101,6 +101,8 @@ public class MakerAssets {
 		if (itemRefs != null) return itemRefs;
 		java.util.TreeSet<String> set = new java.util.TreeSet<>();
 		for (JsonValue it : MakerRuntime.items.values()) { JsonValue sp = it.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png")); }
+		// 영웅 주문서 그림 (spellbook.image 가 "assets/…png" 파일이면)
+		for (JsonValue hr : MakerRuntime.heroes.values()) { JsonValue bk = hr.get("spellbook"); if (bk != null && bk.get("image") != null && bk.get("image").isString() && !bk.getString("image", "").isEmpty()) set.add(bk.getString("image")); }
 		JsonValue gi = MakerRuntime.gameitems == null ? null : MakerRuntime.gameitems.get("items");
 		if (gi != null) for (JsonValue e : gi) { JsonValue sp = e.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png")); }
 		List<String> out = new ArrayList<>();

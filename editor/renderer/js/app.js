@@ -270,8 +270,17 @@
   }
 
   // ---------------- 프로젝트 열기/저장 ----------------
-  function recent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (_) { return []; } }
-  function pushRecent(p) { try { localStorage.setItem(RECENT_KEY, JSON.stringify([p, ...recent().filter(x => x !== p)].slice(0, 8))); } catch (_) { /* 무시 */ } }
+  // 최근 프로젝트: [{ path, name }] (예전 형식 — 경로 문자열 — 도 읽음). name 은 목록에만 보이는 별명
+  const RECENT_MAX = 12;
+  function recent() {
+    try { return (JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') || []).map(x => typeof x === 'string' ? { path: x, name: '' } : x).filter(x => x && x.path); } catch (_) { return []; }
+  }
+  function saveRecent(list) { try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); } catch (_) { /* 무시 */ } }
+  const samePath = (a, b) => String(a).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === String(b).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  function pushRecent(p) {
+    const list = recent(), old = list.find(x => samePath(x.path, p));
+    saveRecent([{ path: p, name: old ? old.name : '' }, ...list.filter(x => !samePath(x.path, p))]);
+  }
 
   async function guardDirty() {
     if (!store.isDirty()) return true;
@@ -551,8 +560,39 @@
         h('div', { class: 'card', onclick: newProject }, h('b', {}, '새 프로젝트'), h('span', {}, '빈 폴더에 26층 기본 구조로 시작')),
         h('div', { class: 'card', onclick: openProject }, h('b', {}, '프로젝트 열기'), h('span', {}, 'project.json 이 있는 폴더 선택')),
         h('div', { class: 'card', onclick: importProject }, h('b', {}, '프로젝트 가져오기'), h('span', {}, '내보낸 .pdmproj 파일을 빈 폴더에 풀어서 열기'))),
-      rec.length ? h('h3', {}, '최근 프로젝트') : null,
-      h('div', { class: 'recent' }, rec.map(p => h('div', { onclick: () => loadProject(p) }, p)))));
+      rec.length ? h('div', { class: 'recent-head' }, h('h3', {}, '최근 프로젝트'),
+        h('button', { class: 'btn sm', title: '최근 프로젝트 목록을 모두 지웁니다 (프로젝트 폴더는 그대로)', onclick: async () => {
+          if (await PDM.ui.confirm('최근 프로젝트 목록을 모두 지울까요?\n(목록에서만 빠지고 프로젝트 폴더는 지워지지 않습니다)')) { saveRecent([]); drawWelcome(); }
+        } }, '목록 비우기')) : null,
+      h('div', { class: 'recent' }, rec.map((r, i) => recentRow(r, i, rec)))));
+    // 폴더가 없어진 항목 표시 (옮겼거나 지운 프로젝트)
+    rec.forEach(async (r, i) => {
+      let ok = true; try { ok = await pdm.exists(pdm.join(r.path, 'project.json')); } catch (_) { /* 무시 */ }
+      const row = body.querySelector(`.recent-row[data-i="${i}"]`);
+      if (row && !ok) { row.classList.add('missing'); row.title = '이 폴더에 project.json 이 없습니다 — 「경로」로 고치거나 「삭제」로 목록에서 빼세요'; }
+    });
+  }
+  /** 최근 프로젝트 한 줄: 클릭하면 열기 · 별명 · 경로 수정 · 위로 · 목록에서 삭제 */
+  function recentRow(r, i, rec) {
+    const base = r.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+    const act = (label, title, fn) => h('button', { class: 'btn sm', title, onclick: e => { e.stopPropagation(); fn(); } }, label);
+    const update = fn => { const list = recent(); const x = list.find(y => samePath(y.path, r.path)); if (x) { fn(x, list); saveRecent(list); } drawWelcome(); };
+    return h('div', { class: 'recent-row', 'data-i': i, onclick: () => loadProject(r.path), title: r.path },
+      h('div', { class: 'recent-main' }, h('b', {}, r.name || base), h('span', {}, r.path)),
+      h('div', { class: 'recent-acts' },
+        i > 0 ? act('▲', '위로 올리기', () => update((x, list) => { const k = list.indexOf(x); list.splice(k, 1); list.splice(k - 1, 0, x); })) : null,
+        act('이름', '목록에 보일 이름 바꾸기 (폴더 이름은 그대로)', async () => {
+          const v = await PDM.ui.prompt('목록에 보일 이름', r.name || base, '비우면 폴더 이름으로 보입니다. 프로젝트 폴더·파일은 바뀌지 않습니다.');
+          if (v !== null && v !== undefined) update(x => { x.name = v.trim() === base ? '' : v.trim(); });
+        }),
+        act('경로', '프로젝트 폴더를 옮겼을 때 새 위치 지정', async () => {
+          const d = await pdm.openFolder('프로젝트 폴더 다시 지정 (project.json 이 있는 폴더)');
+          if (!d) return;
+          let ok = false; try { ok = await pdm.exists(pdm.join(d, 'project.json')); } catch (_) { /* 무시 */ }
+          if (!ok) { toast('project.json 이 없는 폴더입니다', 'bad'); return; }
+          update((x, list) => { const dup = list.findIndex(y => y !== x && samePath(y.path, d)); if (dup >= 0) list.splice(dup, 1); x.path = d; });
+        }),
+        act('삭제', '최근 목록에서 빼기 (프로젝트 폴더는 지우지 않음)', () => update((x, list) => list.splice(list.indexOf(x), 1)))));
   }
   function drawAll() { drawMenubar(); drawToolbar(); drawTree(); updateStatus(); if (!store.isOpen) drawWelcome(); }
 

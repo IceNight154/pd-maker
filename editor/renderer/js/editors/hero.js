@@ -63,12 +63,12 @@
 
   /** 영웅 코드 훅 묶음 */
   const HOOK_GROUPS = [
-    ['진행', ['onGameStart', 'onFloorEnter', 'onTurn', 'onLevelUp', 'onKill', 'onTalentUp']],
+    ['진행', ['onGameStart', 'onFloorEnter', 'onTurn', 'onLevelUp', 'onKill', 'onTalentUp', 'onAction']],
     ['전투 수치', ['attackSkill', 'defenseSkill', 'damageRoll', 'drRoll', 'speed']],
     ['전투 반응', ['attackProc', 'defenseProc']],
     ['기타', ['members', 'imports']]
   ];
-  const HOOK_LABEL = { onGameStart: '게임 시작', onFloorEnter: '층 입장', onTurn: '매 턴', onLevelUp: '레벨업', onKill: '처치', onTalentUp: '특성 올림',
+  const HOOK_LABEL = { onGameStart: '게임 시작', onFloorEnter: '층 입장', onTurn: '매 턴', onLevelUp: '레벨업', onKill: '처치', onTalentUp: '특성 올림', onAction: '행동 버튼',
     attackSkill: '명중', defenseSkill: '회피', damageRoll: '공격 피해', drRoll: '방어 굴림', speed: '이동 속도',
     attackProc: '공격 적중', defenseProc: '공격 받음', members: '추가 멤버', imports: 'import' };
 
@@ -82,9 +82,89 @@
       ['GLog.i / p / w / n("글")', '게임 메시지 (보통·좋음·경고·나쁨)'], ['ch.sprite.showStatus(CharSprite.POSITIVE, "글")', '머리 위 글자'],
       ['MakerItem.create("id")', '프로젝트 아이템 / "spd:클래스" 게임 아이템 만들기'],
       ['StoryState.sw("id") / setSw / var / setVar', '이벤트와 같이 쓰는 스위치·변수'], ['EventInterpreter.runEvent("id", null)', '이벤트 실행'],
-      ['HeartSystem.applyAction("char", "TALK")', '마음 행동 적용']
+      ['HeartSystem.applyAction("char", "TALK")', '마음 행동 적용'],
+      ['Special.get/set/add("키", n)', '특수 기능 값 (게임에 저장됨)'], ['Special.show("키", "이름", BuffIndicator.FIRE, 최대, "설명")', '버프 칸에 아이콘+숫자로 보여 주기'],
+      ['Special.button("id", "이름", HeroIcon.NONE)', '화면 오른쪽 행동 버튼 → 행동 버튼(onAction) 칸']
     ].map(([a, b]) => h('tr', {}, h('td', {}, h('code', {}, a)), h('td', {}, b)))),
     h('p', { class: 'hint' }, '원본 게임의 클래스(actors, items, buffs…)는 이미 import 되어 있습니다. 모드에만 있는 클래스는 import 칸에 적으세요.'));
+
+  /** 특수 기능 예시 — 코드 칸에 넣어 주는 예 (게이지·스택·충전 버튼 같은 영웅만의 시스템) */
+  const SPECIAL_TEMPLATES = [
+    { name: '게이지 (과열식)', desc: '턴마다 오르는 게이지 — 높을수록 공격이 세지고, 가득 차면 주변에 폭발. 행동 버튼으로 식힘', code: {
+      onGameStart: `Special.show("heat", "과열", BuffIndicator.FIRE, 100, "턴마다 오르고, 높을수록 공격이 세진다. 가득 차면 폭주한다.");
+Special.color("heat", 0xFF6622);
+Special.button("vent", "냉각", HeroIcon.ENDURE);`,
+      onTurn: `int heat = Special.add("heat", 2, 0, 100);
+if (heat >= 100) {
+    GLog.n("과열 폭주!");
+    for (Mob m : Dungeon.level.mobs.toArray(new Mob[0]))
+        if (Dungeon.level.distance(hero.pos, m.pos) <= 2) m.damage(Random.IntRange(5, 10), hero);
+    Special.set("heat", 40);
+}`,
+      damageRoll: `return Math.round(value * (1f + Special.get("heat") / 200f));   // 과열 100 이면 +50%`,
+      onAction: `if (id.equals("vent")) {
+    Special.set("heat", 0);
+    GLog.p("열을 식혔다.");
+    hero.spendAndNext(1f);
+}` } },
+    { name: '연속 공격 스택', desc: '맞힐 때마다 스택 +1 (최대 10), 스택만큼 피해 +, 3턴 동안 안 맞히면 사라짐', code: {
+      members: `int idle = 0;`,
+      onGameStart: `Special.show("combo", "연타", BuffIndicator.COMBO, 10, "적을 맞힐 때마다 쌓이고, 쌓인 만큼 피해가 늘어난다.");`,
+      attackProc: `Special.add("combo", 1, 0, 10);
+idle = 0;
+return damage + Special.get("combo");`,
+      onTurn: `if (++idle > 3 && Special.get("combo") > 0) Special.set("combo", 0);` } },
+    { name: '충전 행동 버튼', desc: '적을 3마리 쓰러뜨리면 행동 버튼이 켜지고, 누르면 체력 회복', code: {
+      onGameStart: `Special.show("charge", "투지", BuffIndicator.UPGRADE, 3, "적을 쓰러뜨리면 모인다. 가득 차면 오른쪽 버튼으로 쓴다.");`,
+      onKill: `if (Special.add("charge", 1, 0, 3) >= 3) Special.button("rally", "재기", HeroIcon.LAY_ON_HANDS);`,
+      onAction: `if (id.equals("rally")) {
+    hero.HP = Math.min(hero.HT, hero.HP + hero.HT / 3);
+    hero.sprite.showStatus(CharSprite.POSITIVE, "재기!");
+    Special.set("charge", 0);
+    Special.removeButton("rally");
+    hero.spendAndNext(1f);
+}` } }
+  ];
+  function insertTemplate(key, t) {
+    store.edit(key, '특수 기능 예시: ' + t.name, o => {
+      o.code = o.code || {};
+      Object.entries(t.code).forEach(([k, v]) => { const cur = String(o.code[k] || '').trim(); o.code[k] = cur ? cur + '\n\n// ---- ' + t.name + '\n' + v : v; });
+    });
+    toast('「' + t.name + '」 예시를 코드 칸에 넣었습니다');
+  }
+
+  /** 전직·직업 능력·특성·패시브 항목의 코드 — 그 항목이 켜져 있을 때만 동작 (codegen ENTRY_HOOKS) */
+  const ENTRY_INFO = {
+    subclass: { what: '전직', on: '이 전직을 했을 때만', gain: '전직할 때 (한 번)' },
+    ability: { what: '직업 능력', on: '이 능력을 골랐을 때만', gain: '왕관으로 고를 때 (한 번)' },
+    talent: { what: '특성', on: '이 특성에 포인트가 있을 때만 — 코드 안에서 points = 이 특성의 포인트', gain: '포인트를 올릴 때마다 (points = 올린 뒤 포인트)' },
+    passive: { what: '패시브', on: '이 패시브가 열린 뒤에만', gain: '열릴 때 (한 번)' }
+  };
+  const ENTRY_LABEL = { onGain: '얻을 때', onUse: '쓸 때', onTurn: '매 턴', onKill: '처치', onLevelUp: '레벨업', attackSkill: '명중', defenseSkill: '회피', damageRoll: '공격 피해', drRoll: '방어 굴림', speed: '이동 속도', attackProc: '공격 적중', defenseProc: '공격 받음' };
+  const ENTRY_EXAMPLE = {
+    subclass: { damageRoll: 'return value + hero.lvl / 3;   // 레벨에 따라 피해 +', onGain: 'hero.HT += 10; hero.HP += 10;\nGLog.p("몸이 단단해졌다!");' },
+    ability: { onUse: 'Buff.affect(hero, Haste.class, 3f);   // 쓰고 나면 3턴 가속', defenseProc: 'return damage * 9 / 10;   // 받는 피해 -10%' },
+    talent: { attackProc: 'if (Random.Int(10) < points) Buff.affect(enemy, Bleeding.class).set(points * 2);\nreturn damage;', onGain: 'GLog.p("특성 포인트: " + points);' },
+    passive: { onTurn: 'if (hero.HP < hero.HT / 4) Buff.affect(hero, Haste.class, 1f);   // 체력 25% 미만이면 가속', damageRoll: 'return value + 1;' }
+  };
+  function entryCode(key, p, x, kind, st, i) {
+    const { F } = PDM.ui;
+    const info = ENTRY_INFO[kind];
+    const code = x.code || {};
+    const hooks = PDM.codegen.ENTRY_HOOKS.filter(k => k !== 'onUse' || kind === 'ability');
+    const used = k => typeof code[k] === 'string' && code[k].trim();
+    const sk = 'ec_' + kind + i, cur = st[sk] || (hooks.find(used) || 'onGain');
+    const hk = PDM.codegen.HERO_HOOKS.find(y => y.key === cur);
+    const doc = (cur === 'onGain' ? info.gain : hk.doc + ' — ' + info.on) + (hk.ret !== 'void' ? ` · return 을 안 쓰면 ${hk.val} 를 그대로 (다음 코드로 이어짐)` : '');
+    const n = hooks.filter(used).length;
+    const ex = (ENTRY_EXAMPLE[kind] || {})[cur];
+    return h('details', { class: 'entry-code', open: !!st[sk + 'o'], ontoggle: e => { st[sk + 'o'] = e.target.open; }, style: { marginTop: '8px', borderLeft: '3px solid var(--accent)', paddingLeft: '8px' } },
+      h('summary', { style: { cursor: 'pointer' } }, h('b', {}, '코드 (세부 동작)'), h('span', { class: 'hint' }, n ? `  ● ${n}개 칸에 코드 — ${hooks.filter(used).map(k => ENTRY_LABEL[k]).join(', ')}` : `  위 칸으로 부족하면 ${info.what}의 동작을 Java 로 직접 — ${info.on}`)),
+      h('div', { class: 'code-tabs' }, hooks.map(k => h('button', { class: 'btn xs' + (k === cur ? ' on' : ''), onclick: e => { e.preventDefault(); st[sk] = k; st[sk + 'o'] = true; PDM.tabs.refresh(key); } }, (used(k) ? '● ' : '') + ENTRY_LABEL[k]))),
+      F.code(key, [...p, 'code', cur], { sig: `${hk.ret} ${cur}(${hk.params}) {`, doc, rerender: true, placeholder: ex ? '// 예:\n// ' + ex.replace(/\n/g, '\n// ') : '// 여기에 Java 코드' }),
+      ex && !used(cur) ? h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); PDM.ui.commit(key, [...p, 'code', cur], ex, '코드 예시', true); } }, '예시 넣기') : null,
+      h('p', { class: 'hint' }, '영웅 코드(아래 "코드 (Java)")와 같은 클래스로 만들어집니다 — 영웅 코드의 추가 멤버·Special 도구·게임 API 를 그대로 쓸 수 있습니다. 값 훅(명중·피해 등)은 켜진 항목들의 코드를 차례로 거친 뒤 영웅 코드로 갑니다.'));
+  }
 
   function heroCodeSection(key, c, st, ctx) {
     const { F } = PDM.ui;
@@ -102,6 +182,10 @@
         : F.code(key, ['code', 'imports'], { label: 'import (한 줄에 하나)', doc: '예: com.shatteredpixel.shatteredpixeldungeon.actors.hero.abilities.aria.*', rows: 2, rerender: true });
     return [
       h('p', { class: 'hint' }, '게임의 Hero 클래스에 끼워 넣는 Java 코드입니다. 테스트 플레이 때 pdmaker/gen/' + cg.heroClass(c.id) + '.java 로 만들어져 게임과 함께 컴파일됩니다. 오류가 나도 게임은 멈추지 않고 경고만 뜹니다.'),
+      h('div', { class: 'special-box', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '8px 10px', margin: '6px 0 10px' } },
+        h('div', { style: { fontWeight: 600, marginBottom: '4px' } }, '특수 기능 만들기'),
+        h('p', { class: 'hint', style: { margin: '0 0 6px' } }, '게이지·스택·충전·자세처럼 이 영웅만의 시스템은 코드로 만듭니다. Special 도구로 값을 저장하고(Special.get/set/add), 버프 칸에 아이콘+숫자로 보여 주고(Special.show), 화면 오른쪽 행동 버튼을 띄웁니다(Special.button → "행동 버튼" 칸의 onAction). 값은 게임 저장에 함께 저장됩니다. 아래 예시를 넣어 보고 고쳐 쓰세요.'),
+        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, SPECIAL_TEMPLATES.map(t => h('button', { class: 'btn sm', title: t.desc, onclick: e => { e.preventDefault(); insertTemplate(key, t); } }, '+ ' + t.name)))),
       tabs, body,
       h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
         h('button', { class: 'btn sm', onclick: () => PDM.ui.codeView(cg.heroClass(c.id) + '.java', cg.heroSource(store.get(key))) }, '생성될 코드 보기'),
@@ -163,7 +247,7 @@
         kind === 'ability' ? F.num(key, [...p, 'chargeUse'], { label: '갑옷 충전 소모 %', int: true, min: 0, max: 100, def: 35, rerender: true, hint: '원작 35 (충전은 약 500턴에 100%)' })
           : F.num(key, [...p, 'cost'], { label: '주문 충전 소모', int: true, min: 0, rerender: true }),
         kind === 'ability' ? null : F.num(key, [...p, 'cooldown'], { label: '재사용 대기(턴)', int: true, min: 0, rerender: true }),
-        F.num(key, [...p, 'heat'], { label: '게이지 변화', int: true, rerender: true, hint: '게이지·원소를 켰을 때 (과열 +)' })),
+        (store.get(key).gauge || {}).enabled ? F.num(key, [...p, 'heat'], { label: '게이지 변화', int: true, rerender: true, hint: '예전 게이지 기능 (과열 +)' }) : null),
       row(F.select(key, [...p, 'visual'], PDM.SKILL_VISUALS, { label: '날아가는 효과' }), F.bool(key, [...p, 'projectile'], { label: '벽·적에 막힘' }),
         F.num(key, [...p, 'time'], { label: '걸리는 턴', step: 0.5, min: 0 }), F.text(key, [...p, 'shout'], { label: '외치는 말' })),
       row(F.sound(key, [...p, 'sound'], { label: '쓸 때 소리', kind: 'se', empty: '(기본 소리)' }), F.sound(key, [...p, 'hitSound'], { label: '맞을 때 소리', kind: 'se', empty: '(기본 소리)' })),
@@ -182,9 +266,11 @@
     const { F, row, listEditor } = PDM.ui;
     const subs = (c.subclasses || []).map(x => [x.id, x.name]), abs = (c.abilities || []).map(x => [x.id, x.name]);
     return [
+      h('div', { class: 'hint', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 8px', marginBottom: '6px' } },
+        h('b', {}, '주문이란? '), '영웅이 직접 골라 쓰는 기술(마법·기술)입니다. 영웅은 게임을 시작할 때 "주문서" 아이템을 하나 받고, 주문서를 열면 여기 만든 주문 목록이 나옵니다. 주문을 쓰면 주문서의 충전이 줄고, 시간이 지나면 다시 찹니다 (원작 성직자의 성서와 같은 방식). 주문이 하나도 없으면 주문서도 주지 않습니다.'),
       h('p', { class: 'hint' }, '원작 성직자처럼 영웅이 처음부터 "주문서"를 가지고, 주문서의 충전을 써서 주문을 겁니다. 주문은 1~4단계로 나뉘고 조건(레벨·특성·전직·직업 능력)을 채운 것만 주문 창에 나옵니다. 게임: 주문서 → 주문 창(아이콘을 누르면 시전, 길게 누르면 퀵슬롯 빠른 시전), 영웅 정보 창의 특성 탭 위쪽에도 나옵니다.'),
       row(F.bool(key, ['spellbook', 'enabled'], { label: '주문서 주기', def: true, rerender: true }), F.text(key, ['spellbook', 'name'], { label: '주문서 이름' }),
-        F.num(key, ['spellbook', 'image'], { label: '그림 번호 (items.png)', int: true, min: 0, hint: '246 = 마법서' }),
+        F.icon(key, ['spellbook', 'image'], 'item', { label: '주문서 그림 (게임 아이템 그림 · 파일 지정 · 그리기)', def: ((PDM.SPD_ITEM_SPRITES || {})[PDM.gameMod2 ? 'mod2' : 'vanilla'] || {}).MASTERY ?? 62 }),
         F.num(key, ['spellbook', 'charges'], { label: '최대 충전', int: true, min: 0 }), F.num(key, ['spellbook', 'rechargeTurns'], { label: '1 충전에 걸리는 턴', int: true, min: 1 })),
       F.textarea(key, ['spellbook', 'desc'], { label: '주문서 설명', rows: 2 }),
       listEditor(key, ['spells'], {
@@ -227,6 +313,7 @@
           F.textarea(key, [...p, 'desc'], { label: '설명', rows: 2 }),
           h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '전직하면 붙는 능력치'),
           statsEditor(key, [...p, 'effects']),
+          entryCode(key, p, x, 'subclass', st, i),
           activeEditor(key, [...p, 'active'], x))
       })];
   }
@@ -274,7 +361,8 @@
           F.textarea(key, [...p, 'desc'], { label: '설명', rows: 2 }),
           h('div', {}, h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); PDM.ui.commit(key, [...p, 'desc'], castAutoDesc(x), '능력 설명 자동'); } }, '효과로 설명 만들기')),
           talentMods(c, x.id),
-          ...castFields(key, p, x, 'ability'))
+          ...castFields(key, p, x, 'ability'),
+          entryCode(key, p, x, 'ability', st, i))
       })];
   }
 
@@ -290,6 +378,52 @@
       { id: 'earth', name: '땅', color: '#F5CB3F', icon: 0, desc: '바꾸면 최대 체력 5% 보호막', effects: [{ stat: 'armor', value: 1 }], onSwitch: [{ type: 'shield', on: 'self', amount: 0, percent: 5 }] },
       { id: 'wind', name: '바람', color: '#14EA83', icon: 0, desc: '회피 +3', effects: [{ stat: 'evasion', value: 3 }], onSwitch: [] }],
     switchCool: 25, switchCooldown: 0, replaceNative: ['NewOverHeat'] });
+  /** 캐릭터 선택 화면: 일러스트(그림 한 장 또는 시트 애니메이션) · 배치 · 버튼 아이콘 + 미리보기 */
+  function selectSection(key, c, ctx) {
+    const { F, row } = PDM.ui;
+    const s = c.select || {};
+    const cv = h('canvas', { width: 320, height: 180, class: 'checker', style: { width: '320px', height: '180px', imageRendering: 'pixelated', border: '1px solid var(--line)', borderRadius: '4px' } });
+    if (ctx._ill) ctx._ill();
+    let timer = null, fi = 0;
+    ctx._ill = () => { if (timer) clearInterval(timer); timer = null; };
+    (async () => {
+      const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+      const img = s.illust ? await PDM.assets.load(s.illust) : null;
+      const left = 107;   // 게임 화면처럼 왼쪽 1/3 은 이름·버튼 자리
+      const draw = () => {
+        g.fillStyle = '#1d1e20'; g.fillRect(0, 0, 320, 180);
+        g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(0, 0, left, 180);
+        g.fillStyle = '#ffff44'; g.font = '9px sans-serif'; g.fillText(c.name || '', 10, 80);
+        if (!img) { g.fillStyle = '#888'; g.fillText(s.illust ? '그림을 읽지 못했습니다' : '일러스트 없음 — 게임에서는 영웅 그림을 크게 보여 줍니다', left + 8, 90); return; }
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        const fw = +s.frameW || 0, fh = +s.frameH || 0;
+        if (fw > 0 && fh > 0) {
+          const cols = Math.max(1, Math.floor(img.width / fw)), n = cols * Math.max(1, Math.floor(img.height / fh));
+          const list = String(s.frames || '').split(/[,\s]+/).filter(Boolean).map(Number).filter(x => !isNaN(x));
+          const fr = list.length ? list : [...Array(n).keys()];
+          const f = fr[fi % fr.length]; sx = (f % cols) * fw; sy = Math.floor(f / cols) * fh; sw = fw; sh = fh;
+        }
+        let k, x, y;
+        if ((s.fit || 'right') === 'full') { k = 180 / sh; x = (320 - sw * k) / 2; y = 0; }
+        else { k = Math.min(180 * .9 / sh, (320 - left) * .9 / sw); if (sw <= 160 && sh <= 160) k = Math.max(1, Math.floor(k)); x = left + (320 - left - sw * k) / 2; y = (180 - sh * k) / 2; }
+        g.drawImage(img, sx, sy, sw, sh, x, y, sw * k, sh * k);
+        if ((s.fit || 'right') === 'full') { const gr = g.createLinearGradient(0, 0, left + 20, 0); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(.8, 'rgba(0,0,0,.8)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, left + 20, 180); g.fillStyle = '#ffff44'; g.fillText(c.name || '', 10, 80); }
+      };
+      draw();
+      if ((+s.frameW || 0) > 0 && (+s.frameH || 0) > 0) timer = setInterval(() => { fi++; draw(); }, 1000 / Math.max(1, +s.fps || 8));
+    })();
+    return [
+      h('p', { class: 'hint' }, '게임의 영웅 선택 화면에서 이 영웅을 골랐을 때 오른쪽에 보이는 그림입니다. 비워 두면 ' + (String(c.baseClass || '').trim() && c.id.toUpperCase() === String(c.baseClass).toUpperCase() ? '게임 원래 일러스트' : '영웅 그림(위 시트의 첫 프레임)을 크게') + ' 보여 줍니다. 그림 한 장이나, 프레임 크기를 정하면 시트로 움직이는 그림도 됩니다.'),
+      F.image(key, ['select', 'illust'], { label: '일러스트 그림', sub: 'illustrations', rerender: true, placeholder: 'assets/illustrations/... (PNG)' }),
+      row(F.select(key, ['select', 'fit'], [['right', '오른쪽에 맞춤 (전신 그림)'], ['full', '화면 높이 가득 (원작 일러스트처럼 — 가로로 긴 그림)']], { label: '배치', rerender: true }),
+        F.num(key, ['select', 'frameW'], { label: '프레임 너비', int: true, min: 0, def: 0, hint: '0 = 그림 한 장', rerender: true }),
+        F.num(key, ['select', 'frameH'], { label: '프레임 높이', int: true, min: 0, def: 0, rerender: true }),
+        F.text(key, ['select', 'frames'], { label: '프레임 번호', placeholder: '예: 0,1,2,3 (비우면 전부)', rerender: true }),
+        F.num(key, ['select', 'fps'], { label: '초당 프레임', int: true, min: 1, def: 8, rerender: true })),
+      h('div', { class: 'fl', style: { margin: '6px 0 4px' } }, '미리보기 (게임 화면 비율)'), cv,
+      F.image(key, ['select', 'icon'], { label: '선택 버튼 아이콘 (선택)', sub: 'icons', hint: '비우면 영웅 그림의 첫 프레임. 20px 안쪽으로 줄여 보여 줌' })];
+  }
+
   function gaugeSection(key, c, st) {
     const { F, row, listEditor } = PDM.ui;
     const g = c.gauge || {};
@@ -398,7 +532,8 @@
             if (e.type === 'spell') return row(ty, F.select(key, [...ep, 'spell'], [['*', '모든 주문·능력'], ...modTargets], { label: '대상', empty: '(선택)' }),
               F.select(key, [...ep, 'field'], PDM.SKILL_FIELDS, { label: '바꿀 값' }), F.num(key, [...ep, 'perPoint'], { label: '포인트당 (음수 = 줄임)', step: 1 }));
             return row(ty, F.select(key, [...ep, 'stat'], PDM.TALENT_STATS, { label: '능력치' }), F.num(key, [...ep, 'perPoint'], { label: '포인트당', step: 1 }));
-          } }));
+          } }),
+        entryCode(key, p, t, 'talent', st, sel));
     }
     return [
       h('p', { class: 'hint' }, '원작처럼 레벨이 오르면 포인트를 얻고(초상화가 반짝임), 게임의 영웅 정보 창(왼쪽 위 초상화) → 특성 탭에서 별 포인트를 써서 올립니다. 전직·직업 능력·주문도 같은 탭 위쪽에 나옵니다. 더 복잡한 효과는 코드 훅 "특성 올림"이나 HeroRuntime.talent("id") 로 만드세요.'),
@@ -425,12 +560,13 @@
       const c = store.get(key);
       const { F, section, row, listEditor, field } = PDM.ui;
       const st = ctx.state = ctx.state || { anim: 'idle' };
-      ctx.onDispose(() => ctx._stop && ctx._stop());
+      ctx.onDispose(() => { ctx._stop && ctx._stop(); ctx._ill && ctx._ill(); });
       const proj = store.get('project') || {};
       const isStart = proj.startHero === c.id;
 
-      // 바탕 직업: 목록 + 직접 입력
-      const clsIn = h('input', { type: 'text', value: c.baseClass || '' });
+      // 바탕 직업: 없음(완전히 새 영웅) · 목록 · 직접 입력
+      const zero = !String(c.baseClass || '').trim();
+      const clsIn = h('input', { type: 'text', value: c.baseClass || '', placeholder: '없음 — 완전히 새 영웅' });
       clsIn.addEventListener('change', () => PDM.ui.commit(key, ['baseClass'], clsIn.value.trim().toUpperCase(), '바탕 직업'));
       const clsDl = null;
 
@@ -438,19 +574,23 @@
 
       return h('div', { class: 'page' },
         h('h1', {}, '★ ', c.name, h('span', { class: 'hint', style: { marginLeft: '8px' } }, c.id), isStart ? h('span', { class: 'badge good', style: { marginLeft: '8px' } }, '시작 영웅') : null),
-        h('p', { class: 'lead' }, '새 게임을 시작할 때 적용됩니다. 프로젝트 설정의 "시작 영웅"이면 어떤 직업을 고르든 이 영웅이 되고, 아니면 "바탕 직업"을 골랐을 때 이 영웅이 됩니다.'),
+        h('p', { class: 'lead' }, '게임의 영웅 선택 화면에 이 영웅이 나옵니다 (시작 영웅을 정하면 그 영웅 하나만). ' + (zero
+          ? '바탕 직업이 없는 완전히 새 영웅입니다 — 시작 아이템·감정된 아이템·특성·전직·직업 능력 모두 이 편집기에서 정한 것만 씁니다.'
+          : '바탕 직업 「' + (PDM.HERO_CLASSES[String(c.baseClass).toUpperCase()] || c.baseClass) + '」의 게임 기능(시작 아이템·특성·전직·직업 능력 등)을 물려받고, 여기서 정한 것을 더하거나 바꿉니다.')),
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용' })),
           F.textarea(key, ['desc'], { label: '설명', rows: 2 }),
-          row(field('바탕 직업 (게임 HeroClass)', PDM.ui.combo(clsIn, () => Object.entries(PDM.HERO_CLASSES).map(([k, v]) => [k, v]), { minWidth: 220 }), '전투 방식·갑옷 능력·게임 원래 특성은 이 직업 것을 씁니다 (아래 "특성 (Talent)" 은 따로 더해짐). 모드 직업은 이름을 직접 입력 (예: ARIA)'),
+          row(field('바탕 직업 (선택)', PDM.ui.combo(clsIn, () => [['', '없음 — 완전히 새 영웅'], ...Object.entries(PDM.HERO_CLASSES).map(([k, v]) => [k, v + ' 물려받기'])], { minWidth: 220 }),
+            '비워 두면 처음부터 새로 만드는 영웅입니다 (게임 직업에서 아무것도 물려받지 않음 — 그림이 비었을 때만 전사 그림). 원작 직업을 고치고 싶을 때만 고르세요. 모드 직업은 이름을 직접 입력'),
             F.ref(key, ['character'], 'char', { label: '연결된 캐릭터 (대사 화자·초상화)', empty: '(없음)' })),
           h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
             isStart ? h('button', { class: 'btn sm', onclick: () => store.edit('project', '시작 영웅 해제', p => { p.startHero = ''; }) }, '시작 영웅 해제')
               : h('button', { class: 'btn sm pri', onclick: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, '이 영웅을 시작 영웅으로'),
             linked ? h('button', { class: 'btn sm', onclick: () => store.edit(key, '캐릭터 그림 가져오기', o => { o.sprite = PDM.clone(linked.sprite); }) }, `「${linked.name}」 그림 가져오기`) : null)),
         section('그림 (영웅 시트)',
-          h('p', { class: 'hint' }, '행 = 갑옷 단계(0~6), 열 = 프레임. 비워 두면 바탕 직업의 그림을 씁니다. 프레임 번호는 첫 행 기준이고, 갑옷을 바꾸면 같은 열의 아래 행을 씁니다.'),
+          h('p', { class: 'hint' }, '행 = 갑옷 단계(0~6), 열 = 프레임. 비워 두면 ' + (zero ? '게임 기본(전사) 그림' : '바탕 직업의 그림') + '을 씁니다. 프레임 번호는 첫 행 기준이고, 갑옷을 바꾸면 같은 열의 아래 행을 씁니다.'),
           ...PDM.spriteEditor(key, c, ctx, st)),
+        section('캐릭터 선택 화면 (일러스트)', ...selectSection(key, c, ctx)),
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '시작 최대 체력', int: true, min: 1, hint: '게임 기본 20' }),
             F.num(key, ['stats', 'hpPerLevel'], { label: '레벨당 체력', int: true, min: 0, hint: '게임 기본 5' }),
@@ -477,11 +617,11 @@
             o.inventory.items = [...(van ? van.items : []).map(e => Object.assign({ item: '', count: 1, level: 0, equip: false, quickslot: false, identify: true, fromGame: true }, e)), ...own];
           });
           return [
-            h('div', { class: 'hint', style: { marginBottom: '6px' } }, clear
+            zero ? h('div', { class: 'hint', style: { marginBottom: '6px' } }, '완전히 새 영웅이라 이 목록대로만 줍니다 (게임 직업의 시작 아이템 없음).') : h('div', { class: 'hint', style: { marginBottom: '6px' } }, clear
               ? '이 목록대로만 줍니다 (바탕 직업의 기본 시작 아이템은 주지 않음).'
               : hasGame ? '「게임이 줌」 표시는 바탕 직업이 원래 주는 원작 시작 아이템입니다 (보여 주기만 — 게임이 그대로 줌). 표시 없는 아이템은 거기에 더해 줍니다. 원작 아이템을 바꾸려면 "목록대로 직접 주기"를 누르세요.'
                 : '여기 넣은 아이템을 바탕 직업의 기본 시작 아이템에 더해 줍니다.'),
-            h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' } },
+            zero ? null : h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' } },
               !clear ? h('button', { class: 'btn sm', title: '게임 기본 시작 아이템을 비우고 아래 목록(게임이 줌 포함)대로 줍니다', onclick: () => store.edit(key, '시작 아이템: 목록대로', o => { o.inventory.clearDefault = true; }) }, '목록대로 직접 주기 (게임 기본 대신)') : null,
               van ? h('button', { class: 'btn sm', onclick: restore }, `게임 기본(${van.name})으로 되돌리기`) : null,
               clear ? h('button', { class: 'btn sm', onclick: () => store.edit(key, '시작 아이템: 게임 기본 더하기', o => { o.inventory.clearDefault = false; }) }, '게임 기본도 주기') : null),
@@ -499,10 +639,14 @@
         section('주문 (주문서 — 원작 성직자 방식)', ...spellSection(key, c, st, ctx)),
         section('전직 (Subclass)', ...subclassSection(key, c, st)),
         section('직업 능력 (Armor Ability)', ...abilitySection(key, c, st)),
-        section('게이지 · 원소 (mod-2 과열 방식)', ...gaugeSection(key, c, st)),
+        // 게이지·원소 데이터 편집은 뺐음 (특수 기능은 코드로 — 아래 "코드" 의 특수 기능 만들기). 예전 프로젝트에서 켜 둔 경우만 보여 줌
+        c.gauge && c.gauge.enabled ? section('게이지 · 원소 (예전 기능)',
+          h('p', { class: 'hint' }, '예전에 켜 둔 게이지 데이터입니다. 지금은 이런 특수 기능을 "코드" 칸의 특수 기능 만들기(Special)로 만듭니다. 그대로 두면 계속 동작합니다.'),
+          h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); store.edit(key, '게이지 끄기', o => { o.gauge.enabled = false; }); } }, '게이지 끄기'),
+          ...gaugeSection(key, c, st)) : null,
         section('특성 (Talent)', ...talentSection(key, c, st, ctx)),
         section('패시브',
-          h('p', { class: 'hint' }, '레벨(과 조건)에 따라 열리는 지속 효과. 더 복잡한 효과는 아래 "코드 (Java)" 의 훅으로 만드세요.'),
+          h('p', { class: 'hint' }, '레벨(과 조건)에 따라 열리는 지속 효과. 효과 칸으로 부족하면 각 패시브의 "코드" 로 세부 동작을 직접 쓰세요 (열린 뒤에만 동작).'),
           listEditor(key, ['passives'], {
             addLabel: '패시브', emptyText: '패시브가 없습니다',
             make: () => PDM.make.passive(),
@@ -510,7 +654,8 @@
               row(F.text(key, [...p, 'name'], { label: '이름' }), F.num(key, [...p, 'unlockLevel'], { label: '열리는 레벨', int: true, min: 1 }), F.cond(key, [...p, 'cond'], { label: '조건' })),
               F.text(key, [...p, 'desc'], { label: '설명' }),
               listEditor(key, [...p, 'effects'], { addLabel: '효과', compact: true, make: () => ({ stat: 'hp', value: 5 }),
-                render: (e, j, ep) => row(F.select(key, [...ep, 'stat'], PDM.PASSIVE_STATS, { label: '효과' }), F.num(key, [...ep, 'value'], { label: '값', int: true })) }))
+                render: (e, j, ep) => row(F.select(key, [...ep, 'stat'], PDM.PASSIVE_STATS, { label: '효과' }), F.num(key, [...ep, 'value'], { label: '값', int: true })) }),
+              entryCode(key, p, ps, 'passive', st, i))
           })),
         section('코드 (Java) — 세부 동작', ...heroCodeSection(key, c, st, ctx)),
         section('메모', F.textarea(key, ['note'], { rows: 2 })));

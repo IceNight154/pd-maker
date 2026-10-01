@@ -177,7 +177,14 @@ table.grid td input, table.grid td select { padding: 3px 5px; }
 .welcome h1 { font-size: 26px; margin-bottom: 6px; } .welcome .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 22px 0; }
 .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 16px; cursor: pointer; }
 .card:hover { border-color: var(--accent); } .card b { display: block; font-size: 14px; margin-bottom: 4px; } .card span { color: var(--mute); font-size: 12px; line-height: 1.5; }
-.recent div { padding: 5px 8px; border-radius: 4px; cursor: pointer; color: var(--mute); font-family: var(--mono); font-size: 12px; } .recent div:hover { background: var(--bg3); color: var(--fg); }
+.recent-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.recent-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+.recent-row:hover { background: var(--bg3); }
+.recent-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.recent-main b { font-size: 13px; font-weight: 600; color: var(--fg); }
+.recent-main span { color: var(--mute); font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-acts { display: flex; gap: 4px; opacity: 0; transition: opacity .12s; } .recent-row:hover .recent-acts, .recent-row:focus-within .recent-acts { opacity: 1; }
+.recent-row.missing .recent-main b { color: var(--bad); text-decoration: line-through; } .recent-row.missing .recent-main b::after { content: '  (폴더 없음)'; font-weight: 400; text-decoration: none; display: inline-block; margin-left: 4px; font-size: 11px; }
 
 /* ---- 맵 편집기 ---- */
 .map-wrap { display: grid; grid-template-columns: 180px 1fr; height: 100%; min-height: 0; }

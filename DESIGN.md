@@ -715,7 +715,7 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 | `MakerDialogue` | 대사창 (§3.9) — 아래 대사 상자·스탠딩 일러스트·이름표·▼·한 글자씩·선택지 |
 | `MakerStage` | "일러스트 표시/숨김" 명령의 그림 층 (번호 1~8, 페이드) |
 
-### 8.1 원본 코드에 넣는 연결점 (15개 파일, 줄 32개 — 자동 설치기가 추가/제거, ▶ 테스트 플레이 때 자동 갱신)
+### 8.1 원본 코드에 넣는 연결점 (19개 파일, 줄 38개 — 자동 설치기가 추가/제거, ▶ 테스트 플레이 때 자동 갱신)
 
 1. `Dungeon.init()`: `StoryState.reset()`, 그리고 `initHero(hero)` 뒤 `HeroRuntime.afterInit(hero)` (영웅·시작 층)
 2. `Dungeon.newLevel()` 의 `level.create()` 앞: `MakerRuntime.createLevel(depth, branch)` 가 null 이 아니면 그 층으로 교체
@@ -734,8 +734,27 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 - `PixelScene.create()` 의 `float minWidth, minHeight, scaleFactor;` 앞: `MakerAssets.onSceneCreate(this)` (게임 그림 바꾸기 · 메뉴 화면 배경·음악)
 - `Item.execute(hero, action)` 첫 줄: `MakerAudio.onItemAction(this, action)` · `Item.doPickUp` 의 줍는 소리 앞: `if (!MakerAudio.onItemPickup(this))` (아이템마다 소리)
 - `Item.image()` 첫 줄: `MakerAssets.itemImage(this)` (게임 아이템 그림 바꾸기) · `HeroSprite.updateArmor()` 첫 줄: `if (HeroRuntime.updateArmor(this)) return;` (영웅 시트 유지)
+- `HeroSelectScene.create()` 의 직업 버튼 반복문 앞: `if (!HeroSelect.addButtons(this, heroBtns))` — 영웅 선택 화면에 게임 직업 대신 **프로젝트 영웅** 버튼(enabled 영웅 전부, `startHero` 가 있으면 그 영웅만, 영웅이 없으면 게임 그대로). 누르면 바탕 직업(`baseClass`, 비면 WARRIOR)으로 `setSelectedHero` 를 부른 뒤 이름·설명을 영웅 것으로, 원작 영웅(id = 직업 이름)이 아니면 배경 대신 영웅 그림을 크게. 고른 id 는 `HeroSelect.selected` → `HeroRuntime.pick` (같은 직업 바탕 영웅이 여럿이어도 구분). 원작 영웅은 원작처럼 잠금·직업 정보 창
 - `Level.getTransition(type)` 첫 줄: `WorldGraph.pickArrival(this, type)` (통로 연결 — 짝 계단에 도착)
 - `settings.gradle`(저장소 최상위) `include ':android'` 앞: 안드로이드 SDK(ANDROID_HOME · local.properties)가 없으면 android 모듈을 건너뜀 → SDK 없는 PC 에서도 데스크톱 테스트 플레이
+
+**완전히 새 영웅** (`baseClass` 가 빈 값 — 새 영웅의 기본): 게임은 직업(HeroClass)이 꼭 있어야 해서 안에서는 WARRIOR 로 돌지만, `HeroRuntime.afterInit` 의 `stripClass` 가 직업이 준 것을 모두 걷어 냄 — 장비·가방·퀵슬롯, 감정해 둔 물약·주문서(`Potion/Scroll.handler.known` 에서 제거), 직업 특성(`hero.talents` 비움). 이후 영웅 편집기의 시작 아이템·`knownItems` 만 줌.
+특성 창은 항상 영웅 편집기 것(`MakerTalents.replacesNative`), 텐구 가면은 전직이 없으면 "전직이 없다"(게임 전직 안 줌), 왕관 직업 능력은 없으면 빈 목록, 영웅 창 이름은 영웅 이름(`MakerAbilities.className`). 그림이 비었을 때만 전사 그림.
+**캐릭터 선택 화면** (`heroes/<id>.json` 의 `select = { illust, fit: right|full, frameW, frameH, frames: "0,1,2", fps, icon }`): `HeroSelect.portrait` — illust 가 있으면 그 그림(프레임 크기를 정하면 `MovieClip` 애니메이션), `right` = 오른쪽 영역에 맞춤(160px 이하 도트는 정수 배), `full` = 화면 높이 가득 가운데(원작 일러스트처럼). 없으면 원작 영웅은 게임 일러스트, 새 영웅은 영웅 그림 첫 프레임을 크게. `icon` = 선택 버튼 아이콘(20px 안으로). 새 영웅은 이름 옆 정보 버튼이 영웅 설명 창(게임 버튼은 숨김).
+
+**특수 기능은 코드로** (`Special`): 영웅 편집기에서 게이지·원소 데이터 편집 칸은 뺐음(예전 프로젝트에서 켜 둔 경우만 "예전 기능"으로 보이고 계속 동작). 영웅만의 시스템(게이지·스택·충전·자세)은 영웅 코드에서 `Special` 도구로 조합:
+값 `Special.get/set/add(key, n[, min, max])`(Store 버프 — 저장됨), 버프 칸 표시 `Special.show(key, 이름, BuffIndicator 번호, 최대, 설명)` · `color` · `hide`(Bar 버프 — 아이콘 위 숫자, 최대가 있으면 차오름),
+행동 버튼 `Special.button(id, 이름, HeroIcon 번호)` · `removeButton`(Btn 버프 — 누르면 영웅 코드 훅 `onAction(hero, id)`, 불러오면 버튼 복원). 코드 칸의 "특수 기능 만들기"에 예시 3개(과열식 게이지 · 연속 공격 스택 · 충전 행동 버튼)를 넣는 버튼. 생성 코드 import 에 `ui.BuffIndicator`·`ui.HeroIcon` 추가.
+
+**항목별 코드** (전직·직업 능력·특성·패시브의 `code: { 훅: "Java" }`): 각 항목 편집 칸의 "코드 (세부 동작)". 훅 = `onGain`(전직할 때 · 왕관으로 고를 때 · 특성 포인트 올릴 때 · 패시브 열릴 때) · `onUse`(직업 능력을 쓸 때, 효과 뒤) · onTurn · onKill · onLevelUp · attackSkill · defenseSkill · damageRoll · drRoll · speed · attackProc · defenseProc.
+codegen 이 영웅 코드 클래스(H_<id>)에 `_<kind><i>_<id>_<훅>` 메서드로 넣고, 영웅 훅 메서드에서 켜진 항목만 부름 — 조건: 전직 `MakerAbilities.subclassId()`, 능력 `abilityId()`, 특성 `HeroRuntime.talent(id) > 0`(본문에 `int points`), 패시브 `HeroRuntime.passive(id)`.
+값 훅은 켜진 항목들 → 영웅 코드 순서로 값을 이어 받음. onGain/onUse 는 `kind:id` switch. 런타임: `HeroRuntime.gain(kind, id)`(MakerAbilities.choose · MakerTalents.upgrade · unlockPassives · Tracker 가 능력 바뀜 감지), `HeroRuntime.use("ability", id, hero, cell)`(MakerArmorAbility.activate). 훅 번호 GAIN 14 · USE 15.
+값 훅 본문: 마지막 줄이 return 이 아니면 `return value;` 를 붙임(예전엔 중간에만 return 이 있으면 컴파일 오류).
+**주문서 그림**: `spellbook.image` = 게임 아이템 번호 또는 "assets/items/…png"(아이템 시트에 붙여 씀 — MakerAssets.customItemRefs), 없으면 게임의 마스터리 책. 편집기는 F.icon(item 시트: 게임 그림 고르기 · 파일 지정 · 그리기).
+
+**초상화** (영웅 편집기의 그림): `HeroSprite.avatar(hero)` 첫 줄 → `HeroRuntime.avatar` (상태 창 · 영웅 창 — 시트의 갑옷 단계 줄, idle 첫 프레임). 저장 슬롯은 어떤 영웅인지 기억: 저장할 때 `GamesInProgress.set(slot)` 첫 줄 `HeroRuntime.setSlot`, 파일에서 읽을 때 `Dungeon.preview` 뒤 `HeroRuntime.preview`(pdmaker_story 의 pdm_hero · pdm_subclass) → 시작 화면 슬롯(`StartScene` 의 `long diff = …` 앞)과 이어하기 창(`WndGameInProgress` 의 `title.label(` 앞)이 영웅 그림·이름(전직 이름 → 영웅 이름, 원작 영웅은 게임 그대로).
+
+**프로젝트 그림 텍스처**: `MakerRuntime.texture()` 는 캐시한 텍스처가 아직 `TextureCache` 에 있는지 확인 — 게임이 구역을 옮길 때(`InterlevelScene`) `TextureCache.clear()` 로 지우므로, 지워졌으면 다시 읽음(영웅 선택 화면에서 읽은 영웅 그림이 게임에서 검게 나오던 문제).
 
 **게임 저장소 위치**: 기준은 `pd-maker/game/shattered-pixel-dungeon` (없으면 `game/shattered-pixel-dungeon-mod-2`, PDMaker 폴더만 옮겨도 동작). 새 프로젝트의 `gameRepo` 는 기준 저장소. mod-2 전용 게임 아이템(코덱스 등 ◆)은 프로젝트 저장소가 mod-2 일 때만 목록에 보임(`PDM.gameMod2`). 빌드 전 모듈 build.gradle 이 빠졌으면 원작 저장소에서 채움(`repairRepo`). 에디터가 경로가 틀린 프로젝트를 자동으로 고치고(PDMaker 안 → 전에 쓴 곳 → 위쪽 폴더), 바깥 저장소는 프로젝트 설정의 "PDMaker 폴더 안으로 옮기기"로 옮김. Java 17+ 가 없으면 Temurin 21 을 userData/jdk 에 내려받음. 배포 zip: `make-release.bat`.
 13. (M1) `Hero` 피격·회복 지점: `HeartSystem.counter("heroLowHp")` 등 — 반응(Counter) 확장

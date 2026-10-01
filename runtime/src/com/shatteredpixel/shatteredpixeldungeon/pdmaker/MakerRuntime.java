@@ -281,7 +281,14 @@ public class MakerRuntime {
 			if (!Gdx.files.internal(p).exists()) { warnOnce("게임 에셋에 없는 이미지: " + p + " — 기본 그림으로 대신합니다"); return null; }
 			return p;
 		}
-		if (textures.containsKey(ref)) return textures.get(ref);
+		// 게임이 층 구역을 옮길 때 TextureCache.clear() 로 텍스처를 지우므로, 캐시에 아직 있는지 확인 (없으면 다시 읽음)
+		SmartTexture old = textures.get(ref);
+		if (old != null) {
+			boolean alive = true;
+			try { alive = MakerAssets.cache().containsValue(old); } catch (Throwable ignored) { }
+			if (alive) return old;
+			textures.remove(ref);
+		}
 		try {
 			FileHandle f = root.child(ref);
 			if (!f.exists()) { warnOnce("프로젝트에 없는 이미지: " + ref); return null; }

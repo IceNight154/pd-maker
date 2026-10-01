@@ -18,7 +18,7 @@
     `${PKG}.items.*`, `${PKG}.items.weapon.*`, `${PKG}.items.weapon.melee.*`, `${PKG}.items.weapon.missiles.*`,
     `${PKG}.items.armor.*`, `${PKG}.items.potions.*`, `${PKG}.items.scrolls.*`, `${PKG}.items.food.*`,
     `${PKG}.effects.*`, `${PKG}.levels.*`, `${PKG}.mechanics.*`, `${PKG}.scenes.*`, `${PKG}.sprites.*`,
-    `${PKG}.utils.GLog`, `${PKG}.pdmaker.*`,
+    `${PKG}.utils.GLog`, `${PKG}.pdmaker.*`, `${PKG}.ui.BuffIndicator`, `${PKG}.ui.HeroIcon`,
     'com.watabou.utils.Random', 'com.watabou.utils.PathFinder', 'com.watabou.utils.Bundle', 'com.watabou.noosa.audio.Sample',
     'java.util.ArrayList', 'java.util.HashMap'
   ];
@@ -37,6 +37,9 @@
     { key: 'attackProc', id: 9, ret: 'int', params: 'Hero hero, Char enemy, int damage', val: 'damage', doc: '공격이 맞았을 때 (damage 를 바꾸면 적용)' },
     { key: 'defenseProc', id: 10, ret: 'int', params: 'Hero hero, Char enemy, int damage', val: 'damage', doc: '공격을 받았을 때' },
     { key: 'onKill', id: 11, ret: 'void', params: 'Hero hero, Mob mob', doc: '영웅이 몬스터를 쓰러뜨렸을 때' },
+    { key: 'onGain', id: 14, ret: 'void', params: 'String kind, String id, Hero hero', doc: '전직·직업 능력을 고르거나, 특성 포인트를 올리거나, 패시브가 열렸을 때 (kind = subclass·ability·talent·passive)', entryOnly: true },
+    { key: 'onUse', id: 15, ret: 'void', params: 'String kind, String id, Hero hero, int cell, Char target', doc: '직업 능력을 쓸 때 (효과가 나간 뒤 — cell = 고른 칸, target = 그 칸의 캐릭터)', entryOnly: true },
+    { key: 'onAction', id: 13, ret: 'void', params: 'Hero hero, String id', doc: 'Special.button("id", "이름", 아이콘) 으로 만든 화면 오른쪽 행동 버튼을 눌렀을 때 (id 로 구분)' },
     { key: 'onTalentUp', id: 12, ret: 'void', params: 'Hero hero, String talent, int points', doc: '특성 포인트를 올렸을 때 (talent = 특성 id, points = 올린 뒤 포인트)' }
   ];
 
@@ -67,8 +70,14 @@
   /** 값을 돌려주는 훅: 사용자 코드가 return 을 쓰지 않으면 끝에 return value; */
   function hookBody(code, h, pad) {
     let out = indent(code, pad);
-    if (h.ret !== 'void' && !/\breturn\b/.test(code || '')) out += `\n${pad}return ${h.val};`;
+    // 마지막 줄이 return 이 아니면 끝에 return value; (중간에만 return 이 있어도 — 예전엔 컴파일 오류였음)
+    if (h.ret !== 'void' && !endsWithReturn(code)) out += `\n${pad}return ${h.val};`;
     return out;
+  }
+  /** 마지막 문장이 (조건 없는) return 인지 — 마지막 줄이 return 으로 시작 */
+  function endsWithReturn(code) {
+    const lines = String(code || '').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    return lines.length > 0 && /^return\b/.test(lines[lines.length - 1]);
   }
   function header(extraImports, what) {
     const imps = [...IMPORTS, ...String(extraImports || '').split(/[\n;]+/).map(x => x.trim().replace(/^import\s+/, '')).filter(Boolean)];
@@ -76,11 +85,42 @@
       `package ${PKG}.pdmaker.gen;\n\n` + [...new Set(imps)].map(i => `import ${i};`).join('\n') + '\n\n';
   }
 
+  // ---------------------------------------------------------------- 영웅의 전직·직업 능력·특성·패시브 코드
+  /** 항목별 코드 훅: 이 항목이 켜져 있을 때만 (전직했을 때 · 그 능력을 골랐을 때 · 특성 포인트가 있을 때 · 패시브가 열렸을 때) */
+  const ENTRY_HOOKS = ['onGain', 'onUse', 'onTurn', 'onKill', 'onLevelUp', 'attackSkill', 'defenseSkill', 'damageRoll', 'drRoll', 'speed', 'attackProc', 'defenseProc'];
+  const ENTRY_KINDS = [
+    { kind: 'subclass', list: 'subclasses', name: '전직', cond: id => `MakerAbilities.subclassId().equals(${lit(id)})` },
+    { kind: 'ability', list: 'abilities', name: '직업 능력', cond: id => `MakerAbilities.abilityId().equals(${lit(id)})` },
+    { kind: 'talent', list: 'talents', name: '특성', cond: id => `HeroRuntime.talent(${lit(id)}) > 0` },
+    { kind: 'passive', list: 'passives', name: '패시브', cond: id => `HeroRuntime.passive(${lit(id)})` }
+  ];
+  const entryId = (k, x) => k.kind === 'passive' ? (x.id || x.name || '') : (x.id || '');
+  /** 코드가 있는 항목 [{ k, x, id, fn }] */
+  function codeEntries(hero) {
+    const out = [];
+    ENTRY_KINDS.forEach(k => (hero[k.list] || []).forEach((x, i) => {
+      const c = x.code || {};
+      if (!ENTRY_HOOKS.some(hk => has(c[hk]))) return;
+      const id = entryId(k, x);
+      out.push({ k, x, id, fn: `_${k.kind}${i}_${safeId(id)}` });
+    }));
+    return out;
+  }
+  const paramNames = params => params.split(',').map(p => p.trim().split(/\s+/).pop()).filter(Boolean);
+  /** 항목 코드 본문: 값 훅은 return 을 안 쓰면 끝에 return value; (마지막 줄이 return 이면 붙이지 않음) */
+  function entryBody(code, h, pad, pre) {
+    let out = (pre ? pad + pre + '\n' : '') + indent(code, pad);
+    if (h.ret !== 'void' && !endsWithReturn(code)) out += `\n${pad}return ${h.val};`;
+    return out;
+  }
+
   // ---------------------------------------------------------------- 영웅
   function heroSource(hero) {
     const code = hero.code || {};
     const name = heroClass(hero.id);
-    const used = HERO_HOOKS.filter(h => has(code[h.key]));
+    const entries = codeEntries(hero);
+    const entryFor = h => entries.filter(e => has((e.x.code || {})[h.key]));
+    const used = HERO_HOOKS.filter(h => (!h.entryOnly && has(code[h.key])) || entryFor(h).length);
     const skills = codeCasts(hero);
     let s = header(code.imports, `영웅 「${hero.name || hero.id}」`);
     s += `@SuppressWarnings("unused")\npublic class ${name} extends MakerHeroCode {\n\n`;
@@ -88,7 +128,24 @@
     s += `\tprivate static final boolean[] USED = new boolean[16];\n\tstatic {\n${used.map(h => `\t\tUSED[${h.id}] = true;   // ${h.key}`).join('\n')}\n\t}\n`;
     s += `\t@Override public boolean overrides(int hook) { return hook >= 0 && hook < USED.length && USED[hook]; }\n\n`;
     used.forEach(h => {
-      s += `\t${mark('영웅 ' + hero.id, h.key)}\n\t@Override public ${h.ret} ${h.key}(${h.params}) {\n${hookBody(code[h.key], h, '\t\t')}\n\t}\n\n`;
+      const es = entryFor(h), args = paramNames(h.params).join(', ');
+      let body = '';
+      if (h.key === 'onGain' || h.key === 'onUse') {
+        // 종류·id 로 나눔
+        body += `\t\tswitch (kind + ":" + id) {\n` + es.map(e => `\t\t\tcase ${lit(e.k.kind + ':' + e.id)}: ${e.fn}_${h.key}(${args}); break;\n`).join('') + `\t\t}\n`;
+      } else {
+        // 켜져 있는 항목의 코드를 먼저 (값 훅은 값을 이어 받음), 그다음 영웅 코드
+        es.forEach(e => {
+          body += `\t\tif (${e.k.cond(e.id)}) ` + (h.ret === 'void' ? `${e.fn}_${h.key}(${args});\n` : `${h.val} = ${e.fn}_${h.key}(${args});\n`);
+        });
+        if (has(code[h.key])) body += `\t\t${mark('영웅 ' + hero.id, h.key)}\n` + hookBody(code[h.key], h, '\t\t') + '\n';
+        else if (h.ret !== 'void') body += `\t\treturn ${h.val};\n`;
+      }
+      s += `\t@Override public ${h.ret} ${h.key}(${h.params}) {\n${body}\t}\n\n`;
+      es.forEach(e => {
+        const pre = e.k.kind === 'talent' ? `int points = HeroRuntime.talent(${lit(e.id)});   // 이 특성의 포인트` : '';
+        s += `\t${mark('영웅 ' + hero.id + ' · ' + e.k.name + ' ' + (e.x.name || e.id), h.key)}\n\tprivate ${h.ret} ${e.fn}_${h.key}(${h.params}) {\n${entryBody(e.x.code[h.key], h, '\t\t', pre)}\n\t}\n\n`;
+      });
     });
     if (skills.length) {
       s += `\t@Override public void effect(String id, int effectIndex, Hero hero, int cell, Char target) {\n\t\tswitch (id + "#" + effectIndex) {\n`;
@@ -106,7 +163,7 @@
   const codeCasts = hero => [...(hero.spells || hero.skills || []).map(x => ['주문', x]), ...(hero.abilities || []).map(x => ['직업 능력', x]),
     ...(hero.subclasses || []).filter(x => x.active && x.active.enabled).map(x => ['전직 액티브', Object.assign({}, x.active, { id: 'active_' + x.id })])]
     .filter(([, sk]) => (sk.effects || []).some(e => e.type === 'code' && has(e.code)));
-  const heroNeedsClass = hero => HERO_HOOKS.some(h => has((hero.code || {})[h.key])) || has((hero.code || {}).members) || codeCasts(hero).length > 0;
+  const heroNeedsClass = hero => HERO_HOOKS.some(h => has((hero.code || {})[h.key])) || has((hero.code || {}).members) || codeCasts(hero).length > 0 || codeEntries(hero).length > 0;
 
   // ---------------------------------------------------------------- 아이템
   const KIND_BASE = { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' };
@@ -284,5 +341,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, heroNeedsClass, itemNeedsClass, locate };
 });

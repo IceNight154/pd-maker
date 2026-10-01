@@ -1,5 +1,5 @@
 // ================================================================
-//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 15개 파일에 연결 줄 32개를 추가합니다.
+//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 19개 파일에 연결 줄 38개를 추가합니다.
 //  · 추가한 줄에는 모두 "// >>> pdmaker" 표시가 붙어 있어서, 제거(uninstall)하면 깨끗이 되돌아갑니다.
 //  · 원본 줄은 고치거나 지우지 않습니다 (줄을 "추가"만 함).
 //  사용: node runtime-installer.js <게임저장소> [--uninstall]   또는 main.js 에서 require
@@ -70,6 +70,23 @@ const PATCHES = [
     line: `{ String pdmN = ${PKG}.MakerAbilities.className(this); if (pdmN != null) return pdmN; }` },
   { file: 'scenes/PixelScene.java', name: '게임 그림 바꾸기(assets/game) · 메뉴 화면 배경·음악',
     anchor: /\n([ \t]*)float minWidth, minHeight, scaleFactor;/, where: 'before', line: `${PKG}.MakerAssets.onSceneCreate(this);` },
+  { file: 'scenes/HeroSelectScene.java', name: '영웅 선택 화면: 게임 직업 대신 프로젝트 영웅 버튼',
+    anchor: /\n([ \t]*)for \(HeroClass cl : HeroClass\.values\(\)\)\s*\{/, where: 'before',
+    line: `if (!${PKG}.HeroSelect.addButtons(this, heroBtns))` },
+  // ---- 초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창 · 저장 슬롯) ----
+  { file: 'sprites/HeroSprite.java', name: '초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창)',
+    anchor: /public static Image avatar\(\s*Hero hero\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ Image pdmA = ${PKG}.HeroRuntime.avatar(hero); if (pdmA != null) return pdmA; }` },
+  { file: 'Dungeon.java', name: '저장 슬롯: 어떤 영웅인지 읽기',
+    anchor: /\n([ \t]*)Statistics\.preview\(\s*info,\s*bundle\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.preview(info, bundle);` },
+  { file: 'GamesInProgress.java', name: '저장 슬롯: 지금 영웅 기억 (저장할 때)',
+    anchor: /public static void set\(\s*int slot\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.setSlot(slot);` },
+  { file: 'scenes/StartScene.java', name: '저장 슬롯 초상화·이름 (시작 화면)',
+    anchor: /\n([ \t]*)long diff = Game\.realTime - info\.lastPlayed;/, where: 'before',
+    line: `{ com.watabou.noosa.Image pdmA = ${PKG}.HeroRuntime.slotAvatar(info); if (pdmA != null && hero != null) hero.copy(pdmA); String pdmN = ${PKG}.HeroRuntime.slotName(info); if (pdmN != null) name.text(Messages.titleCase(pdmN)); }` },
+  { file: 'windows/WndGameInProgress.java', name: '저장 슬롯 초상화·이름 (이어하기 창)',
+    anchor: /\n([ \t]*)title\.label\(/, where: 'before',
+    line: `{ com.watabou.noosa.Image pdmA = ${PKG}.HeroRuntime.slotAvatar(info); if (pdmA != null) title.icon(pdmA); String pdmN = ${PKG}.HeroRuntime.slotName(info); if (pdmN != null) className = pdmN; }` },
   { file: 'scenes/TitleScene.java', name: '타이틀 화면 (배경·로고·버튼·음악)',
     anchor: /\n([ \t]*)fadeIn\(\);/, where: 'before', line: `${PKG}.MakerTitle.apply(this);` },
   { file: 'sprites/HeroSprite.java', name: '영웅 시트: 갑옷을 바꿔도 영웅 편집기의 그림·프레임 크기 유지',

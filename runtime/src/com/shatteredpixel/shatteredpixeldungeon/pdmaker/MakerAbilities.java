@@ -69,7 +69,11 @@ public class MakerAbilities {
 	/** TengusMask.execute 연결 줄: 이 영웅에게 전직 목록이 있으면 우리 창 (true = 처리함) */
 	public static boolean chooseSubclass(TengusMask mask, Hero hero) {
 		try {
-			if (!anySubclass()) return false;
+			if (!anySubclass()) {
+				if (!HeroRuntime.zeroBase()) return false;
+				GLog.w("이 영웅은 전직이 없다.");     // 새 영웅: 게임 직업의 전직을 주지 않음
+				return true;
+			}
 			GameScene.show(new WndMakerSubclass(mask, hero));
 			return true;
 		} catch (Throwable t) { MakerRuntime.log("전직 창 오류: " + t); return false; }
@@ -93,6 +97,7 @@ public class MakerAbilities {
 		hero.spend(Actor.TICK); hero.busy();
 		Sample.INSTANCE.play(Assets.Sounds.MASTERY);
 		GLog.p("「" + s.getString("name", subclass) + "」(으)로 전직했다!");
+		HeroRuntime.gain("subclass", subclass);
 		HeroRuntime.syncHP(hero, false);
 		MakerActive.attach(hero);
 		Item.updateQuickslot();
@@ -148,8 +153,9 @@ public class MakerAbilities {
 	/** HeroClass.armorAbilities() 첫 줄: 이 영웅에게 직업 능력 목록이 있으면 그것 (null = 게임 원래) */
 	public static ArmorAbility[] armorAbilities(HeroClass cls) {
 		try {
-			if (Dungeon.hero == null || Dungeon.hero.heroClass != cls || !anyAbility()) return null;
+			if (Dungeon.hero == null || Dungeon.hero.heroClass != cls) return null;
 			if (!(com.watabou.noosa.Game.scene() instanceof GameScene)) return null;
+			if (!anyAbility()) return HeroRuntime.zeroBase() ? new ArmorAbility[0] : null;   // 새 영웅: 게임 직업의 능력을 주지 않음
 			JsonValue a = arr("abilities");
 			ArmorAbility[] out = new ArmorAbility[a.size];
 			for (int i = 0; i < a.size; i++) out[i] = new MakerArmorAbility(a.get(i).getString("id", ""));
@@ -184,7 +190,9 @@ public class MakerAbilities {
 			armor.charge -= chargeUse(hero);
 			Item.updateQuickslot();
 			com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Invisibility.dispel();
-			MakerCast.perform(hero, d, d.getString("target", "self").equals("self") ? hero.pos : target, null, "ability");
+			int cell = d.getString("target", "self").equals("self") ? hero.pos : target;
+			MakerCast.perform(hero, d, cell, null, "ability");
+			HeroRuntime.use("ability", abilityId, hero, cell);
 		}
 		@Override public String name() { JsonValue d = def(); return d == null ? abilityId : d.getString("name", abilityId); }
 		@Override public String shortDesc() { JsonValue d = def(); return d == null ? "" : "_" + name() + ":_ " + d.getString("shortDesc", ""); }
@@ -203,7 +211,8 @@ public class MakerAbilities {
 	/** Hero.className() 첫 줄: 전직했으면 그 이름 (null = 게임 원래) */
 	public static String className(Hero hero) {
 		try {
-			if (hero != Dungeon.hero || subclass.isEmpty()) return null;
+			if (hero != Dungeon.hero) return null;
+			if (subclass.isEmpty()) { JsonValue h = data(); return HeroRuntime.zeroBase(h) ? h.getString("name", null) : null; }   // 새 영웅: 직업 이름 대신 영웅 이름
 			JsonValue s = subclassData();
 			return s == null ? null : s.getString("name", null);
 		} catch (Throwable t) { return null; }

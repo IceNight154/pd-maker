@@ -161,6 +161,7 @@ public class MakerTalents {
 		if (code != null && code.overrides(MakerHeroCode.TALENT_UP)) {
 			try { code.onTalentUp(hero, id, p); } catch (Throwable x) { GenSupport.error("영웅 " + HeroRuntime.heroId(), "onTalentUp", x); }
 		}
+		HeroRuntime.gain("talent", id);
 	}
 
 	/** 레벨이 올라 새 포인트가 생기면 알림 */
@@ -186,7 +187,7 @@ public class MakerTalents {
 	/** 게임 원래 특성 창 대신 우리 창을 쓰는지 */
 	static boolean replacesNative() {
 		JsonValue h = data();
-		return h != null && (any() || MakerSpells.any() || MakerAbilities.anySubclass() || MakerAbilities.anyAbility()) && !h.getBoolean("nativeTalents", false);
+		return h != null && (any() || MakerSpells.any() || MakerAbilities.anySubclass() || MakerAbilities.anyAbility() || HeroRuntime.zeroBase(h)) && !h.getBoolean("nativeTalents", false);
 	}
 	/** Hero.talentPointsAvailable 연결 줄: 우리 특성을 쓰면 그 단계의 남은 포인트 (-1 = 원래대로)
 	 *  → 초상화 반짝임 · "남은 특성 포인트" 알림이 우리 포인트를 따름 */

@@ -13,7 +13,7 @@ public class MakerHeroCode {
 
 	// 훅 번호 (codegen.js 의 HERO_HOOKS 와 같음)
 	public static final int GAME_START = 0, ATTACK_SKILL = 1, DEFENSE_SKILL = 2, DAMAGE_ROLL = 3, DR_ROLL = 4, SPEED = 5,
-			FLOOR_ENTER = 6, TURN = 7, LEVEL_UP = 8, ATTACK_PROC = 9, DEFENSE_PROC = 10, KILL = 11, TALENT_UP = 12;
+			FLOOR_ENTER = 6, TURN = 7, LEVEL_UP = 8, ATTACK_PROC = 9, DEFENSE_PROC = 10, KILL = 11, TALENT_UP = 12, ACTION = 13, GAIN = 14, USE = 15;
 
 	/** 이 훅에 사용자 코드가 있는지 */
 	public boolean overrides(int hook) { return false; }
@@ -32,6 +32,12 @@ public class MakerHeroCode {
 	public void onKill(Hero hero, Mob mob) { }
 	/** 특성 포인트를 올렸을 때 (points = 올린 뒤 포인트) */
 	public void onTalentUp(Hero hero, String talent, int points) { }
+	/** Special.button(id, …) 로 만든 행동 버튼을 눌렀을 때 */
+	public void onAction(Hero hero, String id) { }
+	/** 전직·직업 능력·특성·패시브의 "얻었을 때" 코드 (kind = subclass · ability · talent · passive) */
+	public void onGain(String kind, String id, Hero hero) { }
+	/** 직업 능력의 "쓸 때" 코드 */
+	public void onUse(String kind, String id, Hero hero, int cell, Char target) { }
 	/** 주문 · 직업 능력 효과 "코드" (id = 주문/능력 id, effectIndex = 효과 순서) */
 	public void effect(String id, int effectIndex, Hero hero, int cell, Char target) { }
 }

@@ -178,6 +178,8 @@ public class Hooks {
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
 				}
+				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
+				case "nointro": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro(false); break;
 				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
 				case "sfx": // 게임 효과음 설정이 실제로 어떤 파일로 풀리는지
 					for (String[] k : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.SFX) System.out.println("[TEST] sfx " + k[0] + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.sfxRef(k[0]));
