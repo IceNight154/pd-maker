@@ -41,3 +41,17 @@ desktop.ini
 
 # 지울 파일 모아 두는 곳
 _to_delete/
+
+# --- 설정 · 세이브 (내 PC 에만 있어야 하는 것) ---
+# PDMaker 편집기 설정 (원래 위치는 %APPDATA% — 혹시 이 폴더에 생겨도 올리지 않음)
+pdmaker-settings.json
+pdmaker-playtest.gradle
+# 게임 세이브 · 설정 (테스트 플레이가 이 폴더 안에 저장하는 경우)
+.shatteredpixel/
+*.dat
+settings.xml
+# iOS 빌드가 만드는 설정 (게임 이름 · 패키지 이름이 들어감)
+robovm.properties
+# 서명 키
+*.keystore
+*.jks

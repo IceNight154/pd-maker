@@ -228,7 +228,6 @@ public class GameScene extends PixelScene {
 		}
 
 		Dungeon.level.playLevelMusic();
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.beforeScene(); // >>> pdmaker
 
 		SPDSettings.lastClass(Dungeon.hero.heroClass.ordinal());
 		
@@ -776,7 +775,6 @@ public class GameScene extends PixelScene {
 
 		if (!invVisible) toggleInvPane();
 		fadeIn();
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.onFloorEnter(); // >>> pdmaker
 
 		//re-show WndResurrect if needed
 		if (!Dungeon.hero.isAlive()){

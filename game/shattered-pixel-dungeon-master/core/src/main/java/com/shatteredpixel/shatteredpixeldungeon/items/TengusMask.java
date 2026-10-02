@@ -70,7 +70,6 @@ public class TengusMask extends Item {
 			
 			curUser = hero;
 
-			if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.chooseSubclass(this, hero)) return; // >>> pdmaker
 			GameScene.show( new WndChooseSubclass( this, hero ) );
 			
 		}

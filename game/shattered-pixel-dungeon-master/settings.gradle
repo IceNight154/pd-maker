@@ -3,7 +3,6 @@ include ':SPD-classes'
 include ':core'
 
 //platform modules
-if ({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }()) // >>> pdmaker
 include ':android'
 include ':ios'
 include ':desktop'

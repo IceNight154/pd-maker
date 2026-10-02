@@ -254,7 +254,6 @@ public class WndHero extends WndTabbed {
 		protected void createChildren() {
 			super.createChildren();
 			pane = new TalentsPane(TalentButton.Mode.UPGRADE);
-			{ TalentsPane pdmPane = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalentsPane.forHero(); if (pdmPane != null) { pane.destroy(); pane = pdmPane; } } // >>> pdmaker
 			add(pane);
 		}
 

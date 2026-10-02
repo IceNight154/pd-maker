@@ -231,7 +231,6 @@ public class Dungeon {
 	}
 	
 	public static void init() {
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.StoryState.reset(); // >>> pdmaker
 
 		initialVersion = version = Game.versionCode;
 		challenges = SPDSettings.challenges();
@@ -285,7 +284,6 @@ public class Dungeon {
 		Badges.reset();
 		
 		GamesInProgress.selectedClass.initHero( hero );
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.afterInit(hero); // >>> pdmaker
 	}
 
 	public static boolean isChallenged( int mask ) {
@@ -376,7 +374,6 @@ public class Dungeon {
 			level = new DeadEndLevel();
 		}
 
-		{ Level pdmLevel = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.createLevel(depth, branch); if (pdmLevel != null) level = pdmLevel; } // >>> pdmaker
 		//dead end levels get cleared, don't count as generated
 		if (!(level instanceof DeadEndLevel)){
 			//this assumes that we will never have a depth value outside the range 0 to 999
@@ -399,7 +396,6 @@ public class Dungeon {
 		Statistics.qualifiedForBossRemainsBadge = false;
 		
 		level.create();
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.afterCreate(level); // >>> pdmaker
 		
 		if (branch == 0) Statistics.qualifiedForNoKilling = !bossLevel();
 		Statistics.qualifiedForBossChallengeBadge = false;
@@ -692,7 +688,6 @@ public class Dungeon {
 			Badges.saveLocal( badges );
 			bundle.put( BADGES, badges );
 			
-			com.shatteredpixel.shatteredpixeldungeon.pdmaker.StoryState.store(bundle); // >>> pdmaker
 			FileUtils.bundleToFile( GamesInProgress.gameFile(save), bundle);
 			
 		} catch (IOException e) {
@@ -728,7 +723,6 @@ public class Dungeon {
 	public static void loadGame( int save, boolean fullLoad ) throws IOException {
 		
 		Bundle bundle = FileUtils.bundleFromFile( GamesInProgress.gameFile( save ) );
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.StoryState.restore(bundle); // >>> pdmaker
 
 		initialVersion = bundle.getInt( INIT_VER );
 		version = bundle.getInt( VERSION );
@@ -873,7 +867,6 @@ public class Dungeon {
 
 		Hero.preview( info, bundle.getBundle( HERO ) );
 		Statistics.preview( info, bundle );
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.preview(info, bundle); // >>> pdmaker
 	}
 	
 	public static void fail( Object cause ) {

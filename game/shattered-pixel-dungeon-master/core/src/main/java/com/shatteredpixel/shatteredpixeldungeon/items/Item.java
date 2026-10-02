@@ -126,7 +126,6 @@ public class Item implements Bundlable {
 		if (collect( hero.belongings.backpack )) {
 			
 			GameScene.pickUp( this, pos );
-			if (!com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemPickup(this)) // >>> pdmaker
 			Sample.INSTANCE.play( Assets.Sounds.ITEM );
 			hero.spendAndNext( pickupDelay() );
 			return true;
@@ -156,7 +155,6 @@ public class Item implements Bundlable {
 	}
 	
 	public void execute( Hero hero, String action ) {
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemAction(this, action); // >>> pdmaker
 
 		GameScene.cancel();
 		curUser = hero;
@@ -507,7 +505,6 @@ public class Item implements Bundlable {
 	}
 	
 	public int image() {
-		{ int pdmI = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAssets.itemImage(this); if (pdmI >= 0) return pdmI; } // >>> pdmaker
 		return image;
 	}
 	

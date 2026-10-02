@@ -105,7 +105,6 @@ public abstract class RegularLevel extends Level {
 	protected boolean build() {
 		
 		builder = builder();
-		builder = com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.builder(this, builder); // >>> pdmaker
 		
 		ArrayList<Room> initRooms = initRooms();
 		Random.shuffle(initRooms);
@@ -163,7 +162,6 @@ public abstract class RegularLevel extends Level {
 			initRooms.add(SecretRoom.createRoom());
 		}
 		
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.addRooms(this, initRooms); // >>> pdmaker
 		return initRooms;
 	}
 	

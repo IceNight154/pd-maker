@@ -69,7 +69,6 @@ public class HeroSprite extends CharSprite {
 	}
 	
 	public void updateArmor() {
-		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.updateArmor(this)) return; // >>> pdmaker
 
 		TextureFilm film = new TextureFilm( tiers(), Dungeon.hero.tier(), FRAME_WIDTH, FRAME_HEIGHT );
 		
@@ -176,7 +175,6 @@ public class HeroSprite extends CharSprite {
 	}
 
 	public static Image avatar( Hero hero ){
-		{ Image pdmA = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.avatar(hero); if (pdmA != null) return pdmA; } // >>> pdmaker
 		if (hero.buff(HeroDisguise.class) != null){
 			return avatar(hero.buff(HeroDisguise.class).getDisguise(), hero.tier());
 		} else {

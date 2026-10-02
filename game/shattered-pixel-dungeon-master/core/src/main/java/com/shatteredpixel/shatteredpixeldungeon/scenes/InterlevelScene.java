@@ -120,7 +120,6 @@ public class InterlevelScene extends PixelScene {
 	@Override
 	public void create() {
 		super.create();
-		if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.onFloorLeave(); // >>> pdmaker
 		
 		String loadingAsset;
 		int loadingDepth;

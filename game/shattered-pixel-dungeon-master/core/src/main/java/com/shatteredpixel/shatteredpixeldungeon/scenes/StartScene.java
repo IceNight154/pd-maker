@@ -239,7 +239,6 @@ public class StartScene extends PixelScene {
 					classIcon.copy(Icons.get(info.heroClass));
 				}
 
-				{ com.watabou.noosa.Image pdmA = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.slotAvatar(info); if (pdmA != null && hero != null) hero.copy(pdmA); String pdmN = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.slotName(info); if (pdmN != null) name.text(Messages.titleCase(pdmN)); } // >>> pdmaker
 				long diff = Game.realTime - info.lastPlayed;
 				if (diff > 99L * 30 * 24 * 60 * 60_000){
 					lastPlayed.text(" "); //show no text for >99 months ago

@@ -277,7 +277,6 @@ public enum HeroClass {
 	}
 
 	public ArmorAbility[] armorAbilities(){
-		{ ArmorAbility[] pdmA = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.armorAbilities(this); if (pdmA != null) return pdmA; } // >>> pdmaker
 		switch (this) {
 			case WARRIOR: default:
 				return new ArmorAbility[]{new HeroicLeap(), new Shockwave(), new Endure()};

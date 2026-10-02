@@ -136,7 +136,6 @@ public class GamesInProgress {
 	}
 
 	public static void set(int slot) {
-		com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.setSlot(slot); // >>> pdmaker
 		Info info = new Info();
 		info.slot = slot;
 
