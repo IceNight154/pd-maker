@@ -122,6 +122,7 @@ PDM.ui = (function () {
       case 'charHero': return [['$hero', '플레이어(영웅)'], ...s.all('char').map(c => [c.id, `${c.name} (${c.id})`])];
       case 'item': return s.all('item').map(c => [c.id, `${c.name} (${c.id})`]);
       case 'event': return s.all('event').map(c => [c.id, `${c.name} (${c.id})`]);
+      case 'textfx': return ((s.get('textfx') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})` + (c.sheet ? '' : ' — 아직 안 만듦')]);
       case 'prop': return s.all('prop').map(c => [c.id, `${c.name} (${c.id})`]);
       case 'room': {   // 프로젝트 방 템플릿 + 게임 기본 방 ("game:<분류>.<클래스>", 추가할 수 있는 것만)
         const cn = Object.fromEntries(PDM.SPD_ROOM_CATS || []);

@@ -33,7 +33,7 @@ public class MakerRuntime {
 	private static boolean loaded = false;
 	private static FileHandle root = null;
 
-	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems;
+	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx;
 	/** 방 템플릿 (rooms/<id>.json) */
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
@@ -65,6 +65,7 @@ public class MakerRuntime {
 			sounds   = readOpt(r, "audio/sounds.json");
 			title    = readOpt(r, "title.json");
 			dialogue = readOpt(r, "dialogue.json");
+			textfx = readOpt(r, "textfx.json");   // 글자 연출 (MakerTextFx)
 			gameitems = readOpt(r, "gameitems.json");   // 게임 아이템 그림 바꾸기 { items: { "spd:<경로>": { sprite } } }
 			for (FileHandle f : list("characters")) if (f.extension().equals("json")) { JsonValue v = r.parse(f); chars.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("rooms"))      if (f.extension().equals("json")) { JsonValue v = r.parse(f); rooms.put(v.getString("id", f.nameWithoutExtension()), v); }

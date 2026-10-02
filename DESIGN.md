@@ -473,9 +473,6 @@ RPG Maker 식 대사창: 화면 아래 넓은 대사 상자 + 말하는 캐릭�
 - 소리: 대사창 열기·넘기기·글자·선택지 옮기기/고르기는 게임 효과음 설정(§3.5)의 dialogue.* · choice.*.
 - "일러스트 표시/숨김" 명령(번호 1~8 · 왼쪽·가운데·오른쪽·전체 화면 · 페이드)은 게임 화면 위, 대사창 아래 층(`MakerStage`)에 그림.
 
-### 3.6 (없앰) RPG Maker MZ 리소스 가져오기
-- 저작권(이용 조건) 문제로 가져오기 기능과 `rmmz.js`, 그림·소리 칸의 RM 버튼, `rpgMakerDir` 설정, `assets/rmmz` 표준 폴더를 모두 없앰. PDMaker 는 RPG Maker 리소스를 읽거나 복사하지 않음.
-
 - 런타임 `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 안에 끼워 넣어 게임 설정의 음량·음소거·일시정지를 그대로 따름.
 
 ---
@@ -734,6 +731,7 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 - **드랍 테이블 화면** (`editors/loot.js`, 탭 `loot`, 런타임 `MakerDrops.chestLoot`/`roll`): 출처 쪽에서 편집. 캐릭터 `drops [{ item, chance, min, max, cond }]` (캐릭터 편집기 "등장 · 전리품"과 드랍 테이블 화면의 몬스터 표 — 아이템 쪽 `drops` 와 함께 적용). 상자류 `project.loot.<chest|locked|crystal|tomb|skeleton> { mode: add|replace, pick: each|one, rows: [{ item, chance, min, max, depthMin, depthMax, cond }] }` — each = 줄마다 확률, one = chance 를 가중치로 하나만. `LevelHooks.afterCreate` 에서 게임이 만든 상자에만 적용(직접 그린 맵 `MakerLevel` 제외, 오브젝트 배치보다 먼저). replace 는 unique·열쇠를 남기고, 아무것도 안 뽑히면 원래 내용물 유지. 맵 오브젝트 `item` 의 `container`(chest/locked/crystal/tomb/skeleton)로 직접 상자에 담아 놓기 (`MakerDrops.heapType`). 4.0.0 헤드리스에서 확인(`eval:droptest`), 실제 PDMaker 창은 미확인.
 - **리소스 검색** (`app.js` `filterTree`/`drawTreeSearch`, `#treeSearch`): 이름 검색(항목·분류 이름, 분류 이름이 맞으면 그 아래 전부), 세부 검색(☰ — 분류 root · 세부 종류 group 으로 좁히기), 전체 체크(켜면 접힌 분류까지, 끄면 펼쳐 놓은 분류 안에서만). 드랍 확률은 0.1% 단위 (`F.num` 의 `dec`).
 - **게임 저장소에 맞춘 목록** (`gamescan.js` `PDM.gameScan(repo, force)`, `app.resolveRepo` 에서 호출, `fs:walk`): 저장소의 `items` · `levels/rooms` · `actors/mobs` 를 훑어 묶여 있는 `SPD_ITEM_GROUPS`/`SPD_ROOMS` 에서 파일이 없는 것은 빼고, 저장소에만 있는 것은 소스(분류·`image`·`tier`·messages 이름)에서 읽어 덧붙임(`added`, 목록에 ＋). 캐릭터는 프로젝트 리소스라 지우지 않고 `game` 클래스 파일이 없으면 ⚠ 표시, 저장소에만 있는 몬스터는 캐릭터 › "게임 저장소에서 새로 찾음"에서 눌러 추가. 요약 `PDM.GAME_SCAN`, 프로젝트 설정에 "게임 저장소 다시 읽기". 웹 모드에서만 확인.
+- **글자 연출 (APNG)** (`editors/textfx.js`, 탭·확장 기능 `textfx`, 데이터 `textfx.json { list: [{ id, name, text, font, size, color, color2, stroke, strokeW, glow, glowW, w, h, bg, inFx, inDur, hold, outFx, outDur, loopFx, loopDur, perChar, stagger, css, fps, loop, crop, apng, sheet }] }`): 설정으로 HTML(.stage › .wrap › .text › .line › .ch)과 CSS(@keyframes 프리셋 + 직접 쓴 CSS)를 만들고, 화면 밖 shadow DOM 에서 Web Animations 로 시간별로 멈춘 뒤 애니메이션이 바꾸는 속성의 계산값만 박아 SVG foreignObject → 캔버스로 프레임을 찍음. APNG 는 직접 조립(acTL/fcTL/fdAT, `CompressionStream('deflate')`) → `assets/fx/<id>.png`, 게임용 격자 시트 → `assets/fx/<id>_sheet.png` (`sheet { png, cols, frames, w, h, fps }`, 한 변 4096 까지). 게임은 APNG 를 못 읽으므로 시트를 씀: 런타임 `MakerTextFx.show(id, pos, 너비%, 반복, done)` (uiCamera 위 Image, LINEAR 필터), 이벤트 명령 `textfx { fx, pos, width, loops, nowait }`. 웹 모드 + 4.0.0 헤드리스(`eval:textfx,<id>`)에서 확인.
 - **확장 기능의 편집 화면 칸**: `charPortrait`·`charHeart`·`charDialogue`·`charBehavior` — 체크해야 캐릭터 편집 화면에 그 칸이 보임 (extensions 가 아예 없는 예전 프로젝트는 모두 보임).
 - **픽셀 편집기 영역 선택**: ⬚ 영역 선택 도구 (끌어서 선택, 빈 곳 클릭·Esc = 해제, 선택 안쪽을 끌면 옮김), Ctrl+C/X/V · Delete · Ctrl+A, 붙여넣은 그림은 끌어서 옮기고 Enter(또는 해제·저장)로 놓음. 클립보드는 편집 창끼리 공유 (`PDM._pixClip`).
 - **방 템플릿 추가 기능**: `auto`·`autoChance`·`autoGroups` (자동 생성 — 켠 방은 `LevelHooks.addRooms` 가 모든 자동 생성 맵에 확률대로 넣음, 그룹 제한 가능, 이미 들어간 것은 중복 안 함. 새 방은 기본 켜짐) · `cat` (분류: `project.roomCats`, 순서 `project.roomOrder` — 리소스 목록에서 끌어 놓기) · 편집 화면: 빈 타일(낭떠러지 = CHASM 0) 버튼, 구역 색(벽 빨강·바닥 파랑·문 초록), Ctrl+끌기 = 공간 추가(끈 영역 바닥 + 둘레 벽이 되도록 맵을 넓힘)·Alt+끌기 = 공간 빼기(벽으로 메우고 벽만 남은 바깥 줄을 잘라냄), 테마 "자동"(방을 쓰는 그룹·노드의 테마), 타일 그림 편집(고른 타일 16×16 / 타일셋 전체 / PNG 불러오기 — 게임 기본 테마면 타일셋을 복사한 사용자 테마를 만들어 고침).

@@ -60,6 +60,8 @@ PDM.defaults = {
       layout: { enabled: false } };
   },
   /** 게임 아이템 바꾸기 (아이템 트리의 ▫ 게임 아이템 → 그림) — { items: { 'spd:<경로>': { sprite } } } */
+  /** 글자 연출 (editors/textfx.js · 런타임 MakerTextFx) */
+  textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },
   gameitems() { return { format: 'pdmaker-gameitems', version: PDM.FORMAT_VERSION, items: {} }; },
   sounds() {
     return { format: 'pdmaker-sounds', version: PDM.FORMAT_VERSION, sounds: [] };

@@ -327,6 +327,19 @@ public class EventInterpreter {
 			}
 			case "memory": { String ch = charArg(c, "char"); if (ch != null) HeartSystem.remember(ch, c.getString("key", "")); return true; }
 			// ---------------- 연출
+			case "textfx": {   // 글자 연출 표시 (MakerTextFx)
+				final String fid = c.getString("fx", ""), fpos = c.getString("pos", "center");
+				final float fwid = c.getFloat("width", 80f); final int floops = c.getInt("loops", 1);
+				final boolean fwait = !c.getBoolean("nowait", false);
+				final EventInterpreter self = this;
+				Game.runOnRenderThread(() -> {
+					renderThread = Thread.currentThread();
+					MakerTextFx g = MakerTextFx.show(fid, fpos, fwid, floops, fwait ? () -> resume() : null);
+					if (!fwait) return;
+					if (g == null) resume(); else if (current == self) waitingOn(g);
+				});
+				return !fwait;
+			}
 			case "shake": PixelScene.shake(c.getInt("power", 3), c.getInt("time", 5) / 10f); return true;
 			case "flash": {
 				String hex = c.getString("color", "#ffffff").replace("#", "");

@@ -310,6 +310,7 @@ public class Hooks {
 					System.out.println("[TEST] gnoll drop: " + (hh == null ? "none" : hh.items.toString()));
 					for (com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category cat : com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category.values()) if (cat.classes != null) for (int i = 0; i < cat.classes.length; i++) if (cat.classes[i].getSimpleName().equals("Dagger")) System.out.println("[TEST] Dagger prob in " + cat + " = " + cat.probs[i] + " / default " + (cat.defaultProbs == null ? "-" : "" + cat.defaultProbs[i]));
 					break; }
+				case "textfx": System.out.println("[TEST] textfx " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTextFx.show(p[1], p.length > 2 ? p[2] : "center", 80f, p.length > 3 ? Integer.parseInt(p[3]) : 1, () -> System.out.println("[TEST] textfx done"))); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;
 				case "nointro": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro(false); break;
 				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
