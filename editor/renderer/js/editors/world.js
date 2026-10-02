@@ -57,14 +57,24 @@
   }
 
   // ---------------- 편집 동작 ----------------
-  function addNode(mode, x, y, groupId) {
+  /** mobs: true 몬스터 생김 · false 안 생김 (noMobs — 직접 그리기 맵은 spawn.enabled 도 맞춤) */
+  function addNode(mode, x, y, groupId, mobs) {
     const id = uniqueId('n');
     store.transaction('노드 추가', () => {
-      store.add('node:' + id, PDM.make.node(id, mode), '노드 추가');
+      const nd = PDM.make.node(id, mode);
+      if (mobs === false) nd.noMobs = true;
+      if (mode === 'handmade') nd.spawn = Object.assign({ enabled: mobs !== false, mobs: [], initial: 3, max: 6, respawn: 50, minDist: 8 }, nd.spawn || {}, { enabled: mobs !== false });
+      store.add('node:' + id, nd, '노드 추가');
       store.edit('world', '노드 추가', r => { r.nodes.push({ id, group: groupId || '', x: snap(x), y: snap(y) }); if (!r.start) r.start = id; });
     });
     sel = { nodes: new Set([id]), edge: null, group: null };
     return id;
+  }
+  /** 몬스터 스폰 여부를 물어보고 노드 추가 (취소하면 null) */
+  async function addNodeAsk(mode, x, y, groupId) {
+    const mobs = await PDM.askSpawn('새 노드 — 몬스터 스폰');
+    if (mobs === null || mobs === undefined) return null;
+    return addNode(mode, x, y, groupId, mobs);
   }
   function groupAt(x, y, exclude) {
     const gs = (world().groups || []).slice().reverse();
@@ -441,8 +451,8 @@
           else if (!nodeEl) {
             // 빈 곳에 놓으면: 새 노드를 만들고 바로 연결
             const g = wnode(d.from).group;
-            const id = addNode('procedural', d.x, d.y - NH / 2, g);
-            connect(d.from, id, e.altKey ? 'stair' : e.shiftKey ? 'main' : 'door');
+            const kindE = e.altKey ? 'stair' : e.shiftKey ? 'main' : 'door', from = d.from;
+            addNodeAsk('procedural', d.x, d.y - NH / 2, g).then(id => { if (id) connect(from, id, kindE); else drawSvg(); });
           } else drawSvg();
           return;
         }
@@ -462,7 +472,7 @@
         if (e.target.closest('.wg-gtitle')) { renameGroup(e.target.closest('.wg-gtitle').dataset.group); return; }
         const p = toWorld(e.clientX, e.clientY);
         const g = groupAt(p.x, p.y);
-        addNode('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id);
+        addNodeAsk('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id);
       });
       const onKey = e => {
         if (PDM.tabs.active !== key || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
@@ -478,6 +488,7 @@
         else if (e.ctrlKey && e.key.toLowerCase() === 'c') { if (ids.length) { clip = { nodes: ids.map(id => ({ pos: PDM.clone(wnode(id)), data: PDM.clone(store.get('node:' + id)) })), edges: wd.edges.filter(x => sel.nodes.has(x.from) && sel.nodes.has(x.to)).map(x => PDM.clone(x)) }; toast(`노드 ${ids.length}개 복사`); } }
         else if (e.ctrlKey && e.key.toLowerCase() === 'v') { if (clip) duplicate([], 60, 60, clip.nodes.map(c => ({ pos: PDM.clone(c.pos), data: PDM.clone(c.data) }))); }
         else if (!e.ctrlKey && e.key.toLowerCase() === 'f') fit();
+        else if (e.key === 'Enter' && !ids.length && !sel.edge && !sel.group) { e.preventDefault(); fit(); }   // 아무것도 고르지 않았을 때 Enter = 화면에 꽉 차게
         else if (!e.ctrlKey && e.key.toLowerCase() === 'g' && ids.length) { const r0 = Math.min(...ids.map(id => wnode(id).x)); addGroup(r0, Math.min(...ids.map(id => wnode(id).y)), ids); }
         else if (e.key === 'Escape') { sel = { nodes: new Set(), edge: null, group: null }; markSel(); drawSvg(); inspect(); }
         else if (e.key.startsWith('Arrow') && ids.length) {
@@ -526,7 +537,7 @@
           PDM.ui.menu(e.clientX, e.clientY, [
             { label: '이름 바꾸기…', hint: '더블클릭', run: () => renameGroup(gid) },
             { label: g.safe ? '던전 맵으로 표시' : '던전 밖(마을 등)으로 표시', run: () => store.edit('world', '그룹 종류', r => { const x = r.groups.find(q => q.id === gid); x.safe = !x.safe; }) },
-            { label: '이 그룹에 노드 추가', run: () => { const r = groupRect(g); addNode('procedural', r.x + r.w + 20, r.y + HEAD, gid); } },
+            { label: '이 그룹에 노드 추가', run: () => { const r = groupRect(g); addNodeAsk('procedural', r.x + r.w + 20, r.y + HEAD, gid); } },
             '-',
             { label: '그룹 삭제 (노드는 남김)', run: () => store.edit('world', '그룹 삭제', r => { r.groups = r.groups.filter(x => x.id !== gid); r.nodes.forEach(n => { if (n.group === gid) n.group = ''; }); }) },
             { label: '그룹과 노드 모두 삭제', run: () => deleteNodes(wd.nodes.filter(n => n.group === gid).map(n => n.id)).then(() => store.edit('world', '그룹 삭제', r => { r.groups = r.groups.filter(x => x.id !== gid); })) }]);
@@ -544,14 +555,14 @@
         }
         const g = groupAt(p.x, p.y);
         PDM.ui.menu(e.clientX, e.clientY, [
-          { label: '새 노드: 자동 생성', hint: '더블클릭', run: () => addNode('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id) },
-          { label: '새 노드: 직접 그리기', run: () => addNode('handmade', p.x - NW / 2, p.y - NH / 2, g && g.id) },
-          { label: '새 노드: 혼합 (자동 생성 + 직접 그린 방)', run: () => addNode('hybrid', p.x - NW / 2, p.y - NH / 2, g && g.id) },
+          { label: '새 노드: 자동 생성', hint: '더블클릭', run: () => addNodeAsk('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id) },
+          { label: '새 노드: 직접 그리기', run: () => addNodeAsk('handmade', p.x - NW / 2, p.y - NH / 2, g && g.id) },
+          { label: '새 노드: 혼합 (자동 생성 + 직접 그린 방)', run: () => addNodeAsk('hybrid', p.x - NW / 2, p.y - NH / 2, g && g.id) },
           '-',
           { label: sel.nodes.size ? `선택한 노드 ${sel.nodes.size}개로 새 그룹` : '새 그룹 (빈 그룹)', run: () => addGroup(p.x, p.y, [...sel.nodes]) },
           clip ? { label: `붙여넣기 (노드 ${clip.nodes.length}개)`, hint: 'Ctrl+V', run: () => { const o = clip.nodes[0].pos; duplicate([], p.x - o.x, p.y - o.y, clip.nodes.map(c => ({ pos: PDM.clone(c.pos), data: PDM.clone(c.data) }))); } } : null,
           '-',
-          { label: '전체 보기', hint: 'F', run: fit },
+          { label: '전체 보기', hint: 'F · Enter', run: fit },
           { label: '자동 정렬 (깊이별 열)', run: autoLayout }].filter(Boolean));
       }
 
@@ -627,6 +638,9 @@
               F.select('world', ['nodes', wi, 'group'], wd.groups.map(g => [g.id, g.name]), { label: '그룹', empty: '(없음)' })),
             row(F.text(k, ['label'], { label: '층 표시', placeholder: W_.label(id) }), F.num(k, ['depth'], { label: '난이도 깊이 (0=자동)', int: true, min: 0, max: 30, hint: `지금 ${I.depth[id]}` })),
             row(F.ref(k, ['theme'], 'theme', { label: '테마', empty: '(그룹 테마)' }), F.bool(k, ['boss'], { label: '보스 층' })),
+            (() => { const on = d.mode === 'handmade' ? !!(d.spawn || {}).enabled : !d.noMobs;
+              const cb = h('input', { type: 'checkbox', checked: on, onchange: () => store.edit(k, '몬스터 스폰', r => { r.noMobs = !cb.checked; if (r.mode === 'handmade') r.spawn = Object.assign({ mobs: [], initial: 3, max: 6, respawn: 50, minDist: 8 }, r.spawn || {}, { enabled: cb.checked }); }) });
+              return h('label', { class: 'check', title: '끄면 이 맵에는 몬스터가 놓이지도 다시 생기지도 않습니다 (직접 놓은 몬스터·NPC 는 그대로)' }, cb, '몬스터 스폰 (몬스터가 생기고 다시 생김)'); })(),
             F.sound(k, ['bgm'], { label: '배경음', kind: 'bgm', allowNone: true, empty: `(그룹 설정${(W_.group((wnode(id) || {}).group) || {}).bgm ? ': ' + PDM.audio.label(W_.group(wnode(id).group).bgm) : ' — 게임 기본'})` }),
             h('p', { class: 'hint' }, `게임 안 번호: depth ${I.depth[id]} · branch ${I.branch[id]}${I.reached[id] === undefined && id !== wd.start ? ' · 시작 노드에서 닿지 않음 (이벤트 "맵 이동"이나 입구 목적지로만 갈 수 있음)' : ''}`),
             h('p', { class: 'hint' }, '연결: 오른쪽 점을 다른 노드로 끌기. 빈 곳에 놓으면 새 노드가 생기며 이어집니다.')));
@@ -688,10 +702,10 @@
       // ---- 툴바 ----
       const tb = h('div', { class: 'wg-tb' },
         h('button', { class: 'btn sm', onclick: e => PDM.ui.menu(e.clientX, e.clientY + 10, [
-          ['procedural', '자동 생성'], ['handmade', '직접 그리기'], ['hybrid', '혼합']].map(([m, n]) => ({ label: '새 노드: ' + n, run: () => { const r = vp.getBoundingClientRect(); const p = toWorld(r.left + r.width / 2, r.top + r.height / 2); addNode(m, p.x - NW / 2, p.y - NH / 2); } }))) }, '+ 노드'),
+          ['procedural', '자동 생성'], ['handmade', '직접 그리기'], ['hybrid', '혼합']].map(([m, n]) => ({ label: '새 노드: ' + n, run: () => { const r = vp.getBoundingClientRect(); const p = toWorld(r.left + r.width / 2, r.top + r.height / 2); addNodeAsk(m, p.x - NW / 2, p.y - NH / 2); } }))) }, '+ 노드'),
         h('button', { class: 'btn sm', onclick: () => { const r = vp.getBoundingClientRect(); const p = toWorld(r.left + r.width / 2, r.top + r.height / 2); addGroup(p.x, p.y, [...sel.nodes]); } }, '+ 그룹'),
         h('span', { class: 'tb-sep' }),
-        h('button', { class: 'btn sm', title: 'F', onclick: fit }, '전체 보기'),
+        h('button', { class: 'btn sm', title: 'F — 또는 아무것도 고르지 않고 Enter', onclick: fit }, '전체 보기'),
         h('button', { class: 'btn sm', onclick: autoLayout }, '자동 정렬'),
         h('button', { class: 'btn sm pri', title: '게임 전체의 진행 방향. 그룹마다 따로 정할 수도 있습니다',
           onclick: () => store.edit('project', '진행 방향 반전', r => { r.direction = r.direction === 'up' ? 'down' : 'up'; }) },

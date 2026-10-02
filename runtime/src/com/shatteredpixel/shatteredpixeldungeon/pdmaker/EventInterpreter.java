@@ -327,6 +327,18 @@ public class EventInterpreter {
 			}
 			case "memory": { String ch = charArg(c, "char"); if (ch != null) HeartSystem.remember(ch, c.getString("key", "")); return true; }
 			// ---------------- 연출
+			case "effect": {   // 이펙트 재생 (MakerEffect): at = char(대상 캐릭터 위치) | xy(칸 좌표)
+				String fid = c.getString("fx", "");
+				if ("xy".equals(c.getString("at", "char"))) { if (Dungeon.level != null) MakerEffect.playAt(fid, c.getInt("x", 0) + c.getInt("y", 0) * Dungeon.level.width()); return true; }
+				String tg = c.getString("target", "$hero");
+				if (tg.isEmpty() || tg.equals("$hero")) { MakerEffect.playOn(fid, Dungeon.hero); return true; }
+				String ch = charArg(c, "target");
+				if (Dungeon.level != null) for (Mob m : Dungeon.level.mobs) {
+					String id = m instanceof MakerNPC ? ((MakerNPC) m).charId : m instanceof MakerMob ? ((MakerMob) m).charId : null;
+					if (ch.equals(id)) { MakerEffect.playOn(fid, m); break; }
+				}
+				return true;
+			}
 			case "textfx": {   // 글자 연출 표시 (MakerTextFx)
 				final String fid = c.getString("fx", ""), fpos = c.getString("pos", "center");
 				final float fwid = c.getFloat("width", 80f); final int floops = c.getInt("loops", 1);

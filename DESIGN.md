@@ -1,7 +1,7 @@
 # 픽셀 던전 메이커 (가제) — 설계서 v0.1
 
 > 기반: Shattered Pixel Dungeon v3.2 계열 (`shattered-pixel-dungeon-mod-2`, 앱 이름 *Witchling Pixel Tower*)
-> 참고: era(관계·감정·엔딩), GameMaker(엔진·리소스 구조·플러그인), RPG Maker MZ(이벤트·선택지·일러스트·맵 오브젝트)
+> 참고: era(관계·감정·엔딩), GameMaker(엔진·리소스 구조·플러그인)
 
 ---
 
@@ -9,14 +9,13 @@
 
 **에디터(Electron exe)** 가 프로젝트 폴더에 JSON + PNG 만 저장하고,
 **게임 런타임(SPD 포크, Java exe)** 이 그 폴더를 읽어서 그대로 실행한다. 컴파일 없이 바로 테스트 플레이.
-(RPG Maker 의 `data/*.json` + `js/rmmz_*.js` 구조와 같은 발상)
 
 ```
 ┌──────────── 에디터 (PDMaker.exe · Electron) ────────────┐        ┌──── 게임 (WitchlingTower.exe · Java/libGDX) ────┐
 │ 리소스 트리 │ 맵 · 캐릭터 · 아이템 · 이벤트 · 스토리 편집기 │  JSON  │ MakerRuntime  ─ 프로젝트 로더                    │
 │ (GameMaker) │ 인스펙터 · 로그 · 플러그인 · 용어 관리       │ ─────▶ │  ├ MakerLevel      (손으로 그린 층)             │
 │             │ 테스트 플레이 버튼 ──────────────────────────┼─ 실행 ▶│  ├ LevelHooks      (절차 생성 층에 오브젝트 주입)│
-└─────────────────────────────────────────────────────────┘  PNG   │  ├ EventInterpreter (RPG Maker 식 명령 실행)     │
+└─────────────────────────────────────────────────────────┘  PNG   │  ├ EventInterpreter (이벤트 명령 실행)     │
                                                                     │  ├ HeartSystem     (era 식 감정·관계)            │
                                                                     │  ├ StoryState      (스위치·변수·루트·엔딩)       │
                                                                     │  └ PluginHost      (추가 명령·효과)              │
@@ -36,7 +35,6 @@
 |---|---|---|
 | **era** (eraTW / eraTHYM) | CFLAG(캐릭터별 수치), TALENT(소질), ABL(능력 레벨), MARK(각인), EXP(경험 횟수), SOURCE→PALAM→JUEL 파이프라인, COUNTER(반응), ATTITUDE(태도), 구상(캐릭터별 대사 덮어쓰기), 데일리·외출 이벤트, 일기, 관계 단계 이벤트 | **마음 시스템(Heart System)** — §4 |
 | **GameMaker** | 리소스 트리, 오브젝트 + 이벤트(Create/Step/Collision…), 룸 + 레이어, 시퀀스(타임라인), 부모 상속, `.gmplugin` 매니페스트 | IDE 레이아웃, 캐릭터의 "행동 이벤트", 층 레이어, 장면(Scene) 타임라인, 플러그인 매니페스트 — §2, §7 |
-| **RPG Maker MZ** | 맵 이벤트(페이지·조건·트리거), 이벤트 명령 리스트, 선택지 분기, 스위치/변수, 그림 표시, 커먼 이벤트, 플러그인 `@param` 주석 | 이벤트 편집기, 명령 목록, 일러스트 표시 — §5 |
 | **mod-2 (내 작업)** | 아리아(원소 전환·과부하), 코덱스 무기군, 그리모어, 커스텀 타이틀·파티클, 4인 견습 마녀 스토리 | 샘플 프로젝트의 기본 데이터, 레거시 코드 생성기 |
 
 ### 1.1 NSFW 명칭 처리 원칙
@@ -442,7 +440,7 @@ codex.melee · codex.meleeHit · codex.ranged · codex.cast · codex.hit · spel
 
 ### 3.9 대사창 (dialogue.json) — 에디터 "💬 대사창"
 
-RPG Maker 식 대사창: 화면 아래 넓은 대사 상자 + 말하는 캐릭터의 스탠딩 일러스트(상자와 겹쳐 위로 솟음) + 이름표 + ▼ + 한 글자씩 + 선택지.
+대사창: 화면 아래 넓은 대사 상자 + 말하는 캐릭터의 스탠딩 일러스트(상자와 겹쳐 위로 솟음) + 이름표 + ▼ + 한 글자씩 + 선택지.
 
 ```jsonc
 { "mode": "box",                 // box(아래 대사창) | window(원작 가운데 창: 작은 스프라이트 + 이름)
@@ -586,7 +584,7 @@ era 의 COUNTER 처럼, 가까이 있는 캐릭터가 플레이어 행동에 **�
 
 ---
 
-## 5. 이벤트 시스템 (RPG Maker 식)
+## 5. 이벤트 시스템
 
 ### 5.1 이벤트 구조
 
@@ -607,7 +605,7 @@ era 의 COUNTER 처럼, 가까이 있는 캐릭터가 플레이어 행동에 **�
   ] }
 ```
 
-페이지는 **아래쪽부터** 조건을 검사해 처음 만족하는 페이지가 활성 (RPG Maker 규칙 그대로).
+페이지는 **아래쪽부터** 조건을 검사해 처음 만족하는 페이지가 활성.
 
 ### 5.2 명령 목록 (v0.1)
 
@@ -624,7 +622,7 @@ era 의 COUNTER 처럼, 가까이 있는 캐릭터가 플레이어 행동에 **�
 
 ### 5.3 장면(Scene) — 일러스트 + 애니메이션 연출
 
-장면 = **타임라인 트랙이 있는 이벤트** (GameMaker 시퀀스 + RPG Maker 그림 표시).
+장면 = **타임라인 트랙이 있는 이벤트** (GameMaker 시퀀스 + 그림 표시).
 트랙: 일러스트 레이어(최대 8), 대사, 효과음/음악, 화면 효과. 에디터에서 재생 미리보기.
 
 ---
@@ -650,7 +648,7 @@ era 의 COUNTER 처럼, 가까이 있는 캐릭터가 플레이어 행동에 **�
 
 ## 7. 플러그인
 
-GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
+GameMaker `.gmplugin` 매니페스트에 `@param` 주석 방식을 합친다.
 
 ```jsonc
 // plugins/effect-maker/plugin.json
@@ -732,6 +730,12 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 - **리소스 검색** (`app.js` `filterTree`/`drawTreeSearch`, `#treeSearch`): 이름 검색(항목·분류 이름, 분류 이름이 맞으면 그 아래 전부), 세부 검색(☰ — 분류 root · 세부 종류 group 으로 좁히기), 전체 체크(켜면 접힌 분류까지, 끄면 펼쳐 놓은 분류 안에서만). 드랍 확률은 0.1% 단위 (`F.num` 의 `dec`).
 - **게임 저장소에 맞춘 목록** (`gamescan.js` `PDM.gameScan(repo, force)`, `app.resolveRepo` 에서 호출, `fs:walk`): 저장소의 `items` · `levels/rooms` · `actors/mobs` 를 훑어 묶여 있는 `SPD_ITEM_GROUPS`/`SPD_ROOMS` 에서 파일이 없는 것은 빼고, 저장소에만 있는 것은 소스(분류·`image`·`tier`·messages 이름)에서 읽어 덧붙임(`added`, 목록에 ＋). 캐릭터는 프로젝트 리소스라 지우지 않고 `game` 클래스 파일이 없으면 ⚠ 표시, 저장소에만 있는 몬스터는 캐릭터 › "게임 저장소에서 새로 찾음"에서 눌러 추가. 요약 `PDM.GAME_SCAN`, 프로젝트 설정에 "게임 저장소 다시 읽기". 웹 모드에서만 확인.
 - **글자 연출 (APNG)** (`editors/textfx.js`, 탭·확장 기능 `textfx`, 데이터 `textfx.json { list: [{ id, name, text, font, size, color, color2, stroke, strokeW, glow, glowW, w, h, bg, inFx, inDur, hold, outFx, outDur, loopFx, loopDur, perChar, stagger, css, fps, loop, crop, apng, sheet }] }`): 설정으로 HTML(.stage › .wrap › .text › .line › .ch)과 CSS(@keyframes 프리셋 + 직접 쓴 CSS)를 만들고, 화면 밖 shadow DOM 에서 Web Animations 로 시간별로 멈춘 뒤 애니메이션이 바꾸는 속성의 계산값만 박아 SVG foreignObject → 캔버스로 프레임을 찍음. APNG 는 직접 조립(acTL/fcTL/fdAT, `CompressionStream('deflate')`) → `assets/fx/<id>.png`, 게임용 격자 시트 → `assets/fx/<id>_sheet.png` (`sheet { png, cols, frames, w, h, fps }`, 한 변 4096 까지). 게임은 APNG 를 못 읽으므로 시트를 씀: 런타임 `MakerTextFx.show(id, pos, 너비%, 반복, done)` (uiCamera 위 Image, LINEAR 필터), 이벤트 명령 `textfx { fx, pos, width, loops, nowait }`. 웹 모드 + 4.0.0 헤드리스(`eval:textfx,<id>`)에서 확인.
+  - (2판) 확장: 탭 텍스트(서브 텍스트 · 세로쓰기 · 정렬 · 자동 줄바꿈 · 빈 줄 = 쪽 나누기 · 넘치면 축소) / 폰트(굵기·자간·행간 · 글꼴 파일 등록 `fontFile` → `assets/fonts`, @font-face data URL · 서브 폰트) / 움직임(표시 흐름 char·line·all·scroll, 등장 24종, 퇴장 18종, 표시 중 10종, 방향 · 시간차 · 순서 · 곡선 · 강도, 서브 등장, 앞뒤 공백) / 장식(프리셋 10종, 그라데이션 3색·방향, 테두리 · 바깥 테두리, 그림자, 광채, 노이즈 색) / 배경·배치(장식 틀 10종 + 등장, 배경 4종, 크기 프리셋, 3×3 배치 · 여백 · 미세 조정) / CSS. 템플릿 16종. 미리보기는 멈춘 애니메이션을 시각으로 돌려서(일시 정지 · 타임라인 · 배경 이미지). 내보내기: APNG(+게임용 시트) · PNG 정지 이미지 · 연번 PNG(ZIP, 무압축) · FPS · 루프(1회/무한/횟수) · 파일 이름 · 여백 자르기. 칸 기본값은 `DEF`, 예전 칸은 `norm()` 이 읽을 때 바꿈. 글자 겹: `.ch::before` 바깥 테두리 · `.chi::before` 테두리 · `.chi` 속 · `.chi::after` 그라데이션. 256색 저장 · 웹 글꼴 목록 · 입력 커서는 없음.
+- **이펙트 · 파티클** (`editors/effect.js`, 탭·확장 기능 `effects`, 런타임 `MakerEffect`) — Defold ParticleFX 와 같은 구성. 데이터 `effects.json { list: [{ id, name, sound, emitters: [E], modifiers: [M] }] }`. E 이미터 `{ name, x, y, rot, mode once|loop, duration, delay, startOffset, space world|emitter, max, burst, type circle|box|cone, blend alpha|add|mult|screen, orient default|initial|movement, inheritVel, stretchVel, sprite { png, fw, fh, frames, fps, anim none|life|loop|random }, color, colorSp, 이미터 속성 {v, sp, pts}: rate sizeX sizeY life speed size alpha rot0 stretchX stretchY angVel, 수명 속성 {v, pts}: lScale lAlpha lRot lStretchX lStretchY lAngVel, lColor [[t,hex]], modifiers [M] }`, M `{ type accel|drag|radial|vortex, mag {v,sp,pts}, x, y, rot, maxDist }`. 곡선 pts 는 꺾은선(이미터 속성 = 이미터 진행 0~1, 수명 속성 = 알갱이 수명 0~1). 편집기: 이미터 탭, 값±퍼짐+곡선 편집기, 색 그라데이션, 알갱이 그림(고르기 · `editPixelsModal` 로 직접 그리기 · 기본 모양 7종을 `assets/fx/shapes/` 에 생성 · `game:` 경로), 미리보기(`Sim` — 런타임과 같은 계산, 끌어서 따라오게). 런타임: `Sys`(Group, GameScene 의 effects 층에 빈 Visual `host` 로 붙음) › `Em`(이미터별 Group, 블렌드) › `P`(Image). 반복 이미터는 맵에 놓았을 때(`Spot`, loopAll)만 반복하고 한 번 재생에서는 길이만큼만. 예전 한 겹 형식은 편집기가 프로젝트를 열 때 `migrate` 로 바꿈(저장 필요). 쓰는 곳: ① 맵 오브젝트 `effect` → `MakerEffect.Spot`(CustomTilemap, 시야 안에서만) ② 아이템 `fxUse`·`fxThrow`·`fxEquip`(영웅에 붙어서) ③ 이벤트 명령 `effect { fx, at: char|xy, target, x, y }`. 4.0.0 헤드리스에서 `eval:effect,<id>` · `eval:fxspot,<id>` · `eval:fxdump` 로 확인 (곱하기·스크린 블렌드, 프레임 애니메이션, 아이템 칸·이벤트 명령, 저장 후 불러오기는 게임에서 미확인).
+- **게임 텍스트** (`editors/texts.js`, 탭 `texts`, 데이터 `texts.json { texts: { "<언어 코드>": { 키: 글자 }, "*": { 모든 언어 } } }`, 런타임 `MakerTexts`): 게임 저장소 `assets/messages/<분류>/<분류>[_언어].properties` 를 읽어 언어(저장소에 파일이 있는 것 — 게임 설정의 언어와 같음)·분류·검색·바꾼 것만으로 걸러 보여 주고, 줄마다 바꿀 글자를 적음(대상: 고른 언어만 / 모든 언어). 연결 줄: `Messages.getFromBundle` 맨 앞 `MakerTexts.get(key, lang)` (바꾼 글자가 있으면 그것, 서식 %s 는 그대로 채워짐). 4.0.0 헤드리스 타이틀 화면에서 확인.
+- **확장 기능 기본값 · 리소스 목록**: 확장 기능(`story` 스토리 추가 · event · textfx · effects · sys · 캐릭터 칸 4종)은 `project.extensions[id] === true` 일 때만 켜짐 (새 프로젝트 `{}` · 설정이 없는 프로젝트 = 모두 꺼짐). 리소스 목록은 처음에 모두 접혀 있고 펼친 분류는 `localStorage pdmaker_tree_expanded` 에 기억.
+- **몬스터 스폰 여부** : 노드를 만들 때(`world.js addNodeAsk` → `PDM.askSpawn`)와 방 템플릿을 만들 때(`map.js newRoom`) 묻고, 노드 인스펙터 · 방 속성의 "몬스터 스폰" 체크로 바꿈. 노드 `noMobs` (직접 그리기 맵은 `spawn.enabled` 도 함께): 런타임 `LevelHooks.afterCreate` 가 게임이 놓은 적 몬스터를 치우고 `MakerRuntime.onFloorEnter` 가 `MobSpawner` 를 뺌(4.0.0 헤드리스 확인: 적 8 → 0, 재생성기 1 → 0). 방 템플릿 `noMobs` (없으면 `keepClean` 을 따름): `TemplateRoom`/`TemplateSpecialRoom.canPlaceCharacter`. 맵 그래프: 아무것도 고르지 않고 Enter = 전체 보기(`fit`).
+- **listOps** (`js/listops.js` `PDM.listOps`): `{ list: [{ id, name }] }` 꼴 리소스(이펙트 · 글자 연출)의 추가 · 복제 · 삭제 · id 바꾸기(쓰는 곳 — 이벤트 명령 `fx` · 맵 오브젝트 `ref` · 아이템 `fxUse` 등 — 도 함께 고침) · 순서. 리소스 목록의 하위 항목과 오른쪽 클릭 메뉴, 편집 화면 맨 위 도구 줄(`ops.bar`).
 - **확장 기능의 편집 화면 칸**: `charPortrait`·`charHeart`·`charDialogue`·`charBehavior` — 체크해야 캐릭터 편집 화면에 그 칸이 보임 (extensions 가 아예 없는 예전 프로젝트는 모두 보임).
 - **픽셀 편집기 영역 선택**: ⬚ 영역 선택 도구 (끌어서 선택, 빈 곳 클릭·Esc = 해제, 선택 안쪽을 끌면 옮김), Ctrl+C/X/V · Delete · Ctrl+A, 붙여넣은 그림은 끌어서 옮기고 Enter(또는 해제·저장)로 놓음. 클립보드는 편집 창끼리 공유 (`PDM._pixClip`).
 - **방 템플릿 추가 기능**: `auto`·`autoChance`·`autoGroups` (자동 생성 — 켠 방은 `LevelHooks.addRooms` 가 모든 자동 생성 맵에 확률대로 넣음, 그룹 제한 가능, 이미 들어간 것은 중복 안 함. 새 방은 기본 켜짐) · `cat` (분류: `project.roomCats`, 순서 `project.roomOrder` — 리소스 목록에서 끌어 놓기) · 편집 화면: 빈 타일(낭떠러지 = CHASM 0) 버튼, 구역 색(벽 빨강·바닥 파랑·문 초록), Ctrl+끌기 = 공간 추가(끈 영역 바닥 + 둘레 벽이 되도록 맵을 넓힘)·Alt+끌기 = 공간 빼기(벽으로 메우고 벽만 남은 바깥 줄을 잘라냄), 테마 "자동"(방을 쓰는 그룹·노드의 테마), 타일 그림 편집(고른 타일 16×16 / 타일셋 전체 / PNG 불러오기 — 게임 기본 테마면 타일셋을 복사한 사용자 테마를 만들어 고침).

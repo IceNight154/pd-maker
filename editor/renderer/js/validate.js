@@ -12,6 +12,7 @@ PDM.validate = function () {
     if (kind === 'item') return s.has('item:' + id);
     if (kind === 'event') return s.has('event:' + id);
     if (kind === 'prop') return s.has('prop:' + id);
+    if (kind === 'effect') return ((s.get('effects') || {}).list || []).some(x => x.id === id);
     if (kind === 'switch') return (story.switches || []).some(x => x.id === id);
     if (kind === 'var') return (story.variables || []).some(x => x.id === id);
     if (kind === 'route') return (story.routes || []).some(x => x.id === id);
@@ -90,7 +91,7 @@ PDM.validate = function () {
       add('warn', where, '시작 노드에서 닿지 않습니다 (이벤트 "맵 이동"으로만 갈 수 있음)', 'world');
     (f.objects || []).forEach((o, i) => {
       const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
-      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop' }[o.type];
+      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop', effect: 'effect' }[o.type];
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);

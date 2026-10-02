@@ -236,6 +236,7 @@ public class MakerAudio {
 		try {
 			String key = action.equals("THROW") ? "throw" : action.equals("EQUIP") || action.equals("UNEQUIP") ? "equip" : action.equals("DROP") ? null : "use";
 			if (key == null) return;
+			MakerEffect.itemAction(it, key);   // 아이템 이펙트 (fxUse · fxThrow · fxEquip)
 			if (key.equals("use") && it instanceof MakerItem) return;   // 프로젝트 아이템(기타·코덱스 등)은 사용할 때 스스로 냄
 			String r = itemSound(it, key);
 			if (!r.isEmpty() && !r.equals("none")) playSe(r);

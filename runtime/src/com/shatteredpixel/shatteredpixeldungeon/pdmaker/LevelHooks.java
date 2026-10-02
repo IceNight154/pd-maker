@@ -194,7 +194,16 @@ public class LevelHooks {
 	public static void afterCreate(Level level) {
 		if (!MakerRuntime.isActive()) return;
 		WorldGraph.wire(level, false);
-		if (!(level instanceof MakerLevel)) MakerDrops.chestLoot(level);   // 게임이 만든 상자만 (직접 놓은 상자보다 먼저)
+		if (!(level instanceof MakerLevel)) {
+			MakerDrops.chestLoot(level);
+			// 노드의 "몬스터 스폰" 을 끄면(noMobs): 게임이 놓은 적 몬스터를 치움 (다시 생기는 것은 MakerRuntime.onFloorEnter 에서 막음)
+			JsonValue nd = MakerRuntime.here();
+			if (nd != null && nd.getBoolean("noMobs", false)) {
+				ArrayList<Mob> out = new ArrayList<>();
+				for (Mob m : level.mobs) if (m.alignment == Char.Alignment.ENEMY && !(m instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.NPC)) out.add(m);
+				level.mobs.removeAll(out);
+			}
+		}   // 게임이 만든 상자만 (직접 놓은 상자보다 먼저)
 		placeTemplateObjects(level);
 		MakerDrops.floorDrops(level);
 		if (level instanceof MakerLevel) return;
@@ -229,6 +238,7 @@ public class LevelHooks {
 			}
 			case "item": { Item it = MakerItem.create(ref); if (it != null) { it.quantity(Math.max(1, o.getInt("count", 1))); level.drop(it, cell).type = MakerDrops.heapType(o.getString("container", "")); } break; }
 			case "prop": MakerProp.place(level, ref, cell); break;
+			case "effect": MakerEffect.place(level, ref, cell); break;
 			case "event":
 				if (level instanceof MakerLevel) ((MakerLevel) level).eventCells.put(cell, ref);
 				else eventCells.put(Dungeon.depth + ":" + Dungeon.branch + ":" + cell, ref);

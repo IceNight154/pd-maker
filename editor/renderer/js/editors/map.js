@@ -44,7 +44,8 @@
     const id = await PDM.ui.prompt('새 방 템플릿 id (영문)', '', '파일 이름이 됩니다. 예: herb_greenhouse'); if (!id) return;
     const clean = PDM.slugId(id);
     if (store.has('room:' + clean)) { toast('같은 id 가 있습니다', 'bad'); return; }
-    const r = PDM.make.room(clean); r.name = id;
+    const mobs = await PDM.askSpawn('새 방 템플릿 — 몬스터 스폰'); if (mobs === null || mobs === undefined) return;
+    const r = PDM.make.room(clean); r.name = id; if (mobs === false) r.noMobs = true;
     store.add('room:' + clean, r, '방 템플릿 추가'); PDM.tabs.open('room:' + clean);
   }
 
@@ -306,7 +307,7 @@
         typeSel.value = ui.objType;
         const refKind = PDM.OBJECT_TYPES[ui.objType].ref;
         const opts = refKind === 'character' ? store.all('char').filter(c => ui.objType === 'mob' ? ['mob', 'boss'].includes(c.kind) : !['mob', 'boss', 'hero'].includes(c.kind)).map(c => [c.id, c.name])
-          : refKind === 'item' ? store.all('item').map(c => [c.id, c.name]) : refKind === 'event' ? store.all('event').map(c => [c.id, c.name]) : refKind === 'prop' ? store.all('prop').map(c => [c.id, c.name]) : [];
+          : refKind === 'item' ? store.all('item').map(c => [c.id, c.name]) : refKind === 'event' ? store.all('event').map(c => [c.id, c.name]) : refKind === 'prop' ? store.all('prop').map(c => [c.id, c.name]) : refKind === 'effect' ? PDM.ui.refOptions('effect') : [];
         if (refKind === 'character' && ui.objType === 'mob') opts.push(...['rat', 'gnoll', 'crab', 'slime', 'snake', 'albino'].map(m => ['spd:' + m, `(게임) ${m}`]));
         const refSel = h('select', { onchange: () => { ui.objRef = refSel.value; ui.tool = 'object'; drawTools(); } }, opts.map(([v, t]) => h('option', { value: v }, t)));
         if (!ui.objRef && opts[0]) ui.objRef = opts[0][0];
@@ -640,7 +641,7 @@
         const o = fl.objects && fl.objects[ui.sel];
         if (o) {
           const p = ['objects', ui.sel];
-          const refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop' }[o.type];
+          const refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop', effect: 'effect' }[o.type];
           const el = h('div', {},
             F.select(key, [...p, 'type'], Object.fromEntries(Object.entries(PDM.OBJECT_TYPES).map(([k, v]) => [k, v.name])), { label: '종류' }),
             refKind ? F.ref(key, [...p, 'ref'], refKind, { label: '대상' }) : null,
@@ -652,7 +653,7 @@
             o.type === 'npc' ? F.ref(key, [...p, 'event'], 'event', { label: '말 걸면 실행할 이벤트', empty: '(캐릭터의 인사 대사)' }) : null,
             F.text(key, [...p, 'note'], { label: '메모' }),
             h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } },
-              refKind ? h('button', { class: 'btn sm', onclick: () => o.ref && !o.ref.startsWith('spd:') && PDM.tabs.open(`${refKind}:${o.ref}`) }, '대상 열기') : null,
+              refKind ? h('button', { class: 'btn sm', onclick: () => o.ref && !o.ref.startsWith('spd:') && PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`) }, '대상 열기') : null,
               h('button', { class: 'btn sm danger', onclick: () => { const i = ui.sel; ui.sel = -1; store.edit(key, '오브젝트 삭제', r => { r.objects.splice(i, 1); }); } }, '삭제')));
           PDM.inspector.show(`${PDM.OBJECT_TYPES[o.type].name} #${ui.sel}`, el);
           return;
@@ -664,7 +665,9 @@
           el = h('div', {},
             F.text(key, ['name'], { label: '방 이름', rerender: true }),
             F.select(key, ['kind'], { standard: '일반 방 (여러 방과 연결)', special: '특수 방 (입구 하나, 막다른 방)' }, { label: '종류' }),
-            F.bool(key, ['keepClean'], { label: '자동 아이템·몬스터를 이 방에 놓지 않기' }),
+            F.bool(key, ['keepClean'], { label: '자동 아이템·몬스터를 이 방에 놓지 않기', rerender: true }),
+            (() => { const on = fl.noMobs === undefined ? !fl.keepClean : !fl.noMobs; const cb = h('input', { type: 'checkbox', checked: on, onchange: () => store.edit(key, '방의 몬스터 스폰', r => { r.noMobs = !cb.checked; }) });
+              return h('label', { class: 'check', title: '켜면 게임이 이 방 안에도 몬스터를 놓고 다시 생기게 합니다. 끄면 이 방 안에는 몬스터가 생기지 않습니다 (방에 직접 놓은 몬스터는 그대로)' }, cb, '몬스터 스폰 (이 방 안에 몬스터가 생김)'); })(),
             F.select(key, ['cat'], Object.fromEntries(((store.get('project') || {}).roomCats || []).map(c => [c, c])), { label: '분류', empty: '(분류 없음)', hint: '리소스 목록에서 방을 분류로 끌어다 놓아도 됩니다' }),
             F.ref(key, ['previewTheme'], 'theme', { label: '테마 (편집 화면)', empty: `자동: ${themeName(roomAutoTheme(fl) || 'SEWER')}`, rerender: true, hint: '게임에서는 방이 들어간 맵의 테마 타일로 그려집니다' }),
             section('자동 생성',

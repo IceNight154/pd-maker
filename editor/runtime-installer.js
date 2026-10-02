@@ -27,6 +27,8 @@ const PATCHES = [
     anchor: /\n([ \t]*)FileUtils\.bundleToFile\(\s*GamesInProgress\.gameFile\(\s*save\s*\),\s*bundle\s*\);/, where: 'before', line: `${PKG}.StoryState.store(bundle);` },
   { file: 'Dungeon.java', name: '불러오기',
     anchor: /\n([ \t]*)Bundle bundle = FileUtils\.bundleFromFile\(\s*GamesInProgress\.gameFile\(\s*save\s*\)\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.StoryState.restore(bundle);` },
+  { file: 'messages/Messages.java', name: '게임 글자 바꾸기 (texts.json)',
+    anchor: /private static String getFromBundle\(\s*String key\s*\)\s*\{[^\n]*\n/, where: 'after', line: `{ String pdmT = ${PKG}.MakerTexts.get(key, lang); if (pdmT != null) return pdmT; }` },
   { file: 'scenes/GameScene.java', name: '층 입장 이벤트',
     anchor: /\n([ \t]*)fadeIn\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.onFloorEnter();` },
   { file: 'levels/RegularLevel.java', name: '자동 생성 층에 직접 만든 방 추가',

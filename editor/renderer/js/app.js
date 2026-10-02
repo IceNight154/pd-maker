@@ -124,13 +124,18 @@
   store.on('dirty', () => { updateStatus(); drawTabbar(); drawTreeSoon(); drawToolbarSoon(); });
 
   // ---------------- 리소스 트리 ----------------
-  const expanded = new Set(['map', 'char', 'item', 'event', 'story', 'sys']);
+  // 리소스 목록에서 펼친 분류 — 처음에는 모두 접혀 있고, 펼친 것은 다음 실행 때도 기억
+  const EXP_KEY = 'pdmaker_tree_expanded';
+  const expanded = new Set((() => { try { return JSON.parse(localStorage.getItem(EXP_KEY) || '[]'); } catch (_) { return []; } })());
+  const saveExpanded = () => { try { localStorage.setItem(EXP_KEY, JSON.stringify([...expanded])); } catch (_) { /* 무시 */ } };
   // ---------------- 확장 기능 (리소스 목록에서 켜고 끄는 부분) ----------------
   //  project.extensions = { event: bool, sys: bool } — 꺼진 것은 리소스 목록에서 숨김 (데이터는 그대로, 확장 기능 창에서 열 수 있음)
   //  예전 프로젝트(값 없음)는 모두 켜짐, 새 프로젝트는 꺼짐
   const EXTENSIONS = [
+    { id: 'story', name: '스토리', desc: '스위치 · 변수 · 루트 · 엔딩 — 이벤트의 조건과 게임 진행 상태를 관리' },
     { id: 'event', name: '이벤트', desc: '커먼 이벤트 · 장면(연출) · 이정표 · 층 이벤트 — 대화·연출·스위치로 게임 진행을 만듦' },
     { id: 'textfx', name: '글자 연출 (APNG)', desc: 'CSS 로 움직이는 글자 그림(전투 시작 · 장소 이름 자막 등)을 만들어 APNG 로 저장하고, 이벤트 명령 "글자 연출 표시"로 게임 화면에 띄움' },
+    { id: 'effects', name: '이펙트 · 파티클', desc: '불꽃·연기·반짝임 같은 파티클 이펙트를 만들어 맵에 놓거나(오브젝트 "이펙트"), 아이템을 쓸 때·이벤트 명령 "이펙트 재생"으로 띄움' },
     { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' },
     // 캐릭터 편집 화면의 칸 (켜야 보임)
     { id: 'charPortrait', name: '캐릭터: 초상화 · 표정 · 대사창 일러스트', desc: '캐릭터 편집 화면에 초상화·표정 칸을 보입니다 (대사창에 서는 그림)', section: true },
@@ -139,11 +144,9 @@
     { id: 'charBehavior', name: '캐릭터: 행동 이벤트', desc: '캐릭터 편집 화면에 행동 이벤트(상황마다 실행할 명령) 칸을 보입니다', section: true }
   ];
   /** 켜져 있는지. 리소스 목록 항목(event·sys)은 값이 없으면 켬, 편집 화면 칸(section)은 확장 기능에서 체크해야 켬 (설정이 아예 없는 예전 프로젝트는 모두 켬) */
-  const extOn = id => {
+  const extOn = id => {   // 체크한 것만 켬 (새 프로젝트 · 설정이 없는 프로젝트는 모두 꺼짐)
     const x = (store.get('project') || {}).extensions;
-    if (!x) return true;
-    const e = EXTENSIONS.find(v => v.id === id);
-    return e && e.section ? x[id] === true : x[id] !== false;
+    return !!x && x[id] === true;
   };
   function allRoots() {
     const roots = [];
@@ -232,6 +235,7 @@
   let treeDrag = null;   // 리소스 목록에서 끌고 있는 것
   function drawTree() {
     const body = $('#treeBody'); if (!body) return;
+    saveExpanded();
     const sc = body.scrollTop; body.innerHTML = '';
     if (!store.isOpen) { body.append(h('div', { class: 'empty', style: { padding: '10px' } }, '프로젝트를 열어 주세요')); return; }
     const dirty = new Set(store.dirtyKeys());
@@ -240,13 +244,13 @@
       const open = forced ? forced.has(n.id) : expanded.has(n.id);
       const el = h('div', { class: 'tn' + (n.children ? ' group' : '') + (n.open && active && active.key === n.open ? ' sel' : '') + (n.open && dirty.has(n.open) ? ' dirty' : ''),
         style: { '--d': d }, 'data-open': n.open || '',
-        onclick: () => { if (n.open) PDM.tabs.open(n.open); else if (n.run) n.run(); else if (n.children) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
+        onclick: () => { if (n.open) { PDM.tabs.open(n.open); if (n.expandOnOpen && hasKids && !open) { expanded.add(n.id); drawTree(); } } else if (n.run) n.run(); else if (n.children) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         ondblclick: () => { if (n.children && n.open) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         oncontextmenu: e => { e.preventDefault(); if (n.menu) PDM.ui.menu(e.clientX, e.clientY, typeof n.menu === 'function' ? n.menu() : n.menu); } },
         h('span', { class: 'tw', onclick: e => { if (hasKids) { e.stopPropagation(); open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } } }, hasKids ? (open ? '▾' : '▸') : ''),
         h('span', { class: 'ti' }, n.icon || ''), h('span', { class: 'tl' }, n.label), n.count !== undefined ? h('span', { class: 'tc' }, n.count) : null,
         // 줄에 마우스를 올리면 보이는 작은 버튼 (예: 영웅 순서 ▲▼)
-        n.actions && n.actions.length ? h('span', { class: 'tact' }, n.actions.map(a => h('button', { class: 'ib', title: a.title || '', onclick: e => { e.stopPropagation(); a.run(); } }, a.label))) : null);
+        n.actions && n.actions.length ? h('span', { class: 'tact' }, n.actions.map(a => h('button', { class: 'ib', title: a.title || '', onclick: e => { e.stopPropagation(); a.run(e); } }, a.label))) : null);
       // 끌어 놓기: n.drag = 끌 수 있는 것({ kind, id … }), n.drop(끈 것, 'before'|'after'|'into') = 여기에 놓았을 때 (true 를 돌려주면 처리함)
       //   n.canDrop(끈 것) 이 가능한 위치 목록 ['before','after','into'] 을 돌려줌
       if (n.drag) {
@@ -834,6 +838,6 @@
     const q = new URLSearchParams(location.search).get('project');
     if (q) loadProject(q);
   }
-  PDM.app = { redraw: () => drawAll(), loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
+  PDM.app = { redraw: () => drawAll(), expandTree: id => { if (!expanded.has(id)) { expanded.add(id); drawTree(); } }, loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init();
 })();

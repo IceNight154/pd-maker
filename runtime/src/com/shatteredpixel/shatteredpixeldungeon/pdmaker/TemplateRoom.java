@@ -45,7 +45,7 @@ public class TemplateRoom extends StandardRoom {
 	@Override public boolean canPlaceGrass(Point p) { return false; }
 	@Override public boolean canPlaceTrap(Point p) { return false; }
 	@Override public boolean canPlaceItem(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("keepClean", false)) && super.canPlaceItem(p, l); }
-	@Override public boolean canPlaceCharacter(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("keepClean", false)) && super.canPlaceCharacter(p, l); }
+	@Override public boolean canPlaceCharacter(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("noMobs", t.getBoolean("keepClean", false))) && super.canPlaceCharacter(p, l); }
 
 	@Override
 	public void paint(Level level) {

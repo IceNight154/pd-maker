@@ -33,7 +33,7 @@ public class MakerRuntime {
 	private static boolean loaded = false;
 	private static FileHandle root = null;
 
-	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx;
+	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects;
 	/** 방 템플릿 (rooms/<id>.json) */
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
@@ -65,6 +65,8 @@ public class MakerRuntime {
 			sounds   = readOpt(r, "audio/sounds.json");
 			title    = readOpt(r, "title.json");
 			dialogue = readOpt(r, "dialogue.json");
+			MakerTexts.load(readOpt(r, "texts.json"));   // 게임 글자 바꾸기
+			effects = readOpt(r, "effects.json");   // 이펙트 · 파티클 (MakerEffect)
 			textfx = readOpt(r, "textfx.json");   // 글자 연출 (MakerTextFx)
 			gameitems = readOpt(r, "gameitems.json");   // 게임 아이템 그림 바꾸기 { items: { "spd:<경로>": { sprite } } }
 			for (FileHandle f : list("characters")) if (f.extension().equals("json")) { JsonValue v = r.parse(f); chars.put(v.getString("id", f.nameWithoutExtension()), v); }
@@ -233,6 +235,12 @@ public class MakerRuntime {
 				break;
 			}
 		}
+		// 몬스터 스폰을 끈 노드(noMobs): 게임의 몬스터 재생성기를 뺌 (직접 그린 맵은 MakerLevel 이 spawn.enabled 로 처리)
+		try {
+			if (f != null && f.getBoolean("noMobs", false) && !(Dungeon.level instanceof MakerLevel))
+				for (com.shatteredpixel.shatteredpixeldungeon.actors.Actor a : new java.util.ArrayList<>(com.shatteredpixel.shatteredpixeldungeon.actors.Actor.all()))
+					if (a instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner) com.shatteredpixel.shatteredpixeldungeon.actors.Actor.remove(a);
+		} catch (Throwable t) { log("몬스터 스폰 끄기 실패: " + t); }
 		HeroRuntime.onFloorEnter();
 		HeartUI.attach();
 		HeartSystem.onFloorEnter(depth, safe);

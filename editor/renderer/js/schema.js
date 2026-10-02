@@ -68,6 +68,7 @@ PDM.OBJECT_TYPES = {
   item:  { name: '아이템',  color: '#e6b95c', ref: 'item' },
   event: { name: '이벤트',  color: '#a58bff', ref: 'event' },
   prop:  { name: '맵 오브젝트', color: '#c9a36a', ref: 'prop' },
+  effect: { name: '이펙트', color: '#ff8fd0', ref: 'effect' },
   start: { name: '시작 위치', color: '#63b3ed', ref: null }
 };
 PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구 방', exit: '출구 방', special: '특수 방' };
@@ -181,6 +182,9 @@ PDM.COMMANDS = {
                sum: c => `일러스트 #${c.slot || 1}: ${c.image || '(없음)'} (${c.pos || 'center'})` },
   illustHide:{ g: '연출', name: '일러스트 숨김', params: [{ k: 'slot', t: 'number', label: '번호(0=전부)' }, { k: 'fade', t: 'number', label: '페이드(0.1초)' }], sum: c => `일러스트 숨김 #${c.slot || '전부'}` },
   shake:     { g: '연출', name: '화면 흔들림', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
+  effect:    { g: '연출', name: '이펙트 재생', params: [{ k: 'fx', t: 'effect', label: '이펙트' }, { k: 'at', t: 'select', label: '위치', options: { char: '캐릭터 위치', xy: '칸 좌표' } },
+               { k: 'target', t: 'charHero', label: '캐릭터 (위치가 캐릭터일 때)' }, { k: 'x', t: 'number', label: 'x (칸 좌표일 때)' }, { k: 'y', t: 'number', label: 'y' }],
+               sum: c => `이펙트: ${(((PDM.store.get('effects') || {}).list || []).find(x => x.id === c.fx) || {}).name || c.fx || '?'} @ ${c.at === 'xy' ? `(${c.x || 0}, ${c.y || 0})` : (!c.target || c.target === '$hero' ? '영웅' : PDM.refName('char', c.target))}` },
   textfx:    { g: '연출', name: '글자 연출 표시', params: [{ k: 'fx', t: 'textfx', label: '글자 연출' }, { k: 'pos', t: 'select', label: '위치', options: { center: '가운데', top: '위', bottom: '아래' } },
                { k: 'width', t: 'number', label: '크기 (화면 너비 %, 기본 80)' }, { k: 'loops', t: 'number', label: '반복 횟수 (기본 1)' }, { k: 'nowait', t: 'bool', label: '기다리지 않고 바로 다음 명령으로' }],
                sum: c => `글자 연출: ${(((PDM.store.get('textfx') || {}).list || []).find(x => x.id === c.fx) || {}).name || c.fx || '?'}${c.nowait ? ' (기다리지 않음)' : ''}` },

@@ -1058,6 +1058,7 @@ public abstract class Mob extends Char {
 	}
 	
 	public void rollToDropLoot(){
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.mobDrop(this)) return; // >>> pdmaker
 		if (Dungeon.hero.lvl > maxLvl + 2) return;
 
 		MasterThievesArmband.StolenTracker stolen = buff(MasterThievesArmband.StolenTracker.class);

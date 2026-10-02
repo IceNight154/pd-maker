@@ -108,6 +108,8 @@ public class MakerLevel extends Level {
 				}
 			} else if (type.equals("prop")) {
 				MakerProp.place(this, ref, cell);
+			} else if (type.equals("effect")) {
+				MakerEffect.place(this, ref, cell);
 			} else if (type.equals("event")) {
 				eventCells.put(cell, ref);
 			}

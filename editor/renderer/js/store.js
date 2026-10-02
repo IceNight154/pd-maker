@@ -19,7 +19,7 @@
 // ================================================================
 PDM.store = (function () {
   const em = PDM.Emitter();
-  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json' };
+  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json' };
   const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events', prop: 'props' };
   let version = 0;           // 바뀔 때마다 +1 (계산 캐시용)
 
@@ -60,7 +60,7 @@ PDM.store = (function () {
         if (key === 'world') { const dw = PDM.World.defaultWorld(); data.world = dw.world; Object.entries(dw.data).forEach(([id, o]) => { data['node:' + id] = o; dirty.add('node:' + id); }); }
         else data[key] = PDM.defaults[key]();
         dirty.add(key);
-        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
+        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
       }
     }
     // 마음의 보석 → 마음의 결정 (예전 heart.json / terms.json)
@@ -183,7 +183,7 @@ PDM.store = (function () {
     // 영웅 선택 화면 순서: 원작 순서 (전사·마법사·도적·사냥꾼·결투가·성직자)
     data.project.heroOrder = (PDM.SPD_HEROES || []).map(x => x.cls.toLowerCase()).filter(id => data['hero:' + id]);
     // 확장 기능(이벤트·시스템)은 꺼진 채로 시작 — 도구 모음의 "확장 기능"에서 켬
-    data.project.extensions = { event: false, sys: false };
+    data.project.extensions = {};   // 확장 기능은 모두 꺼진 채로 시작 — 도구 모음의 "확장 기능"에서 켬
     Object.keys(data).forEach(k => dirty.add(k));
     em.emit('load');
     await save();
