@@ -71,3 +71,5 @@ function Emitter() {
 }
 
 Object.assign(PDM, { h, $, $$, uid, clone, escapeHtml, debounce, clamp, slugId, deepGet, deepSet, toast, Emitter });
+/** Java 패키지 이름 꼴인지 (com.myname.mygame) */
+PDM.validPackage = s => /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(String(s || '').trim());

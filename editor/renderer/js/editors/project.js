@@ -70,12 +70,18 @@ PDM.registerEditor({
             h('button', { class: 'btn pri', onclick: async () => { try { await pdm.runtimeInstall(repo, PDM.store.root); toast('런타임 설치 완료'); refresh(); PDM.app.showBottom('log'); } catch (e) { toast(e.message, 'bad'); } } }, '설치 / 업데이트'),
             h('button', { class: 'btn danger', onclick: async () => { if (!(await PDM.ui.confirm('게임 저장소에서 pdmaker 런타임을 제거할까요?'))) return; try { await pdm.runtimeUninstall(repo); toast('제거했습니다'); refresh(); } catch (e) { toast(e.message, 'bad'); } } }, '제거')));
       })()),
+      section('게임 이름 · 세이브 위치 (build.gradle)',
+        (() => { const { F, row } = PDM.ui, g = p.game || {}, pkg = PDM.validPackage(g.appPackageName) ? g.appPackageName : 'com.shatteredpixel.shatteredpixeldungeon', nm = g.appName || (/^[\x20-\x7e]+$/.test(p.name || '') ? p.name : 'PDMaker ' + (pdm.basename(PDM.store.root || '').replace(/[^\x20-\x7e]/g, '').trim() || 'Game'));
+          return h('div', {},
+            row(F.text('project', ['game', 'appName'], { label: '게임 이름 (appName)', placeholder: '비우면 프로젝트 이름 (한글이면 PDMaker + 폴더 이름)', rerender: true, hint: '게임 창 제목 · 세이브 폴더 이름. 영문을 권합니다.' }),
+              F.text('project', ['game', 'appPackageName'], { label: '패키지 이름 (appPackageName)', placeholder: '비우면 게임 저장소 그대로', rerender: true, hint: g.appPackageName && !PDM.validPackage(g.appPackageName) ? '⚠ 영문 소문자·숫자를 점으로 이은 꼴이어야 적용됩니다 (예: com.myname.mygame)' : '예: com.myname.mygame' })),
+            h('p', { class: 'hint' }, '테스트 플레이·게임 내보내기 때 게임 저장소 맨 위 build.gradle 의 appName · appPackageName 에 적습니다 (처음 고칠 때 build.gradle.pdmaker-backup 을 남김).'),
+            h('p', { class: 'hint' }, '세이브 데이터 위치 (Windows): ', h('code', {}, `%APPDATA%\\.${pkg.split('.')[1]}\\${nm}\\`), ' — 원작은 ', h('code', {}, '%APPDATA%\\.shatteredpixel\\Shattered Pixel Dungeon\\'), '. 게임 이름이나 패키지 이름을 바꾸면 세이브가 다른 폴더에 저장되어 원작·다른 프로젝트와 섞이지 않습니다. (이름을 바꾸면 이전 세이브는 예전 폴더에 남습니다.)')); })()),
       section('테스트 플레이',
-        PDM.ui.F.select('project', ['settings', 'playTask'], [['playtest', 'PDMaker 테스트 실행 (기본 — 버전 -PLAYTEST, 저장 폴더 분리)'], ['debug', 'gradle desktop:debug (게임 원래 실행 작업 — 버전 -INDEV)']],
-          { label: '▶ 테스트 플레이 빌드 방식', hint: 'desktop:debug 는 게임 저장소의 원래 디버그 실행 작업입니다 (INDEV 버전으로 빌드·실행, 저장 폴더는 게임 원래 것). 두 방식 모두 이 프로젝트를 넘겨줍니다.' }),
+        PDM.ui.F.select('project', ['settings', 'playTask'], [['debug', 'gradle desktop:debug (기본 — 게임 원래 실행 작업 · 버전 -INDEV · 세이브는 위 게임 이름 폴더)'], ['playtest', 'PDMaker 테스트 실행 (버전 -PLAYTEST · 세이브는 "PDMaker Playtest" 폴더)']],
+          { label: '▶ 테스트 플레이 빌드 방식', hint: '두 방식 모두 이 프로젝트를 게임에 넘겨줍니다. debug 는 내보낸 게임과 같은 세이브 폴더를 쓰고, PDMaker 테스트 실행은 세이브를 따로 둡니다.' }),
         h('p', { class: 'hint' }, '▶ 테스트 플레이는 게임 저장소에서 gradle 로 게임을 실행하면서 이 프로젝트 폴더를 넘겨줍니다 (-Dpdmaker.project=…).',
           h('br'), '게임 쪽에 pdmaker 런타임 패키지가 들어가 있어야 프로젝트 데이터가 반영됩니다 (runtime/INTEGRATION.md 참고).'),
-        h('p', { class: 'hint' }, '▶ 테스트 플레이를 누르면 런타임이 없거나 예전 것일 때 자동으로 설치·갱신합니다.'),
-        h('p', { class: 'hint' }, '저장 폴더는 "PDMaker Playtest" 로 분리되어 실제 세이브와 섞이지 않습니다.')));
+        h('p', { class: 'hint' }, '▶ 테스트 플레이를 누르면 런타임이 없거나 예전 것일 때 자동으로 설치·갱신합니다.')));
   }
 });

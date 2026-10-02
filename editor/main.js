@@ -293,6 +293,8 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   }
   // 영웅·아이템에 적은 코드 → pdmaker/gen/*.java (컴파일 때도 항상 새로 만듦)
   if (project) { try { installer.generate(repo, project, l => log('  ' + l)); } catch (e) { log('! 코드 생성 실패: ' + e.message); } }
+  // 게임 이름 · 패키지 이름 → build.gradle (세이브 폴더가 원작과 섞이지 않게)
+  if (project) { try { installer.applyGameId(repo, project, l => log('  ' + l)); } catch (e) { log('! build.gradle 게임 이름 적용 실패: ' + e.message); } }
   const init = writeInitScript(app.getPath('userData'), project);
   const args = task === 'compile'
     ? ['core:compileJava', '--console=plain']
@@ -374,6 +376,7 @@ function prepareRuntime(repo, project) {
   const st = runtimeState(repo);
   if (!st.upToDate) { log(`> 게임 런타임 ${st.pkg ? '갱신' : '설치'} (${st.reason})`); installer.install(repo, runtimeSrc(), l => log('  ' + l)); }
   if (project) installer.generate(repo, project, l => log('  ' + l));
+  if (project) installer.applyGameId(repo, project, l => log('  ' + l));
 }
 async function runGradle(repo, args, onDone) {
   if (gameProc) throw new Error('이미 실행 중입니다. 먼저 중지하세요.');

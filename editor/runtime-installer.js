@@ -227,7 +227,38 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   return results;
 }
 
-module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK };
+/** 게임 이름 · 패키지 이름 (프로젝트 설정 project.game) → 게임 저장소 맨 위 build.gradle 의 appName · appPackageName.
+ *  데스크톱 세이브 폴더가 이 둘로 정해짐: %APPDATA%\.<패키지 둘째 마디>\<게임 이름>\  (DesktopLauncher 의 basePath)
+ *  게임 이름을 따로 정하지 않았고 저장소가 원작 이름 그대로면 프로젝트 이름을 써서 원작 세이브와 섞이지 않게 함. 처음 고칠 때 build.gradle.pdmaker-backup 을 남김 */
+const ORIGINAL_APP = 'Shattered Pixel Dungeon';
+function gameId(projectDir) {
+  let p = {}; try { p = JSON.parse(fs.readFileSync(path.join(projectDir, 'project.json'), 'utf8')); } catch (_) { /* 없음 */ }
+  const g = p.game || {};
+  const clean = s => String(s || '').replace(/['"\\\r\n]/g, '').replace(/[<>:/|?*]/g, ' ').trim();
+  const pkg = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(String(g.appPackageName || '').trim()) ? g.appPackageName.trim() : '';
+  // 따로 정하지 않았을 때 쓸 이름: 프로젝트 이름이 영문이면 그대로, 아니면 "PDMaker <폴더 이름>" (build.gradle 에 한글을 넣으면 PC 에 따라 깨질 수 있음)
+  const ascii = s => /^[\x20-\x7e]+$/.test(s);
+  const folder = path.basename(projectDir).replace(/[^\x20-\x7e]/g, '').replace(/['"\\<>:/|?*]/g, ' ').trim();
+  return { appName: clean(g.appName), appPackageName: pkg, projectName: ascii(clean(p.name)) ? clean(p.name) : 'PDMaker ' + (folder || 'Game') };
+}
+function applyGameId(repo, projectDir, log = console.log) {
+  const fp = path.join(repo, 'build.gradle');
+  if (!projectDir || !fs.existsSync(fp)) return null;
+  const want = gameId(projectDir), before = fs.readFileSync(fp, 'utf8');
+  const cur = { appName: (/appName\s*=\s*'([^']*)'/.exec(before) || [])[1], appPackageName: (/appPackageName\s*=\s*'([^']*)'/.exec(before) || [])[1] };
+  const name = want.appName || (cur.appName === ORIGINAL_APP && want.projectName && want.projectName !== ORIGINAL_APP ? want.projectName : '');
+  let s = before;
+  if (name && cur.appName !== undefined && name !== cur.appName) s = s.replace(/(appName\s*=\s*')[^']*(')/, (m, a, b) => a + name + b);
+  if (want.appPackageName && cur.appPackageName !== undefined && want.appPackageName !== cur.appPackageName) s = s.replace(/(appPackageName\s*=\s*')[^']*(')/, (m, a, b) => a + want.appPackageName + b);
+  if (s !== before) {
+    if (!fs.existsSync(fp + '.pdmaker-backup')) fs.writeFileSync(fp + '.pdmaker-backup', before, 'utf8');
+    fs.writeFileSync(fp, s, 'utf8');
+    log(`build.gradle: 게임 이름 '${name || cur.appName}' · 패키지 '${want.appPackageName || cur.appPackageName}' (세이브 폴더가 이 이름으로 따로 생깁니다)`);
+  }
+  return { appName: name || cur.appName, appPackageName: want.appPackageName || cur.appPackageName };
+}
+
+module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId };
 
 if (require.main === module) {
   const [repo, flag] = process.argv.slice(2);

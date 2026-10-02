@@ -372,6 +372,7 @@
     play: 'M7 4v16l13-8z',
     stop: 'M6 6h12v12H6z',
     theme: 'M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18',
+    gradle: 'M6 3h9l4 4v14H6zM15 3v4h4M9 12l-2 2 2 2M15 12l2 2-2 2M13 11l-2 6',
     ext: 'M9 3h6v4a2 2 0 1 0 4 0V3h2v8h-4a2 2 0 1 0 0 4h4v6H3v-6h4a2 2 0 1 0 0-4H3V3h2v4a2 2 0 1 0 4 0z',
     settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'
   };
@@ -401,7 +402,8 @@
         tbBtn('exportGame', '게임 파일 내보내기', exportGame, { disabled: !open || !el, tip: '게임 파일 내보내기 — 친구에게 줄 수 있는 실행 파일 폴더(JAR 또는 Java 포함 실행 파일) 만들기' + webTip, key: 'Ctrl+Shift+E' })),
       grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: 'Ctrl+Z' }),
         tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: 'Ctrl+Y' })),
-      grp(tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
+      grp(tbBtn('gradle', 'build.gradle', editBuildGradle, { disabled: !open, tip: 'build.gradle — 게임 저장소의 빌드 설정(게임 이름 · 패키지 이름 · 버전)을 보고 고치기' }),
+        tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
       h('span', { class: 'grow' }),
       grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: 'F7' }),
         tbBtn('clean', '정리', cleanBuild, { iconOnly: true, disabled: !open || !el || running, tip: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때' + webTip })),
@@ -540,13 +542,68 @@
     } catch (_) { /* 무시 */ }
   }
 
+  /** 게임 저장소 맨 위 build.gradle 편집 (게임 이름 · 패키지 이름 · 버전 칸 + 파일 내용 그대로) */
+  async function editBuildGradle() {
+    if (!store.isOpen) return;
+    const repo = await resolveRepo(true), fp = pdm.join(repo || '', 'build.gradle');
+    let text; try { text = await pdm.readText(fp); } catch (_) { toast('게임 저장소의 build.gradle 을 찾지 못했습니다 — 프로젝트 설정에서 게임 저장소 경로를 확인하세요', 'bad'); return; }
+    const original = text;
+    const KEYS = [['appName', '게임 이름 (appName)', true, '게임 창 제목 · 세이브 폴더 이름'], ['appPackageName', '패키지 이름 (appPackageName)', true, '예: com.myname.mygame'], ['appVersionName', '버전 이름 (appVersionName)', true, '예: 1.0.0'], ['appVersionCode', '버전 번호 (appVersionCode)', false, '정수 — 새 버전을 낼 때마다 올림']];
+    const re = (k, q) => new RegExp('(\\b' + k + '\\s*=\\s*)' + (q ? "'([^']*)'" : '(\\d+)'));
+    const ta = h('textarea', { class: 'mono', rows: 18, spellcheck: false, style: { width: '100%', fontSize: '12px', whiteSpace: 'pre', overflow: 'auto' } }); ta.value = text;
+    const inputs = {};
+    const fromText = () => KEYS.forEach(([k, , q]) => { const m = re(k, q).exec(ta.value); inputs[k].value = m ? m[2] : ''; inputs[k].disabled = !m; });
+    KEYS.forEach(([k, label, q, hint]) => { const i = inputs[k] = h('input', { type: 'text' });
+      i.addEventListener('input', () => { const v = q ? i.value.replace(/['\\\r\n]/g, '') : i.value.replace(/\D/g, ''); if (!q && v === '') return; ta.value = ta.value.replace(re(k, q), (m, a) => a + (q ? "'" + v + "'" : v)); }); });
+    fromText(); ta.addEventListener('input', fromText);
+    const ok = await PDM.ui.modal('build.gradle — 게임 빌드 설정', h('div', { style: { width: 'min(760px, 86vw)' } },
+      h('p', { class: 'hint' }, fp),
+      h('div', { class: 'row' }, ...KEYS.slice(0, 2).map(([k, label, , hint]) => PDM.ui.field(label, inputs[k], hint))),
+      h('div', { class: 'row' }, ...KEYS.slice(2).map(([k, label, , hint]) => PDM.ui.field(label, inputs[k], hint))),
+      h('p', { class: 'hint' }, '위 칸을 고치면 아래 파일 내용에 바로 반영됩니다. 아래 내용을 직접 고쳐도 됩니다 (라이브러리 버전 등). 게임 이름·패키지 이름은 프로젝트 설정에도 함께 저장되고, 세이브 폴더가 %APPDATA%\\.<패키지 둘째 마디>\\<게임 이름> 으로 정해집니다.'),
+      ta),
+      [['취소', null], ['원래대로 (백업에서)', 'restore'], ['저장', 'save', 'pri']]);
+    if (!ok) return;
+    try {
+      if (ok === 'restore') {
+        let bak; try { bak = await pdm.readText(fp + '.pdmaker-backup'); } catch (_) { toast('백업(build.gradle.pdmaker-backup)이 없습니다 — 아직 고친 적이 없습니다', 'bad'); return; }
+        await pdm.writeText(fp, bak);
+        store.edit('project', 'build.gradle 되돌리기', r => { delete r.game; });   // 프로젝트 쪽 이름도 비워야 다음 테스트 플레이 때 다시 덮어쓰지 않음
+        PDM.log('build.gradle 을 처음 상태로 되돌렸습니다 (프로젝트의 게임 이름 · 패키지 이름도 비움)', 'ok'); toast('되돌렸습니다');
+      } else {
+        const now = ta.value; if (now === original) return;
+        if (!(await pdm.exists(fp + '.pdmaker-backup'))) await pdm.writeText(fp + '.pdmaker-backup', original);
+        await pdm.writeText(fp, now);
+        const nm = (re('appName', true).exec(now) || [])[2], pk = (re('appPackageName', true).exec(now) || [])[2];
+        store.edit('project', 'build.gradle', r => { r.game = Object.assign({}, r.game || {}, nm !== undefined ? { appName: nm } : {}, pk !== undefined && PDM.validPackage(pk) ? { appPackageName: pk } : {}); });
+        if (pk !== undefined && !PDM.validPackage(pk)) PDM.log('패키지 이름이 올바른 꼴이 아닙니다 (영문 소문자·숫자를 점으로): ' + pk, 'err');
+        PDM.log('build.gradle 을 저장했습니다: ' + fp, 'ok'); toast('build.gradle 저장');
+      }
+      PDM.tabs.refresh('project');
+    } catch (e) { PDM.log('build.gradle 저장 실패: ' + e.message, 'err'); toast(e.message, 'bad'); }
+  }
+
   async function newProject() {
     if (!(await guardDirty())) return;
     const d = await pdm.openFolder('새 프로젝트를 만들 빈 폴더 선택'); if (!d) return;
     if (await pdm.exists(pdm.join(d, 'project.json'))) { toast('이미 프로젝트가 있는 폴더입니다', 'bad'); return; }
-    const name = await PDM.ui.prompt('프로젝트 이름', '새 픽셀 던전'); if (name === null) return;
+    // 프로젝트 이름 + 게임 이름 · 패키지 이름 (게임 저장소 build.gradle 의 appName · appPackageName — 세이브 폴더도 이걸로 정해짐)
+    const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '') || 'mygame';
+    const iName = h('input', { type: 'text', value: '새 픽셀 던전' }), iApp = h('input', { type: 'text', value: 'My Pixel Dungeon' }), iPkg = h('input', { type: 'text', value: 'com.pdmaker.mypixeldungeon' }), warn = h('small', { class: 'hint', style: { color: 'var(--bad)' } });
+    let pkgTouched = false;
+    iApp.addEventListener('input', () => { if (!pkgTouched) iPkg.value = 'com.pdmaker.' + slug(iApp.value); });
+    iPkg.addEventListener('input', () => { pkgTouched = true; warn.textContent = PDM.validPackage(iPkg.value) ? '' : '패키지 이름은 영문 소문자·숫자를 점으로 이은 꼴이어야 합니다 (예: com.myname.mygame)'; });
+    const made = await PDM.ui.modal('새 프로젝트', h('div', { style: { minWidth: '460px', maxWidth: '560px' } },
+      PDM.ui.field('프로젝트 이름', iName),
+      PDM.ui.field('게임 이름 (appName) — 게임 창 제목 · 세이브 폴더 이름', iApp, '영문을 권합니다. 원작(Shattered Pixel Dungeon)과 다르게 지어야 세이브가 섞이지 않습니다.'),
+      PDM.ui.field('패키지 이름 (appPackageName)', iPkg), warn,
+      h('p', { class: 'hint' }, '이 둘은 테스트 플레이·게임 내보내기 때 게임 저장소의 build.gradle 에 적힙니다. 세이브는 %APPDATA%\\.<패키지 둘째 마디>\\<게임 이름> 폴더에 따로 저장됩니다. 나중에 프로젝트 설정에서 바꿀 수 있습니다.')),
+      [['취소', null], ['만들기', () => ({ name: iName.value.trim() || '새 픽셀 던전', appName: iApp.value.trim(), pkg: iPkg.value.trim() }), 'pri']]);
+    if (!made) return;
+    const name = made.name;
     PDM.tabs.closeAll();
     await store.createNew(d, name);
+    store.edit('project', '게임 이름', r => { r.game = { appName: made.appName, appPackageName: PDM.validPackage(made.pkg) ? made.pkg : '' }; });
     await resolveRepo(true);   // 기본값(../../git-hub/…)이 이 폴더에서 틀리면 찾아서 고쳐 둠
     // 게임 저장소 경로: 왜 필요한지 설명 + 찾았는지 표시
     const cur = store.get('project').gameRepo || '';
@@ -688,8 +745,8 @@
   async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
-    // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'playtest' 기본 | 'debug' = gradle desktop:debug, INDEV 버전)
-    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'playtest';
+    // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'debug' 기본 = gradle desktop:debug, INDEV 버전 | 'playtest' = PDMaker 테스트 실행)
+    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'debug';
     if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
     try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode }); setRunning(true); }
     catch (e) { PDM.log(e.message, 'err'); toast(e.message, 'bad'); }
@@ -838,6 +895,6 @@
     const q = new URLSearchParams(location.search).get('project');
     if (q) loadProject(q);
   }
-  PDM.app = { redraw: () => drawAll(), expandTree: id => { if (!expanded.has(id)) { expanded.add(id); drawTree(); } }, loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
+  PDM.app = { editBuildGradle, redraw: () => drawAll(), expandTree: id => { if (!expanded.has(id)) { expanded.add(id); drawTree(); } }, loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init();
 })();
