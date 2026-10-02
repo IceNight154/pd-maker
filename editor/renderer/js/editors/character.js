@@ -291,7 +291,8 @@
           F.bool(key, ['useGame'], { label: '게임 원래 동작 그대로 쓰기 (AI·공격·특수 능력·퀘스트 모두 게임 코드) — 맵에 놓거나 이벤트로 소환하면 게임 클래스가 나옵니다', def: true, rerender: true }),
           h('p', { class: 'hint', style: { margin: '4px 0 0' } }, c.useGame === false
             ? '끔: 아래 능력치·그림·AI·대사로 동작하는 PDMaker 캐릭터가 됩니다 (게임의 특수 능력은 없음).'
-            : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.')) : null,
+            : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.'),
+          PDM.gameMobBox(c, st)) : null,
         section('기본',
           row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' })),
           F.textarea(key, ['desc'], { label: '설명(도감)', rows: 2 })),
@@ -318,7 +319,7 @@
           })),
         section('소리',
           (() => {
-            const S = (label, f, hint) => F.sound(key, ['sounds', f], { label, kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty: '(게임 원래 소리)', hint, rerender: true });
+            const S = (label, f, hint) => F.sound(key, ['sounds', f], { label, kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty: c.game && c.useGame !== false ? ({ attack: '(게임 소리: hit — Assets.Sounds.HIT)', hurt: '(게임: 소리 없음)', die: '(게임: 소리 없음 — 몬스터 코드에 따로 있으면 그 소리)', talk: '(게임: 소리 없음)' }[f] || '(게임 소리)') : ({ attack: '(기본: hit)', hurt: '(기본: 소리 없음)', die: '(기본: 소리 없음)', talk: '(기본: 소리 없음)' }[f] || '(기본)'), hint, rerender: true });
             const fighter = ['mob', 'boss'].includes(c.kind);
             return h('div', {},
               row(fighter ? S('공격할 때', 'attack', '공격이 맞을 때') : null, fighter ? S('다칠 때', 'hurt') : null, fighter ? S('쓰러질 때', 'die') : null, !fighter ? S('말 걸 때', 'talk', '영웅이 말을 걸 때') : null),
@@ -326,7 +327,8 @@
           })()),
         ['mob', 'boss'].includes(c.kind) ? section('등장 · 전리품',
           c.game ? F.bool(key, ['noSpawn'], { label: '던전에 자동으로 나오지 않게 (등장 금지) — 게임이 층마다 뽑는 몬스터 목록에서 뺍니다. 맵에 직접 놓거나 이벤트로 소환한 것은 그대로 나옵니다', rerender: true }) : null,
-          F.bool(key, ['noGameLoot'], { label: '게임 원래 전리품을 떨어뜨리지 않음 (아래 드랍 테이블만 적용)' }),
+          F.bool(key, ['noGameLoot'], { label: '게임 코드의 전리품을 떨어뜨리지 않음 (아래 드랍 테이블만 적용)' }),
+          c.game ? (() => { const el = h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 코드의 전리품: 읽는 중…'); PDM.gameMobLoot(c.game).then(t => { el.textContent = '게임 코드의 전리품: ' + (t || '없음') + ' — 자세한 코드는 위 "게임 코드의 실제 값"'; }); return el; })() : h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 클래스가 아닌 PDMaker 캐릭터라 게임 코드의 전리품은 없습니다.'),
           h('h4', { style: { margin: '10px 0 4px' } }, '드랍 테이블'),
           PDM.charLootEditor(key, c)) : null,
         section('능력치',

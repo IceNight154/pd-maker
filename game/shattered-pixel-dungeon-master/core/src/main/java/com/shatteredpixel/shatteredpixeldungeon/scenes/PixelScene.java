@@ -108,6 +108,7 @@ public class PixelScene extends Scene {
 			Holiday.clearCachedHoliday();
 		}
 
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAssets.onSceneCreate(this); // >>> pdmaker
 		float minWidth, minHeight, scaleFactor;
 		if (SPDSettings.interfaceSize() > 0){
 			minWidth = MIN_WIDTH_FULL;

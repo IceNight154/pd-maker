@@ -244,6 +244,7 @@ public class MakerRuntime {
 		HeroRuntime.onFloorEnter();
 		HeartUI.attach();
 		HeartSystem.onFloorEnter(depth, safe);
+		EventTriggers.onFloorEnter(id);
 	}
 
 	/** 층을 떠날 때 (InterlevelScene 직전) — 감정 결정화, 일기, 떠난 계단 기록 */
@@ -258,6 +259,7 @@ public class MakerRuntime {
 		// 통로(연결마다 짝지은 출구·입구)로 떠나면 도착 층에서 짝 계단으로
 		WorldGraph.noteLeave(Dungeon.level, ct);
 		HeartSystem.onFloorLeave(Dungeon.depth);
+		EventTriggers.onFloorLeave();
 	}
 
 	// ------------------------------------------------------------ 진행 방향 (내려가기 / 올라가기)

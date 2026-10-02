@@ -192,6 +192,7 @@ public class HeroSelectScene extends PixelScene {
 		infoButton.setSize(20, 21);
 		add(infoButton);
 
+		if (!com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroSelect.addButtons(this, heroBtns)) // >>> pdmaker
 		for (HeroClass cl : HeroClass.values()){
 			HeroBtn button = new HeroBtn(cl);
 			add(button);

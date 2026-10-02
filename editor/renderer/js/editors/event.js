@@ -123,6 +123,19 @@
   PDM.previewEvent = preview;
 
   // =============================================================
+  const TRIG_HINT = {
+            action: '맵 오브젝트(캐릭터 · 이벤트 칸)에 이 이벤트를 지정하면, 말을 걸거나 조사할 때 실행됩니다.',
+            touch: '맵의 이벤트 칸에 지정하면, 영웅이 그 칸을 밟을 때 실행됩니다.',
+            auto: '맵에 놓지 않아도 됩니다. 페이지 조건이 맞는 순간 한 번 실행됩니다 (게임마다 한 번). 조건을 비우면 게임을 시작하자마자 실행.',
+            parallel: '맵에 놓지 않아도 됩니다. 페이지 조건이 맞는 동안 매 턴 실행됩니다 (다른 이벤트가 진행 중이면 쉼). 대사처럼 멈추는 명령은 피하세요.',
+            floorEnter: '맵에 놓지 않아도 됩니다. 어느 맵이든 들어올 때마다 실행됩니다. 특정 맵만이면 조건에 node == "노드id" 를 쓰세요.',
+            turn: '맵에 놓지 않아도 됩니다. 정한 턴마다 실행됩니다.',
+            heart: '맵에 놓지 않아도 됩니다. 대상 캐릭터의 마음 조건을 만족하면 한 번 실행됩니다.',
+            itemPickup: '맵에 놓지 않아도 됩니다. 그 아이템을 주울 때마다 실행됩니다 (프로젝트 아이템 id 또는 spd:게임 아이템). 금화는 해당 없음.',
+            mobKilled: '맵에 놓지 않아도 됩니다. 적이 죽을 때마다 실행됩니다 (캐릭터 id · 게임 클래스 이름, 비우면 아무 적이나).',
+            bossDefeated: '맵에 놓지 않아도 됩니다. 보스(게임의 BOSS 속성)가 죽을 때 실행됩니다.',
+            none: '스스로 실행되지 않습니다. "커먼 이벤트 호출" · 노드의 입장 이벤트 · 스토리 비트 · 엔딩 장면 등에서 불러 씁니다.'
+          };
   PDM.registerEditor({
     id: 'event', icon: k => { const e = store.get(k); return (e && KIND_ICON[e.kind]) || '⚡'; },
     match: k => k.startsWith('event:'),
@@ -149,11 +162,58 @@
       if (st.page >= ev.pages.length) st.page = 0;
       const pi = st.page, pg = ev.pages[pi], P = ['pages', pi];
 
+      const blank = () => PDM.make.page();
       const pageTabs = h('div', { class: 'pages' },
-        ev.pages.map((p, i) => h('button', { class: 'chip' + (i === pi ? ' on' : ''), onclick: () => { st.page = i; ctx.refresh(); } }, `페이지 ${i + 1}`)),
-        h('button', { class: 'btn sm', onclick: () => { store.edit(key, '페이지 추가', r => { r.pages.push(PDM.make.page()); }); st.page = ev.pages.length - 1; ctx.refresh(); } }, '+ 새 페이지'),
-        h('button', { class: 'btn sm', onclick: () => { store.edit(key, '페이지 복사', r => { r.pages.splice(pi + 1, 0, PDM.clone(r.pages[pi])); }); st.page = pi + 1; ctx.refresh(); } }, '페이지 복사'),
-        ev.pages.length > 1 ? h('button', { class: 'btn sm danger', onclick: async () => { if (await PDM.ui.confirm(`페이지 ${pi + 1} 을(를) 삭제할까요?`)) { store.edit(key, '페이지 삭제', r => { r.pages.splice(pi, 1); }); st.page = 0; ctx.refresh(); } } }, '페이지 삭제') : null);
+        ev.pages.map((p, i) => h('button', { class: 'chip' + (i === pi ? ' on' : ''), onclick: () => { st.page = i; ctx.refresh(); } }, `${i + 1}`)),
+        h('button', { class: 'btn sm', onclick: () => { store.edit(key, '페이지 추가', r => { r.pages.splice(pi + 1, 0, blank()); }); st.page = pi + 1; ctx.refresh(); } }, '이벤트 페이지 새로 만들기'),
+        h('button', { class: 'btn sm', title: '이 페이지를 복사해 둡니다 (다른 이벤트에도 붙여넣을 수 있음)', onclick: () => { PDM._pageClip = PDM.clone(pg); toast(`페이지 ${pi + 1} 을 복사했습니다`); ctx.refresh(); } }, '복사하기'),
+        h('button', { class: 'btn sm', disabled: !PDM._pageClip, title: '복사한 페이지를 이 페이지 다음에 넣습니다', onclick: () => { if (!PDM._pageClip) return; store.edit(key, '페이지 붙여넣기', r => { r.pages.splice(pi + 1, 0, PDM.clone(PDM._pageClip)); }); st.page = pi + 1; ctx.refresh(); } }, '붙여넣기'),
+        h('button', { class: 'btn sm danger', disabled: ev.pages.length <= 1, onclick: async () => { if (ev.pages.length > 1 && await PDM.ui.confirm(`페이지 ${pi + 1} 을(를) 삭제할까요?`)) { store.edit(key, '페이지 삭제', r => { r.pages.splice(pi, 1); }); st.page = Math.max(0, pi - 1); ctx.refresh(); } } }, '삭제하기'),
+        h('button', { class: 'btn sm', onclick: async () => { if (await PDM.ui.confirm(`페이지 ${pi + 1} 의 조건 · 이미지 · 이동 · 실행 내용을 모두 비울까요?`)) store.edit(key, '페이지 비우기', r => { r.pages[pi] = blank(); }); } }, '비우기'));
+
+      // ---- 페이지 설정 (RPG Maker 의 이벤트 에디터처럼: 왼쪽 = 조건 · 이미지 · 자율 이동 · 옵션 · 발동, 오른쪽 = 실행 내용)
+      const cd = pg.conds || {}, mv = pg.move || {}, op = pg.opts || {}, gr = pg.graphic || {};
+      const setIn = (path, v, label) => store.edit(key, label || '페이지 설정', r => { const p = r.pages[pi]; let o = p; for (let k = 0; k < path.length - 1; k++) o = o[path[k]] = (o[path[k]] && typeof o[path[k]] === 'object' && !Array.isArray(o[path[k]])) ? o[path[k]] : {}; if (v === undefined) delete o[path[path.length - 1]]; else o[path[path.length - 1]] = v; });
+      const sel = (opts, cur, on, o = {}) => { const s2 = h('select', { disabled: !!o.disabled, style: { flex: 1, minWidth: 0 } }, o.empty ? h('option', { value: '' }, o.empty) : null, opts.map(([v, t]) => h('option', { value: v, selected: String(v) === String(cur ?? '') }, t))); s2.onchange = () => on(s2.value); return s2; };
+      const story = store.get('story') || {};
+      const swOpts = (story.switches || []).map(x => [x.id, x.name ? `${x.name} (${x.id})` : x.id]), varOpts = (story.variables || []).map(x => [x.id, x.name ? `${x.name} (${x.id})` : x.id]);
+      const itemOpts = store.all('item').map(x => [x.id, x.name || x.id]), heroOpts = store.all('hero').filter(x => x.enabled !== false).map(x => [x.id, x.name || x.id]), charOpts = store.all('char').map(x => [x.id, `${x.name || x.id}`]);
+      /** 조건 한 줄: 체크하면 켜지고(첫 항목으로), 끄면 지워짐 */
+      const condRow = (label, k, opts, extra) => { const on = cd[k] !== undefined && cd[k] !== '';
+        const cb = h('input', { type: 'checkbox', checked: on }); cb.onchange = () => { if (cb.checked && !opts.length) { cb.checked = false; toast(label + ': 고를 것이 없습니다 — 먼저 만들어 주세요', 'bad'); return; } setIn(['conds', k], cb.checked ? opts[0][0] : undefined, '출현 조건'); };
+        return h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('label', { class: 'check', style: { width: '92px', flex: 'none' } }, cb, label),
+          sel(opts, cd[k], v => setIn(['conds', k], v, '출현 조건'), { disabled: !on }), extra ? extra(on) : null); };
+      const panel = (title, ...kids) => h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', background: 'var(--bg2)' } }, h('div', { style: { fontWeight: 600, marginBottom: '4px' } }, title), ...kids);
+      const varMin = on => { const i = h('input', { type: 'number', value: cd.varMin ?? 0, disabled: !on || PDM.varTypeOf(cd.var) !== 'number', style: { width: '64px' }, title: '숫자 변수: 이 값 이상 · 참/거짓 변수: 참일 때 · 문자열 변수: 비어 있지 않을 때' }); i.onchange = () => setIn(['conds', 'varMin'], parseInt(i.value, 10) || 0, '출현 조건'); return h('span', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, '≥', i); };
+      const gch = gr.char && store.has('char:' + gr.char) ? store.get('char:' + gr.char) : null;
+      const gcv = h('canvas', { width: 64, height: 64, class: 'checker', style: { imageRendering: 'pixelated', borderRadius: '4px', flex: 'none' } });
+      if (gch && gch.sprite && gch.sprite.sheet) PDM.assets.load(gch.sprite.sheet).then(im => { if (!im) return; const fw = (gch.sprite.frame || [16, 16])[0], fh = (gch.sprite.frame || [16, 16])[1], z = Math.max(1, Math.floor(Math.min(64 / fw, 64 / fh))); const g2 = gcv.getContext('2d'); g2.imageSmoothingEnabled = false; g2.drawImage(im, 0, 0, fw, fh, (64 - fw * z) / 2, (64 - fh * z) / 2, fw * z, fh * z); }).catch(() => {});
+      const custom = mv.type === 'custom';
+      const left = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', width: '330px', flex: 'none' } },
+        panel('출현 조건',
+          condRow('스위치', 'sw1', swOpts), condRow('스위치', 'sw2', swOpts), condRow('변수', 'var', varOpts, varMin),
+          condRow('셀프 스위치', 'self', [['A', 'A'], ['B', 'B'], ['C', 'C'], ['D', 'D']]), condRow('아이템', 'item', itemOpts), condRow('영웅', 'hero', heroOpts),
+          F.cond(key, [...P, 'cond'], { label: '조건식 (선택 — 위 조건과 함께 모두 만족해야 함)', hint: '예: switch.bridge_fixed && self.A' })),
+        panel('이미지',
+          h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, gcv,
+            h('div', { style: { flex: 1, minWidth: 0 } }, sel(charOpts, gr.char, v => setIn(['graphic', 'char'], v || undefined, '페이지 이미지'), { empty: '(없음 — 보이지 않음)' }),
+              h('small', { class: 'hint' }, '캐릭터의 그림을 씁니다. 맵 편집기에서 이 이벤트를 "이벤트" 오브젝트로 놓으면 이 모습으로 나타나고, 페이지가 바뀌면 그림도 바뀝니다. 이미지가 없는 페이지에서는 사라집니다.')))),
+        panel('자율 이동',
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('span', { style: { width: '48px' } }, '유형:'), sel([['fixed', '고정'], ['random', '랜덤'], ['approach', '접근 (영웅에게)'], ['custom', '사용자 지정']], mv.type || 'fixed', v => setIn(['move', 'type'], v, '자율 이동')),
+            h('button', { class: 'btn sm', disabled: !custom, onclick: async e => { e.preventDefault(); const r = await PDM.editRouteModal({ route: mv.route || [], repeat: mv.repeat !== false, skip: !!mv.skip }, '이동 루트 — 페이지 ' + (pi + 1)); if (r) store.edit(key, '이동 루트', q => { const m = q.pages[pi].move = q.pages[pi].move || {}; m.route = r.route || []; m.repeat = !!r.repeat; m.skip = !!r.skip; }); } }, '루트…')),
+          custom ? h('small', { class: 'hint' }, (mv.route || []).length ? (mv.route || []).map(PDM.routeOpText).join(' → ').slice(0, 120) + (mv.repeat !== false ? ' ↻' : '') : '루트가 비어 있습니다 — "루트…" 를 눌러 만드세요') : null,
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('span', { style: { width: '48px' } }, '속도:'), sel([[1, '1: x8 느리게'], [2, '2: x4 느리게'], [3, '3: x2 느리게'], [4, '4: 보통'], [5, '5: x2 빠르게'], [6, '6: x4 빠르게']], mv.speed || 3, v => setIn(['move', 'speed'], +v, '이동 속도'))),
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('span', { style: { width: '48px' } }, '빈도:'), sel([[1, '1: 최저'], [2, '2: 낮음'], [3, '3: 보통'], [4, '4: 높음'], [5, '5: 최고']], mv.freq || 3, v => setIn(['move', 'freq'], +v, '이동 빈도')))),
+        panel('옵션',
+          F.bool(key, [...P, 'opts', 'dirFix'], { label: '방향 고정 (움직여도 그림을 뒤집지 않음)' }),
+          F.bool(key, [...P, 'opts', 'through'], { label: '통과 (벽 · 장애물을 무시하고 이동)' })),
+        panel('발동',
+          row(F.select(key, [...P, 'trigger'], PDM.TRIGGERS, { label: '', rerender: true })),
+          pg.trigger === 'turn' ? F.num(key, [...P, 'turnEvery'], { label: '몇 턴마다', int: true, min: 1 }) : null,
+          pg.trigger === 'heart' ? F.ref(key, [...P, 'heartChar'], 'char', { label: '대상 캐릭터' }) : null,
+          pg.trigger === 'heart' ? F.cond(key, [...P, 'heartCond'], { label: '마음 조건 (그 캐릭터 기준)', placeholder: 'favor>=800 && abl.intimacy>=3' }) : null,
+          ['mobKilled', 'itemPickup'].includes(pg.trigger) ? F.text(key, [...P, 'triggerRef'], { label: pg.trigger === 'mobKilled' ? '몬스터 id (비우면 아무거나)' : '아이템 id' }) : null,
+          h('small', { class: 'hint' }, TRIG_HINT[pg.trigger || 'action'] || '')));
 
       return h('div', { class: 'page' },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, h('h1', { style: { flex: 1 } }, `${KIND_ICON[ev.kind] || ''} ${ev.name}`),
@@ -164,14 +224,8 @@
           F.textarea(key, ['note'], { label: '메모', rows: 2 })),
         h('p', { class: 'hint' }, '페이지는 번호가 큰 것부터 조건을 검사해서, 처음 맞는 페이지 하나만 동작합니다 (RPG Maker 와 같음).'),
         pageTabs,
-        section(`페이지 ${pi + 1} — 조건 · 트리거`,
-          F.cond(key, [...P, 'cond'], { label: '페이지 조건', hint: '예: switch.bridge_fixed && self.A' }),
-          row(F.select(key, [...P, 'trigger'], PDM.TRIGGERS, { label: '트리거' }),
-            pg.trigger === 'turn' ? F.num(key, [...P, 'turnEvery'], { label: '몇 턴마다', int: true, min: 1 }) : h('span'),
-            pg.trigger === 'heart' ? F.ref(key, [...P, 'heartChar'], 'char', { label: '대상 캐릭터' }) : h('span')),
-          pg.trigger === 'heart' ? F.cond(key, [...P, 'heartCond'], { label: '마음 조건 (그 캐릭터 기준)', placeholder: 'favor>=800 && abl.intimacy>=3' }) : null,
-          ['mobKilled', 'itemPickup'].includes(pg.trigger) ? F.text(key, [...P, 'triggerRef'], { label: pg.trigger === 'mobKilled' ? '몬스터 id (비우면 아무거나)' : '아이템 id' }) : null),
-        section(`페이지 ${pi + 1} — 실행 내용`, PDM.commandList(key, [...P, 'commands'])));
+        h('div', { style: { display: 'flex', gap: '12px', alignItems: 'flex-start', marginTop: '8px' } }, left,
+          h('div', { style: { flex: 1, minWidth: 0 } }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
     }
   });
   PDM.events = { newEvent };

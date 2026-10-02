@@ -86,7 +86,9 @@
       if (!hc || !new RegExp('\\b' + cls + '\\s*\\(').test(strip(hc))) return null;
       const msg = PDM.gameProps ? await PDM.gameProps(repo, 'actors') : {};
       const hcS = strip(hc), tlS = strip(tl), hsS = strip(hs);
-      const res = { cls, inv: null, subs: [], abilities: [], tiers: [], files: { hero: 'actors/hero/HeroClass.java', sub: 'actors/hero/HeroSubClass.java', talent: 'actors/hero/Talent.java' } };
+      const hk = 'actors.hero.heroclass.' + lc(cls);
+      const texts = { name: fmt(msg[hk]), short: fmt(msg[hk + '_desc_short']), desc: fmt(msg[hk + '_desc']), unlock: fmt(msg[hk + '_unlock']) };
+      const res = { cls, texts, inv: null, subs: [], abilities: [], tiers: [], files: { hero: 'actors/hero/HeroClass.java', sub: 'actors/hero/HeroSubClass.java', talent: 'actors/hero/Talent.java' } };
 
       // ---- 특성: enum 상수 (아이콘 x, y, 최대 포인트) · 글자
       const xy = /Talent\s*\(\s*int\s+x\s*,\s*int\s+y\s*[,)]/.test(tlS);   // 생성자가 (x, y[, 최대]) 인 모드 · 원작은 (아이콘[, 최대])
@@ -246,5 +248,6 @@
       render(d, kind, c).forEach(x => body.appendChild(x)); });
     return box;
   };
+  PDM.gameSrc = { J, repoOf, strip, block, method, caseBodies, fmt, lc, codeView, fold, kv, mono, itemName, usageFold };
   PDM.gameHeroClear = () => { Object.keys(cache).forEach(k => delete cache[k]); Object.keys(srcCache).forEach(k => delete srcCache[k]); };
 })();

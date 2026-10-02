@@ -52,7 +52,7 @@ public class EventInterpreter {
 		String id = ev.getString("id", "");
 		for (int i = pages.size - 1; i >= 0; i--) {
 			JsonValue p = pages.get(i);
-			if (!Cond.eval(p.getString("cond", ""), StoryState.globalResolver(id))) continue;
+			if (!pageOk(id, p)) continue;
 			if (triggerFilter != null) {
 				String t = p.getString("trigger", "action");
 				boolean mapTrig = triggerFilter.equals("action") || triggerFilter.equals("touch");
@@ -61,6 +61,31 @@ public class EventInterpreter {
 			return p;
 		}
 		return null;
+	}
+	/** 페이지 출현 조건: 조건식(cond) + 체크한 조건들(conds: 스위치 2개 · 변수 ≥ 값 · 셀프 스위치 · 아이템 소지 · 영웅) 을 모두 만족 */
+	public static boolean pageOk(String eventId, JsonValue p) {
+		if (!Cond.eval(p.getString("cond", ""), StoryState.globalResolver(eventId))) return false;
+		JsonValue q = p.get("conds");
+		if (q == null || !q.isObject()) return true;
+		String s;
+		if (!(s = q.getString("sw1", "")).isEmpty() && !StoryState.sw(s)) return false;
+		if (!(s = q.getString("sw2", "")).isEmpty() && !StoryState.sw(s)) return false;
+		if (!(s = q.getString("var", "")).isEmpty()) {
+			Object v = StoryState.varValue(s);
+			if (v instanceof Boolean ? !((Boolean) v) : v instanceof Number ? ((Number) v).intValue() < q.getInt("varMin", 0) : String.valueOf(v).isEmpty()) return false;
+		}
+		if (!(s = q.getString("self", "")).isEmpty() && !StoryState.self(eventId, s)) return false;
+		if (!(s = q.getString("item", "")).isEmpty() && StoryState.itemCount(s) <= 0) return false;
+		if (!(s = q.getString("hero", "")).isEmpty() && !s.equals(HeroRuntime.heroId())) return false;
+		return true;
+	}
+	/** 지금 동작하는 페이지 번호 (없으면 -1) */
+	public static int pageIndex(JsonValue ev) {
+		JsonValue pages = ev == null ? null : ev.get("pages");
+		if (pages == null) return -1;
+		String id = ev.getString("id", "");
+		for (int i = pages.size - 1; i >= 0; i--) if (pageOk(id, pages.get(i))) return i;
+		return -1;
 	}
 	/** 명령 목록 실행 (캐릭터 행동 이벤트, 아이템 사용 등) */
 	public static void run(JsonValue commands, String eventId, String ctxChar) {
@@ -171,7 +196,28 @@ public class EventInterpreter {
 	}
 
 	/** 창·타이머로 멈추는 명령 (멈춤 감시 대상) */
-	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait"));
+	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade"));
+	static com.watabou.noosa.ColorBlock fadeBlock;
+	/** 캐릭터마다 지금 돌고 있는 이동 경로 (새 경로를 주면 앞의 것을 멈춤) */
+	static final java.util.Map<com.shatteredpixel.shatteredpixeldungeon.actors.Char, Gizmo> routes = new java.util.HashMap<>();
+	static int parseColor(String s) { try { return Integer.parseInt(s.replace("#", "").trim(), 16) & 0xFFFFFF; } catch (Exception e) { return 0; } }
+	/** 이 맵에 있는 캐릭터 (프로젝트 캐릭터 id) */
+	static com.shatteredpixel.shatteredpixeldungeon.actors.Char findChar(String id) {
+		if (Dungeon.level == null || id == null) return null;
+		JsonValue d = MakerRuntime.character(id); String game = d == null ? "" : d.getString("game", "");
+		for (Mob m : Dungeon.level.mobs) {
+			if (m instanceof MakerNPC && ((MakerNPC) m).charId.equals(id)) return m;
+			if (m instanceof MakerMob && ((MakerMob) m).charId.equals(id)) return m;
+			if (!game.isEmpty() && (game.equals(m.getClass().getSimpleName()) || game.endsWith("." + m.getClass().getSimpleName()))) return m;
+		}
+		return null;
+	}
+	/** 이벤트로 죽었을 때의 사인 (랭킹 · 사망 창) */
+	public static class Death {
+		final String text;
+		Death(String t) { text = t; }
+		@Override public String toString() { return text == null || text.isEmpty() ? "이벤트" : text; }
+	}
 
 	/** 창 띄우기 — 화면 스레드에서, 만들다 오류가 나면 기록하고 이어서 실행 (이벤트가 멈추지 않게) */
 	void showWindow(java.util.function.Supplier<com.shatteredpixel.shatteredpixeldungeon.ui.Window> make) { showWindow(make, 0); }
@@ -204,7 +250,7 @@ public class EventInterpreter {
 		switch (cmd) {
 			// ---------------- 메시지
 			case "text": {
-				MakerDialogue.Line l = MakerDialogue.line(c.getString("speaker", ""), c.getString("face", ""), c.getString("illust", ""), c.getString("text", ""));
+				MakerDialogue.Line l = MakerDialogue.line(c.getString("speaker", ""), c.getString("face", ""), c.getString("illust", ""), StoryState.expand(c.getString("text", "")));
 				if (!c.getString("name", "").isEmpty()) l.name = c.getString("name", "");
 				if (!c.getString("side", "").isEmpty()) l.side = c.getString("side", "");
 				showLine(l);
@@ -221,7 +267,7 @@ public class EventInterpreter {
 				final JsonValue opts = c.get("options"), branches = c.get("branches");
 				if (opts == null || opts.size == 0) return true;
 				final String[] labels = new String[opts.size];
-				for (int i = 0; i < labels.length; i++) labels[i] = opts.get(i).asString();
+				for (int i = 0; i < labels.length; i++) labels[i] = StoryState.expand(opts.get(i).asString());
 				if (!MakerDialogue.classic()) {   // 대사창 스타일 선택지 (대사 없이)
 					final MakerDialogue.Line l = new MakerDialogue.Line();
 					l.choices = labels;
@@ -241,7 +287,7 @@ public class EventInterpreter {
 				return false;
 			}
 			case "notice": {
-				String t = c.getString("text", ""), col = c.getString("color", "normal");
+				String t = StoryState.expand(c.getString("text", "")), col = c.getString("color", "normal");
 				if (col.equals("good")) GLog.p(t); else if (col.equals("bad")) GLog.n(t); else if (col.equals("warn")) GLog.w(t); else GLog.i(t);
 				return true;
 			}
@@ -283,9 +329,29 @@ public class EventInterpreter {
 			case "global": MakerDrops.setGlobal(c.getString("key", ""), c.getBoolean("value", true)); return true;
 			case "switch": StoryState.setSw(c.getString("id", ""), c.getBoolean("value", false)); return true;
 			case "var": {
-				String id = c.getString("id", ""); int v = StoryState.var(id), x = c.getInt("value", 0);
+				String id = c.getString("id", ""); String vt = StoryState.varType(id);
+				if (vt.equals("string")) {   // 문자열 변수: = 바꾸기 · += 뒤에 붙이기 ("다른 값"이면 그 값을 글자로)
+					String tx = StoryState.expand(c.getString("text", ""));
+					if (c.getString("src", "").equals("ref")) { Object o = resolver().get(c.getString("ref", "").trim()); tx = o == null ? "" : String.valueOf(o); }
+					else if (tx.isEmpty() && c.has("value") && c.getInt("value", 0) != 0) tx = String.valueOf(c.getInt("value", 0));
+					StoryState.setStr(id, c.getString("op", "set").equals("add") ? StoryState.str(id) + tx : tx);
+					return true;
+				}
+				if (vt.equals("bool")) {   // 참/거짓 변수: 켜기 · 끄기 · 뒤집기 ("다른 값"이면 그 값이 참인지)
+					String bop = c.getString("op", "set"); boolean nv;
+					if (bop.equals("toggle")) nv = StoryState.var(id) == 0;
+					else if (c.getString("src", "").equals("ref")) { Object o = resolver().get(c.getString("ref", "").trim()); nv = o instanceof Boolean ? (Boolean) o : o instanceof Number ? ((Number) o).intValue() != 0 : o != null && !String.valueOf(o).isEmpty(); }
+					else nv = c.getInt("value", 0) != 0 || "true".equalsIgnoreCase(c.getString("text", ""));
+					StoryState.setVar(id, nv ? 1 : 0);
+					return true;
+				}
+				int v = StoryState.var(id), x = c.getInt("value", 0);
+				String src = c.getString("src", "");
+				if (src.equals("rand")) x = com.watabou.utils.Random.IntRange(Math.min(c.getInt("min", 0), x), Math.max(c.getInt("min", 0), x));
+				else if (src.equals("ref")) { Object o = resolver().get(c.getString("ref", "").trim()); x = o instanceof Number ? ((Number) o).intValue() : o instanceof Boolean ? ((Boolean) o ? 1 : 0) : 0; }
 				switch (c.getString("op", "set")) {
-					case "add": v += x; break; case "sub": v -= x; break; case "mul": v *= x; break; default: v = x;
+					case "add": v += x; break; case "sub": v -= x; break; case "mul": v *= x; break;
+					case "div": if (x != 0) v /= x; break; case "mod": if (x != 0) v %= x; break; default: v = x;
 				}
 				StoryState.setVar(id, v); return true;
 			}
@@ -421,9 +487,241 @@ public class EventInterpreter {
 				}
 				return true;
 			}
-			case "move": case "party":
-				MakerRuntime.log("(M1/M4 예정) " + cmd);
+			case "party": { String ch = charArg(c, "char"); EventTriggers.setParty(ch, c.getBoolean("join", true)); return true; }
+			case "move": {   // 이동 경로 설정 (RPG Maker 식): route = [{op, …}] 를 차례로. 예전 방식 path = "3,4 5,4" (칸 좌표로 걸어가기)도 됨
+				String who = c.getString("char", "$hero");
+				final com.shatteredpixel.shatteredpixeldungeon.actors.Char ch = who.isEmpty() || who.equals("$hero") ? Dungeon.hero : findChar(who);
+				if (ch == null || Dungeon.level == null) { MakerRuntime.log("이동 경로: 이 맵에 없는 캐릭터 " + who); return true; }
+				final ArrayList<JsonValue> ops = new ArrayList<>();
+				if (c.get("route") != null) for (JsonValue o : c.get("route")) ops.add(o);
+				for (String pt : c.getString("path", "").trim().split("\\s+")) {
+					String[] xy = pt.split(",");
+					if (xy.length != 2) continue;
+					try { JsonValue o = new JsonValue(JsonValue.ValueType.object); o.addChild("op", new JsonValue("goto")); o.addChild("x", new JsonValue(Long.parseLong(xy[0].trim()))); o.addChild("y", new JsonValue(Long.parseLong(xy[1].trim()))); ops.add(o); } catch (NumberFormatException ignored) { }
+				}
+				if (ops.isEmpty()) return true;
+				final boolean repeat = c.getBoolean("repeat", false), skip = c.getBoolean("skip", false);
+				final boolean wait = !repeat && c.getBoolean("wait", true);
+				final EventInterpreter self = this;
+				Game.runOnRenderThread(() -> {
+					renderThread = Thread.currentThread();
+					if (Game.scene() == null) { if (wait) resume(); return; }
+					Gizmo old = routes.remove(ch);   // 같은 캐릭터의 앞선 (반복) 경로는 멈춤
+					if (old != null) { old.active = false; if (old.parent != null) old.parent.remove(old); }
+					Gizmo walker = new Gizmo() {
+						int idx = 0, stuck = 0, dx = 0, dy = 1; float left = 0, step = 0.13f; boolean done, through, dirFix;
+						void end() { if (done) return; done = true; active = false; routes.remove(ch, this); if (parent != null) parent.remove(this); if (wait) resume(); }
+						boolean free(int cell) {
+							return cell >= 0 && cell < Dungeon.level.length() && (through || Dungeon.level.passable[cell]) && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(cell) == null;
+						}
+						void go(int dest) {
+							int oldPos = ch.pos, w = Dungeon.level.width();
+							int ndx = Integer.signum(dest % w - oldPos % w), ndy = Integer.signum(dest / w - oldPos / w);
+							if (ndx != 0 || ndy != 0) { dx = ndx; dy = ndy; }
+							boolean flip = ch.sprite != null && ch.sprite.flipHorizontal;
+							ch.move(dest);
+							if (ch.sprite != null) { ch.sprite.move(oldPos, ch.pos); if (dirFix) ch.sprite.flipHorizontal = flip; }
+							if (ch == Dungeon.hero) { Dungeon.observe(); GameScene.updateFog(); }
+						}
+						/** 한 걸음. true = 이 명령 끝 (다음으로) */
+						boolean tryStep(int ddx, int ddy) {
+							int w = Dungeon.level.width(), x = ch.pos % w + ddx, y = ch.pos / w + ddy;
+							int dest = x < 0 || x >= w ? -1 : x + y * w;
+							if (free(dest)) { stuck = 0; go(dest); return true; }
+							if (skip || ++stuck > 25) { stuck = 0; return true; }   // 못 가면: 건너뛰기 옵션이면 바로, 아니면 잠깐 기다렸다가 넘어감
+							return false;
+						}
+						void face(int ddx) { if (ddx != 0 && ch.sprite != null && !dirFix) ch.sprite.flipHorizontal = ddx < 0; if (ddx != 0) dx = ddx; }
+						@Override public void update() {
+							super.update();
+							left -= Game.elapsed; if (left > 0 || done) return;
+							left = step;
+							try {
+								if (!ch.isAlive() || Dungeon.level == null || (ch != Dungeon.hero && !Dungeon.level.mobs.contains(ch))) { end(); return; }
+								for (int guard = 0; guard < 60; guard++) {
+									if (idx >= ops.size()) { if (repeat) { idx = 0; return; } end(); return; }
+									JsonValue o = ops.get(idx);
+									String op = o.getString("op", "");
+									int w = Dungeon.level.width(), hx = Dungeon.hero.pos % w - ch.pos % w, hy = Dungeon.hero.pos / w - ch.pos / w;
+									switch (op) {
+										// ---- 이동 (한 걸음 걷고 다음 틱으로)
+										case "down": if (tryStep(0, 1)) idx++; return;
+										case "up": if (tryStep(0, -1)) idx++; return;
+										case "left": if (tryStep(-1, 0)) idx++; return;
+										case "right": if (tryStep(1, 0)) idx++; return;
+										case "dl": if (tryStep(-1, 1)) idx++; return;
+										case "dr": if (tryStep(1, 1)) idx++; return;
+										case "ul": if (tryStep(-1, -1)) idx++; return;
+										case "ur": if (tryStep(1, -1)) idx++; return;
+										case "random": { int[] d = com.watabou.utils.PathFinder.NEIGHBOURS8; int o2 = d[com.watabou.utils.Random.Int(d.length)]; int nx = (ch.pos + o2) % w - ch.pos % w, ny = (ch.pos + o2) / w - ch.pos / w; if (Math.abs(nx) > 1) { idx++; return; } if (tryStep(nx, ny) || true) idx++; stuck = 0; return; }
+										case "toward": if (ch == Dungeon.hero || (Math.abs(hx) <= 1 && Math.abs(hy) <= 1) || tryStep(Integer.signum(hx), Integer.signum(hy))) idx++; return;
+										case "away": if (ch == Dungeon.hero || tryStep(-Integer.signum(hx), -Integer.signum(hy))) idx++; return;
+										case "forward": if (tryStep(dx, dy)) idx++; return;
+										case "backward": { int kx = dx, ky = dy; boolean ok = tryStep(-dx, -dy); dx = kx; dy = ky; if (ok) idx++; return; }
+										case "goto": {   // 칸 좌표까지 길을 찾아 걸어감 (여러 걸음)
+											int target = o.getInt("x", 0) + o.getInt("y", 0) * w;
+											if (ch.pos == target || target < 0 || target >= Dungeon.level.length()) { idx++; stuck = 0; continue; }
+											boolean[] all = new boolean[Dungeon.level.length()]; java.util.Arrays.fill(all, true);
+											int st = Dungeon.findStep(ch, target, Dungeon.level.passable, all, true);
+											if (st == -1) { if (skip || ++stuck > 8) { idx++; stuck = 0; } return; }
+											stuck = 0; go(st); return;
+										}
+										case "jump": {   // 지금 자리에서 (x, y) 만큼 뛰어 넘음
+											int x = ch.pos % w + o.getInt("x", 0), y = ch.pos / w + o.getInt("y", 0), dest = x < 0 || x >= w ? -1 : x + y * w;
+											idx++;
+											if (dest != ch.pos && free(dest)) {
+												int oldPos = ch.pos; ch.pos = dest; Dungeon.level.occupyCell(ch);
+												if (ch.sprite != null) ch.sprite.jump(oldPos, dest, () -> { });
+												if (ch == Dungeon.hero) { Dungeon.observe(); GameScene.updateFog(); }
+												left = 0.3f;
+											}
+											return;
+										}
+										case "wait": idx++; left = Math.max(0.01f, o.getInt("n", 10) / 10f); return;
+										// ---- 방향 (그림은 왼쪽/오른쪽만 뒤집힘)
+										case "turnLeft": face(-1); dy = 0; break;
+										case "turnRight": face(1); dy = 0; break;
+										case "turnDown": dx = 0; dy = 1; break;
+										case "turnUp": dx = 0; dy = -1; break;
+										case "turn180": face(-dx); dy = -dy; break;
+										case "turnR90": { int t = dx; dx = -dy; dy = t; face(dx); break; }
+										case "turnL90": { int t = dx; dx = dy; dy = -t; face(dx); break; }
+										case "turnRandom": face(com.watabou.utils.Random.Int(2) == 0 ? -1 : 1); break;
+										case "turnToward": if (ch != Dungeon.hero) { dy = Integer.signum(hy); if (hx != 0) face(Integer.signum(hx)); else dx = 0; } break;
+										case "turnAway": if (ch != Dungeon.hero) { dy = -Integer.signum(hy); if (hx != 0) face(-Integer.signum(hx)); else dx = 0; } break;
+										// ---- 설정
+										case "switchOn": StoryState.setSw(o.getString("id", ""), true); break;
+										case "switchOff": StoryState.setSw(o.getString("id", ""), false); break;
+										case "speed": { float[] sp = { 0.5f, 0.32f, 0.2f, 0.13f, 0.08f, 0.04f }; step = sp[Math.max(1, Math.min(6, o.getInt("n", 4))) - 1]; break; }
+										case "throughOn": through = true; break;
+										case "throughOff": through = false; break;
+										case "dirFixOn": dirFix = true; break;
+										case "dirFixOff": dirFix = false; break;
+										case "transparentOn": if (ch.sprite != null) ch.sprite.alpha(0f); break;
+										case "transparentOff": if (ch.sprite != null) ch.sprite.alpha(1f); break;
+										case "opacity": if (ch.sprite != null) ch.sprite.alpha(Math.max(0, Math.min(255, o.getInt("n", 255))) / 255f); break;
+										case "se": MakerAudio.playSe(o.getString("file", "")); break;
+										default: break;
+									}
+									idx++;   // 시간이 들지 않는 명령은 바로 다음으로
+								}
+							} catch (Throwable t) { MakerRuntime.log("이동 경로 오류: " + t); end(); }
+						}
+					};
+					Game.scene().add(walker);
+					routes.put(ch, walker);
+					if (wait && current == self) waitingOn(walker);
+				});
+				return !wait;
+			}
+			case "teleport": {   // 같은 맵 안에서 순간 이동 (영웅 또는 캐릭터)
+				String who = c.getString("char", "$hero");
+				final com.shatteredpixel.shatteredpixeldungeon.actors.Char ch = who.isEmpty() || who.equals("$hero") ? Dungeon.hero : findChar(who);
+				if (ch == null || Dungeon.level == null) return true;
+				final int cell = c.getInt("x", 0) + c.getInt("y", 0) * Dungeon.level.width();
+				if (cell < 0 || cell >= Dungeon.level.length() || com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(cell) != null) return true;
+				Game.runOnRenderThread(() -> {
+					try {
+						com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfTeleportation.appear(ch, cell);
+						Dungeon.level.occupyCell(ch);
+						if (ch == Dungeon.hero) { Dungeon.observe(); GameScene.updateFog(); }
+					} catch (Throwable t) { MakerRuntime.log("순간 이동 오류: " + t); }
+				});
 				return true;
+			}
+			// ---------------- 영웅 상태 (RPG Maker 의 소지금 · HP · 상태 · 경험치)
+			case "gold": {
+				int n = c.getInt("value", 0);
+				Dungeon.gold = Math.max(0, Dungeon.gold + n);
+				if (n != 0 && !c.getBoolean("quiet", false)) GLog.i("금화 " + (n > 0 ? "+" : "") + n);
+				return true;
+			}
+			case "hp": {
+				com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hr = Dungeon.hero;
+				if (hr == null) return true;
+				String op = c.getString("op", "add"); int v = c.getInt("value", 0);
+				if (op.equals("full")) v = hr.HT; else if (op.equals("pct")) v = Math.round(hr.HT * v / 100f);
+				int hp = op.equals("set") ? v : hr.HP + v;
+				if (hp <= 0 && c.getBoolean("kill", false)) { hr.HP = 0; stack.clear(); com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.reallyDie(new Death(c.getString("text", ""))); return true; }
+				final int nv = Math.max(1, Math.min(hr.HT, hp)), diff = nv - hr.HP;
+				hr.HP = nv;
+				Game.runOnRenderThread(() -> { if (hr.sprite != null && diff != 0) hr.sprite.showStatus(diff > 0 ? com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite.POSITIVE : com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite.NEGATIVE, (diff > 0 ? "+" : "") + diff); });
+				return true;
+			}
+			case "buff": {
+				String who = c.getString("char", "$hero");
+				com.shatteredpixel.shatteredpixeldungeon.actors.Char ch = who.isEmpty() || who.equals("$hero") ? Dungeon.hero : findChar(who);
+				if (ch == null) return true;
+				String name = c.getString("buff", "");
+				if (c.getBoolean("remove", false)) {
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff b : ch.buffs().toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff[0]))
+						if (b.getClass().getSimpleName().equalsIgnoreCase(name)) b.detach();
+				} else MakerCast.addBuff(ch, name, Math.max(1, c.getInt("turns", 5)));
+				return true;
+			}
+			case "exp": {
+				com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hr = Dungeon.hero;
+				if (hr == null) return true;
+				String op = c.getString("op", "exp"); int v = c.getInt("value", 0);
+				if (op.equals("level")) { for (int i = 0; i < v && hr.lvl < 30; i++) hr.earnExp(hr.maxExp() - hr.exp, getClass()); }
+				else if (op.equals("str")) { hr.STR = Math.max(1, hr.STR + v); GLog.p("힘 " + (v >= 0 ? "+" : "") + v); }
+				else if (op.equals("maxhp")) { hr.HT = Math.max(1, hr.HT + v); hr.HP = Math.max(1, Math.min(hr.HT, hr.HP + Math.max(0, v))); }
+				else if (v > 0) hr.earnExp(v, getClass());
+				return true;
+			}
+			// ---------------- 흐름: 이름표로 건너뛰기
+			case "label": return true;
+			case "jump": {
+				String name = c.getString("name", "");
+				java.util.Iterator<Frame> it = stack.iterator();
+				int depth = 0;
+				while (it.hasNext()) {
+					Frame f = it.next();
+					if (f.list != null) for (int i = 0; i < f.list.size; i++) {
+						JsonValue x = f.list.get(i);
+						if ("label".equals(x.getString("cmd", "")) && name.equals(x.getString("name", ""))) {
+							for (int k = 0; k < depth; k++) stack.pop();
+							f.i = i + 1;
+							return true;
+						}
+					}
+					depth++;
+				}
+				MakerRuntime.log("건너뛰기: 이름표 「" + name + "」 을 찾지 못했습니다 (" + eventId + ")");
+				return true;
+			}
+			// ---------------- 화면 어둡게 / 밝게
+			case "fade": {
+				final boolean out = !c.getString("op", "out").equals("in");
+				final float sec = Math.max(0.01f, c.getInt("time", 5) / 10f);
+				final int color = parseColor(c.getString("color", "#000000"));
+				final boolean wait = c.getBoolean("wait", true);
+				final EventInterpreter self = this;
+				Game.runOnRenderThread(() -> {
+					renderThread = Thread.currentThread();
+					if (Game.scene() == null) { if (wait) resume(); return; }
+					if (fadeBlock == null || fadeBlock.parent != Game.scene()) {
+						if (!out) { if (wait) resume(); return; }   // 어둡게 한 적이 없으면 밝게 할 것도 없음
+						fadeBlock = new com.watabou.noosa.ColorBlock(PixelScene.uiCamera.width, PixelScene.uiCamera.height, 0xFF000000 | color);
+						fadeBlock.camera = PixelScene.uiCamera; fadeBlock.alpha(0);
+						Game.scene().add(fadeBlock);
+					}
+					final com.watabou.noosa.ColorBlock blk = fadeBlock;
+					final float from = blk.alpha();
+					Gizmo tw = new Gizmo() {
+						float t = 0; boolean done;
+						@Override public void update() {
+							super.update(); if (done) return;
+							t += Game.elapsed; float k = Math.min(1f, t / sec);
+							blk.alpha(out ? from + (1f - from) * k : from * (1f - k));
+							if (k >= 1f) { done = true; active = false; if (!out) { blk.killAndErase(); if (fadeBlock == blk) fadeBlock = null; } if (parent != null) parent.remove(this); if (wait) resume(); }
+						}
+					};
+					Game.scene().add(tw);
+					if (wait && current == self) waitingOn(tw);
+				});
+				return !wait;
+			}
 			// ---------------- 월드
 			case "heroPath": {   // 전직·직업 능력 고르기 창 (텐구의 가면·왕관 없이)
 				if (c.getString("what", "subclass").equals("ability")) MakerAbilities.openAbility(); else MakerAbilities.openSubclass();
@@ -490,7 +788,32 @@ public class EventInterpreter {
 				if (page != null) stack.push(new Frame(page.get("commands"), "list", 0));
 				return true;
 			}
-			case "gameOver": GLog.n(c.getString("text", "")); MakerRuntime.log("(M3 예정) gameOver"); return true;
+			case "gameOver": {   // 영웅 사망 처리 (부활 없이) → 게임의 사망 화면
+				String text = c.getString("text", "");
+				if (!text.isEmpty()) GLog.n(text);
+				stack.clear();
+				if (Dungeon.hero != null) { Dungeon.hero.HP = 0; com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.reallyDie(new Death(text)); }
+				return true;
+			}
+			case "title": {   // 타이틀로 (저장하고 나가기 — 이어 하기 가능)
+				stack.clear();
+				Game.runOnRenderThread(() -> {
+					try { Dungeon.saveAll(); } catch (Throwable t) { MakerRuntime.log("저장 실패: " + t); }
+					Game.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.TitleScene.class);
+				});
+				return true;
+			}
+			case "victory": {   // 게임 클리어: 승리 기록을 남기고 랭킹 화면으로 (세이브는 지워짐)
+				stack.clear();
+				Game.runOnRenderThread(() -> {
+					try {
+						Dungeon.win(com.shatteredpixel.shatteredpixeldungeon.items.Amulet.class);
+						Dungeon.deleteGame(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.curSlot, true);
+					} catch (Throwable t) { MakerRuntime.log("승리 처리 오류: " + t); }
+					Game.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.RankingsScene.class);
+				});
+				return true;
+			}
 			case "plugin": return PluginHost.execute(c.getString("command", ""), c, this);
 			default:
 				if (PluginHost.has(cmd)) return PluginHost.execute(cmd, c, this);

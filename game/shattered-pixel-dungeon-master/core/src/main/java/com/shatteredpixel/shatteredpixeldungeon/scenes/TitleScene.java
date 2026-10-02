@@ -301,6 +301,7 @@ public class TitleScene extends PixelScene {
 			add(new WndVictoryCongrats());
 		}
 
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.apply(this); // >>> pdmaker
 		fadeIn();
 	}
 

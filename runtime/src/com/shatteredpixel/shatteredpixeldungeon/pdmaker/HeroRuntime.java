@@ -316,6 +316,7 @@ public class HeroRuntime {
 	}
 	/** Mob.die() 첫 줄 */
 	public static void onMobDie(Mob mob, Object cause) {
+		try { EventTriggers.onMobDie(mob, cause); } catch (Throwable t) { MakerRuntime.log("몬스터 처치 트리거 오류: " + t); }
 		try { MakerActive.onKill(mob, cause); } catch (Throwable t) { MakerRuntime.log("전직 액티브 오류: " + t); }
 		if (code == null || !code.overrides(MakerHeroCode.KILL) || Dungeon.hero == null) return;
 		if (cause != Dungeon.hero && !(cause instanceof Item) && !(cause instanceof com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand)) return;

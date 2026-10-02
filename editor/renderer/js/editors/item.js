@@ -68,10 +68,10 @@
     const kind = game ? '' : (it.kind || 'misc');
     const codex = kind === 'codex' || kind === 'grimoire';
     const fields = [
-      codex ? null : o(game ? '사용할 때 (행동 버튼)' : '쓸 때', 'use', game ? '(게임 원래 소리만)' : kind === 'misc' ? '(기본: 분류에 맞는 소리)' : '(없음)', game ? '먹기·마시기·읽기·휘두르기 등 행동 버튼을 누를 때 — 게임 원래 소리에 더해 납니다' : null),
-      o('던질 때', 'throw', game ? '(게임 원래 소리만)' : '(게임 원래 소리)'),
-      o('주울 때', 'pickup', '(게임 원래 소리)', '고르면 게임의 줍는 소리 대신 이 소리'),
-      game || EQUIP_KINDS.includes(kind) ? o('장착 · 해제할 때', 'equip', game ? '(게임 원래 소리만)' : '(게임 원래 소리)') : null].filter(Boolean);
+      codex ? null : o(game ? '사용할 때 (행동 버튼)' : '쓸 때', 'use', game ? '(게임 소리만: 먹기 eat · 마시기 drink · 읽기 read · 마법봉 zap)' : kind === 'misc' ? '(기본: 분류에 맞는 소리)' : '(없음)', game ? '먹기·마시기·읽기·휘두르기 등 행동 버튼을 누를 때 — 게임 원래 소리에 더해 납니다' : null),
+      o('던질 때', 'throw', game ? '(게임 소리만: miss — Assets.Sounds.MISS)' : '(게임 소리: miss — Assets.Sounds.MISS)'),
+      o('주울 때', 'pickup', '(게임 소리: item — Assets.Sounds.ITEM)', '고르면 게임의 줍는 소리 대신 이 소리'),
+      game || EQUIP_KINDS.includes(kind) ? o('장착 · 해제할 때', 'equip', '(게임: 소리 없음 · 저주받은 장비면 cursed)') : null].filter(Boolean);
     return [row(...fields.slice(0, 2)), row(...fields.slice(2)),
       codex ? h('p', { class: 'hint' }, '쓸 때·맞을 때·빗나갈 때 소리는 위의 코덱스 설정에 있습니다.') : null,
       h('p', { class: 'hint' }, '🎚 을 누르면 사운드 편집기에서 그 소리를 편집합니다 (게임 소리는 프로젝트로 복사해서 편집). "(소리 없음)"을 고르면 조용해집니다.')];
@@ -544,7 +544,7 @@
     const { F, row } = PDM.ui;
     const mobs = () => store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
     const groups = () => ((store.get('world') || {}).groups || []).filter(g => !g.safe);
-    return PDM.ui.listEditor(skey, path, { addLabel: '드랍 추가', emptyText: '드랍 없음 — 이 아이템은 시작 아이템·맵에 놓기·이벤트·게임 원래 규칙으로만 나옵니다',
+    return PDM.ui.listEditor(skey, path, { addLabel: '드랍 추가', emptyText: '드랍 없음 — 이 아이템은 시작 아이템·맵에 놓기·이벤트·게임의 무작위 생성(Generator)으로만 나옵니다',
       make: () => ({ src: 'mob', char: (mobs()[0] || [''])[0], chance: 10, min: 1, max: 1, cond: '' }),
       render: (it, i, p) => h('div', {},
         row(F.select(skey, [...p, 'src'], { mob: '몬스터가 죽을 때', floor: '층 바닥에 (층을 만들 때)' }, { label: '어디서', rerender: true }),
@@ -601,7 +601,7 @@
         })(),
         PDM.ui.section('등장 · 드랍 테이블',
           PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'banned'], { label: '게임에 나오지 않게 (등장 금지) — 게임의 무작위 아이템 생성(바닥·상자·전리품·상점 무작위 칸)에서 뺍니다', rerender: true }),
-          h('p', { class: 'hint' }, '등장 금지는 "무작위로 뽑는 곳"에만 적용됩니다. 직업의 시작 아이템, 퀘스트 보상처럼 게임 코드가 정해 놓고 주는 것은 그대로 나옵니다. 아래 드랍은 게임 원래 규칙에 더해집니다.'),
+          h('p', { class: 'hint' }, '등장 금지는 "무작위로 뽑는 곳"에만 적용됩니다. 직업의 시작 아이템, 퀘스트 보상처럼 게임 코드가 정해 놓고 주는 것은 그대로 나옵니다. 아래 드랍은 게임의 무작위 생성(Generator 확률표)에 더해집니다.'),
           dropsEditor('gameitems', ['items', 'spd:' + g.p, 'drops'])),
         PDM.ui.section('코드로 고치기',
           h('p', { class: 'hint' }, '이 게임 아이템을 바탕(상속)으로 한 프로젝트 아이템을 만들고, 그 아이템의 "코드"에서 훅·행동 버튼·추가 멤버(@Override)로 동작을 직접 고칩니다. 게임 효과·강화는 그대로 유지됩니다. 만든 아이템은 시작 아이템·상점·이벤트에서 그 id 로 씁니다.'),

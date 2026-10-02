@@ -65,6 +65,16 @@
           h('td', {}, h('button', { class: 'ib danger', onclick: () => store.edit(key, '삭제', r => { r[listKey].splice(i, 1); }) }, '✕')))));
         return h('div', {}, tb, h('button', { class: 'btn sm add', onclick: () => store.edit(key, '추가', r => { r[listKey] = r[listKey] || []; r[listKey].push(make(arr.length)); }) }, '+ 추가'));
       };
+      // 변수 형식 · 형식에 맞는 처음 값 입력칸
+      const rowAt = p => (story[p[0]] || [])[p[1]] || {};
+      const typeSelect = p => { const cur = rowAt(p).type || 'number';
+        const sl = h('select', {}, [['number', '숫자'], ['string', '문자열'], ['bool', '참/거짓']].map(([v, t]) => h('option', { value: v, selected: v === cur }, t)));
+        sl.onchange = () => store.edit(key, '변수 형식', r => { const it = r[p[0]][p[1]]; it.type = sl.value; it.initial = sl.value === 'string' ? String(it.initial === true || it.initial === false || it.initial === 0 || it.initial == null ? '' : it.initial) : sl.value === 'bool' ? !!(it.initial && it.initial !== '0' && it.initial !== 'false') : (parseInt(it.initial, 10) || 0); });
+        return sl; };
+      const initialInput = p => { const it = rowAt(p), t = it.type || 'number';
+        if (t === 'string') { const i = h('input', { type: 'text', value: it.initial == null ? '' : String(it.initial), placeholder: '(빈 글자)' }); i.onchange = () => store.edit(key, '처음 값', r => { r[p[0]][p[1]].initial = i.value; }, { silent: true }); return i; }
+        if (t === 'bool') { const sl = h('select', {}, h('option', { value: 'false', selected: !it.initial }, '거짓 (false)'), h('option', { value: 'true', selected: !!it.initial }, '참 (true)')); sl.onchange = () => store.edit(key, '처음 값', r => { r[p[0]][p[1]].initial = sl.value === 'true'; }, { silent: true }); return sl; }
+        return F.num(key, p, { int: true }); };
       return h('div', { class: 'page' },
         h('h1', {}, '스토리'),
         h('p', { class: 'lead' }, '게임 전체 이야기의 흐름을 관리합니다. 이벤트에서 쓰는 스위치/변수를 여기서 이름 붙여 두고, 장마다 필수 이벤트(비트)와 엔딩 조건을 정합니다.'),
@@ -74,14 +84,18 @@
         section('스위치 (켬/끔)', tableOf('switches', [
           { label: 'id', k: 'id', w: '22%', input: p => F.text(key, p, { transform: v => PDM.slugId(v) }) },
           { label: '이름', k: 'name', w: '25%', input: p => F.text(key, p) },
+          { label: '처음 상태', k: 'initial', w: '11%', input: p => { const on = !!rowAt(p).initial; const sl = h('select', { style: on ? { color: 'var(--good)', fontWeight: '600' } : {} }, h('option', { value: 'false', selected: !on }, '끔 (OFF)'), h('option', { value: 'true', selected: on }, '켬 (ON)')); sl.onchange = () => store.edit(key, '스위치 처음 상태', r => { r[p[0]][p[1]].initial = sl.value === 'true'; }); return sl; } },
           { label: '그룹', k: 'group', w: '15%', input: p => F.text(key, p) },
-          { label: '메모', k: 'note', input: p => F.text(key, p) }], n => ({ id: 'sw' + (n + 1), name: '', group: '', note: '' }))),
-        section('변수 (숫자)', tableOf('variables', [
+          { label: '메모', k: 'note', input: p => F.text(key, p) }], n => ({ id: 'sw' + (n + 1), name: '', initial: false, group: '', note: '' })),
+          h('p', { class: 'hint' }, '"처음 상태"를 켬으로 두면 새 게임을 시작할 때 이미 켜져 있습니다. 게임 중에는 이벤트 명령 "스위치"로 바꿉니다.')),
+        section('변수 (숫자 · 문자열 · 참/거짓)', tableOf('variables', [
           { label: 'id', k: 'id', w: '20%', input: p => F.text(key, p, { transform: v => PDM.slugId(v) }) },
           { label: '이름', k: 'name', w: '22%', input: p => F.text(key, p) },
-          { label: '처음 값', k: 'initial', w: '10%', input: p => F.num(key, p, { int: true }) },
+          { label: '형식', k: 'type', w: '13%', input: p => typeSelect(p) },
+          { label: '처음 값', k: 'initial', w: '16%', input: p => initialInput(p) },
           { label: '그룹', k: 'group', w: '12%', input: p => F.text(key, p) },
-          { label: '메모', k: 'note', input: p => F.text(key, p) }], n => ({ id: 'var' + (n + 1), name: '', initial: 0, group: '', note: '' }))),
+          { label: '메모', k: 'note', input: p => F.text(key, p) }], n => ({ id: 'var' + (n + 1), name: '', type: 'number', initial: 0, group: '', note: '' })),
+          h('p', { class: 'hint' }, '숫자 = 정수 · 문자열 = 글자(이름, 암호 등) · 참/거짓 = 스위치처럼 켬/끔. 조건식: var.id >= 3 · var.id == "글자" · var.id (참/거짓). 대사·알림·선택지 글 안에 {var.id} 를 쓰면 그 값이 들어갑니다 ({gold} · {hero.lvl} 같은 이름도 됨).')),
         section('루트',
           h('p', { class: 'hint' }, '현재 루트는 이벤트의 "루트 설정" 명령으로 바뀌고, 조건식에서 route==\'id\' 로 확인합니다. 맵 그래프의 연결 조건에 route==\'id\' 를 쓰면 루트마다 다른 구역으로 갈라집니다.'),
           listEditor(key, ['routes'], { addLabel: '루트 추가', compact: true, make: () => ({ id: PDM.uid('route'), name: '새 루트', when: '', note: '' }),

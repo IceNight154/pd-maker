@@ -4,7 +4,7 @@
 //   조작
 //    · 화면 이동: Space + 끌기 / 가운데 버튼 끌기 / 오른쪽 버튼 끌기     · 확대/축소: 휠
 //    · 노드: 끌어서 이동 (Alt = 격자 무시), Shift+클릭 = 여러 개 선택, 빈 곳 끌기 = 사각형 선택
-//    · 연결: 노드 오른쪽 점(●)을 다른 노드로 끌기.  Alt 를 누른 채 놓으면 샛길 계단으로
+//    · 연결: 노드 가장자리 점(●, 네 면)을 다른 노드로 끌기.  Alt 를 누른 채 놓으면 샛길 계단으로
 //    · 더블클릭: 노드 = 맵 열기, 빈 곳 = 새 노드
 //    · 오른쪽 클릭(끌지 않고): 메뉴 (새 노드 / 새 그룹 / 연결 / 삭제 …)
 //    · 키: Delete 삭제 · Ctrl+D 복제 · Ctrl+A 전체 선택 · G 선택한 노드로 그룹 · F 전체 보기 · 방향키 조금 이동 · Esc 선택 해제
@@ -123,13 +123,33 @@
     sel = { nodes: new Set(made.map(m => m.id)), edge: null, group: null };
   }
   /** 연결 만들기 — 같은 두 노드 사이에도 여러 개 가능 (통로는 연결마다 다른 출구·입구를 씀) */
-  function connect(from, to, kind) {
+  // ---- 연결이 붙는 면 (마인드맵처럼 네 방향) : r 오른쪽 · l 왼쪽 · t 위 · b 아래. 비어 있으면 두 노드의 위치로 자동
+  const SIDES = { '': '자동 (노드 위치에 맞춤)', r: '오른쪽', l: '왼쪽', t: '위', b: '아래' };
+  const SIDE_N = { r: [1, 0], l: [-1, 0], t: [0, -1], b: [0, 1] }, OPP = { r: 'l', l: 'r', t: 'b', b: 't' };
+  const sidePt = (p, sd, off) => sd === 'r' ? [p.x + NW, p.y + NH / 2 + off] : sd === 'l' ? [p.x, p.y + NH / 2 + off] : sd === 't' ? [p.x + NW / 2 + off, p.y] : [p.x + NW / 2 + off, p.y + NH];
+  /** 두 노드 위치로 고른 면 [출발 면, 도착 면] */
+  function autoSides(a, b) {
+    const dx = (b.x - a.x) / NW, dy = (b.y - a.y) / NH;
+    const s1 = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'r' : 'l') : (dy >= 0 ? 'b' : 't');
+    return [s1, OPP[s1]];
+  }
+  /** 노드 안의 점(월드 좌표)에서 가장 가까운 면 */
+  const nearSide = (p, x, y) => { const d = { l: x - p.x, r: p.x + NW - x, t: y - p.y, b: p.y + NH - y }; return Object.keys(d).sort((m, n) => d[m] - d[n])[0]; };
+  function edgePath(e, a, b, off) {
+    const au = autoSides(a, b), s1 = SIDE_N[e.fromSide] ? e.fromSide : au[0], s2 = SIDE_N[e.toSide] ? e.toSide : au[1];
+    const [x1, y1] = sidePt(a, s1, off), [x2, y2] = sidePt(b, s2, off);
+    const k = Math.max(40, Math.min(220, Math.hypot(x2 - x1, y2 - y1) * .45)), n1 = SIDE_N[s1], n2 = SIDE_N[s2];
+    return { d: `M${x1},${y1} C${x1 + n1[0] * k},${y1 + n1[1] * k} ${x2 + n2[0] * k},${y2 + n2[1] * k} ${x2},${y2}`, x1, y1, x2, y2,
+      mx: (x1 + x2) / 2 + (n1[0] + n2[0]) * k * .375, my: (y1 + y2) / 2 + (n1[1] + n2[1]) * k * .375 };
+  }
+  function connect(from, to, kind, sides) {
     if (from === to) return;
     kind = kind || 'door';
     const same = (world().edges || []).filter(e => e.from === from && e.to === to);
     const id = 'e' + Math.random().toString(36).slice(2, 8);
     const e = { id, from, to, kind, cond: '', weight: 100, label: '', place: 'exit', message: '' };
     if (kind === 'door') Object.assign(e, { exit: -1, entrance: -1 });
+    if (sides) { if (sides[0]) e.fromSide = sides[0]; if (sides[1]) e.toSide = sides[1]; }
     store.edit('world', '노드 연결', r => { r.edges.push(e); });
     if (same.length) toast(`같은 두 노드 사이의 ${same.length + 1}번째 연결 — 출구·입구를 따로 씁니다`);
     sel = { nodes: new Set(), edge: id, group: null };
@@ -286,9 +306,7 @@
         wd.edges.forEach(e => {
           const a = P(e.from), b = P(e.to); if (!a || !b) return;
           const n = pairN[[e.from, e.to].sort().join('|')], off = n > 1 ? (pairK[e.id] - (n - 1) / 2) * Math.min(14, (NH - 10) / (n - 1)) : 0;
-          const x1 = a.x + NW, y1 = a.y + NH / 2 + off, x2 = b.x, y2 = b.y + NH / 2 + off;
-          const dx = x2 >= x1 ? Math.max(40, (x2 - x1) * .5) : Math.min(260, 80 + (x1 - x2) * .25);
-          const d = `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+          const ep = edgePath(e, a, b, off), d = ep.d;
           const cls = 'wg-edge' + (e.kind === 'stair' ? ' stair' : '') + (e.kind === 'door' ? ' door' : '') + (e.cond ? ' cond' : '') + (sel.edge === e.id ? ' on' : '');
           const hit = el('path', { d, class: 'wg-hit' }); hit.dataset.edge = e.id;
           el('path', { d, class: cls, 'marker-end': 'url(#wgArrow)' });
@@ -299,7 +317,7 @@
           if (e.cond) tags.push('if ' + e.cond);
           if (e.label) tags.unshift(e.label);
           if (tags.length) {
-            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + (n > 1 ? off * 0.6 : 0);
+            const mx = ep.mx, my = ep.my;
             const txt = el('text', { x: mx, y: my - 6, class: 'wg-etag' + (sel.edge === e.id ? ' on' : ''), 'text-anchor': 'middle' });
             txt.textContent = tags.join(' · ').slice(0, 40); txt.dataset.edge = e.id;
           }
@@ -328,8 +346,7 @@
           h('div', { class: 'wg-nt' }, h('b', {}, (n.id === wd.start ? '★ ' : '') + W_.label(n.id)),
             h('span', { class: 'badge' + (d.mode === 'handmade' ? ' gold' : d.mode === 'hybrid' ? ' good' : '') }, mode.name)),
           h('div', { class: 'wg-ns' }, [d.name, PDM.mapUtil.themeName(W_.themeOf(n.id)), `깊이 ${I.depth[n.id]}`].filter(Boolean).join(' · ')),
-          h('div', { class: 'wg-port in', title: '들어오는 곳' }),
-          h('div', { class: 'wg-port out', 'data-port': n.id, title: '끌어서 다른 노드와 연결 (Alt = 샛길 계단)' }));
+          ...['r', 'l', 't', 'b'].map(sd => h('div', { class: 'wg-port out s-' + sd, 'data-port': n.id, 'data-side': sd, title: '끌어서 다른 노드와 연결 — 놓는 쪽 면에 붙음 (Shift = 갈림길 출구 · Alt = 샛길 계단)' })));
         nodeEls[n.id] = e; canvas.append(e);
       });
       placeNodes();
@@ -366,7 +383,7 @@
         }
         if (e.button !== 0) return;
         const wpt = toWorld(e.clientX, e.clientY);
-        if (port) { drag = { type: 'connect', from: port.dataset.port, x: wpt.x, y: wpt.y }; e.preventDefault(); return; }
+        if (port) { drag = { type: 'connect', from: port.dataset.port, side: port.dataset.side || 'r', x: wpt.x, y: wpt.y }; e.preventDefault(); return; }
         if (nodeEl) {
           const id = nodeEl.dataset.node;
           if (e.shiftKey || e.ctrlKey) { sel.nodes.has(id) ? sel.nodes.delete(id) : sel.nodes.add(id); }
@@ -415,7 +432,7 @@
         } else if (drag.type === 'connect') {
           drag.x = wpt.x; drag.y = wpt.y;
           const a = P(drag.from);
-          drawSvg(el => el('path', { d: `M${a.x + NW},${a.y + NH / 2} L${wpt.x},${wpt.y}`, class: 'wg-edge temp' + (e.altKey ? ' stair' : '') }));
+          drawSvg(el => el('path', { d: `M${sidePt(a, drag.side, 0).join(',')} L${wpt.x},${wpt.y}`, class: 'wg-edge temp' + (e.altKey ? ' stair' : '') }));
         } else if (drag.type === 'marquee') {
           const x = Math.min(drag.x0, wpt.x), y = Math.min(drag.y0, wpt.y), w = Math.abs(wpt.x - drag.x0), hh = Math.abs(wpt.y - drag.y0);
           if (!marqEl) { marqEl = h('div', { class: 'wg-marq' }); canvas.append(marqEl); }
@@ -447,12 +464,13 @@
         if (d.type === 'connect') {
           const tEl = document.elementFromPoint(e.clientX, e.clientY);
           const nodeEl = tEl && tEl.closest && tEl.closest('.wg-node');
-          if (nodeEl && nodeEl.dataset.node !== d.from) connect(d.from, nodeEl.dataset.node, e.altKey ? 'stair' : e.shiftKey ? 'main' : 'door');
+          if (nodeEl && nodeEl.dataset.node !== d.from) { const tp = toWorld(e.clientX, e.clientY); connect(d.from, nodeEl.dataset.node, e.altKey ? 'stair' : e.shiftKey ? 'main' : 'door', [d.side, nearSide(P(nodeEl.dataset.node), tp.x, tp.y)]); }
           else if (!nodeEl) {
             // 빈 곳에 놓으면: 새 노드를 만들고 바로 연결
             const g = wnode(d.from).group;
             const kindE = e.altKey ? 'stair' : e.shiftKey ? 'main' : 'door', from = d.from;
-            addNodeAsk('procedural', d.x, d.y - NH / 2, g).then(id => { if (id) connect(from, id, kindE); else drawSvg(); });
+            const sd = d.side, np = sd === 'l' ? [d.x - NW, d.y - NH / 2] : sd === 't' ? [d.x - NW / 2, d.y - NH] : sd === 'b' ? [d.x - NW / 2, d.y] : [d.x, d.y - NH / 2];
+            addNodeAsk('procedural', np[0], np[1], g).then(id => { if (id) connect(from, id, kindE, [sd, OPP[sd]]); else drawSvg(); });
           } else drawSvg();
           return;
         }
@@ -549,7 +567,7 @@
           PDM.ui.menu(e.clientX, e.clientY, [
             ...Object.entries(EDGE_KINDS).filter(([k]) => k !== (ed.kind || 'main')).map(([k, t]) => ({ label: t.split(' (')[0] + '(으)로 바꾸기', run: () => store.edit('world', '연결 종류', r => { const x = r.edges.find(q => q.id === edgeId); x.kind = k; if (k === 'door') { x.exit = x.exit ?? -1; x.entrance = x.entrance ?? -1; } }) })),
             { label: '같은 방향으로 통로 하나 더', run: () => connect(ed.from, ed.to, 'door') },
-            { label: '방향 뒤집기', run: () => store.edit('world', '연결 뒤집기', r => { const x = r.edges.find(q => q.id === edgeId); [x.from, x.to] = [x.to, x.from]; }) },
+            { label: '방향 뒤집기', run: () => store.edit('world', '연결 뒤집기', r => { const x = r.edges.find(q => q.id === edgeId); [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; [x.fromSide, x.toSide] = [x.toSide, x.fromSide]; }) },
             { label: '삭제', hint: 'Delete', run: () => store.edit('world', '연결 삭제', r => { r.edges = r.edges.filter(x => x.id !== edgeId); }) }]);
           return;
         }
@@ -593,6 +611,10 @@
           };
           PDM.inspector.show('연결', h('div', {},
             h('p', {}, h('b', {}, W_.fullName(ed.from)), ' → ', h('b', {}, W_.fullName(ed.to)), siblings.length > 1 ? h('span', { class: 'badge', style: { marginLeft: '6px' } }, `같은 방향 ${siblings.findIndex(x => x.id === ed.id) + 1}/${siblings.length}`) : null),
+            (() => { const sel2 = h('select', {}, h('option', { value: 'ab', selected: true }, `${W_.fullName(ed.from)} → ${W_.fullName(ed.to)}`), h('option', { value: 'ba' }, `${W_.fullName(ed.to)} → ${W_.fullName(ed.from)}`));
+              sel2.onchange = () => { if (sel2.value === 'ba') store.edit('world', '연결 방향', r => { const x = r.edges[i]; [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; [x.fromSide, x.toSide] = [x.toSide, x.fromSide]; }); };
+              return PDM.ui.field('방향 (화살표 쪽으로 넘어감)', sel2); })(),
+            row(F.select('world', [...p, 'fromSide'], SIDES, { label: '출발 노드에서 붙는 면' }), F.select('world', [...p, 'toSide'], SIDES, { label: '도착 노드에서 붙는 면' })),
             F.select('world', [...p, 'kind'], EDGE_KINDS, { label: '종류', onchange: v => { if (v === 'door') store.edit('world', '연결 종류', r => { const x = r.edges[i]; x.exit = x.exit ?? -1; x.entrance = x.entrance ?? -1; }, { silent: true }); } }),
             kind === 'door' ? h('div', {},
               h('p', { class: 'hint' }, '통로: 출발 노드의 출구 하나와 도착 노드의 입구 하나가 짝이 됩니다. 이 출구로 가면 짝 입구에 도착하고, 그 입구로 돌아가면 이 출구로 돌아옵니다. 같은 두 노드 사이에 통로를 여러 개 만들 수 있고, 통로마다 다른 출구·입구를 씁니다.'),
@@ -605,11 +627,11 @@
             F.text('world', [...p, 'label'], { label: '메모 (그래프에 표시)' }),
             h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' } },
               h('button', { class: 'btn sm', onclick: () => connect(ed.from, ed.to, 'door') }, '＋ 같은 방향 통로 하나 더'),
-              h('button', { class: 'btn sm', onclick: () => store.edit('world', '연결 뒤집기', r => { const x = r.edges[i]; [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; }) }, '방향 뒤집기'),
+              h('button', { class: 'btn sm', onclick: () => store.edit('world', '연결 뒤집기', r => { const x = r.edges[i]; [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; [x.fromSide, x.toSide] = [x.toSide, x.fromSide]; }) }, '방향 뒤집기'),
               h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('node:' + ed.from) }, '출발 맵 열기'),
               h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('node:' + ed.to) }, '도착 맵 열기'),
               h('button', { class: 'btn sm danger', onclick: () => { sel.edge = null; store.edit('world', '연결 삭제', r => { r.edges.splice(i, 1); }); } }, '삭제')),
-            h('p', { class: 'hint' }, '노드 오른쪽 점을 끌어 연결: 그냥 = 통로 · Shift = 갈림길 출구 · Alt = 샛길. 직접 그린 맵의 출구(>)·입구(<) 타일 번호는 맵 편집기에 표시됩니다.')));
+            h('p', { class: 'hint' }, '노드의 네 면에 있는 점을 끌어 연결 (끌기 시작한 면 → 놓은 면에 붙음): 그냥 = 통로 · Shift = 갈림길 출구 · Alt = 샛길. 직접 그린 맵의 출구(>)·입구(<) 타일 번호는 맵 편집기에 표시됩니다.')));
           return;
         }
         if (sel.group && ids.length !== 1) {
@@ -621,7 +643,7 @@
             row(h('div', { class: 'field' }, h('span', { class: 'fl' }, '색'), (() => { const c = h('input', { type: 'color', value: g.color || '#5fd6b4' }); c.addEventListener('change', () => PDM.ui.commit('world', [...p, 'color'], c.value, '그룹 색')); return c; })()),
               F.bool('world', [...p, 'safe'], { label: '던전 밖 (마을 등: 층 번호 대신 이름, 데일리 이벤트 없음)' })),
             groupMusic(g, p),
-            section('구성 블럭 (이 그룹의 자동 생성 노드 전체)', h('div', { class: 'hint' }, '블럭을 쌓아 층의 구성을 정합니다. 노드에 따로 블럭을 쌓으면 그 노드는 자기 것을 씁니다.'), PDM.mapUtil.blockListEditor('world', [...p, 'blocks'])),
+            section('구성 블럭 (이 그룹의 자동 생성 노드 전체)', h('div', { class: 'hint' }, '블럭을 쌓아 층의 구성을 정합니다. 노드에 따로 블럭을 쌓으면 그 노드는 자기 것을 씁니다.'), PDM.mapUtil.blockListEditor('world', [...p, 'blocks'], { theme: g.theme || 'SEWER' })),
             section('이 그룹의 자동 생성 노드마다 추가할 방', PDM.mapUtil.roomListEditor('world', [...p, 'rooms'])),
             F.textarea('world', [...p, 'note'], { label: '메모', rows: 2 }),
             h('p', { class: 'hint' }, `노드 ${wd.nodes.filter(n => n.group === g.id).length}개. 제목을 끌면 그룹째 움직입니다.`)));
@@ -643,7 +665,7 @@
               return h('label', { class: 'check', title: '끄면 이 맵에는 몬스터가 놓이지도 다시 생기지도 않습니다 (직접 놓은 몬스터·NPC 는 그대로)' }, cb, '몬스터 스폰 (몬스터가 생기고 다시 생김)'); })(),
             F.sound(k, ['bgm'], { label: '배경음', kind: 'bgm', allowNone: true, empty: `(그룹 설정${(W_.group((wnode(id) || {}).group) || {}).bgm ? ': ' + PDM.audio.label(W_.group(wnode(id).group).bgm) : ' — 게임 기본'})` }),
             h('p', { class: 'hint' }, `게임 안 번호: depth ${I.depth[id]} · branch ${I.branch[id]}${I.reached[id] === undefined && id !== wd.start ? ' · 시작 노드에서 닿지 않음 (이벤트 "맵 이동"이나 입구 목적지로만 갈 수 있음)' : ''}`),
-            h('p', { class: 'hint' }, '연결: 오른쪽 점을 다른 노드로 끌기. 빈 곳에 놓으면 새 노드가 생기며 이어집니다.')));
+            h('p', { class: 'hint' }, '연결: 노드 가장자리의 점(네 면)을 다른 노드로 끌기 — 놓은 쪽 면에 붙습니다. 빈 곳에 놓으면 새 노드가 생기며 이어집니다.')));
           return;
         }
         if (ids.length > 1) {
@@ -661,7 +683,7 @@
           h('div', { class: 'kv' },
             h('b', {}, '화면 이동'), h('span', {}, 'Space+끌기 · 가운데/오른쪽 버튼 끌기 · 휠 확대'),
             h('b', {}, '노드'), h('span', {}, '끌기 이동 · Shift 여러 개 · 빈 곳 끌기 사각형 선택'),
-            h('b', {}, '연결'), h('span', {}, '오른쪽 점 → 다른 노드 (Alt = 샛길)'),
+            h('b', {}, '연결'), h('span', {}, '가장자리 점 → 다른 노드 (Alt = 샛길)'),
             h('b', {}, '만들기'), h('span', {}, '빈 곳 더블클릭 · 오른쪽 클릭 메뉴'),
             h('b', {}, '키'), h('span', {}, 'Del · Ctrl+D/C/V/A · G 그룹 · F 전체 · 방향키')),
           section('사용자 테마',
@@ -681,7 +703,7 @@
                       try { await pdm.copy(PDM.assets.resolvePath('game:' + PDM.THEMES[it.base || 'SEWER'].tiles), store.abs(rel)); } catch (err) { toast('기본 타일셋 복사 실패: ' + err.message, 'bad'); return; }
                       store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], rel); });
                     }
-                    const out = await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16);
+                    const out = await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16, null, { tilePreview: it.base || 'SEWER' });
                     if (out && out !== rel) store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], out); });   // 다른 이름으로 저장
                     if (out) { PDM.assets.clear(); PDM.tabs.refresh(); }
                   } }, '타일셋 편집…'))))
@@ -713,7 +735,7 @@
         h('span', { class: 'grow' }), zoomLbl);
 
       const page = h('div', { class: 'page full wg' }, tb, vp,
-        h('div', { class: 'wg-help' }, 'Space+끌기 이동 · 휠 확대 · 빈 곳 더블클릭 새 노드 · 오른쪽 점 끌기 연결 (그냥=통로 · Shift=갈림길 출구 · Alt=샛길 · 여러 번 끌면 통로 여러 개) · 오른쪽 클릭 메뉴'));
+        h('div', { class: 'wg-help' }, 'Space+끌기 이동 · 휠 확대 · 빈 곳 더블클릭 새 노드 · 가장자리 점 끌기 연결 (그냥=통로 · Shift=갈림길 출구 · Alt=샛길 · 여러 번 끌면 통로 여러 개) · 오른쪽 클릭 메뉴'));
       drawSvg(); markSel();
       requestAnimationFrame(() => { if (!v) fit(); else applyView(); if (PDM.tabs.active === key) inspect(); });
       if (v) applyView();

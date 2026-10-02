@@ -111,7 +111,7 @@ public class MakerLevel extends Level {
 			} else if (type.equals("effect")) {
 				MakerEffect.place(this, ref, cell);
 			} else if (type.equals("event")) {
-				eventCells.put(cell, ref);
+				if (!EventTriggers.placeEvent(this, ref, cell)) eventCells.put(cell, ref);
 			}
 		}
 		spawnInitial();

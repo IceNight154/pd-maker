@@ -55,3 +55,6 @@ robovm.properties
 # 서명 키
 *.keystore
 *.jks
+
+# 업데이트 기록 (zip 으로 받은 PC 에서 어느 커밋까지 받았는지)
+.pdmaker-update.json

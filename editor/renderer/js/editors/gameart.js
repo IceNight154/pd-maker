@@ -99,7 +99,7 @@
     const edit = async () => {
       let rel = c.tiles;
       if (!rel) { rel = `assets/tiles/${c.id}.png`; try { await pdm.copy(PDM.assets.resolvePath('game:' + PDM.THEMES[c.base || 'SEWER'].tiles), store.abs(rel)); } catch (err) { toast('타일셋 복사 실패: ' + err.message, 'bad'); return; } }
-      const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, rel, 256, 256, 16);
+      const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, rel, 256, 256, 16, null, { tilePreview: c.base || 'SEWER' });
       if (out && out !== c.tiles) store.edit('world', '타일셋 경로', w => { w.customThemes[i].tiles = out; });
       if (out) { PDM.assets.clear(); ctx.refresh(); }
     };

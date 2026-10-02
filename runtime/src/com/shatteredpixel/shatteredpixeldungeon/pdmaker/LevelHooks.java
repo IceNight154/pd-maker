@@ -240,6 +240,7 @@ public class LevelHooks {
 			case "prop": MakerProp.place(level, ref, cell); break;
 			case "effect": MakerEffect.place(level, ref, cell); break;
 			case "event":
+				if (EventTriggers.placeEvent(level, ref, cell)) break;
 				if (level instanceof MakerLevel) ((MakerLevel) level).eventCells.put(cell, ref);
 				else eventCells.put(Dungeon.depth + ":" + Dungeon.branch + ":" + cell, ref);
 				break;

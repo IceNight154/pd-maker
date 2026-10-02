@@ -391,6 +391,7 @@ public class Hero extends Char {
 	}
 
 	public int talentPointsAvailable(int tier){
+		{ int pdmT = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTalents.nativeOverride(tier); if (pdmT >= 0) return pdmT; } // >>> pdmaker
 		if (lvl < (Talent.tierLevelThresholds[tier] - 1)
 			|| (tier == 3 && subClass == HeroSubClass.NONE)
 			|| (tier == 4 && armorAbility == null)) {
@@ -416,6 +417,7 @@ public class Hero extends Char {
 	}
 	
 	public String className() {
+		{ String pdmN = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAbilities.className(this); if (pdmN != null) return pdmN; } // >>> pdmaker
 		return subClass == null || subClass == HeroSubClass.NONE ? heroClass.title() : subClass.title();
 	}
 
@@ -509,6 +511,7 @@ public class Hero extends Char {
 
 	@Override
 	public int attackSkill( Char target ) {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.wrap(1)) return com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.attackSkill(this, target, attackSkill(target)); // >>> pdmaker
 		KindOfWeapon wep = belongings.attackingWeapon();
 		
 		float accuracy = 1;
@@ -566,6 +569,7 @@ public class Hero extends Char {
 	
 	@Override
 	public int defenseSkill( Char enemy ) {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.wrap(2)) return com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.defenseSkill(this, enemy, defenseSkill(enemy)); // >>> pdmaker
 
 		if (buff(Combo.ParryTracker.class) != null){
 			if (canAttack(enemy) && !isCharmedBy(enemy)){
@@ -641,6 +645,7 @@ public class Hero extends Char {
 
 	@Override
 	public int drRoll() {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.wrap(4)) return com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.drRoll(this, drRoll()); // >>> pdmaker
 		int dr = super.drRoll();
 
 		if (belongings.armor() != null) {
@@ -667,6 +672,7 @@ public class Hero extends Char {
 	
 	@Override
 	public int damageRoll() {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.wrap(3)) return com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.damageRoll(this, damageRoll()); // >>> pdmaker
 		KindOfWeapon wep = belongings.attackingWeapon();
 		int dmg;
 
@@ -712,6 +718,7 @@ public class Hero extends Char {
 	
 	@Override
 	public float speed() {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.wrap(5)) return com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.speed(this, speed()); // >>> pdmaker
 
 		float speed = super.speed();
 
@@ -1012,6 +1019,7 @@ public class Hero extends Char {
 	}
 	
 	private boolean actMove( HeroAction.Move action ) {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.propInteract(this, action.dst)) return false; // >>> pdmaker
 
 		if (getCloser( action.dst )) {
 			canSelfTrample = false;
@@ -1522,6 +1530,7 @@ public class Hero extends Char {
 	
 	@Override
 	public int attackProc( final Char enemy, int damage ) {
+		damage = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.attackProc(this, enemy, damage); // >>> pdmaker
 		damage = super.attackProc( enemy, damage );
 
 		KindOfWeapon wep;
@@ -1584,6 +1593,7 @@ public class Hero extends Char {
 	
 	@Override
 	public int defenseProc( Char enemy, int damage ) {
+		damage = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.defenseProc(this, enemy, damage); // >>> pdmaker
 		
 		if (damage > 0 && subClass == HeroSubClass.BERSERKER){
 			Berserk berserk = Buff.affect(this, Berserk.class);

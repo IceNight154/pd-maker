@@ -158,7 +158,8 @@
       return h('button', { class: 'btn xs', disabled: dis, title: B.desc + (dis ? ' — 이미 있음' : ''), style: { borderLeft: `4px solid ${B.color}` },
         onclick: e => { e.preventDefault(); edit('블럭 추가: ' + B.name, a => { const b = B.make(); B.once ? a.unshift(b) : a.push(b); }); } }, `+ ${B.icon} ${B.name}`);
     })));
-    if (!list.length) wrap.append(h('div', { class: 'empty' }, o.emptyText || '블럭 없음 — 게임 기본 구성으로 만듭니다. 위에서 블럭을 눌러 쌓으면 그 구성대로 자동 생성합니다.'),
+    if (!list.length) wrap.append(h('div', { class: 'empty' }, o.emptyText || '블럭 없음 — 게임 코드의 구성으로 만듭니다 (아래). 위에서 블럭을 눌러 쌓으면 그 구성대로 자동 생성합니다.'),
+      !o.emptyText && o.theme ? PDM.gameLevelBox(o.theme) : null,
       h('button', { class: 'btn sm', style: { marginTop: '6px' }, onclick: e => { e.preventDefault(); edit('기본 구성 블럭', a => { a.push(BLOCKS.layout.make(), BLOCKS.standard.make(), BLOCKS.special.make(), BLOCKS.secret.make()); }); } }, '게임 기본과 비슷한 구성으로 채우기'));
     let dragFrom = -1;
     list.forEach((b, i) => {
@@ -368,7 +369,7 @@
       const afterTiles = () => { PDM.assets.clear(); PDM.tabs.refresh(); };
       async function editTileset() {
         const c = await ensureCustomTheme(); if (!c) return;
-        const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, c.tiles, 256, 256, 16);
+        const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, c.tiles, 256, 256, 16, null, { tilePreview: c.base || 'SEWER' });
         if (out && out !== c.tiles) store.edit('world', '타일셋 경로', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.tiles = out; });   // 다른 이름으로 저장
         if (out) afterTiles(); else PDM.tabs.refresh();
       }
@@ -697,7 +698,7 @@
           fl.mode !== 'handmade' ? section('구성 블럭 (자동 생성)',
             h('div', { class: 'hint' }, '블럭을 쌓아 이 층의 구성을 정합니다. 방의 위치와 연결, 방 안의 내용은 게임이 들어갈 때마다 자동으로 만듭니다.'
               + (!((fl.procedural || {}).blocks || []).length && grp && (grp.blocks || []).length ? ` 지금은 그룹 「${grp.name}」 의 블럭 ${grp.blocks.length}개를 따릅니다.` : '')),
-            blockListEditor(key, [...pr, 'blocks'], grp && (grp.blocks || []).length ? { emptyText: `블럭 없음 — 그룹 「${grp.name}」 의 구성 블럭을 따릅니다. 여기에 쌓으면 이 노드만 다른 구성이 됩니다.` } : {}),
+            blockListEditor(key, [...pr, 'blocks'], grp && (grp.blocks || []).length ? { emptyText: `블럭 없음 — 그룹 「${grp.name}」 의 구성 블럭을 따릅니다. 여기에 쌓으면 이 노드만 다른 구성이 됩니다.` } : { theme: fl.theme || (grp || {}).theme || PDM.defaultThemeForDepth(fl.depth || 1) }),
             fl.mode === 'hybrid' ? F.select(key, ['hybrid', 'placement'], { special: '특수 방으로 (막다른 방)', random: '일반 방으로 (여러 방과 연결)' }, { label: '직접 그린 방을 넣는 방식' }) : null) : null,
           fl.mode !== 'handmade' ? section('추가 방 (방 템플릿)',
             h('div', { class: 'hint' }, '자동 생성할 때 이 방들을 함께 넣습니다.' + (grp && (grp.rooms || []).length ? ` 그룹 「${grp.name}」 의 방 ${grp.rooms.length}개도 들어갑니다.` : '')),
@@ -707,7 +708,7 @@
           section('연결',
             h('div', { class: 'hint' }, '들어오는 곳: '), ins.length ? ins.map(e => h('div', {}, '← ', link(e.from), portText(e, false))) : h('div', { class: 'hint' }, fl.id === (store.get('world') || {}).start ? '시작 노드' : '없음 (이벤트 "맵 이동"이나 입구 목적지로만 옴)'),
             h('div', { class: 'hint', style: { marginTop: '4px' } }, '나가는 곳: '), outs.length ? outs.map(e => h('div', {}, '→ ', link(e.to), portText(e, true))) : h('div', { class: 'hint' }, '없음 — 출구가 온 곳으로 되돌아갑니다'),
-            h('div', { class: 'hint', style: { marginTop: '4px' } }, '연결은 맵 그래프에서 노드 오른쪽 점을 끌어서 만듭니다 (같은 두 노드 사이에 여러 개 가능). 연결을 누르면 쓸 출구·입구 번호를 고를 수 있습니다.'),
+            h('div', { class: 'hint', style: { marginTop: '4px' } }, '연결은 맵 그래프에서 노드 가장자리의 점(위·아래·왼쪽·오른쪽)을 끌어서 만듭니다 (같은 두 노드 사이에 여러 개 가능). 연결을 누르면 쓸 출구·입구 번호를 고를 수 있습니다.'),
             F.select(key, ['entranceTo'], W_.options().filter(([id]) => id !== fl.id), { label: '입구 계단 목적지 (고급)', empty: '(기본: 온 곳으로 돌아가기)', hint: '예: 1층 입구 → 마을. 시작 노드의 입구는 기본이 "지상으로 나가기"' })),
           F.ref(key, ['onEnter'], 'event', { label: '들어올 때 이벤트 (처음 한 번)', empty: '(없음)' }),
           F.textarea(key, ['note'], { label: '메모' }),
@@ -737,7 +738,8 @@
           sp.enabled ? h('div', {},
             row(F.num(key, ['spawn', 'initial'], { label: '처음 수', int: true, min: 0, max: 40, def: 3 }), F.num(key, ['spawn', 'max'], { label: '최대 수', int: true, min: 0, max: 40, def: 6 })),
             row(F.num(key, ['spawn', 'respawn'], { label: '다시 생기는 간격 (턴)', int: true, min: 1, def: 50, hint: '게임 기본 50' }), F.num(key, ['spawn', 'minDist'], { label: '영웅과 최소 거리', int: true, min: 0, max: 30, def: 8 })),
-            h('div', { class: 'fl', style: { marginTop: '6px' } }, '나오는 몬스터 (무게대로 무작위 · 비우면 깊이에 맞는 게임 기본 몬스터)'),
+            h('div', { class: 'fl', style: { marginTop: '6px' } }, '나오는 몬스터 (무게대로 무작위)'),
+            !(sp.mobs || []).length ? PDM.gameSpawnBox(fl.depth || ((() => { try { return W_.info().depth[fl.id]; } catch (_) { return 0; } })()) || 1) : null,
             PDM.ui.listEditor(key, ['spawn', 'mobs'], { addLabel: '몬스터 추가', compact: true,
               make: () => ({ ref: (mobOpts[0] || [''])[0], weight: 1 }),
               render: (it, i, ip) => row(F.select(key, [...ip, 'ref'], mobOpts, { label: '몬스터' }), F.num(key, [...ip, 'weight'], { label: '무게', int: true, min: 0, def: 1 })) }),

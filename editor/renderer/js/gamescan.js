@@ -188,7 +188,7 @@
     /** 프로젝트 캐릭터의 game 클래스가 이 저장소에 없는지 */
     sum.missingMob = cls => !!cls && mobFiles.size > 0 && !mobFiles.has(String(cls).split('$')[0].replace(/\./g, '/'));
     sum.msgRoot = (await msgRoot(repo)).join(' + ');
-    PDM.GAME_SCAN = sum; if (PDM.gameHeroClear) PDM.gameHeroClear();
+    PDM.GAME_SCAN = sum; if (PDM.gameHeroClear) PDM.gameHeroClear(); if (PDM.gameInfoClear) PDM.gameInfoClear();
     const part = (n, s) => `${n} ${s.total}개` + (s.added.length ? ` (+${s.added.length} 새로 찾음)` : '') + (s.removed.length ? ` (−${s.removed.length} 저장소에 없음)` : '');
     PDM.log && PDM.log(`게임 저장소에 맞춰 목록을 고쳤습니다 — ${part('아이템', sum.items)}, ${part('방', sum.rooms)}` + (sum.newMobs.length ? `, 새 몬스터 ${sum.newMobs.length}` : ''), 'ok');
     return true;
@@ -215,13 +215,13 @@
       if (!fixOnly) store.all('char').forEach(c => { if (c.game && sc.missingMob(c.game)) { store.remove('char:' + c.id, '저장소에 없는 캐릭터'); res.charsRemoved++; } });
       const have = new Set(store.all('char').map(c => c.game).filter(Boolean));
       (fixOnly ? [] : sc.newMobs || []).forEach(e => { if (have.has(e.cls)) return; const c = PDM.make.vanillaChar(Object.assign({}, e, { sprite: PDM.make.character('x', e.kind).sprite })); if (store.has('char:' + c.id)) return;
-        c.note = '게임 저장소에서 찾은 캐릭터 (actors.mobs.' + e.cls + ') — 그림·능력치는 게임 원래 것을 씁니다'; store.add('char:' + c.id, c, '게임 캐릭터 추가'); res.charsAdded++; });
+        c.note = '게임 저장소에서 찾은 캐릭터 (actors.mobs.' + e.cls + ') — 그림·능력치·AI 는 게임 코드의 값을 씁니다 (캐릭터 화면 위 "게임 코드의 실제 값" 참고)'; store.add('char:' + c.id, c, '게임 캐릭터 추가'); res.charsAdded++; });
       if (sc.heroes && sc.heroes.length) {
         const ok = new Set(sc.heroes.map(x => x.cls));
         if (!fixOnly) store.all('hero').forEach(hr => { if (hr.baseClass && !ok.has(hr.baseClass)) { store.remove('hero:' + hr.id, '저장소에 없는 영웅'); res.heroesRemoved++; } });
         const haveH = new Set(store.all('hero').map(x => x.baseClass).filter(Boolean)), tpl = store.all('hero').find(x => x.baseClass && x.sprite && x.sprite.sheet);
         (fixOnly ? [] : sc.heroes).forEach(x => { if (haveH.has(x.cls)) return; const id = x.cls.toLowerCase(); if (store.has('hero:' + id)) return;
-          const hr = PDM.make.hero(id); Object.assign(hr, { name: x.name, desc: String(x.desc || ''), baseClass: x.cls, note: '게임 저장소의 직업 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 원래 것을 씁니다' });
+          const hr = PDM.make.hero(id); Object.assign(hr, { name: x.name, desc: String(x.desc || ''), baseClass: x.cls, note: '게임 저장소의 직업 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 코드의 값을 씁니다 (각 섹션 위 상자에 실제 값 표시)' });
           if (hr.spellbook) hr.spellbook.enabled = false;
           if (x.hidden) hr.enabled = false;
           if (tpl) hr.sprite = Object.assign(PDM.clone(tpl.sprite), { sheet: 'game:sprites/' + id + '.png' });

@@ -164,7 +164,7 @@
         const top = bs.top > 0 ? bs.top * H : (center ? (H - (land ? 3 : 5) * (bh + GAP)) / 2 : tr + GAP);
         const perRow = land ? [2, 3, 3] : [1, 1, 2, 2, 2];
         let i = 0, row = 0, y = top;
-        while (i < n) { let cols = row < perRow.length ? perRow[row] : (land ? 3 : 2); cols = Math.min(cols, n - i); const cw = (aw - (cols - 1) * 2) / cols; for (let c = 0; c < cols; c++, i++) out.push({ ...list[i], i, r: [left + c * (cw + 2), y, cw, bh] }); y += bh + GAP; row++; }
+        while (i < n) { let cols = row < perRow.length ? perRow[row] : (land ? 3 : 2); cols = Math.max(1, Math.min(cols | 0, n - i)); const cw = (aw - (cols - 1) * 2) / cols; for (let c = 0; c < cols; c++, i++) out.push({ ...list[i], i, r: [left + c * (cw + 2), y, cw, bh] }); y += bh + GAP; row++; }
         return out;
       }
       const cols = layout === 'column' ? 1 : Math.max(1, bs.columns || (land ? 3 : 2));
@@ -192,6 +192,8 @@
     const dir = archSt === 'classic' ? (bg.archDir || 'up') : (bg.archReverse ? 'down' : 'up'), aspd = archSt === 'classic' ? (bg.archSpeed ?? 20) : 20;
     function frame(now) {
       if (stop) return;
+      if (!cv.isConnected) { stop = true; return; }                       // 탭을 닫았으면 끝
+      if (!cv.offsetParent) { last = now; setTimeout(() => requestAnimationFrame(frame), 300); return; }   // 다른 탭을 보는 동안은 그리지 않음
       const tt = (now - t0) / 1000, e = Math.min(0.1, (now - last) / 1000); last = now;
       if (revealed) { revealT = Math.min(1, revealT + e * 2); btnClock += e; }
       g.setTransform(SC, 0, 0, SC, 0, 0); g.imageSmoothingEnabled = false;
@@ -206,7 +208,7 @@
         t4T += e;
         const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
         const aw = 333 * k, ah = 100 * k, off = (t4T * sp) % ah, row0 = Math.floor(t4T * sp / ah);
-        for (let ry = -1; ry * ah - off < H; ry++) for (let cx = 0; cx * aw < W; cx++) {
+        if (ah > 0.5 && aw > 0.5) for (let ry = -1; ry * ah - off < H; ry++) for (let cx = 0; cx * aw < W; cx++) {
           const f = Math.floor(rnd((row0 + ry) * 31 + cx) * 6);
           g.drawImage(t4bg, (f % 3) * 333, Math.floor(f / 3) * 100, 333, 100, cx * aw, ry * ah - off, aw + 0.5, ah + 0.5);
         }
@@ -228,11 +230,11 @@
         });
       } else if (mod2bg) {
         MOD2_LAYERS.forEach((r, i) => {
-          const im = imgs[r]; if (!im) return;
+          const im = imgs[r]; if (!im || !(im.width > 0 && im.height > 0)) return;   // 크기가 0 인 그림이면 아래 반복이 끝나지 않음
           mod2Off[i] -= (bg.archReverse ? -1 : 1) * MOD2_SPEED[i] * e;
           const k = H / im.height, tw = im.width * k;
           let x = ((mod2Off[i] % tw) + tw) % tw - tw;
-          for (; x < W; x += tw) g.drawImage(im, x, 0, tw, H);
+          if (tw > 0.5) for (; x < W; x += tw) g.drawImage(im, x, 0, tw, H);
         });
         // 위쪽 물빛 그라데이션 (Archs 와 같은 3단)
         const th = H * 0.4;
@@ -240,7 +242,7 @@
       } else if (archSt !== 'none') {
         archOff += e * aspd;
         [[ARC_BG, 1], [ARC_FG, 2]].forEach(([r, sp]) => {
-          const im = imgs[r]; if (!im) return;
+          const im = imgs[r]; if (!im || !(im.width > 0 && im.height > 0)) return;
           const o = archOff * sp, vx = dir === 'left' ? -o : dir === 'right' ? o : 0, vy = dir === 'up' ? -o : dir === 'down' ? o : 0;
           const ox = ((vx % im.width) + im.width) % im.width, oy = ((vy % im.height) + im.height) % im.height;
           for (let x = ox - im.width - im.width / 4; x < W; x += im.width) for (let y = oy - im.height; y < H; y += im.height) g.drawImage(im, x, y);

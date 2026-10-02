@@ -162,6 +162,16 @@ ipcMain.handle('app:paths', wrap(() => ({
 ipcMain.handle('app:openExternal', wrap(p => /^https?:\/\//i.test(String(p)) ? shell.openExternal(p) : shell.openPath(p)));
 // 파일 위치 열기: 탐색기에서 그 파일을 선택한 채로 폴더를 엶 (파일이 없으면 폴더만)
 ipcMain.handle('app:showInFolder', wrap(p => { if (fs.existsSync(p)) shell.showItemInFolder(path.normalize(p)); else shell.openPath(path.dirname(p)); return true; }));
+// ---- PDMaker 업데이트 (GitHub main 과 비교 · 받아 오기) — updater.js
+const updater = require('./updater');
+const updateRoot = () => path.join(__dirname, '..');
+ipcMain.handle('update:check', wrap(() => updater.check(updateRoot())));
+ipcMain.handle('update:apply', wrap(async ({ zip } = {}) => {
+  const log = m => { try { win.webContents.send('game:log', String(m)); } catch (_) { /* 창 닫힘 */ } };
+  try { return await (zip ? updater.applyZip(updateRoot(), log) : updater.apply(updateRoot(), log)); }
+  catch (e) { if (e.gitFailed) return { ok: false, gitFailed: true, error: e.message }; throw e; }
+}));
+ipcMain.handle('update:restart', wrap(() => { win.__forceClose = true; app.relaunch(); app.exit(0); return true; }));
 ipcMain.handle('app:close', wrap(() => { win.__forceClose = true; win.close(); return true; }));
 
 // ---------------- 테스트 플레이 ----------------

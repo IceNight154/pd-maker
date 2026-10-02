@@ -335,7 +335,10 @@ iframe.legacy { width: 100%; height: 100%; border: 0; background: #fff; }
 .wg-ns { color: var(--mute); font-size: 11px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wg-port { position: absolute; top: 69px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--good); background: var(--bg); }
 .wg-port.in { left: -7px; pointer-events: none; }
-.wg-port.out { right: -7px; cursor: crosshair; background: var(--good); }
+.wg-port.out { cursor: crosshair; background: var(--good); opacity: .35; transition: opacity .1s; }
+.wg-node:hover .wg-port.out, .wg-node.on .wg-port.out { opacity: 1; }
+.wg-port.s-r { right: -7px; } .wg-port.s-l { left: -7px; }
+.wg-port.s-t { top: -7px; left: 79px; } .wg-port.s-b { top: auto; bottom: -7px; left: 79px; }
 .wg-port.out:hover { transform: scale(1.4); }
 .wg-marq { position: absolute; border: 1px dashed var(--accent); background: var(--accent-soft); pointer-events: none; }
 .wg-help { position: absolute; left: 10px; bottom: 8px; color: var(--dim); font-size: 11px; pointer-events: none; }
@@ -462,3 +465,4 @@ table.tbl { border-collapse: collapse; font-size: 12px; } table.tbl td, table.tb
 .combo-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .combo-v { color: var(--dim, #9a93ad); font-size: 11px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
 .px-size { border-top: 1px solid var(--line, #3a3548); padding-top: 6px; }
+.modal:has(.px-preview) { width: auto; max-width: 97vw; }

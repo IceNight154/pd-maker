@@ -462,11 +462,11 @@ return damage + Special.get("combo");`,
       if ((+s.frameW || 0) > 0 && (+s.frameH || 0) > 0) timer = setInterval(() => { fi++; draw(); }, 1000 / Math.max(1, +s.fps || 8));
     })();
     return [
-      h('p', { class: 'hint' }, '게임의 영웅 선택 화면에서 이 영웅을 골랐을 때 오른쪽에 보이는 그림입니다. 비워 두면 ' + (String(c.baseClass || '').trim() && c.id.toUpperCase() === String(c.baseClass).toUpperCase() ? '게임 원래 일러스트' : '영웅 그림(위 시트의 첫 프레임)을 크게') + ' 보여 줍니다. 그림 한 장이나, 프레임 크기를 정하면 시트로 움직이는 그림도 됩니다.'),
+      h('p', { class: 'hint' }, '게임의 영웅 선택 화면에서 이 영웅을 골랐을 때 오른쪽에 보이는 그림입니다. 비워 두면 ' + (String(c.baseClass || '').trim() && c.id.toUpperCase() === String(c.baseClass).toUpperCase() ? '게임 일러스트 (splashes/' + c.id.toLowerCase() + '.jpg)' : '영웅 그림(위 시트의 첫 프레임)을 크게') + ' 보여 줍니다. 그림 한 장이나, 프레임 크기를 정하면 시트로 움직이는 그림도 됩니다.'),
       h('div', { class: 'fl', style: { margin: '4px 0 2px' } }, '선택 화면 글자 (비우면 기본)'),
       F.text(key, ['select', 'title'], { label: '이름 (선택 화면 · 시작 버튼 · 저장 슬롯)', placeholder: c.name || c.id }),
-      F.textarea(key, ['select', 'desc'], { label: '짧은 설명 (이름 아래)', rows: 2, placeholder: vanillaHero(c) ? '(게임 원래 짧은 설명)' : (c.desc || '(영웅 설명)') }),
-      F.textarea(key, ['select', 'info'], { label: '정보 창 설명 (ⓘ 버튼 · 선택된 영웅을 한 번 더 누를 때)', rows: 3, placeholder: vanillaHero(c) ? '(게임 원래 직업 정보 창)' : (c.desc || '(영웅 설명)') }),
+      PDM.gameHeroText(F.textarea(key, ['select', 'desc'], { label: '짧은 설명 (이름 아래)', rows: 2, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc_short)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'short'),
+      PDM.gameHeroText(F.textarea(key, ['select', 'info'], { label: '정보 창 설명 (ⓘ 버튼 · 선택된 영웅을 한 번 더 누를 때)', rows: 3, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc + 시작 아이템 · 전직 탭)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'desc', '비우면 게임의 직업 정보 창 (정보 · 시작 아이템 · 전직 탭). 정보 글: '),
       h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
         h('button', { class: 'btn xs', title: '글 칸에서 글자를 끌어 고른 뒤 누르면 _밑줄_ 로 감싸 노란색 강조로 만듭니다', onmousedown: e => {
           e.preventDefault();   // 글 칸의 선택이 풀리지 않게
@@ -669,7 +669,7 @@ return damage + Special.get("combo");`,
         section('캐릭터 선택 화면 (글자 · 일러스트)', ...selectSection(key, c, ctx)),
         section('해금 조건 (선택 화면에서 잠김)', ...(() => {
           const u = c.unlock || {}, mode = u.mode || (vanillaHero(c) ? 'game' : 'always');
-          const sel = h('select', {}, [['always', '항상 열림'], ['game', '게임 원래 규칙 (바탕 직업의 해금 조건)'], ['badge', '게임 배지를 얻었을 때 (보스 처치 · 승리)'], ['global', '전역 스위치가 켜졌을 때 (이벤트로 켬)'], ['cond', '조건식']]
+          const sel = h('select', {}, [['always', '항상 열림'], ['game', '게임 코드의 해금 조건 (HeroClass.isUnlocked — 바탕 직업의 배지)'], ['badge', '게임 배지를 얻었을 때 (보스 처치 · 승리)'], ['global', '전역 스위치가 켜졌을 때 (이벤트로 켬)'], ['cond', '조건식']]
             .filter(([k]) => k !== 'game' || String(c.baseClass || '').trim()).map(([k, t]) => h('option', { value: k, selected: mode === k }, t)));
           sel.onchange = () => store.edit(key, '해금 조건', o => { o.unlock = Object.assign({ badge: 'BOSS_SLAIN_1', key: '', cond: '', text: '' }, o.unlock || {}, { mode: sel.value }); });
           return [
@@ -677,7 +677,7 @@ return damage + Special.get("combo");`,
             mode === 'badge' ? F.select(key, ['unlock', 'badge'], { BOSS_SLAIN_1: '첫 번째 보스 처치', BOSS_SLAIN_2: '두 번째 보스 처치', BOSS_SLAIN_3: '세 번째 보스 처치', BOSS_SLAIN_4: '네 번째 보스 처치', VICTORY: '게임 클리어 (승리)' }, { label: '배지 (한 번이라도 얻은 적이 있으면 열림)' }) : null,
             mode === 'global' ? F.text(key, ['unlock', 'key'], { label: '전역 스위치 이름 (영문)', placeholder: '예: hero2_unlocked', hint: '이벤트 명령 "전역 스위치 (새 게임에도 유지)"로 켭니다. 한 번 켜지면 새 게임을 시작해도 남습니다.' }) : null,
             mode === 'cond' ? F.cond(key, ['unlock', 'cond'], { label: '조건식', placeholder: '예: global.beat_boss && global.found_secret', hint: '선택 화면은 게임을 시작하기 전이므로 global.<이름> (전역 스위치)만 뜻이 있습니다.' }) : null,
-            mode !== 'always' ? F.textarea(key, ['unlock', 'text'], { label: '잠겨 있을 때 누르면 나오는 글 (비우면 기본)', rows: 2, placeholder: mode === 'game' ? '(게임 원래 해금 설명)' : '예: 첫 번째 보스를 쓰러뜨리면 열립니다.' }) : null,
+            mode !== 'always' ? PDM.gameHeroText(F.textarea(key, ['unlock', 'text'], { label: '잠겨 있을 때 누르면 나오는 글 (비우면 기본)', rows: 2, placeholder: mode === 'game' ? '(게임 글자 actors.hero.heroclass.' + String(c.baseClass || '').toLowerCase() + '_unlock)' : '예: 첫 번째 보스를 쓰러뜨리면 열립니다.' }), mode === 'game' ? c.baseClass : '', 'unlock') : null,
             h('p', { class: 'hint' }, mode === 'game' ? '※ 테스트 플레이(디버그 실행)에서는 게임 규칙상 모든 직업이 열려 있습니다. 내보낸 게임에서 잠깁니다.' : mode === 'always' ? '선택 화면에서 바로 고를 수 있습니다.' : '잠긴 영웅은 선택 화면에서 어둡게 보이고, 누르면 위의 글이 나옵니다.')];
         })()),
         section('능력치',
@@ -685,7 +685,7 @@ return damage + Special.get("combo");`,
             F.num(key, ['stats', 'hpPerLevel'], { label: '레벨당 체력', int: true, min: 0, hint: '게임 기본 5' }),
             F.num(key, ['stats', 'str'], { label: '힘', int: true, min: 1, hint: '게임 기본 10' }),
             F.num(key, ['startGold'], { label: '시작 골드', int: true, min: 0 })),
-          h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '세부 능력치 (게임 기본값이면 원래대로)'),
+          h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '세부 능력치 (아래 안내의 게임 기본값과 같으면 게임 코드 그대로 동작)'),
           row(F.num(key, ['stats', 'attackSkill'], { label: '명중', int: true, min: 0, def: 10, hint: '기본 10' }),
             F.num(key, ['stats', 'accPerLvl'], { label: '레벨당 명중', int: true, min: 0, def: 1, hint: '기본 1' }),
             F.num(key, ['stats', 'defenseSkill'], { label: '회피', int: true, min: 0, def: 5, hint: '기본 5' }),

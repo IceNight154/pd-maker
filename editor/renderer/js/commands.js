@@ -47,6 +47,43 @@
         t.addEventListener('input', () => set(t.value.split('\n').map(s => s.trim()).filter(Boolean)));
         return h('div', {}, t, h('small', { class: 'hint' }, '선택지 개수만큼 분기가 생깁니다'));
       }
+      case 'route': {   // 이동 경로 편집 (왼쪽 = 명령 목록, 오른쪽 = 누르면 추가되는 명령 버튼)
+        const list = obj.route = Array.isArray(obj.route) ? obj.route : [];
+        if (obj.path && !list.length) {   // 예전 방식(칸 좌표 문자열) → 걸어가기 명령으로
+          String(obj.path).trim().split(/\s+/).forEach(pt => { const m = /^(-?\d+),(-?\d+)$/.exec(pt); if (m) list.push({ op: 'goto', x: +m[1], y: +m[2] }); }); delete obj.path; }
+        if (obj.wait === undefined) obj.wait = true;
+        let selI = list.length;   // 선택한 줄 (list.length = 맨 끝 ◇ — 새 명령이 들어갈 자리)
+        const lb = h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', minHeight: '260px', maxHeight: '340px', overflow: 'auto', background: 'var(--bg)' } });
+        const detail = h('div', { style: { marginTop: '6px' } });
+        const optBox = h('div', { style: { marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '2px' } });
+        const chk = (k, label, dis) => { const i = h('input', { type: 'checkbox', checked: !!obj[k], disabled: !!dis }); i.onchange = () => { obj[k] = i.checked; redraw(); }; return h('label', { class: 'check', style: dis ? { opacity: .5 } : {} }, i, label); };
+        const redraw = () => {
+          lb.innerHTML = '';
+          [...list, null].forEach((o, i) => lb.append(h('div', { style: { padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap', background: i === selI ? 'var(--accent)' : (i % 2 ? 'var(--bg2)' : ''), color: i === selI ? '#fff' : '' },
+            onclick: () => { selI = i; redraw(); }, ondblclick: () => { if (o) { list.splice(i, 1); selI = Math.min(i, list.length); redraw(); } } }, '◇ ' + (o ? PDM.routeOpText(o) : ''))));
+          detail.innerHTML = '';
+          const o = list[selI];
+          if (o) {
+            const d = PDM.ROUTE_OP[o.op] || { params: [] };
+            d.params.forEach(([k, label, t]) => detail.append(PDM.ui.field(label, paramInput(o, { k, t }, {}))));
+            detail.querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => { const y = lb.scrollTop; const keep = document.activeElement; redrawList(); lb.scrollTop = y; }));
+            detail.append(h('div', { style: { display: 'flex', gap: '4px', marginTop: '4px' } },
+              h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); if (selI > 0) { [list[selI - 1], list[selI]] = [list[selI], list[selI - 1]]; selI--; redraw(); } } }, '▲ 위로'),
+              h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); if (selI < list.length - 1) { [list[selI + 1], list[selI]] = [list[selI], list[selI + 1]]; selI++; redraw(); } } }, '▼ 아래로'),
+              h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); list.splice(selI + 1, 0, PDM.clone(o)); selI++; redraw(); } }, '복제'),
+              h('button', { class: 'btn xs danger', onclick: e => { e.preventDefault(); list.splice(selI, 1); selI = Math.min(selI, list.length); redraw(); } }, '삭제')));
+          } else detail.append(h('small', { class: 'hint' }, '오른쪽 명령을 누르면 맨 끝(또는 선택한 줄 다음)에 들어갑니다. 줄을 누르면 값·순서를 고치고, 두 번 누르면 지웁니다.'));
+          optBox.innerHTML = '';
+          optBox.append(h('b', {}, '옵션'), chk('repeat', '동작을 반복 (맵을 떠날 때까지 · 기다리지 않음)'), chk('skip', '이동할 수 없으면 건너뛰기'), chk('wait', '끝날 때까지 대기', obj.repeat));
+        };
+        const redrawList = () => { [...lb.children].forEach((el, i) => { if (list[i]) el.textContent = '◇ ' + PDM.routeOpText(list[i]); }); };
+        const add = id => { const d = PDM.ROUTE_OP[id], o = { op: id }; d.params.forEach(([k, , , def]) => { o[k] = def; }); const pos = selI >= list.length ? list.length : selI + 1; list.splice(pos, 0, o); selI = d.params.length || pos < list.length - 1 ? pos : list.length; redraw(); if (!d.params.length) lb.scrollTop = lb.scrollHeight; };
+        const cols = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(150px, 1fr))', gap: '8px', flex: 1 } },
+          PDM.ROUTE_OPS.map(([g, ops]) => h('div', {}, h('div', { class: 'fl', style: { marginBottom: '3px' } }, g),
+            ops.map(([id, name]) => h('button', { class: 'btn xs', style: { display: 'block', width: '100%', marginBottom: '2px' }, onclick: e => { e.preventDefault(); add(id); } }, name)))));
+        redraw();
+        return h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start' } }, h('div', { style: { width: '230px', flex: 'none' } }, lb, detail, optBox), cols);
+      }
       case 'sound': return PDM.ui.soundPicker(cur, set, { allowNone: true });
       case 'switch': return sel(R('switch'), { create: () => createStoryVar('switches', '스위치') });
       case 'var': return sel(R('var'), { create: () => createStoryVar('variables', '변수') });
@@ -69,6 +106,14 @@
     return clean;
   }
 
+  /** 이동 루트만 고치는 창 (이벤트 페이지의 자율 이동 "사용자 지정"). obj = { route, repeat, skip } — 확인하면 고친 사본, 취소하면 null */
+  PDM.editRouteModal = async function (obj, title) {
+    const o = PDM.clone(obj || {}); o.wait = false;
+    const body = h('div', { style: { minWidth: '700px' } }, paramInput(o, { k: 'route', t: 'route' }, {}));
+    const ok = await PDM.ui.modal(title || '이동 루트', body, [['취소', false], ['확인', true, 'pri']]);
+    if (!ok) return null;
+    delete o.wait; return o;
+  };
   PDM.editCommandModal = async function (cmd, isNew) {
     const def = PDM.COMMANDS[cmd.cmd];
     if (!def) { toast('알 수 없는 명령: ' + cmd.cmd, 'bad'); return null; }

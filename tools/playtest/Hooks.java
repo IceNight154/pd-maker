@@ -316,6 +316,41 @@ public class Hooks {
 				case "fxdump": System.out.println("[TEST] fxdump " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerEffect.debug()); break;
 				case "mobcount": { int en = 0; for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) en++; int sp = 0; for (com.shatteredpixel.shatteredpixeldungeon.actors.Actor a : com.shatteredpixel.shatteredpixeldungeon.actors.Actor.all()) if (a instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner) sp++; System.out.println("[TEST] mobcount enemies=" + en + " spawners=" + sp + " level=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getClass().getSimpleName()); break; }
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;
+				case "ev": com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.runEvent(p[1], null); break;   // ev,<이벤트 id> — 이벤트 실행
+				case "evstate": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; StringBuilder sb = new StringBuilder("[TEST] evstate");
+					for (String v : p.length > 1 ? p[1].split("/") : new String[0]) sb.append(' ').append(v).append('=').append(com.shatteredpixel.shatteredpixeldungeon.pdmaker.StoryState.resolveGlobal(v, null));
+					sb.append(" buffs=").append(hh.buffs().size()).append(" busy=").append(com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.busy()).append(" alive=").append(hh.isAlive()).append(" scene=").append(com.watabou.noosa.Game.scene().getClass().getSimpleName());
+					int n = 0; for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) { n++; sb.append(" npcDist=").append(com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, hh.pos)); }
+					System.out.println(sb.append(" npcs=").append(n)); break; }
+				case "killmob": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs.toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob[0])) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) { m.die(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break; } break; }
+				case "pickgold": new com.shatteredpixel.shatteredpixeldungeon.items.food.Food().doPickUp(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break;
+				case "godepth": { // godepth,<깊이> — 원작 던전의 그 깊이로
+					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.RETURN;
+					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnDepth = Integer.parseInt(p[1]);
+					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnBranch = 0;
+					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnPos = -1;
+					com.watabou.noosa.Game.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.class); break; }
+				case "leveldump": { // leveldump,<파일>,<테마> — 지금 층의 지형 + 게임이 고른 타일 그림 번호 (바닥 층 · 벽 층) 한 줄 추가
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					Object sc = com.watabou.noosa.Game.scene();
+					StringBuilder sb = new StringBuilder("{\"theme\":\"" + p[2] + "\",\"depth\":" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth + ",\"w\":" + lv.width() + ",\"h\":" + lv.height());
+					sb.append(",\"water\":").append(com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTileSheet.WATER);
+					sb.append(",\"hero\":").append(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos);
+					sb.append(",\"map\":["); for (int i = 0; i < lv.length(); i++) sb.append(i > 0 ? "," : "").append(lv.map[i]); sb.append("]");
+					for (String fn : new String[]{ "tiles", "walls" }) {
+						java.lang.reflect.Field f = com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.class.getDeclaredField(fn); f.setAccessible(true);
+						Object tm = f.get(sc);
+						java.lang.reflect.Field df = com.watabou.noosa.Tilemap.class.getDeclaredField("data"); df.setAccessible(true);
+						int[] d = (int[]) df.get(tm);
+						sb.append(",\"").append(fn).append("\":["); for (int i = 0; i < d.length; i++) sb.append(i > 0 ? "," : "").append(d[i]); sb.append("]");
+					}
+					sb.append("}\n");
+					java.nio.file.Files.write(java.nio.file.Paths.get(p[1]), sb.toString().getBytes("UTF-8"), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+					System.out.println("[TEST] leveldump " + lv.width() + "x" + lv.height() + " " + lv.getClass().getSimpleName()); break; }
+				case "evplace": com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventTriggers.hide(p[1], Integer.parseInt(p[2])); break;   // evplace,<이벤트 id>,<칸> — 이미지가 있는 이벤트를 그 칸에 (다음 턴에 나타남)
+				case "npcs": { StringBuilder sb = new StringBuilder("[TEST] npcs"); int w = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width();
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC n = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m; sb.append(' ').append(n.charId).append(n.pageEvent ? "*" : "").append('@').append(m.pos % w).append(',').append(m.pos / w); }
+					System.out.println(sb); break; }
 				case "nointro": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro(false); break;
 				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
 				case "sfx": // 게임 효과음 설정이 실제로 어떤 파일로 풀리는지

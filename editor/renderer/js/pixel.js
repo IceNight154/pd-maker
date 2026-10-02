@@ -57,31 +57,113 @@ PDM.pixelEditor = function (o) {
     }
     // 붙여넣은(옮기는 중인) 그림 · 선택 영역 테두리
     if (floating) g.drawImage(floating.cv, floating.x * scale, floating.y * scale, floating.cv.width * scale, floating.cv.height * scale);
+    if (sel && sel.mask && sel.mask.length !== W * H) sel = null;   // 크기를 바꾼 뒤의 낡은 선택
     if (sel) {
       g.save(); g.lineWidth = 1;
-      g.strokeStyle = '#000'; g.setLineDash([]); g.strokeRect(sel.x * scale + .5, sel.y * scale + .5, sel.w * scale - 1, sel.h * scale - 1);
-      g.strokeStyle = floating ? '#5fd66a' : '#fff'; g.setLineDash([4, 4]); g.strokeRect(sel.x * scale + .5, sel.y * scale + .5, sel.w * scale - 1, sel.h * scale - 1);
+      const path = () => {
+        g.beginPath();
+        if (!sel.mask) { g.rect(sel.x * scale + .5, sel.y * scale + .5, sel.w * scale - 1, sel.h * scale - 1); return; }
+        const m = sel.mask;   // 선택한 칸과 아닌 칸 사이의 변만 그림
+        for (let y = sel.y; y < sel.y + sel.h; y++) for (let x = sel.x; x < sel.x + sel.w; x++) {
+          if (!m[y * W + x]) continue;
+          const X = x * scale + .5, Y = y * scale + .5, X2 = (x + 1) * scale - .5, Y2 = (y + 1) * scale - .5;
+          if (y === 0 || !m[(y - 1) * W + x]) { g.moveTo(X, Y); g.lineTo(X2, Y); }
+          if (y === H - 1 || !m[(y + 1) * W + x]) { g.moveTo(X, Y2); g.lineTo(X2, Y2); }
+          if (x === 0 || !m[y * W + x - 1]) { g.moveTo(X, Y); g.lineTo(X, Y2); }
+          if (x === W - 1 || !m[y * W + x + 1]) { g.moveTo(X2, Y); g.lineTo(X2, Y2); }
+        }
+      };
+      g.strokeStyle = '#000'; g.setLineDash([]); path(); g.stroke();
+      g.strokeStyle = floating ? '#5fd66a' : '#fff'; g.setLineDash([4, 4]); path(); g.stroke();
       g.restore();
     }
-    selInfo.textContent = sel ? `선택 ${sel.w}×${sel.h} (${sel.x}, ${sel.y})${floating ? ' — 끌어서 옮기고 Enter 로 놓기' : ''}` : '';
+    if (selDrag && selDrag.pts && selDrag.pts.length > 1) {   // 올가미를 그리는 중
+      g.save(); g.lineWidth = 1; g.strokeStyle = selDrag.mode === 'sub' ? '#ff7a7a' : '#ffe27a'; g.beginPath();
+      selDrag.pts.forEach(([x, y], i) => g[i ? 'lineTo' : 'moveTo']((x + .5) * scale, (y + .5) * scale)); g.stroke(); g.restore();
+    }
+    if (hov && brush > 1 && (tool === 'pen' || tool === 'erase')) {   // 브러쉬 크기 표시
+      const o0 = Math.floor(brush / 2);
+      g.save(); g.strokeStyle = 'rgba(255,255,255,.8)'; g.setLineDash([2, 2]); g.strokeRect((hov[0] - o0) * scale + .5, (hov[1] - o0) * scale + .5, brush * scale - 1, brush * scale - 1); g.restore();
+    }
+    selInfo.textContent = sel ? `선택 ${sel.w}×${sel.h} (${sel.x}, ${sel.y})${sel.mask ? ' · 모양 선택' : ''}${floating ? ' — 끌어서 옮기고 Enter 로 놓기' : ' — 칠하기는 선택 안에만'}` : '';
+    if (o.onDraw) { try { o.onDraw(data); } catch (_) { /* 미리보기 오류는 무시 */ } }
   }
   // ---------------- 영역 선택 · 복사 · 붙여넣기 ----------------
   //  sel = 선택한 사각형 (픽셀 단위), floating = 붙여넣었거나 들어 올린 그림 (아직 놓지 않음 — 끌어서 옮김)
   let sel = null, floating = null, selDrag = null;
   const selInfo = h('small', { class: 'hint' });
-  const inSel = (x, y) => sel && x >= sel.x && y >= sel.y && x < sel.x + sel.w && y < sel.y + sel.h;
+  let brush = 1, hov = null;
+  const sizes = { pen: 1, erase: 1 };   // 브러쉬 · 지우개 크기는 따로 기억
+  const sizeKey = () => tool === 'erase' ? 'erase' : 'pen';
+  const inSel = (x, y) => sel && x >= sel.x && y >= sel.y && x < sel.x + sel.w && y < sel.y + sel.h && (!sel.mask || sel.mask[y * W + x] === 1);
+  // 선택 영역: 사각형(mask 없음) 또는 모양(mask = 칸마다 0/1, 크기 W×H). 더하기(Ctrl) · 빼기(Alt)는 mask 끼리 합침
+  const rectMask = r => { const m = new Uint8Array(W * H); for (let y = Math.max(0, r.y); y < Math.min(H, r.y + r.h); y++) m.fill(1, y * W + Math.max(0, r.x), y * W + Math.min(W, r.x + r.w)); return m; };
+  const selMask = s2 => !s2 ? new Uint8Array(W * H) : s2.mask ? s2.mask : rectMask(s2);
+  function fromMask(m) {
+    let x0 = W, y0 = H, x1 = -1, y1 = -1, n = 0;
+    for (let i = 0; i < m.length; i++) if (m[i]) { const x = i % W, y = (i / W) | 0; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    const r = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    if (n !== r.w * r.h) r.mask = m;
+    return r;
+  }
+  function combine(base, add, mode) {
+    if (mode === 'new' || !base) return mode === 'sub' ? null : fromMask(add);
+    const m = selMask(base).slice();
+    for (let i = 0; i < m.length; i++) if (add[i]) m[i] = mode === 'add' ? 1 : 0;
+    return fromMask(m);
+  }
+  const lineCells = (x0, y0, x1, y1, fn) => { if (![x0, y0, x1, y1].every(Number.isFinite) || Math.abs(x1 - x0) + Math.abs(y1 - y0) > 20000) return; let dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy;
+    for (;;) { fn(x0, y0); if (x0 === x1 && y0 === y1) break; const e2 = 2 * err; if (e2 >= dy) { err += dy; x0 += sx; } if (e2 <= dx) { err += dx; y0 += sy; } } };
+  /** 올가미: 끌어서 그린 도형 안쪽 칸 */
+  function lassoMask(pts) {
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const cg = c.getContext('2d');
+    cg.beginPath(); pts.forEach(([x, y], i) => cg[i ? 'lineTo' : 'moveTo'](x + .5, y + .5)); cg.closePath(); cg.fill();
+    const d = cg.getImageData(0, 0, W, H).data, m = new Uint8Array(W * H);
+    for (let i = 0; i < m.length; i++) if (d[i * 4 + 3] >= 128) m[i] = 1;
+    const mark = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) m[y * W + x] = 1; };
+    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; lineCells(a[0], a[1], b[0], b[1], mark); }
+    return m;
+  }
+  /** 마법봉: 누른 칸과 이어진 같은 색 칸 */
+  function wandMask(x0, y0) {
+    const d = dg.getImageData(0, 0, W, H).data, m = new Uint8Array(W * H), t = (y0 * W + x0) * 4;
+    const same = i => d[i] === d[t] && d[i + 1] === d[t + 1] && d[i + 2] === d[t + 2] && d[i + 3] === d[t + 3];
+    const st = [y0 * W + x0];
+    while (st.length) { const p = st.pop(); if (m[p] || !same(p * 4)) continue; m[p] = 1; const x = p % W;
+      if (x > 0) st.push(p - 1); if (x < W - 1) st.push(p + 1); if (p >= W) st.push(p - W); if (p < W * (H - 1)) st.push(p + W); }
+    return m;
+  }
+  /** 선택한 칸들을 투명하게 */
+  function clearRegion(r) {
+    if (!r.mask) { dg.clearRect(r.x, r.y, r.w, r.h); return; }
+    const img = dg.getImageData(r.x, r.y, r.w, r.h), d = img.data;
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (r.mask[(r.y + y) * W + r.x + x]) { const i = (y * r.w + x) * 4; d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0; }
+    dg.putImageData(img, r.x, r.y);
+  }
+  const undo = () => { if (hist.length) { fut.push(cap()); put(hist.pop()); floating = null; draw(); } };
+  const redo = () => { if (fut.length) { hist.push(cap()); put(fut.pop()); floating = null; draw(); } };
+  function setBrush(n) { brush = sizes[sizeKey()] = Math.max(1, Math.min(64, Math.round(n) || 1)); brushIn.value = brush; draw(); }
+  function syncBrush() { brush = sizes[sizeKey()]; try { brushIn.value = brush; brushLbl.textContent = tool === 'erase' ? '지우개 크기' : '브러쉬 크기'; } catch (_) { /* 아직 화면을 만들기 전 */ } }
   function commitFloating() {
     if (!floating) return;
     snap(); dg.drawImage(floating.cv, floating.x, floating.y); floating = null;
   }
   function deselect() { commitFloating(); sel = null; draw(); }
-  function regionCanvas(r) { const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; c.getContext('2d').drawImage(data, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return c; }
+  function regionCanvas(r) {
+    const c = document.createElement('canvas'); c.width = r.w; c.height = r.h; const cg = c.getContext('2d');
+    cg.drawImage(data, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    if (r.mask) { const img = cg.getImageData(0, 0, r.w, r.h), d = img.data;   // 모양 선택: 선택하지 않은 칸은 비움
+      for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (!r.mask[(r.y + y) * W + r.x + x]) { const i = (y * r.w + x) * 4; d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0; }
+      cg.putImageData(img, 0, 0); }
+    return c;
+  }
   function copySel(cut) {
     if (floating) { PDM._pixClip = floating.cv; if (cut) { floating = null; sel = null; draw(); } return; }
     const r = sel || { x: 0, y: 0, w: W, h: H };
     PDM._pixClip = regionCanvas(r);
     try { PDM._pixClip.toBlob(b => { if (b && navigator.clipboard && window.ClipboardItem) navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).catch(() => { }); }); } catch (_) { /* 시스템 클립보드는 안 되어도 됨 */ }
-    if (cut) { snap(); dg.clearRect(r.x, r.y, r.w, r.h); draw(); }
+    if (cut) { snap(); clearRegion(r); draw(); }
     toast(cut ? `잘라냈습니다 (${r.w}×${r.h})` : `복사했습니다 (${r.w}×${r.h})`);
   }
   async function pasteClip() {
@@ -96,28 +178,64 @@ PDM.pixelEditor = function (o) {
     floating = { cv: c, x, y }; sel = { x, y, w: c.width, h: c.height };
     setTool('select'); draw();
   }
-  function clearSel() { if (floating) { floating = null; sel = null; draw(); return; } if (!sel) return; snap(); dg.clearRect(sel.x, sel.y, sel.w, sel.h); draw(); }
-  function setTool(id) { tool = id; PDM.$$('[data-t]', wrap).forEach(b => b.classList.toggle('on', b.dataset.t === id)); }
+  function clearSel() { if (floating) { floating = null; sel = null; draw(); return; } if (!sel) return; snap(); clearRegion(sel); draw(); }
+  function setTool(id) { tool = id; PDM.$$('[data-t]', wrap).forEach(b => b.classList.toggle('on', b.dataset.t === id)); syncBrush(); }
   const onKeySel = e => {
     if (!wrap.isConnected) { removeEventListener('keydown', onKeySel); return; }
     if (/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) return;
-    const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey;
+    const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey, code = e.code;
+    if (e.key === 'Alt') { e.preventDefault(); return; }   // Alt = 선택 빼기 (창 메뉴로 초점이 가지 않게)
+    if (c && code === 'KeyZ') { e.preventDefault(); e.stopPropagation(); e.shiftKey ? redo() : undo(); return; }
+    // Space 를 누른 채 끌기 = 작업 영역 이동 · Z 를 누른 채 끌기 = 확대/축소 (가운데에서 바깥으로 = 확대, 안쪽으로 = 축소)
+    if (code === 'Space' && !c) { e.preventDefault(); e.stopPropagation(); if (!navKey) { navKey = 'pan'; view.style.cursor = 'grab'; } return; }
+    if (code === 'KeyZ' && !c && !e.altKey) { e.preventDefault(); if (!navKey) { navKey = 'zoom'; view.style.cursor = 'zoom-in'; } return; }
+    if (c && code === 'KeyD') { e.preventDefault(); e.stopPropagation(); deselect(); return; }   // 선택 해제
+    if (c && code === 'KeyY') { e.preventDefault(); e.stopPropagation(); redo(); return; }
+    if (!c && !e.altKey) {
+      const tk = { KeyB: 'pen', KeyE: 'erase', KeyG: 'fill', KeyL: 'lasso', KeyW: 'wand', KeyM: 'select', KeyI: 'pick' }[code];
+      if (tk) { e.preventDefault(); if (!SEL_TOOLS.includes(tk)) commitFloating(); setTool(tk); draw(); return; }
+      if (code === 'BracketLeft') { e.preventDefault(); setBrush(brush - 1); return; }
+      if (code === 'BracketRight') { e.preventDefault(); setBrush(brush + 1); return; }
+    }
     if (c && k === 'c') { e.preventDefault(); copySel(false); }
     else if (c && k === 'x') { e.preventDefault(); copySel(true); }
     else if (c && k === 'v') { e.preventDefault(); pasteClip(); }
-    else if (c && k === 'a') { e.preventDefault(); commitFloating(); sel = { x: 0, y: 0, w: W, h: H }; setTool('select'); draw(); }
+    else if (c && k === 'a') { e.preventDefault(); commitFloating(); sel = { x: 0, y: 0, w: W, h: H }; if (!SEL_TOOLS.includes(tool)) setTool('select'); draw(); }
     else if (k === 'escape' && (sel || floating)) { e.preventDefault(); e.stopPropagation(); if (floating) { floating = null; sel = null; draw(); } else deselect(); }
     else if (k === 'enter' && floating) { e.preventDefault(); e.stopPropagation(); commitFloating(); draw(); }
     else if ((k === 'delete' || k === 'backspace') && (sel || floating)) { e.preventDefault(); clearSel(); }
   };
   addEventListener('keydown', onKeySel, true);
+  let navKey = null, nav = null;
+  const onKeyUpNav = e => {
+    if (!wrap.isConnected) { removeEventListener('keyup', onKeyUpNav, true); return; }
+    if ((e.code === 'Space' && navKey === 'pan') || (e.code === 'KeyZ' && navKey === 'zoom')) { navKey = null; if (!nav) view.style.cursor = ''; }
+  };
+  addEventListener('keyup', onKeyUpNav, true);
+  addEventListener('blur', () => { navKey = null; nav = null; view.style.cursor = ''; });
+  addEventListener('mousemove', e => {
+    if (!nav) return;
+    const pn = view.parentNode;
+    if (nav.type === 'pan') { pn.scrollLeft = nav.l - (e.clientX - nav.x); pn.scrollTop = nav.t - (e.clientY - nav.y); return; }
+    const d = Math.hypot(e.clientX - nav.cx, e.clientY - nav.cy);
+    const ns = Math.max(1, Math.min(48, Math.round(nav.s0 + (d - nav.d0) / 12)));
+    if (ns !== scale) {   // 가운데에 보이던 곳이 그대로 가운데에 오게
+      const fx = (pn.scrollLeft + pn.clientWidth / 2) / scale, fy = (pn.scrollTop + pn.clientHeight / 2) / scale;
+      scale = ns; draw();
+      pn.scrollLeft = fx * scale - pn.clientWidth / 2; pn.scrollTop = fy * scale - pn.clientHeight / 2;
+    }
+  });
+  addEventListener('mouseup', () => { if (nav) { nav = null; view.style.cursor = navKey === 'pan' ? 'grab' : navKey === 'zoom' ? 'zoom-in' : ''; } });
   const hex = (r, g, b) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-  function setPx(x, y, c) {
-    if (x < 0 || y < 0 || x >= W || y >= H) return;
+  const SEL_TOOLS = ['select', 'lasso', 'wand'];
+  function px1(x, y, c) {
+    if (x < 0 || y < 0 || x >= W || y >= H || (sel && !floating && !inSel(x, y))) return;   // 선택이 있으면 그 안에만
     // 칸을 그 색·불투명도로 바꿈 (덧칠이 아니라 바꾸기 — 반투명 색을 정확히 넣기 위해)
     dg.clearRect(x, y, 1, 1);
     if (c !== null && alpha > 0) { dg.globalAlpha = alpha; dg.fillStyle = c; dg.fillRect(x, y, 1, 1); dg.globalAlpha = 1; }
   }
+  /** 브러쉬 크기만큼 (정사각형, 누른 칸이 가운데) */
+  function setPx(x, y, c) { const o0 = Math.floor(brush / 2); for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) px1(x - o0 + dx, y - o0 + dy, c); }
   function fill(x0, y0, c) {
     const img = dg.getImageData(0, 0, W, H), d = img.data;
     const at = (x, y) => (y * W + x) * 4, t = at(x0, y0);
@@ -127,7 +245,7 @@ PDM.pixelEditor = function (o) {
     if (target.every((v, i) => v === rgba[i])) return;
     const st = [[x0, y0]];
     while (st.length) {
-      const [x, y] = st.pop(); if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const [x, y] = st.pop(); if (x < 0 || y < 0 || x >= W || y >= H || (sel && !inSel(x, y))) continue;
       const i = at(x, y); if (d[i] !== target[0] || d[i + 1] !== target[1] || d[i + 2] !== target[2] || d[i + 3] !== target[3]) continue;
       d[i] = rgba[0]; d[i + 1] = rgba[1]; d[i + 2] = rgba[2]; d[i + 3] = rgba[3];
       st.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
@@ -137,33 +255,76 @@ PDM.pixelEditor = function (o) {
   const cell = e => { const r = view.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / scale), Math.floor((e.clientY - r.top) / scale)]; };
   let down = false;
   view.addEventListener('mousedown', e => {
+    if (navKey && e.button === 0) {   // 이동 · 확대/축소 중에는 그리지 않음
+      e.preventDefault();
+      const pn = view.parentNode, r = pn.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      nav = navKey === 'pan' ? { type: 'pan', x: e.clientX, y: e.clientY, l: pn.scrollLeft, t: pn.scrollTop }
+        : { type: 'zoom', cx, cy, d0: Math.hypot(e.clientX - cx, e.clientY - cy), s0: scale };
+      if (navKey === 'pan') view.style.cursor = 'grabbing';
+      return;
+    }
     const [x, y] = cell(e);
-    if (tool === 'select') {
+    if (SEL_TOOLS.includes(tool)) {
       if (e.button !== 0) { deselect(); return; }
-      if (inSel(x, y)) {   // 선택 안쪽을 끌면 그 그림을 옮김 (처음이면 들어 올림)
-        if (!floating) { snap(); floating = { cv: regionCanvas(sel), x: sel.x, y: sel.y }; dg.clearRect(sel.x, sel.y, sel.w, sel.h); }
+      e.preventDefault();
+      const mode = e.ctrlKey || e.metaKey ? 'add' : e.altKey ? 'sub' : 'new';   // Ctrl = 선택에 더하기 · Alt = 선택에서 빼기
+      const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y));
+      if (mode === 'new' && tool !== 'wand' && (floating ? x >= sel.x && y >= sel.y && x < sel.x + sel.w && y < sel.y + sel.h : inSel(x, y))) {   // 선택 안쪽을 끌면 그 그림을 옮김 (처음이면 들어 올림)
+        if (!floating) { snap(); floating = { cv: regionCanvas(sel), x: sel.x, y: sel.y }; clearRegion(sel); sel = { x: sel.x, y: sel.y, w: sel.w, h: sel.h }; }
         selDrag = { move: true, ox: x - floating.x, oy: y - floating.y };
-      } else { commitFloating(); selDrag = { x0: Math.max(0, Math.min(W - 1, x)), y0: Math.max(0, Math.min(H - 1, y)), moved: false }; sel = null; }
+      } else {
+        commitFloating();
+        const base = mode === 'new' ? null : sel;
+        if (tool === 'wand') { sel = combine(base, wandMask(cx, cy), mode); draw(); return; }
+        selDrag = { tool, mode, base, x0: cx, y0: cy, moved: false, pts: tool === 'lasso' ? [[cx, cy]] : null };
+        if (mode === 'new') sel = null;
+      }
       draw(); return;
     }
     if (floating) commitFloating();
     if (tool === 'pick') { const p = dg.getImageData(x, y, 1, 1).data; if (p[3]) { color = hex(p[0], p[1], p[2]); colorIn.value = color; setAlpha(p[3] / 255); drawPal(); } return; }
     snap();
-    if (tool === 'fill') { fill(x, y, e.button === 2 ? null : color); draw(); return; }
-    down = true; setPx(x, y, tool === 'erase' || e.button === 2 ? null : color); draw();
+    if (tool === 'fill') { if (e.button !== 2) useColor(color); fill(x, y, e.button === 2 ? null : color); draw(); return; }
+    if (tool !== 'erase' && e.button !== 2) useColor(color);
+    down = [x, y]; setPx(x, y, tool === 'erase' || e.button === 2 ? null : color); draw();
   });
   view.addEventListener('mousemove', e => {
     if (!selDrag) return;
     const [x, y] = cell(e);
     if (selDrag.move) { floating.x = x - selDrag.ox; floating.y = y - selDrag.oy; sel = { x: floating.x, y: floating.y, w: floating.cv.width, h: floating.cv.height }; }
     else { const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y)); selDrag.moved = true;
-      sel = { x: Math.min(selDrag.x0, cx), y: Math.min(selDrag.y0, cy), w: Math.abs(cx - selDrag.x0) + 1, h: Math.abs(cy - selDrag.y0) + 1 }; }
+      if (selDrag.pts) { const l = selDrag.pts[selDrag.pts.length - 1]; if (l[0] !== cx || l[1] !== cy) selDrag.pts.push([cx, cy]); }
+      else { const r = { x: Math.min(selDrag.x0, cx), y: Math.min(selDrag.y0, cy), w: Math.abs(cx - selDrag.x0) + 1, h: Math.abs(cy - selDrag.y0) + 1 };
+        sel = selDrag.mode === 'new' ? r : combine(selDrag.base, rectMask(r), selDrag.mode); } }
     draw();
   });
-  view.addEventListener('mousemove', e => { if (!down) return; const [x, y] = cell(e); setPx(x, y, tool === 'erase' || e.buttons === 2 ? null : color); draw(); });
-  addEventListener('mouseup', () => { down = false; if (selDrag) { if (!selDrag.move && !selDrag.moved) sel = null; selDrag = null; if (wrap.isConnected) draw(); } });
+  view.addEventListener('mousemove', e => {
+    const [x, y] = cell(e);
+    if (!down) { if (brush > 1 && (tool === 'pen' || tool === 'erase') && (!hov || hov[0] !== x || hov[1] !== y)) { hov = [x, y]; draw(); } return; }
+    hov = [x, y];
+    const c = tool === 'erase' || e.buttons === 2 ? null : color;
+    lineCells(down[0], down[1], x, y, (a, b) => setPx(a, b, c));   // 빨리 움직여도 끊기지 않게 사이를 이음
+    down = [x, y]; draw();
+  });
+  view.addEventListener('mouseleave', () => { if (hov) { hov = null; draw(); } });
+  addEventListener('mouseup', () => { down = false; if (selDrag) {
+    if (!selDrag.move) {
+      if (selDrag.pts) sel = selDrag.pts.length > 2 ? combine(selDrag.base, lassoMask(selDrag.pts), selDrag.mode) : selDrag.base;
+      else if (!selDrag.moved) sel = selDrag.mode === 'new' ? null : selDrag.base;
+    }
+    selDrag = null; if (wrap.isConnected) draw(); } });
   view.addEventListener('contextmenu', e => e.preventDefault());
 
+  // 최근 사용 색 8칸 (실제로 칠한 색 — 편집기를 다시 열어도 이어짐)
+  const recent = PDM._pixRecent = PDM._pixRecent || [];
+  const recEl = h('div', { class: 'px-pal', title: '최근 사용 색' });
+  function drawRecent() {
+    recEl.innerHTML = '';
+    for (let i = 0; i < 8; i++) { const c = recent[i];
+      recEl.append(h('div', { class: 'px-sw' + (c && c === color ? ' on' : ''), title: c || '', style: c ? { background: c } : { background: 'transparent', border: '1px dashed var(--line)', cursor: 'default' },
+        onclick: () => { if (!c) return; color = c; colorIn.value = c; drawPal(); drawRecent(); } })); }
+  }
+  function useColor(c) { if (!c) return; const i = recent.indexOf(c); if (i === 0) return; if (i > 0) recent.splice(i, 1); recent.unshift(c); recent.length = Math.min(recent.length, 8); drawRecent(); }
   const pal = h('div', { class: 'px-pal' });
   function drawPal() { pal.innerHTML = ''; PDM.PALETTE.forEach(c => pal.append(h('div', { class: 'px-sw' + (c === color ? ' on' : ''), style: { background: c }, onclick: () => { color = c; colorIn.value = c; drawPal(); } }))); }
   const colorIn = h('input', { type: 'color', value: color, oninput: () => { color = colorIn.value; drawPal(); } });
@@ -177,24 +338,32 @@ PDM.pixelEditor = function (o) {
   const zoomIn = h('input', { type: 'number', min: 1, max: 48, value: scale, style: { width: '56px' }, title: '표시 배율: 그림의 한 픽셀을 화면에서 몇 배로 볼지' });
   zoomIn.addEventListener('change', () => { scale = Math.max(1, Math.min(48, Math.round(+zoomIn.value || 1))); draw(); });
   const fitFrame = () => { const pane = view.parentNode; if (!pane || !gridStep) return; const r = pane.getBoundingClientRect(); scale = Math.max(1, Math.min(48, Math.floor(Math.min(r.width / gridStep, r.height / (o.rowStep || gridStep)) * 0.9))); draw(); };
-  const toolBtn = (id, label) => h('button', { class: 'tool' + (tool === id ? ' on' : ''), 'data-t': id, onclick: e => { e.preventDefault(); if (id !== 'select') commitFloating(); setTool(id); draw(); } }, label);
+  const toolBtn = (id, label, tip) => h('button', { class: 'tool' + (tool === id ? ' on' : ''), 'data-t': id, title: tip || '', onclick: e => { e.preventDefault(); if (!SEL_TOOLS.includes(id)) commitFloating(); setTool(id); draw(); } }, label);
+  const brushIn = h('input', { type: 'number', min: 1, max: 64, value: 1, style: { width: '56px' }, title: '브러쉬 크기 — [ 작게 · ] 크게 (브러쉬와 지우개는 크기를 따로 기억)' });
+  const brushLbl = h('span', { class: 'fl' }, '브러쉬 크기');
+  brushIn.addEventListener('change', () => setBrush(+brushIn.value));
   const side = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '190px' } },
-    h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, toolBtn('pen', '✎ 펜'), toolBtn('erase', '⌫ 지우개'), toolBtn('fill', '▣ 채우기'), toolBtn('pick', '⊙ 스포이드'), toolBtn('select', '⬚ 영역 선택')),
+    h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, toolBtn('pen', '✎ 브러쉬', 'B'), toolBtn('erase', '⌫ 지우개', 'E'), toolBtn('fill', '▣ 채우기', 'G'), toolBtn('pick', '⊙ 스포이드', 'I'),
+      toolBtn('select', '⬚ 사각 선택', 'M'), toolBtn('lasso', '➰ 올가미', 'L — 끌어서 그린 모양 안쪽을 선택'), toolBtn('wand', '✦ 마법봉', 'W — 누른 칸과 이어진 같은 색을 선택')),
+    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, brushLbl, brushIn,
+      h('button', { class: 'btn xs', title: '[', onclick: e => { e.preventDefault(); setBrush(brush - 1); } }, '[ 작게'), h('button', { class: 'btn xs', title: ']', onclick: e => { e.preventDefault(); setBrush(brush + 1); } }, '크게 ]')),
+    h('small', { class: 'hint' }, '선택 도구: Ctrl+조작 = 선택에 더하기 · Alt+조작 = 선택에서 빼기. Ctrl+Z 되돌리기 · Ctrl+Shift+Z 다시 실행 · Space+끌기 = 이동 · Z+끌기 = 확대(바깥으로)/축소(안쪽으로)'),
     h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' } },
       h('button', { class: 'btn xs', title: 'Ctrl+C — 선택한 영역 복사 (선택이 없으면 그림 전체)', onclick: e => { e.preventDefault(); copySel(false); } }, '복사'),
       h('button', { class: 'btn xs', title: 'Ctrl+X', onclick: e => { e.preventDefault(); copySel(true); } }, '잘라내기'),
       h('button', { class: 'btn xs', title: 'Ctrl+V — 선택한 자리(없으면 왼쪽 위)에 붙이고, 끌어서 옮긴 뒤 Enter', onclick: e => { e.preventDefault(); pasteClip(); } }, '붙여넣기'),
       h('button', { class: 'btn xs', title: 'Delete — 선택한 영역을 투명하게', onclick: e => { e.preventDefault(); clearSel(); } }, '지우기'),
-      h('button', { class: 'btn xs', title: 'Esc — 선택 해제 (붙여넣던 그림은 그 자리에 놓임)', onclick: e => { e.preventDefault(); deselect(); } }, '선택 해제')),
+      h('button', { class: 'btn xs', title: 'Ctrl+D 또는 Esc — 선택 해제 (붙여넣던 그림은 그 자리에 놓임)', onclick: e => { e.preventDefault(); deselect(); } }, '선택 해제')),
     selInfo,
+    h('div', {}, h('span', { class: 'fl' }, '최근 사용 색'), recEl),
     pal, h('label', { class: 'field' }, h('span', { class: 'fl' }, '직접 색 고르기'), colorIn),
     h('div', { class: 'field' }, h('span', { class: 'fl' }, '불투명도 (%)'), h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, alphaIn, alphaNum)),
     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '표시 배율 ×'), zoomIn,
       gridStep ? h('button', { class: 'btn xs', title: '한 프레임이 창에 꽉 차게', onclick: e => { e.preventDefault(); fitFrame(); } }, '프레임 하나에 맞춤') : null,
       h('button', { class: 'btn xs', title: '그림 전체가 창에 들어오게', onclick: e => { e.preventDefault(); const pane = view.parentNode; const r = pane.getBoundingClientRect(); scale = Math.max(1, Math.min(48, Math.floor(Math.min(r.width / W, r.height / H)))); draw(); } }, '전체 맞춤')),
     h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
-      h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); if (hist.length) { fut.push(cap()); put(hist.pop()); draw(); } } }, '↶ 되돌리기'),
-      h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); if (fut.length) { hist.push(cap()); put(fut.pop()); draw(); } } }, '↷'),
+      h('button', { class: 'btn sm', title: 'Ctrl+Z', onclick: e => { e.preventDefault(); undo(); } }, '↶ 되돌리기'),
+      h('button', { class: 'btn sm', title: 'Ctrl+Shift+Z', onclick: e => { e.preventDefault(); redo(); } }, '↷'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); scale = Math.min(48, scale + 2); draw(); } }, '+'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); scale = Math.max(1, scale - 2); draw(); } }, '−'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); grid = !grid; draw(); } }, '격자'),
@@ -246,8 +415,9 @@ PDM.pixelEditor = function (o) {
   if (o.src) { const img = new Image(); img.onload = () => { dg.drawImage(img, 0, 0); draw(); }; img.src = o.src; }
   // Ctrl + 휠 = 확대/축소
   view.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); scale = Math.max(1, Math.min(48, scale + (e.deltaY < 0 ? 1 : -1))); draw(); }, { passive: false });
-  syncSize(); drawPal(); draw();
+  syncSize(); drawPal(); drawRecent(); draw();
   wrap.toDataURL = () => { commitFloating(); return data.toDataURL('image/png'); };
+  wrap.dataCanvas = data;
   return wrap;
 };
 
@@ -277,8 +447,18 @@ PDM.editPixelsModal = async function (title, relPath, w, h_, gridStep, saveAsPat
     const name = String(relPath || 'new_sprite.png').split('/').pop().replace(/\.png$/i, '');
     return `assets/sprites/${name}_copy.png`;
   }
-  const ed = PDM.pixelEditor({ width: W, height: H, src, gridStep, rowStep: (opts || {}).rowStep, onSave: d => { result = d; PDM.$('.modal-foot .pri').click(); }, onSaveAs: saveAs });
-  const ok = await PDM.ui.modal(title, ed, [['취소', false], ['저장', () => true, 'pri']]);
+  // 타일셋 · 물 그림이면 옆에 "실시간 미리보기" (게임이 만든 층을 지금 그림으로)
+  const tp = PDM.levelPreview && ((opts || {}).tilePreview ? { theme: opts.tilePreview, kind: 'tiles' } : PDM.levelPreview.themeOfPath(saveAsPath || relPath));
+  let pv = null, other = null;
+  const ed = PDM.pixelEditor({ width: W, height: H, src, gridStep, rowStep: (opts || {}).rowStep, onSave: d => { result = d; PDM.$('.modal-foot .pri').click(); }, onSaveAs: saveAs, onDraw: () => { if (pv) pv.redraw(); } });
+  let body = ed;
+  if (tp && (PDM.SPD_LEVEL_PREVIEWS || {})[tp.theme]) {
+    const T = PDM.THEMES[tp.theme];
+    PDM.assets.load('game:' + (tp.kind === 'tiles' ? T.water : T.tiles)).then(im => { other = im; if (pv) pv.redraw(); }).catch(() => {});
+    pv = PDM.levelPreview.panel({ theme: tp.theme, tiles: () => tp.kind === 'tiles' ? ed.dataCanvas : other, water: () => tp.kind === 'tiles' ? other : ed.dataCanvas });
+    body = PDM.h('div', { class: 'px-preview', style: { display: 'flex', gap: '12px', alignItems: 'flex-start' } }, ed, pv.el);
+  }
+  const ok = await PDM.ui.modal(title, body, [['취소', false], ['저장', () => true, 'pri']]);
   if (!ok) return null;
   const data = result || ed.toDataURL();
   let out = asPath || saveAsPath || relPath;

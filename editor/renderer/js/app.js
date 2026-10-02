@@ -55,6 +55,7 @@
   function render(t) {
     const body = $('#tabbody');
     const keep = active === t ? body.scrollTop : (t.scroll || 0);
+    if (t.key.includes(':') && store.isOpen && !store.has(t.key)) { setTimeout(() => PDM.tabs.close(t.key), 0); return; }   // 지워진 리소스의 탭은 닫음 (그리다 오류 나지 않게)
     t.dispose && t.dispose(); t.dispose = null;
     // ctx 는 탭마다 하나 (ctx.state / ctx.st 에 둔 화면 상태가 다시 그려도 유지됨)
     const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { t.dispose = fn; }, key: t.key };
@@ -345,7 +346,9 @@
     ],
     '도움말': () => [
       { label: '설계서 (DESIGN.md) 열기', run: async () => { const p = await pdm.paths(); pdm.openExternal(pdm.join(p.resources, 'DESIGN.md')); } },
-      { label: '조건식 문법', run: showCondHelp }
+      { label: '조건식 문법', run: showCondHelp },
+      { label: 'PDMaker 업데이트 확인…', run: () => checkUpdate(true) },
+      { label: 'GitHub 페이지 열기', run: () => pdm.openExternal('https://github.com/IceNight154/pd-maker') }
     ]
   };
   function drawMenubar() {
@@ -586,6 +589,41 @@
   }
 
   /** 게임 저장소 맨 위 build.gradle 편집 (게임 이름 · 패키지 이름 · 버전 칸 + 파일 내용 그대로) */
+  /** PDMaker 업데이트: GitHub 의 main 과 비교해서 보여 주고, 누르면 받아서 다시 시작. manual = 메뉴에서 누름 (최신이어도 알려 줌) */
+  async function checkUpdate(manual) {
+    if (!pdm.updateCheck) { if (manual) toast('이 실행 방식에서는 업데이트를 확인할 수 없습니다 (웹 모드 · 예전 실행 파일)', 'bad'); return; }
+    let r;
+    try { if (manual) toast('업데이트 확인 중…'); r = await pdm.updateCheck(); }
+    catch (e) { if (manual) PDM.ui.modal('업데이트 확인', h('div', {}, h('p', {}, '업데이트를 확인하지 못했습니다.'), h('p', { class: 'hint dlg-text' }, String(e.message || e))), [['닫기', null, 'pri']]); return; }
+    if (r.upToDate) { if (manual) PDM.ui.modal('업데이트 확인', h('div', {}, h('p', {}, 'PDMaker 가 최신입니다.'), h('p', { class: 'hint' }, `현재 ${r.local ? r.local.short : '?'} · ${r.note || ''}`)), [['닫기', null, 'pri']]); else PDM.log('PDMaker 가 최신입니다 (' + (r.local ? r.local.short : '') + ')', 'dim'); return; }
+    if (!manual) { PDM.log(`PDMaker 새 버전이 있습니다 (${r.commits.length}개 변경) — 도움말 › PDMaker 업데이트 확인`, 'ok'); toast('PDMaker 새 버전이 있습니다 — 도움말 › 업데이트 확인'); return; }
+    const fmtDate = d => d ? String(d).slice(0, 10) : '';
+    const body = h('div', { style: { width: 'min(620px, 84vw)' } },
+      h('p', {}, r.canApply ? '새 버전이 있습니다.' : '새 버전이 있지만 이 실행 방식에서는 직접 받아야 합니다.'),
+      h('p', { class: 'hint' }, `현재 ${r.local ? r.local.short + (r.local.date ? ' (' + fmtDate(r.local.date) + ')' : '') : '알 수 없음'}  →  최신 ${r.remote.short}${r.remote.date ? ' (' + fmtDate(r.remote.date) + ')' : ''} · 방식: ${{ git: 'git pull', zip: 'ZIP 내려받아 덮어쓰기', packaged: '실행 파일' }[r.mode]}`),
+      r.note ? h('p', { class: 'hint' }, r.note) : null,
+      h('div', { class: 'fl' }, '바뀐 내용' + (r.behind ? ` (${r.behind}개)` : '')),
+      h('div', { style: { maxHeight: '40vh', overflow: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '6px 10px' } },
+        ...r.commits.slice(0, 60).map(c => h('div', { style: { margin: '2px 0' } }, h('code', { class: 'hint', style: { marginRight: '8px' } }, String(c.sha).slice(0, 7) + ' ' + fmtDate(c.date)), c.message))),
+      h('p', { class: 'hint' }, r.mode === 'git' ? '업데이트하면 git pull 로 받아 온 뒤 PDMaker 를 다시 시작합니다.' + (r.dirty ? ` 이 폴더에 고친 파일이 ${r.dirty}개 있어 겹치면 실패할 수 있습니다 (실패하면 ZIP 방식으로 받을 수 있음).` : '')
+        : r.mode === 'zip' ? '업데이트하면 PDMaker 파일을 최신으로 덮어쓴 뒤 다시 시작합니다. game 폴더(게임 저장소)와 프로젝트는 건드리지 않습니다.' : ''));
+    const ans = await PDM.ui.modal('PDMaker 업데이트', body, [['닫기', null], ['GitHub 열기', 'page'], ...(r.canApply ? [['업데이트하고 다시 시작', 'go', 'pri']] : [])]);
+    if (ans === 'page') { pdm.openExternal(r.page); return; }
+    if (ans !== 'go') return;
+    if (store.isOpen && store.isDirty()) { if (!(await PDM.ui.confirm('저장하지 않은 변경이 있습니다. 저장하고 업데이트할까요?'))) return; await saveAll(); }
+    showBottom && showBottom('log'); PDM.log('PDMaker 업데이트 시작…', 'ok');
+    try {
+      let res = await pdm.updateApply({});
+      if (res && res.gitFailed) {
+        PDM.log(res.error, 'warn');
+        if (!(await PDM.ui.confirm('git pull 이 실패했습니다 (이 폴더에서 고친 파일과 겹침).\n\nZIP 을 받아 PDMaker 파일만 덮어쓸까요? game 폴더는 건드리지 않지만, editor · runtime 등에서 직접 고친 내용은 사라집니다.'))) return;
+        res = await pdm.updateApply({ zip: true });
+      }
+      PDM.log('업데이트 완료' + (res.sha ? ' → ' + String(res.sha).slice(0, 7) : ''), 'ok');
+      if (res.needInstall) await PDM.ui.modal('업데이트', h('p', {}, '필요한 모듈(Electron 등) 버전이 바뀌었습니다. PDMaker 를 닫은 뒤 editor 폴더에서 npm install 을 한 번 실행해 주세요.'), [['확인', null, 'pri']]);
+      await pdm.updateRestart();
+    } catch (e) { PDM.log('업데이트 실패: ' + (e.message || e), 'err'); PDM.ui.modal('업데이트 실패', h('p', { class: 'dlg-text' }, String(e.message || e)), [['닫기', null, 'pri']]); }
+  }
   async function editBuildGradle() {
     if (!store.isOpen) return;
     const repo = await resolveRepo(true), fp = pdm.join(repo || '', 'build.gradle');
@@ -946,6 +984,7 @@
     if (window.PDM_THEME) { PDM_THEME.connect(); PDM_THEME.onChange(() => drawToolbar()); }
     pdm.on('app:before-close', async () => { if (await guardDirty()) pdm.closeApp(); });
     PDM.log('PDMaker 시작 ' + (pdm.isElectron ? '' : '(웹 모드)'), 'dim');
+    if (pdm.isElectron) setTimeout(() => checkUpdate(false), 4000);   // 시작할 때 조용히 한 번 확인
     const q = new URLSearchParams(location.search).get('project');
     if (q) loadProject(q);
   }

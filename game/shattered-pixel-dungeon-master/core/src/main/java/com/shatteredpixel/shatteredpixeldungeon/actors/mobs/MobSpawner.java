@@ -63,6 +63,7 @@ public class MobSpawner extends Actor {
 		ArrayList<Class<? extends Mob>> mobs = standardMobRotation( depth );
 		addRareMobs(depth, mobs);
 		swapMobAlts(mobs);
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.filterMobs(mobs); // >>> pdmaker
 		Random.shuffle(mobs);
 		return mobs;
 	}

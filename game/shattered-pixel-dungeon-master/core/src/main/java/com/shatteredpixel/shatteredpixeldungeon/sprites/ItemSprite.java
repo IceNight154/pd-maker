@@ -104,6 +104,7 @@ public class ItemSprite extends MovieClip {
 	}
 	
 	public void link( Heap heap ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.heapScale(this, heap); // >>> pdmaker
 		this.heap = heap;
 		view(heap);
 		renderShadow = true;

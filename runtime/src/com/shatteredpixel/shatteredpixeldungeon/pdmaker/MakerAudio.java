@@ -245,6 +245,7 @@ public class MakerAudio {
 	/** Item.doPickUp 의 줍는 소리 대신 — true 면 원래 소리를 내지 않음 */
 	public static boolean onItemPickup(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {
 		if (!MakerRuntime.isActive() || it == null) return false;
+		try { EventTriggers.onItemPickup(it); } catch (Throwable t) { MakerRuntime.log("아이템 줍기 트리거 오류: " + t); }
 		try {
 			String r = itemSound(it, "pickup");
 			if (r.isEmpty()) return false;

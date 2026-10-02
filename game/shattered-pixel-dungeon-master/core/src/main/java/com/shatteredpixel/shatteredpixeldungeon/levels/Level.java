@@ -564,6 +564,7 @@ public abstract class Level implements Bundlable {
 	}
 
 	public LevelTransition getTransition(LevelTransition.Type type){
+		{ LevelTransition pdmT = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.pickArrival(this, type); if (pdmT != null) return pdmT; } // >>> pdmaker
 		if (transitions.isEmpty()){
 			return null;
 		}
@@ -1159,6 +1160,7 @@ public abstract class Level implements Bundlable {
 	}
 	
 	public void occupyCell( Char ch ){
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.onOccupy(this, ch); // >>> pdmaker
 		if (!ch.isImmune(Web.class) && Blob.volumeAt(ch.pos, Web.class) > 0){
 			blobs.get(Web.class).clear(ch.pos);
 			Web.affectChar( ch );

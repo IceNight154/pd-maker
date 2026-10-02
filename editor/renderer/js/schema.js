@@ -132,7 +132,7 @@ PDM.BEHAVIOR_HOOKS = { onSpawn: '생성될 때', onInteract: '말을 걸었을 �
 
 // ---------- 이벤트 ----------
 PDM.TRIGGERS = {
-  action: '조사(말 걸기)', touch: '밟았을 때', auto: '자동 실행(1회)', parallel: '병렬(매 턴)',
+  action: '조사(말 걸기)', touch: '밟았을 때', auto: '자동 실행 (조건이 맞으면 한 번)', parallel: '병렬 (매 턴)',
   floorEnter: '층에 들어올 때', turn: 'N 턴마다', heart: '마음 조건 만족 시', itemPickup: '아이템 주웠을 때',
   mobKilled: '몬스터 처치 시', bossDefeated: '보스 처치 시', none: '없음(호출 전용)'
 };
@@ -140,6 +140,21 @@ PDM.EVENT_KINDS = { common: '커먼 이벤트', scene: '장면(연출)', milesto
 
 // 명령 정의: params 의 type → 편집 화면 입력칸 종류
 //  text | textarea | number | bool | select | char | charHero | item | event | switch | var | floor | image | face | cond | options | theme | ending | heartStat | sound
+/** 스토리 변수의 형식: number | string | bool */
+PDM.varTypeOf = id => ((((PDM.store.get('story') || {}).variables || []).find(v => v.id === id) || {}).type) || 'number';
+// 이동 경로 명령 (RPG Maker 의 이동 루트 설정에 해당). p = 추가로 정하는 값 [키, 라벨, 종류, 기본값]
+PDM.ROUTE_OPS = [
+  ['이동', [['down', '아래로 이동'], ['left', '왼쪽으로 이동'], ['right', '오른쪽으로 이동'], ['up', '위로 이동'], ['dl', '왼쪽 아래로 이동'], ['dr', '오른쪽 아래로 이동'], ['ul', '왼쪽 위로 이동'], ['ur', '오른쪽 위로 이동'],
+    ['random', '무작위로 이동'], ['toward', '영웅에게 다가가기'], ['away', '영웅에게서 멀어지기'], ['forward', '한 걸음 앞으로'], ['backward', '한 걸음 뒤로'],
+    ['jump', '뛰어넘기…', [['x', 'x 만큼', 'number', 0], ['y', 'y 만큼', 'number', 0]]], ['goto', '칸으로 걸어가기…', [['x', 'x 좌표', 'number', 0], ['y', 'y 좌표', 'number', 0]]], ['wait', '대기…', [['n', '시간(0.1초)', 'number', 10]]]]],
+  ['방향', [['turnDown', '아래를 봄'], ['turnLeft', '왼쪽을 봄'], ['turnRight', '오른쪽을 봄'], ['turnUp', '위를 봄'], ['turnR90', '오른쪽으로 90°'], ['turnL90', '왼쪽으로 90°'], ['turn180', '뒤돌기 (180°)'],
+    ['turnRandom', '무작위 방향'], ['turnToward', '영웅 쪽을 봄'], ['turnAway', '영웅 반대쪽을 봄'],
+    ['switchOn', '스위치 켜기…', [['id', '스위치', 'switch', '']]], ['switchOff', '스위치 끄기…', [['id', '스위치', 'switch', '']]], ['speed', '이동 속도 바꾸기…', [['n', '속도 1(느림)~6(빠름)', 'number', 4]]]]],
+  ['상태', [['dirFixOn', '방향 고정 켜기'], ['dirFixOff', '방향 고정 끄기'], ['throughOn', '통과 켜기 (벽 · 장애물 무시)'], ['throughOff', '통과 끄기'], ['transparentOn', '투명 켜기'], ['transparentOff', '투명 끄기'],
+    ['opacity', '불투명도 바꾸기…', [['n', '불투명도 0~255', 'number', 255]]], ['se', '효과음 재생…', [['file', '소리', 'sound', '']]]]]
+];
+PDM.ROUTE_OP = {}; PDM.ROUTE_OPS.forEach(([, l]) => l.forEach(([id, name, ps]) => { PDM.ROUTE_OP[id] = { name: name.replace('…', ''), params: ps || [] }; }));
+PDM.routeOpText = o => { const d = PDM.ROUTE_OP[o.op]; if (!d) return o.op || '?'; const v = d.params.map(([k]) => o[k]).filter(x => x !== undefined && x !== ''); return d.name + (v.length ? ' ' + v.join(', ') : ''); };
 PDM.COMMANDS = {
   text:      { g: '메시지', name: '대사 표시', params: [
                  { k: 'speaker', t: 'charHero', label: '화자' }, { k: 'face', t: 'face', label: '표정' },
@@ -158,13 +173,17 @@ PDM.COMMANDS = {
   break:     { g: '흐름', name: '반복 중단', params: [], sum: () => '반복 중단' },
   wait:      { g: '흐름', name: '대기', params: [{ k: 'turns', t: 'number', label: '시간(0.1초 단위)' }], sum: c => `대기 ${c.turns || 0}` },
   call:      { g: '흐름', name: '커먼 이벤트 호출', params: [{ k: 'event', t: 'event', label: '이벤트' }], sum: c => '호출: ' + PDM.refName('event', c.event) },
+  label:     { g: '흐름', name: '이름표', params: [{ k: 'name', t: 'text', label: '이름' }], sum: c => `◈ 이름표: ${c.name || ''}` },
+  jump:      { g: '흐름', name: '이름표로 건너뛰기', params: [{ k: 'name', t: 'text', label: '이름표 이름 (같은 목록이나 바깥 목록에 있는 것)' }], sum: c => `→ 이름표 「${c.name || ''}」 로` },
   stop:      { g: '흐름', name: '이벤트 중지', params: [], sum: () => '이벤트 중지' },
   global:    { g: '데이터', name: '전역 스위치 (새 게임에도 유지)', params: [{ k: 'key', t: 'text', label: '이름 (영문)' }, { k: 'value', t: 'bool', label: '켜기' }],
                sum: c => `전역 스위치 ${c.key || '?'} = ${c.value === false ? '끔' : '켬'}  (조건식 global.${c.key || '이름'} · 영웅 해금)` },
   switch:    { g: '데이터', name: '스위치', params: [{ k: 'id', t: 'switch', label: '스위치' }, { k: 'value', t: 'bool', label: '켜기' }],
                sum: c => `스위치 ${PDM.refName('switch', c.id)} = ${c.value ? '켬' : '끔'}` },
-  var:       { g: '데이터', name: '변수', params: [{ k: 'id', t: 'var', label: '변수' }, { k: 'op', t: 'select', label: '연산', options: { set: '=', add: '+=', sub: '-=', mul: '×=' } }, { k: 'value', t: 'number', label: '값' }],
-               sum: c => `변수 ${PDM.refName('var', c.id)} ${({ set: '=', add: '+=', sub: '-=', mul: '×=' })[c.op || 'set']} ${c.value ?? 0}` },
+  var:       { g: '데이터', name: '변수', params: [{ k: 'id', t: 'var', label: '변수' }, { k: 'op', t: 'select', label: '연산', options: { set: '= (넣기)', add: '+= (더하기 · 문자열은 뒤에 붙이기)', sub: '-=', mul: '×=', div: '÷=', mod: '나머지 =', toggle: '뒤집기 (참/거짓 변수)' } },
+                 { k: 'src', t: 'select', label: '넣을 값', options: { rand: '무작위 (최소 ~ 값)', ref: '다른 값 (아래 이름)' } }, { k: 'value', t: 'number', label: '값 (무작위면 최대 · 참/거짓 변수는 1 = 참, 0 = 거짓)' }, { k: 'text', t: 'text', label: '글자 (문자열 변수일 때 — {var.id} 같은 이름을 넣을 수 있음)' }, { k: 'min', t: 'number', label: '최소 (무작위일 때)' },
+                 { k: 'ref', t: 'text', label: '다른 값 이름 (예: var.score · gold · hero.hp · hero.lvl · item.아이템id · depth · turns)' }],
+               sum: c => `변수 ${PDM.refName('var', c.id)} ${({ set: '=', add: '+=', sub: '-=', mul: '×=', div: '÷=', mod: '%=' })[c.op || 'set']} ${c.op === 'toggle' ? '' : c.src === 'rand' ? `무작위(${c.min || 0}~${c.value ?? 0})` : c.src === 'ref' ? (c.ref || '?') : PDM.varTypeOf(c.id) === 'string' ? JSON.stringify(c.text || '') : PDM.varTypeOf(c.id) === 'bool' ? (c.value || c.text === 'true' ? '참' : '거짓') : (c.value ?? 0)}`.replace('undefined', '뒤집기') },
   self:      { g: '데이터', name: '셀프 스위치', params: [{ k: 'key', t: 'select', label: '스위치', options: { A: 'A', B: 'B', C: 'C', D: 'D' } }, { k: 'value', t: 'bool', label: '켜기' }],
                sum: c => `셀프 ${c.key || 'A'} = ${c.value ? '켬' : '끔'}` },
   heart:     { g: '마음', name: '마음 수치 변경', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'stat', t: 'heartStat', label: '수치' }, { k: 'value', t: 'number', label: '더할 값' }],
@@ -189,15 +208,27 @@ PDM.COMMANDS = {
                { k: 'width', t: 'number', label: '크기 (화면 너비 %, 기본 80)' }, { k: 'loops', t: 'number', label: '반복 횟수 (기본 1)' }, { k: 'nowait', t: 'bool', label: '기다리지 않고 바로 다음 명령으로' }],
                sum: c => `글자 연출: ${(((PDM.store.get('textfx') || {}).list || []).find(x => x.id === c.fx) || {}).name || c.fx || '?'}${c.nowait ? ' (기다리지 않음)' : ''}` },
   flash:     { g: '연출', name: '화면 번쩍임', params: [{ k: 'color', t: 'text', label: '색(#rrggbb)' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `번쩍임 ${c.color || '#ffffff'}` },
+  fade:      { g: '연출', name: '화면 어둡게 / 밝게', params: [{ k: 'op', t: 'select', label: '무엇을', options: { out: '어둡게 (페이드 아웃)', in: '밝게 (페이드 인)' } }, { k: 'time', t: 'number', label: '시간(0.1초)' }, { k: 'color', t: 'text', label: '색(#rrggbb, 기본 검정)' }, { k: 'wait', t: 'bool', label: '끝날 때까지 대기' }],
+               sum: c => `화면 ${c.op === 'in' ? '밝게' : '어둡게'} (${(c.time ?? 5) / 10}초)` },
   face:      { g: '연출', name: '표정 바꾸기', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'face', t: 'face', label: '표정' }], sum: c => `${PDM.refName('character', c.char)} 표정 → ${c.face || '기본'}` },
   sound:     { g: '연출', name: '효과음/음악', params: [{ k: 'kind', t: 'select', label: '종류', options: { se: '효과음', bgm: '배경음' } }, { k: 'file', t: 'sound', label: '소리 (사운드 편집기 목록 · 게임 소리)' }], sum: c => `${c.kind === 'bgm' ? '배경음' : '효과음'} ${PDM.audio ? PDM.audio.label(c.file) : c.file || ''}` },
   anim:      { g: '캐릭터', name: '애니메이션 재생', params: [{ k: 'target', t: 'charHero', label: '대상' }, { k: 'anim', t: 'text', label: '애니메이션 이름 (idle·attack·fly… 또는 시트에서 만든 추가 애니메이션)' }],
                sum: c => `${c.target === '$hero' || !c.target ? '영웅' : PDM.refName('character', c.target)} 애니메이션 「${c.anim || '?'}」` },
-  move:      { g: '캐릭터', name: '이동 경로', params: [{ k: 'char', t: 'charHero', label: '대상' }, { k: 'path', t: 'text', label: '경로 (예: 3,4 5,4 5,8)' }, { k: 'wait', t: 'bool', label: '끝날 때까지 대기' }],
-               sum: c => `${PDM.refName('character', c.char)} 이동: ${c.path || ''}` },
-  spawn:     { g: '캐릭터', name: '캐릭터 소환', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'x', t: 'number', label: 'x' }, { k: 'y', t: 'number', label: 'y' }], sum: c => `소환 ${PDM.refName('character', c.char)} (${c.x},${c.y})` },
+  move:      { g: '캐릭터', name: '이동 경로 설정', params: [{ k: 'char', t: 'charHero', label: '대상 (비우면 영웅)' }, { k: 'route', t: 'route', label: '이동 명령 (오른쪽 버튼을 누르면 왼쪽 목록에 추가)' }],
+               sum: c => `${!c.char || c.char === '$hero' ? '영웅' : PDM.refName('character', c.char)} 이동: ${(c.route || []).map(PDM.routeOpText).join(' → ').slice(0, 90) || c.path || '(비어 있음)'}${c.repeat ? ' ↻ 반복' : c.wait === false ? ' (기다리지 않음)' : ''}` },
+  teleport:  { g: '캐릭터', name: '순간 이동 (같은 맵)', params: [{ k: 'char', t: 'charHero', label: '대상 (비우면 영웅)' }, { k: 'x', t: 'number', label: 'x' }, { k: 'y', t: 'number', label: 'y' }],
+               sum: c => `${!c.char || c.char === '$hero' ? '영웅' : PDM.refName('character', c.char)} 순간 이동 (${c.x || 0}, ${c.y || 0})` },
+  spawn:     { g: '캐릭터', name: '캐릭터 소환', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'x', t: 'number', label: 'x' }, { k: 'y', t: 'number', label: 'y' }], sum: c => `소환 ${PDM.refName('character', c.char)} (${c.x ?? 0},${c.y ?? 0})` },
   despawn:   { g: '캐릭터', name: '캐릭터 제거', params: [{ k: 'char', t: 'char', label: '캐릭터' }], sum: c => `제거 ${PDM.refName('character', c.char)}` },
-  party:     { g: '캐릭터', name: '동료 합류/이탈', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'join', t: 'bool', label: '합류' }], sum: c => `${PDM.refName('character', c.char)} ${c.join ? '합류' : '이탈'}` },
+  party:     { g: '캐릭터', name: '동료 합류/이탈', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'join', t: 'bool', label: '합류' }], sum: c => `${PDM.refName('character', c.char)} ${c.join ? '합류 (영웅을 따라다님 · 층을 옮겨도 함께)' : '이탈 (그 자리에 남음)'}` },
+  gold:      { g: '영웅', name: '금화 늘리기/줄이기', params: [{ k: 'value', t: 'number', label: '더할 금화 (음수 = 빼기)' }, { k: 'quiet', t: 'bool', label: '알림 없이' }], sum: c => `금화 ${c.value >= 0 ? '+' : ''}${c.value || 0}` },
+  hp:        { g: '영웅', name: '체력 바꾸기', params: [{ k: 'op', t: 'select', label: '방식', options: { add: '더하기 (음수 = 피해)', set: '정하기', pct: '최대 체력의 % 만큼 더하기', full: '모두 회복' } }, { k: 'value', t: 'number', label: '값' },
+                 { k: 'kill', t: 'bool', label: '0 이하가 되면 사망 (끄면 1 에서 멈춤)' }, { k: 'text', t: 'text', label: '사망 원인 문구 (선택)' }],
+               sum: c => c.op === 'full' ? '체력 모두 회복' : `체력 ${c.op === 'set' ? '=' : (c.value >= 0 ? '+' : '')}${c.value || 0}${c.op === 'pct' ? '%' : ''}${c.kill ? ' (사망 가능)' : ''}` },
+  buff:      { g: '영웅', name: '상태(버프) 걸기/풀기', params: [{ k: 'char', t: 'charHero', label: '대상 (비우면 영웅)' }, { k: 'buff', t: 'select', label: '상태', get options() { return PDM.SPD_BUFFS || {}; } }, { k: 'turns', t: 'number', label: '턴' }, { k: 'remove', t: 'bool', label: '풀기 (걸려 있는 것을 없앰)' }],
+               sum: c => `${!c.char || c.char === '$hero' ? '영웅' : PDM.refName('character', c.char)} 상태 ${(PDM.SPD_BUFFS || {})[c.buff] || c.buff || '?'} ${c.remove ? '풀기' : (c.turns || 5) + '턴'}` },
+  exp:       { g: '영웅', name: '경험치 · 레벨 · 힘', params: [{ k: 'op', t: 'select', label: '무엇을', options: { exp: '경험치 더하기', level: '레벨 올리기', str: '힘 더하기', maxhp: '최대 체력 더하기' } }, { k: 'value', t: 'number', label: '값' }],
+               sum: c => `${({ exp: '경험치', level: '레벨', str: '힘', maxhp: '최대 체력' })[c.op || 'exp']} +${c.value || 0}` },
   heroPath:  { g: '영웅', name: '전직 · 직업 능력 고르기', params: [{ k: 'what', t: 'select', label: '무엇을', options: { subclass: '전직 고르기 (텐구의 가면 없이)', ability: '직업 능력 고르기 (왕관 없이 — 갑옷을 입고 있어야 함)' } }],
                sum: c => c.what === 'ability' ? '직업 능력 고르기 창' : '전직 고르기 창' },
   heroGauge: { g: '영웅', name: '게이지 · 원소 바꾸기', params: [{ k: 'op', t: 'select', label: '무엇을', options: { add: '게이지 더하기', set: '게이지 정하기', element: '원소 바꾸기' } },
@@ -205,11 +236,13 @@ PDM.COMMANDS = {
                sum: c => c.op === 'element' ? `원소 → ${c.element || '?'}` : `게이지 ${c.op === 'set' ? '=' : (c.value >= 0 ? '+' : '')}${c.value || 0}` },
   spellCharge: { g: '영웅', name: '주문서 충전', params: [{ k: 'value', t: 'number', label: '더할 충전 (크게 = 가득)' }], sum: c => `주문서 충전 +${c.value || 0}` },
   giveItem:  { g: '월드', name: '아이템 주기/빼기', params: [{ k: 'item', t: 'item', label: '아이템' }, { k: 'count', t: 'number', label: '개수(음수=빼기)' }], sum: c => `아이템 ${PDM.refName('item', c.item)} ${c.count >= 0 ? '+' : ''}${c.count ?? 1}` },
-  tile:      { g: '월드', name: '타일 바꾸기', params: [{ k: 'x', t: 'number', label: 'x' }, { k: 'y', t: 'number', label: 'y' }, { k: 'terrain', t: 'terrain', label: '타일' }], sum: c => `타일 (${c.x},${c.y}) → ${(PDM.TERRAIN_BY_ID[c.terrain] || {}).name || '?'}` },
+  tile:      { g: '월드', name: '타일 바꾸기', params: [{ k: 'x', t: 'number', label: 'x' }, { k: 'y', t: 'number', label: 'y' }, { k: 'terrain', t: 'terrain', label: '타일' }], sum: c => `타일 (${c.x ?? 0},${c.y ?? 0}) → ${(PDM.TERRAIN_BY_ID[c.terrain] || {}).name || '?'}` },
   transfer:  { g: '월드', name: '맵 이동', params: [{ k: 'node', t: 'node', label: '맵(노드)' }, { k: 'x', t: 'number', label: 'x(선택)' }, { k: 'y', t: 'number', label: 'y(선택)' }], sum: c => `「${PDM.refName('node', c.node)}」 으로 이동` },
   route:     { g: '스토리', name: '루트 설정', params: [{ k: 'route', t: 'route', label: '루트' }], sum: c => `루트 → ${PDM.refName('route', c.route)}` },
   ending:    { g: '스토리', name: '엔딩 실행', params: [{ k: 'ending', t: 'ending', label: '엔딩(비우면 조건으로 자동)' }], sum: c => `엔딩: ${c.ending ? PDM.refName('ending', c.ending) : '(조건으로 결정)'}` },
-  gameOver:  { g: '스토리', name: '게임 오버', params: [{ k: 'text', t: 'text', label: '문구' }], sum: () => '게임 오버' },
+  gameOver:  { g: '스토리', name: '게임 오버', params: [{ k: 'text', t: 'text', label: '문구 (사망 원인)' }], sum: c => '게임 오버 (영웅 사망 처리 · 부활 없음)' + (c.text ? ' — ' + c.text : '') },
+  victory:   { g: '스토리', name: '게임 클리어 (승리)', params: [], sum: () => '게임 클리어 — 승리 기록을 남기고 랭킹 화면으로 (세이브 삭제)' },
+  title:     { g: '스토리', name: '타이틀로 돌아가기', params: [], sum: () => '저장하고 타이틀 화면으로' },
   plugin:    { g: '확장', name: '플러그인 명령', params: [{ k: 'command', t: 'text', label: '명령 id' }, { k: 'args', t: 'textarea', label: '인자(JSON)' }], sum: c => `플러그인: ${c.command || ''}` },
   comment:   { g: '확장', name: '메모', params: [{ k: 'text', t: 'textarea', label: '메모' }], sum: c => '# ' + (c.text || '') }
 };
@@ -278,7 +311,7 @@ PDM.make = {
     const out = {};
     (PDM.SPD_HEROES || []).forEach(x => {
       const id = x.cls.toLowerCase(), hr = PDM.make.hero(id);
-      Object.assign(hr, { name: x.name, desc: String(x.descLong || x.desc || '').replace(/\\n/g, '\n'), baseClass: x.cls, note: '원작 영웅 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 원래 것을 씁니다' });
+      Object.assign(hr, { name: x.name, desc: String(x.descLong || x.desc || '').replace(/\\n/g, '\n'), baseClass: x.cls, note: '원작 영웅 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 코드의 값을 씁니다 (각 섹션 위 상자에 실제 값 표시)' });
       hr.spellbook.enabled = false;
       // 그림: 원작 영웅 시트(행 = 갑옷 단계 0~6)와 원작 HeroSprite 의 애니메이션 — 바로 미리 보고 고칠 수 있게 채워 둠
       hr.sprite = { sheet: 'game:sprites/' + id + '.png', frame: [12, 15], scale: 0, tierRows: [0, 1, 2, 3, 4, 5, 6], anims: {
@@ -357,7 +390,7 @@ PDM.make = {
     return { format: 'pdmaker-event', version: PDM.FORMAT_VERSION, id, kind: kind || 'common', name: '새 이벤트', note: '',
       pages: [PDM.make.page()] };
   },
-  page() { return { cond: '', trigger: 'action', turnEvery: 10, heartCond: '', graphic: {}, commands: [] }; },
+  page() { return { cond: '', conds: {}, trigger: 'action', turnEvery: 10, heartCond: '', graphic: {}, move: { type: 'fixed', speed: 3, freq: 3, route: [], repeat: true, skip: false }, opts: {}, commands: [] }; },
   /** 맵 오브젝트: 맵에 놓는 물건 (상자·바위·레버…) — 상태·밀기·상호작용. 런타임 MakerProp */
   prop(id) {
     return { format: 'pdmaker-prop', version: PDM.FORMAT_VERSION, id, name: '새 오브젝트', desc: '', note: '',

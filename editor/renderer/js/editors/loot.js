@@ -44,7 +44,7 @@
     const fromItems = PDM.dropsFrom ? PDM.dropsFrom(c.id) : [];
     return h('div', {},
       h('p', { class: 'hint' }, '이 몬스터가 죽을 때 떨어뜨리는 아이템. 줄마다 따로 확률을 굴립니다 (100% = 항상). 개수는 겹쳐지는 아이템에만 적용됩니다.'),
-      PDM.lootRows(key, ['drops'], { emptyText: '드랍 없음 — 게임 원래 전리품만 떨어뜨립니다' }),
+      PDM.lootRows(key, ['drops'], { emptyText: '드랍 없음 — 게임 코드의 전리품만 떨어뜨립니다 (캐릭터 화면의 "게임 코드의 실제 값" 참고)' }),
       fromItems.length ? h('div', { class: 'hint' }, '아이템 쪽 드랍 테이블에서 이 몬스터를 고른 것 (함께 적용): ',
         fromItems.map(([k, t]) => h('a', { href: '#', style: { marginRight: '8px' }, onclick: e => { e.preventDefault(); PDM.tabs.open(k); } }, t))) : null);
   };
@@ -71,14 +71,15 @@
             const t = loot[k];
             const open = st.open === k;
             const head = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer', padding: '6px 0' }, onclick: () => { st.open = open ? null : k; if (!t) ensure(k); else ctx.refresh(); } },
-              h('b', {}, `${open ? '▾' : '▸'} ${info.icon} ${info.name}`), h('span', { class: 'hint' }, t && (t.rows || []).length ? `${t.mode === 'replace' ? '바꾸기' : '추가'} · ${summary(t.rows)}` : info.desc + ' — 게임 원래 내용물'));
+              h('b', {}, `${open ? '▾' : '▸'} ${info.icon} ${info.name}`), h('span', { class: 'hint' }, t && (t.rows || []).length ? `${t.mode === 'replace' ? '바꾸기' : '추가'} · ${summary(t.rows)}` : info.desc + ' — ' + (PDM.gameHeapText(k) || '').split('.')[0]));
             if (!open || !t) return h('div', { style: { borderTop: '1px solid var(--line)' } }, head);
             const one = t.pick === 'one';
             return h('div', { style: { borderTop: '1px solid var(--line)', paddingBottom: '8px' } }, head,
-              row(F.select('project', ['loot', k, 'mode'], { add: '게임 원래 내용물에 추가', replace: '원래 내용물 대신 (바꾸기)' }, { label: '적용 방식', rerender: true }),
+              row(F.select('project', ['loot', k, 'mode'], { add: '게임이 넣는 내용물에 추가', replace: '게임이 넣는 내용물 대신 (바꾸기)' }, { label: '적용 방식', rerender: true }),
                 F.select('project', ['loot', k, 'pick'], { each: '줄마다 따로 확률을 굴림 (여러 개 나올 수 있음)', one: '하나만 뽑음 (가중치 비율대로)' }, { label: '뽑는 방식', rerender: true })),
               h('p', { class: 'hint' }, one ? '가중치가 클수록 잘 나옵니다. 예: 30 · 10 · 10 → 60% · 20% · 20%.' : '줄마다 확률(%)을 따로 굴립니다. 하나도 뽑히지 않은 상자는 원래 내용물 그대로 둡니다.'),
-              PDM.lootRows('project', ['loot', k, 'rows'], { depth: true, weight: one, emptyText: '아이템 없음 — 게임 원래 내용물 그대로' }));
+              PDM.lootRows('project', ['loot', k, 'rows'], { depth: true, weight: one, emptyText: '아이템 없음 — 게임이 넣는 내용물 그대로 (아래 설명)' }),
+              PDM.gameHeapBox(k));
           })),
         section('몬스터',
           mobs.length ? h('table', { class: 'tbl', style: { width: '100%' } },
@@ -88,12 +89,14 @@
               const open = st.mob === c.id;
               return [h('tr', {},
                 h('td', {}, `${c.name} (${c.id})` + (c.kind === 'boss' ? ' · 보스' : '')),
-                h('td', { class: 'hint' }, [mine, other].filter(Boolean).join(', ') || (c.noGameLoot ? '없음' : '게임 원래 전리품'), c.noGameLoot && (mine || other) ? ' · 원래 전리품 없음' : ''),
+                (() => { const td = h('td', { class: 'hint' }, [mine, other].filter(Boolean).join(', ') || (c.noGameLoot ? '없음' : ''), c.noGameLoot && (mine || other) ? ' · 게임 전리품 없음' : '');
+                  if (!c.noGameLoot) { const g = h('span', {}, (mine || other ? ' + ' : '') + (c.game ? '게임: …' : '')); td.append(g); if (c.game) PDM.gameMobLoot(c.game).then(t => { g.textContent = (mine || other ? ' + ' : '') + '게임: ' + (t || '없음'); }); else if (!(mine || other)) g.textContent = '없음'; }
+                  return td; })(),
                 h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } },
                   h('button', { class: 'btn sm' + (open ? ' pri' : ''), onclick: () => { st.mob = open ? null : c.id; ctx.refresh(); } }, open ? '접기' : '편집'),
                   h('button', { class: 'btn sm', style: { marginLeft: '4px' }, onclick: () => PDM.tabs.open('char:' + c.id) }, '캐릭터 열기'))),
               open ? h('tr', {}, h('td', { colspan: 3 },
-                F.bool('char:' + c.id, ['noGameLoot'], { label: '게임 원래 전리품을 떨어뜨리지 않음', rerender: true }),
+                F.bool('char:' + c.id, ['noGameLoot'], { label: '게임 코드의 전리품을 떨어뜨리지 않음', rerender: true }),
                 PDM.charLootEditor('char:' + c.id, c))) : null];
             })) : h('p', { class: 'hint' }, '몬스터·보스 캐릭터가 없습니다. 캐릭터 목록에서 몬스터를 만들거나 게임 몬스터를 가져오면 여기에 나옵니다.')));
     }

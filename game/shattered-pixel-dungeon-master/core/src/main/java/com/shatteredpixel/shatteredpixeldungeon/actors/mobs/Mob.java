@@ -983,6 +983,7 @@ public abstract class Mob extends Char {
 	
 	@Override
 	public void die( Object cause ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.onMobDie(this, cause); // >>> pdmaker
 
 		if (cause == Chasm.class){
 			//50% chance to round up, 50% to round down
@@ -1057,6 +1058,7 @@ public abstract class Mob extends Char {
 	}
 	
 	public void rollToDropLoot(){
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.mobDrop(this)) return; // >>> pdmaker
 		if (Dungeon.hero.lvl > maxLvl + 2) return;
 
 		MasterThievesArmband.StolenTracker stolen = buff(MasterThievesArmband.StolenTracker.class);

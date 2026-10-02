@@ -147,6 +147,7 @@ public class Messages {
 	}
 
 	private static String getFromBundle(String key){
+		{ String pdmT = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTexts.get(key, lang); if (pdmT != null) return pdmT; } // >>> pdmaker
 		String result;
 		for (I18NBundle b : bundles){
 			result = b.get(key);
