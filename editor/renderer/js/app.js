@@ -473,7 +473,8 @@
     const same = (a, b) => String(a).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase() === String(b).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
     if (await isRepo(cur)) {
       // 예전 기준 저장소(PDMaker 의 game 폴더 안 shattered-pixel-dungeon · -mod-2)를 가리키면 지금 기준(-master)으로 바꿈
-      const old = /^shattered-pixel-dungeon(-mod-2)?$/.test(pdm.basename(cur)) && bundled && same(pdm.dirname(cur), pdm.dirname(bundled)) && !same(cur, bundled);
+      // (직접 고른 저장소 — gameRepoPinned — 는 바꾸지 않음)
+      const old = !p.gameRepoPinned && /^shattered-pixel-dungeon(-mod-2)?$/.test(pdm.basename(cur)) && bundled && same(pdm.dirname(cur), pdm.dirname(bundled)) && !same(cur, bundled);
       if (!old) return { dir: cur, changed: false };
       return { dir: bundled, changed: true };
     }
@@ -512,10 +513,52 @@
     // mod-2 전용 아이템(코덱스 등)은 그 저장소일 때만 목록에 보임
     try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
     // 리소스 목록의 게임 기본 아이템·방·몬스터를 이 저장소의 실제 파일에 맞춤 (gamescan.js)
-    try { if (PDM.gameScan && await PDM.gameScan(r.missing ? '' : r.dir)) { drawAll(); if (active) PDM.tabs.refresh(active.key); } } catch (e) { console.error(e); }
+    try { if (PDM.gameScan && await PDM.gameScan(r.missing ? '' : r.dir)) { drawAll(); if (active) PDM.tabs.refresh(active.key);
+      // 이 저장소에만 있는 직업이 프로젝트에 없으면 알려 줌 (다른 게임 저장소를 연결했을 때)
+      const need = PDM.gameSyncNeeded && PDM.gameSyncNeeded();
+      if (need && !need.heroes && need.fix > 0) { const r2 = await PDM.gameSyncVanilla(true); if (r2 && r2.heroesFixed) { PDM.log(`영웅 ${r2.heroesFixed}명의 이름·그림 칸 크기를 게임 저장소에 맞췄습니다 (저장하면 반영)`, 'ok'); drawAll(); } }
+      if (need && need.heroes > 0) { PDM.log(`이 게임 저장소에는 프로젝트에 없는 직업 ${need.heroes}개 · 몬스터 ${need.mobs}개가 있습니다 → 프로젝트 설정 › 게임 저장소 연결 › "영웅·캐릭터를 저장소에 맞추기" 를 누르면 리소스 목록에 들어옵니다.`, 'err'); toast('게임 저장소의 영웅이 프로젝트에 없습니다 — 프로젝트 설정에서 "영웅·캐릭터를 저장소에 맞추기"', 'bad'); }
+    } } catch (e) { console.error(e); PDM.log('게임 저장소를 읽다가 오류가 났습니다 (리소스 목록이 기준 목록으로 보일 수 있음): ' + (e && e.message), 'err'); }
     return r.dir;
   }
 
+  /** PDMaker 의 game 폴더 안에 있는 게임 저장소들 [{ dir, name }] (gradlew 가 있는 폴더) */
+  async function listRepos() {
+    const out = [];
+    try {
+      const P = await pdm.paths(), base = P.gameRepoDefault ? pdm.dirname(P.gameRepoDefault) : P.gameRepo ? pdm.dirname(P.gameRepo) : pdm.join(P.resources || '', 'game');
+      for (const e of await pdm.list(base)) if (e.dir && await isRepo(pdm.join(base, e.name))) out.push({ dir: pdm.join(base, e.name), name: e.name });
+    } catch (_) { /* 무시 */ }
+    return out;
+  }
+  /** 이 프로젝트의 게임 저장소를 바꿈 (직접 고른 것으로 고정) → 그 저장소를 읽고, 영웅·캐릭터가 다르면 맞출지 물음 */
+  async function setRepo(dir, opts = {}) {
+    if (!(await isRepo(dir))) { toast('게임 저장소가 아닙니다 (gradlew 파일이 없음): ' + dir, 'bad'); return false; }
+    const rel = pdm.relative(store.root, dir).replace(/\\/g, '/') || dir;
+    store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; r.gameRepoPinned = true; });
+    try { await store.save(); } catch (_) { /* 무시 */ }
+    try { localStorage.setItem(REPO_KEY, dir); } catch (_) { /* 무시 */ }
+    if (PDM.assets && PDM.assets.clear) PDM.assets.clear();
+    await resolveRepo(true);
+    try { if (PDM.gameScan) await PDM.gameScan(dir, true); } catch (e) { console.error(e); }
+    const need = PDM.gameSyncNeeded && PDM.gameSyncNeeded();
+    if (need && (need.heroes || need.mobs || need.gone || need.fix)) {
+      const yes = opts.auto || await PDM.ui.confirm(`이 게임 저장소와 프로젝트의 영웅·캐릭터가 다릅니다.\n\n· 저장소에만 있는 직업 ${need.heroes}개 · 몬스터 ${need.mobs}개\n· 저장소에 없는 원작 영웅·캐릭터 ${need.gone}개\n\n프로젝트를 이 저장소에 맞출까요? (없는 것은 빼고, 저장소의 것을 더합니다. 직접 만든 것은 그대로 · 실행 취소 가능)`);
+      if (yes) { const r = await PDM.gameSyncVanilla(); if (r) PDM.log(`게임 저장소에 맞춰 리소스를 고쳤습니다 — 캐릭터 −${r.charsRemoved} +${r.charsAdded} · 영웅 −${r.heroesRemoved} +${r.heroesAdded}${r.heroesHidden ? ' (감춘 직업 ' + r.heroesHidden + '개는 꺼 둠)' : ''}`, 'ok'); try { await store.save(); } catch (_) { /* 무시 */ } }
+    }
+    PDM.log('게임 저장소: ' + dir, 'ok');
+    drawAll(); PDM.tabs.refresh('project');
+    return true;
+  }
+  /** 게임 저장소 경로를 "이전 메이커 경로" 칸에 잘못 적은 프로젝트 → 게임 저장소로 쓸지 물음 */
+  async function offerLegacyRepo() {
+    try {
+      const p = store.get('project') || {}; if (!p.legacyMaker || p.gameRepoPinned) return;
+      const dir = store.abs(p.legacyMaker), cur = p.gameRepo ? store.abs(p.gameRepo) : '';
+      if (!(await isRepo(dir)) || String(dir).replace(/[\\/]+$/, '').toLowerCase() === String(cur).replace(/[\\/]+$/, '').toLowerCase()) return;
+      if (await PDM.ui.confirm(`"이전 메이커 경로" 칸에 게임 저장소가 적혀 있습니다:\n${dir}\n\n지금 프로젝트는 다른 저장소를 쓰고 있습니다:\n${cur || '(없음)'}\n\n이 폴더를 이 프로젝트의 게임 저장소로 쓸까요?`)) { store.edit('project', '이전 메이커 경로 비우기', r => { r.legacyMaker = ''; }); await setRepo(dir); }
+    } catch (e) { console.error(e); }
+  }
   /** 게임 저장소를 PDMaker 폴더 안(game/)으로 옮기고 이 프로젝트 경로를 맞춤 */
   async function bundleRepo(from) {
     if (!(await PDM.ui.confirm(`게임 저장소를 PDMaker 폴더 안으로 옮길까요?\n\n${from}\n→ PDMaker/game/ 안\n\n다른 PC 에 PDMaker 폴더만 복사해도 테스트 플레이가 됩니다. Android Studio 등에서 이 폴더를 열어 두었다면 먼저 닫아 주세요.`))) return;
@@ -583,6 +626,7 @@
     } catch (e) { PDM.log('build.gradle 저장 실패: ' + e.message, 'err'); toast(e.message, 'bad'); }
   }
 
+  let creating = false;   // 새 프로젝트를 만드는 중 (저장소를 고르기 전의 자동 알림을 막음)
   async function newProject() {
     if (!(await guardDirty())) return;
     const d = await pdm.openFolder('새 프로젝트를 만들 빈 폴더 선택'); if (!d) return;
@@ -602,7 +646,8 @@
     if (!made) return;
     const name = made.name;
     PDM.tabs.closeAll();
-    await store.createNew(d, name);
+    creating = true;
+    try { await store.createNew(d, name); } finally { creating = false; }
     store.edit('project', '게임 이름', r => { r.game = { appName: made.appName, appPackageName: PDM.validPackage(made.pkg) ? made.pkg : '' }; });
     await resolveRepo(true);   // 기본값(../../git-hub/…)이 이 폴더에서 틀리면 찾아서 고쳐 둠
     // 게임 저장소 경로: 왜 필요한지 설명 + 찾았는지 표시
@@ -610,6 +655,11 @@
     const found = cur && await isRepo(store.abs(cur));
     const inp = h('input', { type: 'text', value: cur, placeholder: '예: ../pd-maker/game/shattered-pixel-dungeon-master' });
     const pick = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const f = await pdm.openFolder('게임 저장소 폴더 선택 (gradlew 가 들어 있는 폴더)'); if (f) inp.value = pdm.relative(d, f).replace(/\\/g, '/') || f; } }, '폴더 찾기…');
+    // PDMaker 의 game 폴더에 들어 있는 저장소들 — 눌러서 고름 (여러 개면 어느 것을 쓸지 꼭 골라야 함)
+    const repos = await listRepos();
+    const repoBtns = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '4px 0 8px' } });
+    const drawRepos = () => repoBtns.replaceChildren(...repos.map(r => { const rel = pdm.relative(d, r.dir).replace(/\\/g, '/'); return h('button', { class: 'btn sm' + (inp.value === rel ? ' pri' : ''), onclick: e => { e.preventDefault(); inp.value = rel; drawRepos(); } }, r.name); }));
+    drawRepos(); inp.addEventListener('input', drawRepos);
     const rel = await PDM.ui.modal('게임 저장소 경로', h('div', { style: { maxWidth: '620px' } },
       h('p', {}, 'PDMaker 는 게임을 처음부터 만드는 것이 아니라, ', h('b', {}, 'Shattered Pixel Dungeon 의 소스 코드(게임 저장소)'), ' 위에 프로젝트를 얹어서 실행합니다. 그래서 테스트 플레이와 게임 내보내기를 하려면 게임 저장소 폴더가 꼭 있어야 합니다.'),
       h('p', {}, '아래 둘 중 하나를 준비해 주세요.'),
@@ -618,9 +668,13 @@
         h('li', {}, '원래 작업하던 픽셀 던전(모드) 소스 폴더 — gradlew 파일이 들어 있는 맨 위 폴더')),
       h('p', { class: 'hint' }, '받은 폴더를 PDMaker 폴더의 game 안에 shattered-pixel-dungeon-master 라는 이름으로 넣어 두면 자동으로 찾습니다. 다른 곳에 두었다면 아래에 경로를 적거나 [폴더 찾기…] 로 고르세요. 나중에 프로젝트 설정 → 게임 저장소 연결에서도 바꿀 수 있습니다.'),
       h('p', { class: 'hint', style: { color: found ? 'var(--good, #5fd66a)' : 'var(--bad)' } }, found ? '✓ 게임 저장소를 찾았습니다: ' + cur : '✗ 아직 게임 저장소를 찾지 못했습니다 — 경로를 지정하지 않으면 그림 미리보기·테스트 플레이가 되지 않습니다.'),
+      repos.length ? h('div', {}, h('b', { style: { fontSize: '12px' } }, repos.length > 1 ? 'PDMaker 의 game 폴더에 저장소가 여러 개 있습니다 — 이 프로젝트에 쓸 것을 고르세요:' : 'PDMaker 의 game 폴더에 있는 저장소:'), repoBtns) : null,
       PDM.ui.field('게임 저장소 경로 (프로젝트 폴더 기준 상대 경로 또는 절대 경로)', h('div', { style: { display: 'flex', gap: '6px' } }, inp, pick))),
       [['나중에', null], ['확인', () => inp.value.trim(), 'pri']]);
-    if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; }); await store.save(); await resolveRepo(true); if (PDM.assets && PDM.assets.clear) PDM.assets.clear(); }
+    if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; r.gameRepoPinned = true; }); await store.save(); await resolveRepo(true); if (PDM.assets && PDM.assets.clear) PDM.assets.clear(); }
+    // 고른 저장소가 기준 저장소와 다르면: 방금 채운 원작 영웅·캐릭터를 그 저장소에 맞춤 (없는 것은 빼고, 그 저장소에만 있는 것은 더함)
+    try { if (PDM.gameScan) await PDM.gameScan(await resolveRepo(true), true); const r = PDM.gameSyncVanilla && await PDM.gameSyncVanilla();
+      if (r && (r.charsRemoved || r.charsAdded || r.heroesRemoved || r.heroesAdded || r.heroesHidden || r.heroesFixed)) { PDM.log(`게임 저장소에 맞춰 리소스를 고쳤습니다 — 캐릭터 −${r.charsRemoved} +${r.charsAdded} · 영웅 −${r.heroesRemoved} +${r.heroesAdded}${r.heroesHidden ? ' (감춘 직업 ' + r.heroesHidden + '개는 꺼 둠)' : ''}`, 'ok'); await store.save(); } } catch (e) { console.error(e); PDM.log('리소스를 게임 저장소에 맞추지 못했습니다: ' + e.message, 'err'); }
     pushRecent(d); drawAll(); PDM.tabs.open('world');
     PDM.log('새 프로젝트를 만들었습니다: ' + d, 'ok');
   }
@@ -865,7 +919,7 @@
     $$('.btab').forEach(b => b.addEventListener('click', () => showBottom(b.dataset.b)));
     $('#logClear').addEventListener('click', () => { $('#logBody').innerHTML = ''; $('#checkBody').innerHTML = ''; });
     $('#treeCollapse').addEventListener('click', () => { expanded.clear(); drawTree(); });
-    store.on('load', () => { drawAll(); resolveRepo(true).then(() => offerBundle()); });
+    store.on('load', () => { drawAll(); resolveRepo(true).then(() => offerBundle()).then(() => { if (!creating) offerLegacyRepo(); }); });
     store.on('change', () => drawToolbar());
     addEventListener('keydown', e => {
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
@@ -895,6 +949,6 @@
     const q = new URLSearchParams(location.search).get('project');
     if (q) loadProject(q);
   }
-  PDM.app = { editBuildGradle, redraw: () => drawAll(), expandTree: id => { if (!expanded.has(id)) { expanded.add(id); drawTree(); } }, loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
+  PDM.app = { listRepos, setRepo, editBuildGradle, redraw: () => drawAll(), expandTree: id => { if (!expanded.has(id)) { expanded.add(id); drawTree(); } }, loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init();
 })();

@@ -456,7 +456,7 @@ public class MakerTitle {
 			case "rankings": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.RankingsScene.class); break;
 			case "journal": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.JournalScene.class); break;
 			case "news": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.NewsScene.class); break;
-			case "changes": com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.changesSelected = 0; ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.class); break;
+			case "changes": try { com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.class.getField("changesSelected").setInt(null, 0); } catch (Throwable ignored) { /* 이 칸이 없는 저장소 */ } ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.class); break;
 			case "settings": scene.add(new WndSettings()); break;
 			default: ShatteredPixelDungeon.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.AboutScene.class);
 		}

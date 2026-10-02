@@ -18,7 +18,8 @@
     const repo = await PDM.app.resolveRepo(true);
     if (repo !== cache.repo) cache = { repo, langs: null, bundles: null, files: {} };
     if (!cache.langs) {
-      const base = pdm.join(repo, 'core', 'src', 'main', 'assets', 'messages');
+      cache.roots = PDM.gameMsgRoot ? await PDM.gameMsgRoot(repo) : ['messages'];   // 게임이 읽는 글자 폴더들 (모드에 따라 messages + new_messages 등 — 뒤의 것이 덮어씀)
+      const base = pdm.join(repo, 'core', 'src', 'main', 'assets', cache.roots[0]);
       let dirs = []; try { dirs = (await pdm.list(base)).filter(e => e.dir).map(e => e.name).sort(); } catch (_) { /* 없음 */ }
       const codes = new Set();
       for (const d of dirs.slice(0, 1)) { try { (await pdm.list(pdm.join(base, d))).forEach(e => { const m = new RegExp('^' + d + '(?:_([A-Za-z-]+))?\\.properties$').exec(e.name); if (m) codes.add(m[1] || 'en'); }); } catch (_) { /* 없음 */ } }
@@ -28,8 +29,9 @@
   }
   async function loadFile(bundle, lang) {
     const id = bundle + '|' + lang; if (cache.files[id]) return cache.files[id];
-    let rows = [];
-    try { rows = parse(await pdm.readText(pdm.join(cache.repo, 'core', 'src', 'main', 'assets', 'messages', bundle, bundle + (lang === 'en' ? '' : '_' + lang) + '.properties'))); } catch (_) { /* 번역 파일 없음 */ }
+    const m = new Map();
+    for (const root of cache.roots || ['messages']) { try { parse(await pdm.readText(pdm.join(cache.repo, 'core', 'src', 'main', 'assets', root, bundle, bundle + (lang === 'en' ? '' : '_' + lang) + '.properties'))).forEach(([k, v]) => m.set(k, v)); } catch (_) { /* 이 폴더에는 없음 */ } }
+    const rows = [...m.entries()];
     return (cache.files[id] = rows);
   }
   /** [{ key, bundle, text(고른 언어 원문 — 없으면 영어), en }] */

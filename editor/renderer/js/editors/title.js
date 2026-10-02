@@ -20,7 +20,8 @@
   const ENTERS = { none: '없음 (바로 보임)', fade: '서서히 나타남', slideUp: '아래에서 위로', slideDown: '위에서 아래로', slideLeft: '오른쪽에서 왼쪽으로', slideRight: '왼쪽에서 오른쪽으로', drop: '떨어지며 튕김', pop: '가로로 튀어나옴' };
   const IDLES = { none: '없음', bob: '둥실둥실 (위아래)', sway: '살랑살랑 (좌우)', pulse: '깜빡임' };
   const LOGO_ANIM = { none: '없음', float: '둥실둥실', sway: '살랑살랑', pulse: '깜빡임' };
-  const SIZES = { l256: [256, 160, '가로 1280×800'], l320: [320, 180, '가로 1920×1080'], p180: [180, 320, '세로 (휴대폰)'] };
+  // 게임 화면 단위 크기 = 창 크기 ÷ 배율. PC 는 배율 3 (PixelScene: ceil(density × 2.5), density 1), 휴대폰 세로는 1080×2340 · 배율 8
+  const SIZES = { l256: [427, 267, '가로 1280×800'], l320: [640, 360, '가로 1920×1080'], p180: [135, 292, '세로 (휴대폰)'] };
 
   const get = () => store.get(K) || PDM.defaults.title();
   const ease = t => { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); };
@@ -212,8 +213,9 @@
         const gd = g.createLinearGradient(0, 0, 0, H); gd.addColorStop(0, 'rgba(0,0,0,0)'); gd.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = gd; g.fillRect(0, 0, W, H);
         const k2 = k * (W <= H ? 1 / 1.5 : 1);
         // [그림, 프레임 가로, 세로, 열, 프레임 수, 개수, 속도 배율, 크기 배율, 어둡기]
-        [[T4.clusters, 450, 250, 1, 2, 2, 1.33, 0.5, 0.55], [T4.clusters, 450, 250, 1, 2, 2, 2, 0.8, 0.35], [T4.small, 112, 116, 9, 36, 5, 2.66, 0.6, 0.3],
-          [T4.mid, 273, 242, 7, 28, 3, 3.5, 0.9, 0.15], [T4.mid, 273, 242, 7, 28, 2, 4.7, 1.1, 0], [T4.small, 112, 116, 9, 36, 4, 6.2, 1.3, 0]].forEach(([r, fw, fh, cols, nf, cnt, spd, sz, dark], li) => {
+        // 크기·밝기·속도는 게임 ui/TitleBackground 의 겹과 같게 (먼 덩어리 0.5배·밝기 0.5 → 덩어리 1배·0.75 → 먼 조각 → 중간 1 → 중간 2(1.5배) → 앞 조각(2.25배))
+        [[T4.clusters, 450, 250, 1, 2, 4, 1.33, 0.5, 0.5], [T4.clusters, 450, 250, 1, 2, 3, 2, 1, 0.25], [T4.small, 112, 116, 9, 36, 6, 2.66, 1, 0.2],
+          [T4.mid, 273, 242, 7, 28, 3, 3.54, 1, 0.1], [T4.mid, 273, 242, 7, 28, 2, 4.7, 1.5, 0], [T4.small, 112, 116, 9, 36, 3, 6.26, 2.25, 0]].forEach(([r, fw, fh, cols, nf, cnt, spd, sz, dark], li) => {
           const im = imgs[r]; if (!im) return;
           const w2 = fw * k2 * sz, h2 = fh * k2 * sz, span = H + h2 * 2;
           for (let i = 0; i < cnt; i++) {
@@ -352,9 +354,11 @@
         if (alpha <= 0.01) return;
         const bx = x + dx + (w - bw) / 2, by = y + dy;
         g.globalAlpha = alpha;
-        g.fillStyle = style === 'RED_BUTTON' ? '#a03c32' : style === 'TOAST_TR' ? 'rgba(20,20,20,0.55)' : 'rgba(90,90,90,0.85)';
-        g.fillRect(bx, by, bw, hh); g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 2 / SC; g.strokeRect(bx + 0.5, by + 0.5, bw - 1, hh - 1);
-        g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '7px "Malgun Gothic", sans-serif';
+        // 게임의 회색 반투명 버튼(GREY_BUTTON_TR)처럼: 어두운 반투명 바탕 + 밝은 테두리 + 안쪽 어두운 선
+        g.fillStyle = style === 'RED_BUTTON' ? '#a03c32' : style === 'TOAST_TR' ? 'rgba(20,20,20,0.55)' : 'rgba(46,46,44,0.82)';
+        g.fillRect(bx, by, bw, hh);
+        if (style !== 'TOAST_TR') { g.lineWidth = 1; g.strokeStyle = style === 'RED_BUTTON' ? '#d98a7e' : '#8f8f86'; g.strokeRect(bx + 0.5, by + 0.5, bw - 1, hh - 1); g.strokeStyle = 'rgba(0,0,0,0.55)'; g.strokeRect(bx + 1.5, by + 1.5, bw - 3, hh - 3); }
+        g.fillStyle = b.id === 'support' ? '#ffff44' : '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '7px "Malgun Gothic", sans-serif';
         g.fillText(b.label, bx + bw / 2, by + hh / 2 + 0.5, bw - 4);
         g.globalAlpha = 1;
       });

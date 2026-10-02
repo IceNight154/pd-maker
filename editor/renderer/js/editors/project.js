@@ -32,11 +32,17 @@ PDM.registerEditor({
       })(),
       section('게임 저장소 연결',
         h('p', { class: 'hint' }, 'PDMaker 는 Shattered Pixel Dungeon 의 소스 코드(게임 저장소) 위에 프로젝트를 얹어 실행합니다. 원작 소스(', h('a', { href: '#', onclick: e => { e.preventDefault(); pdm.openExternal && pdm.openExternal(PDM.SPD_REPO_URL); } }, PDM.SPD_REPO_URL), ')나 원래 작업하던 픽셀 던전 소스 폴더(gradlew 가 있는 맨 위 폴더)를 넣어야 테스트 플레이·게임 내보내기가 됩니다.'),
-        F.text(key, ['gameRepo'], { label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon-master 을 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
+        F.text(key, ['gameRepo'], { onchange: v => PDM.store.edit('project', '게임 저장소 고정', r => { if (v) r.gameRepoPinned = true; else delete r.gameRepoPinned; }, { silent: true }), label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon-master 을 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
+        (() => { const box = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 6px' } });
+          PDM.app.listRepos().then(list => { const cur = String(PDM.store.abs(p.gameRepo || '.')).replace(/[\\/]+$/, '').toLowerCase();
+            box.append(h('span', { class: 'hint' }, 'game 폴더의 저장소:'), ...list.map(r => h('button', { class: 'btn sm' + (String(r.dir).replace(/[\\/]+$/, '').toLowerCase() === cur ? ' pri' : ''), title: r.dir, onclick: () => PDM.app.setRepo(r.dir) }, r.name)),
+              h('button', { class: 'btn sm', onclick: async () => { const f = await pdm.openFolder('게임 저장소 폴더 선택 (gradlew 가 들어 있는 폴더)'); if (f) PDM.app.setRepo(f); } }, '다른 폴더 찾기…')); }).catch(() => { });
+          return box; })(),
         status,
         (() => { const g = PDM.GAME_SCAN; const part = (n, x) => `${n} ${x.total}개` + (x.added.length ? ` (+${x.added.length})` : '') + (x.removed.length ? ` (−${x.removed.length})` : '');
           return h('div', { class: 'hint', style: { marginTop: '6px' } }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
-            h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기')); })(),
+            h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기'),
+            h('button', { class: 'btn xs', style: { marginLeft: '4px' }, title: '저장소에 없는 원작 영웅·캐릭터는 빼고, 저장소에만 있는 직업·몬스터는 더합니다. 직접 만든 것은 그대로 둡니다', onclick: async () => { if (!(await PDM.ui.confirm('프로젝트의 원작 영웅·캐릭터를 지금 게임 저장소에 맞출까요?\n\n저장소에 없는 원작 영웅·캐릭터는 프로젝트에서 빠지고, 저장소에만 있는 직업·몬스터가 더해집니다. (실행 취소 가능)'))) return; const r0 = await PDM.app.resolveRepo(true); if (PDM.gameScan && r0) await PDM.gameScan(r0, true); const r = await PDM.gameSyncVanilla(); PDM.log(r ? `게임 저장소에 맞췄습니다 — 캐릭터 −${r.charsRemoved} +${r.charsAdded} · 영웅 −${r.heroesRemoved} +${r.heroesAdded}` : '게임 저장소를 읽지 못했습니다', r ? 'ok' : 'err'); PDM.app.redraw(); } }, '영웅·캐릭터를 저장소에 맞추기')); })(),
         (() => {
           const box = h('div', { style: { marginTop: '6px' } });
           if (!pdm.paths || !pdm.repoBundle) return box;
@@ -54,7 +60,7 @@ PDM.registerEditor({
           }).catch(() => { });
           return box;
         })(),
-        F.text(key, ['legacyMaker'], { label: '이전 메이커(pixel-dungeon-maker) 경로', hint: '고급: Java 코드 생성기 탭에서 사용' })),
+        PDM.extensions.on('sys') ? h('details', { style: { marginTop: '8px' } }, h('summary', { class: 'hint' }, '고급: 이전 메이커 경로 (게임 저장소가 아님)'), F.text(key, ['legacyMaker'], { label: '이전 메이커(pixel-dungeon-maker) 경로', hint: 'Java 코드 생성기 탭에서만 씁니다. 게임 저장소 경로는 위의 "게임 저장소 경로" 칸입니다.' })) : null),
       section('게임 런타임 (pdmaker 패키지)', (() => {
         const st = h('div', { class: 'hint' }, '상태 확인 중…');
         const repo = PDM.store.abs(p.gameRepo);

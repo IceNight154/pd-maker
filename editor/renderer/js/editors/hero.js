@@ -347,9 +347,10 @@ return damage + Special.get("combo");`,
   function subclassSection(key, c, st) {
     const { F, row, listEditor } = PDM.ui;
     return [
-      h('p', { class: 'hint' }, '원작처럼 텐구를 쓰러뜨리면 나오는 "텐구의 가면"을 쓰면 이 목록에서 하나를 고릅니다 (이벤트 명령 "전직 고르기"로도 열 수 있음). 전직하면 특성 3단계가 열리고, "이 전직만" 표시한 주문·특성이 나옵니다. 비워 두면 게임 원래 전직(바탕 직업 것)을 씁니다.'),
+      PDM.gameHeroBox(c, 'subs', !(c.subclasses || []).length, st),
+      h('p', { class: 'hint' }, '원작처럼 텐구를 쓰러뜨리면 나오는 "텐구의 가면"을 쓰면 이 목록에서 하나를 고릅니다 (이벤트 명령 "전직 고르기"로도 열 수 있음). 전직하면 특성 3단계가 열리고, "이 전직만" 표시한 주문·특성이 나옵니다. 비워 두면 위 상자의 게임 원래 전직을 그대로 씁니다.'),
       listEditor(key, ['subclasses'], {
-        addLabel: '전직', emptyText: '전직이 없습니다 (게임 원래 전직을 씀)',
+        addLabel: '전직', emptyText: '프로젝트 전직이 없습니다 — 위 상자의 게임 원래 전직이 그대로 쓰입니다',
         make: () => PDM.make.subclass(),
         render: (x, i, p) => h('details', { open: !!st['sc' + i], ontoggle: e => { st['sc' + i] = e.target.open; } },
           h('summary', { style: { cursor: 'pointer' } }, iconCanvas(x.icon || 0), h('b', {}, x.name || x.id), h('span', { class: 'hint' }, '  ' + (x.shortDesc || '') + (x.base ? ` · 게임 전직 ${x.base}` : '') + ((x.effects || []).length ? ' · ' + statsText(x.effects) : ''))),
@@ -396,9 +397,10 @@ return damage + Special.get("combo");`,
   function abilitySection(key, c, st) {
     const { F, row, listEditor } = PDM.ui;
     return [
-      h('p', { class: 'hint' }, '원작처럼 "왕의 왕관"을 쓰면 이 목록에서 하나를 골라 입은 갑옷이 직업 갑옷이 되고, 갑옷의 충전(0~100%)을 써서 발동합니다 (이벤트 명령 "직업 능력 고르기"로도 열 수 있음). 고르면 특성 4단계가 열립니다. 원작은 셋 중 하나. 비워 두면 게임 원래 능력을 씁니다.'),
+      PDM.gameHeroBox(c, 'abilities', !(c.abilities || []).length, st),
+      h('p', { class: 'hint' }, '원작처럼 "왕의 왕관"을 쓰면 이 목록에서 하나를 골라 입은 갑옷이 직업 갑옷이 되고, 갑옷의 충전(0~100%)을 써서 발동합니다 (이벤트 명령 "직업 능력 고르기"로도 열 수 있음). 고르면 특성 4단계가 열립니다. 원작은 셋 중 하나. 비워 두면 위 상자의 게임 원래 능력을 그대로 씁니다.'),
       listEditor(key, ['abilities'], {
-        addLabel: '직업 능력', emptyText: '직업 능력이 없습니다 (게임 원래 능력을 씀)',
+        addLabel: '직업 능력', emptyText: '프로젝트 직업 능력이 없습니다 — 위 상자의 게임 원래 능력이 그대로 쓰입니다',
         make: () => PDM.make.ability(),
         render: (x, i, p) => h('details', { open: !!st['ab' + i], ontoggle: e => { st['ab' + i] = e.target.open; } },
           h('summary', { style: { cursor: 'pointer' } }, iconCanvas(x.icon ?? castIconDef(x)), h('b', {}, x.name || x.id), h('span', { class: 'hint' }, '  ' + castSummary(x, 'ability'))),
@@ -608,6 +610,7 @@ return damage + Special.get("combo");`,
     }
     return [
       h('p', { class: 'hint' }, '원작처럼 레벨이 오르면 포인트를 얻고(초상화가 반짝임), 게임의 영웅 정보 창(왼쪽 위 초상화) → 특성 탭에서 별 포인트를 써서 올립니다. 전직·직업 능력·주문도 같은 탭 위쪽에 나옵니다. 더 복잡한 효과는 코드 훅 "특성 올림"이나 HeroRuntime.talent("id") 로 만드세요.'),
+      PDM.gameHeroBox(c, 'talents', !!c.nativeTalents, st),
       F.bool(key, ['nativeTalents'], { label: '게임 원래 특성 창을 그대로 쓰기 (바탕 직업의 특성 — 아래 특성·주문은 창에 안 나옴)' }),
       tierBox, tree, calc, detail];
   }
@@ -703,6 +706,7 @@ return damage + Special.get("combo");`,
             o.inventory.items = [...(van ? van.items : []).map(e => Object.assign({ item: '', count: 1, level: 0, equip: false, quickslot: false, identify: true, fromGame: true }, e)), ...own];
           });
           return [
+            PDM.gameHeroBox(c, 'inv', !clear, st),
             zero ? h('div', { class: 'hint', style: { marginBottom: '6px' } }, '완전히 새 영웅이라 이 목록대로만 줍니다 (게임 직업의 시작 아이템 없음).') : h('div', { class: 'hint', style: { marginBottom: '6px' } }, clear
               ? '이 목록대로만 줍니다 (바탕 직업의 기본 시작 아이템은 주지 않음).'
               : hasGame ? '「게임이 줌」 표시는 바탕 직업이 원래 주는 원작 시작 아이템입니다 (보여 주기만 — 게임이 그대로 줌). 표시 없는 아이템은 거기에 더해 줍니다. 원작 아이템을 바꾸려면 "목록대로 직접 주기"를 누르세요.'
