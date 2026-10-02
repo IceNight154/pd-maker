@@ -1,2 +1,4 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Windows batch files: store and check out byte-for-byte (CRLF kept, even in a GitHub ZIP download).
+# LF-only .bat files are misread by cmd.exe.
+*.bat -text
+*.cmd -text

@@ -1,37 +1,42 @@
 @echo off
-chcp 65001 >nul
+rem ================================================================
+rem  Makes a zip of PDMaker to move to another PC.
+rem  Keep this file ASCII-only with CRLF line endings.
+rem   Included: editor, game runtime, docs, tools
+rem             + game\shattered-pixel-dungeon-master (needed for test play / game export)
+rem             + Electron (the receiver only needs to run start-editor.bat, no Node.js)
+rem   Excluded: .git .gradle .idea build dist backups local.properties
+rem   Java (JDK 17+) is downloaded by the editor on first test play if missing.
+rem ================================================================
 setlocal
-rem ================================================================
-rem  PDMaker 를 다른 PC 로 옮길 zip 만들기
-rem   들어가는 것: 에디터 · 게임 런타임 · 문서 · 도구
-rem              + game\shattered-pixel-dungeon-master (게임 저장소 — 테스트 플레이·게임 내보내기에 필요)
-rem              + Electron 실행 파일 (받는 사람은 Node.js 없이 start-editor.bat 만 누르면 됨)
-rem   빼는 것  : .git · .gradle · .idea · build · dist · 백업 파일 · local.properties
-rem   Java(JDK 17+)는 없으면 테스트 플레이 때 에디터가 자동으로 내려받습니다 (처음 한 번, 인터넷 필요)
-rem ================================================================
 cd /d "%~dp0"
-if not exist "game\shattered-pixel-dungeon-master\gradlew.bat" (
-  echo [!] game\shattered-pixel-dungeon-master 가 없습니다.
-  echo     에디터를 켜서 프로젝트를 열면 "게임 저장소를 PDMaker 폴더 안으로 옮길까요?" 가 나옵니다. 먼저 옮겨 주세요.
-  echo     ^(프로젝트 설정 → 게임 저장소 연결 → "게임 저장소를 PDMaker 폴더 안으로 옮기기" 버튼도 있음^)
-  pause
-  goto :eof
-)
-if not exist "editor\node_modules\electron\dist\electron.exe" (
-  echo Electron 이 없어 먼저 내려받습니다...
-  pushd editor
-  call npm install
-  popd
-)
+if not exist "game\shattered-pixel-dungeon-master\gradlew.bat" goto norepo
+if exist "editor\node_modules\electron\dist\electron.exe" goto pack
+echo Electron is missing. Downloading it first...
+pushd editor
+call npm install
+popd
+:pack
 cd ..
-set OUT=%CD%\pd-maker-release.zip
+set "OUT=%CD%\pd-maker-release.zip"
 if exist "%OUT%" del "%OUT%"
 set E=pd-maker/editor
 set PARTS=pd-maker/README.md pd-maker/DESIGN.md pd-maker/start-editor.bat pd-maker/build-exe.bat pd-maker/make-release.bat pd-maker/docs pd-maker/references pd-maker/runtime pd-maker/tools pd-maker/game/shattered-pixel-dungeon-master
 set PARTS=%PARTS% %E%/main.js %E%/preload.js %E%/runtime-installer.js %E%/zip.js %E%/package.json %E%/package-lock.json %E%/renderer %E%/builtin-plugins
 if exist "pd-maker\editor\node_modules\electron\dist\electron.exe" set PARTS=%PARTS% %E%/node_modules/electron
-echo zip 만드는 중... (몇 분 걸릴 수 있음)
+echo Making the zip... (this can take a few minutes)
 tar -a -c -f "%OUT%" --exclude=.git --exclude=.gradle --exclude=.idea --exclude=build --exclude=dist/win-unpacked --exclude=*.pdmaker-backup --exclude=local.properties --exclude=out %PARTS%
-if errorlevel 1 (echo [!] 실패) else (echo 완료: %OUT%)
-echo 받는 사람: zip 을 풀고 pd-maker\start-editor.bat 을 실행하세요.
+if errorlevel 1 goto fail
+echo Done: %OUT%
+echo For the receiver: unzip it and run pd-maker\start-editor.bat
+pause
+goto :eof
+:fail
+echo [!] Failed to make the zip.
+pause
+goto :eof
+:norepo
+echo [!] game\shattered-pixel-dungeon-master was not found.
+echo     Open a project in the editor and move the game repository into the PDMaker folder first
+echo     (Project settings - game repository - "move into the PDMaker folder").
 pause
