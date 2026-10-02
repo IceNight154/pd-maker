@@ -6,7 +6,7 @@ PDM.defaults = {
     return {
       format: 'pdmaker-project', version: PDM.FORMAT_VERSION,
       name: '새 픽셀 던전', author: '',
-      gameRepo: '',   // 게임 저장소 (프로젝트 폴더 기준 상대 경로). 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon 를 찾아 채움
+      gameRepo: '',   // 게임 저장소 (프로젝트 폴더 기준 상대 경로). 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon-master 를 찾아 채움
       legacyMaker: '../../pixel-dungeon-maker',
       startHero: '', startDepth: 1, heartButton: true,
       plugins: [],                  // 켜진 플러그인 id (순서대로 불러옴)
@@ -29,8 +29,12 @@ PDM.defaults = {
     };
   },
   /** 사운드 목록 (사운드 편집기) — 참조는 sound:<id> */
-  title() {
-    return { format: 'pdmaker-title', version: PDM.FORMAT_VERSION, enabled: true,
+  /** 타이틀 화면 — 기본값은 지금 게임 저장소(pd-maker/game/…)의 타이틀과 같은 모습.
+   *  style: '4.0' = SPD 4.0 이상 (폐허 시차 배경 · 화면 감추기 버튼 · 버튼 순서 설정→변경 내역), '3.x' = 그 전 (아치 배경). 안 주면 지금 저장소 (PDM.gameTitle4) */
+  title(style) {
+    const v4 = style ? style === '4.0' : PDM.gameTitle4 !== false;
+    const order = v4 ? ['play', 'support', 'rankings', 'journal', 'news', 'settings', 'changes', 'about'] : ['play', 'support', 'rankings', 'journal', 'news', 'changes', 'settings', 'about'];
+    return { format: 'pdmaker-title', version: PDM.FORMAT_VERSION, enabled: true, hideButton: v4,
       music: { tracks: [] },
       background: { archs: true, archStyle: 'game', archReverse: false, archDir: 'up', archSpeed: 20, archImages: { bg: '', fg: '' }, color: '', gradient: { enabled: false, color: '#0b1b3a', alpha: 0.55, from: 'top' },
         vignette: false, effect: 'none', effectDensity: 1, effectColor: '', effectFront: false, effectArea: 'screen' },
@@ -40,7 +44,7 @@ PDM.defaults = {
       gate: { enabled: false, text: '화면을 누르세요', color: '#dddddd', blink: true, logoAfter: 'fade', idleReturn: 15 },
       buttons: { layout: 'game', columns: 3, firstWide: true, top: 0, width: 0, height: 20, gap: 3, offsetX: 0, style: '',
         anim: { enter: 'none', duration: 0.6, stagger: 0.08, distance: 24, idle: 'none', idleAmount: 2, idleSpeed: 1 },
-        items: ['play', 'support', 'rankings', 'journal', 'news', 'changes', 'settings', 'about'].map(id => ({ id, label: '', visible: true, icon: '' })) },
+        items: order.map(id => ({ id, label: '', visible: true, icon: '' })) },
       version: { visible: true, text: '' }, exit: { visible: true } };
   },
   /** 대사창 (dialogue.json) — 게임 MakerDialogue.DEFAULTS 와 같음 */

@@ -56,6 +56,7 @@ PDM.ui = (function () {
       let v = parseFloat(i.value); if (isNaN(v)) v = o.def ?? 0;
       if (o.min !== undefined) v = Math.max(o.min, v); if (o.max !== undefined) v = Math.min(o.max, v);
       if (o.int) v = Math.round(v);
+      if (o.dec !== undefined) v = +v.toFixed(o.dec);
       i.value = v; commit(key, path, v, o.label, o.rerender); o.onchange && o.onchange(v);
     });
     return o.label ? field(o.label, i, o.hint) : i;
@@ -121,7 +122,12 @@ PDM.ui = (function () {
       case 'charHero': return [['$hero', '플레이어(영웅)'], ...s.all('char').map(c => [c.id, `${c.name} (${c.id})`])];
       case 'item': return s.all('item').map(c => [c.id, `${c.name} (${c.id})`]);
       case 'event': return s.all('event').map(c => [c.id, `${c.name} (${c.id})`]);
-      case 'room': return s.all('room').map(c => [c.id, `${c.name} (${c.id}${c.kind === 'special' ? ', 특수' : ''})`]);
+      case 'prop': return s.all('prop').map(c => [c.id, `${c.name} (${c.id})`]);
+      case 'room': {   // 프로젝트 방 템플릿 + 게임 기본 방 ("game:<분류>.<클래스>", 추가할 수 있는 것만)
+        const cn = Object.fromEntries(PDM.SPD_ROOM_CATS || []);
+        return [...s.all('room').map(c => [c.id, `★ ${c.name} (${c.id}${c.kind === 'special' ? ', 특수' : ''})`]),
+          ...(PDM.SPD_ROOMS || []).filter(r => !r.noUse).map(r => ['game:' + r.id, `${cn[r.cat] || r.cat} · ${r.name} (${r.cls})`])];
+      }
       case 'node': return PDM.World.options();
       case 'group': return ((s.get('world') || {}).groups || []).map(g => [g.id, g.name]);
       case 'switch': return ((s.get('story') || {}).switches || []).map(v => [v.id, `${v.name || v.id} (${v.id})`]);
@@ -179,12 +185,7 @@ PDM.ui = (function () {
       txt.value = p; commit(key, path, p, o.label, o.rerender); PDM.assets.invalidate(p); draw(); o.onchange && o.onchange(p);
     } }, '찾기…');
     draw();
-    const rmBtn = h('button', { class: 'btn sm', title: 'RPG Maker MZ 그림에서 가져오기', onclick: async e => {
-      e.preventDefault();
-      const p = await PDM.rmmz.importImage(o.rmCat); if (!p) return;
-      txt.value = p; commit(key, path, p, o.label, o.rerender); PDM.assets.invalidate(p); draw(); o.onchange && o.onchange(p);
-    } }, 'RM…');
-    const wrap = h('div', { class: 'imgpick' }, cv, txt, btn, rmBtn);
+    const wrap = h('div', { class: 'imgpick' }, cv, txt, btn);
     return o.label ? field(o.label, wrap, o.hint) : wrap;
   };
 
@@ -201,9 +202,27 @@ PDM.ui = (function () {
       mine.length ? h('optgroup', { label: '프로젝트 사운드' }, mine.map(x => h('option', { value: 'sound:' + x.id }, `♪ ${x.name || x.id}`))) : null,
       other.length ? h('optgroup', { label: '프로젝트 사운드 (다른 종류)' }, other.map(x => h('option', { value: 'sound:' + x.id }, `${x.name || x.id}`))) : null,
       h('optgroup', { label: o.kind === 'se' ? '게임 효과음' : '게임 음악' }, game.map(g => h('option', { value: g }, g.replace(/^game:(music|sounds)\//, '') + (isM2(g) ? '  (mod-2)' : '')))));
+    s.append(h('option', { value: '__path' }, '✎ 파일 경로 직접 입력…'));
     s.value = cur || '';
-    if (cur && s.value !== cur) { s.append(h('option', { value: cur }, `⚠ ${cur}`)); s.value = cur; }
-    s.addEventListener('change', () => set(s.value));
+    const isPath = v => v && v !== 'none' && !v.startsWith('sound:') && !v.startsWith('game:');
+    if (cur && s.value !== cur) { s.append(h('option', { value: cur }, isPath(cur) ? `📄 ${cur}` : `⚠ ${cur}`)); s.value = cur; }
+    s.addEventListener('change', async () => {
+      if (s.value !== '__path') { set(s.value); return; }
+      s.value = cur || '';
+      const v = (await PDM.ui.prompt('소리 파일 경로', isPath(cur) ? cur : 'assets/audio/', '프로젝트 폴더 기준 경로 (예: assets/audio/door.ogg) 또는 game:sounds/… · game:music/… — ogg · mp3 · wav') || '').trim().replace(/\\/g, '/');
+      if (v) set(v);
+    });
+    // 다른 파일 고르기: 프로젝트 밖의 파일이면 assets/audio 로 복사하고 그 경로를 씀 (이미지 "찾기…" 와 같음)
+    const browse = h('button', { class: 'ib', title: '다른 소리 파일 고르기 (ogg · mp3 · wav) — 프로젝트 밖의 파일은 assets/audio 로 복사합니다', onclick: async e => {
+      e.preventDefault();
+      const src = await pdm.openFile('소리 파일 (ogg · mp3 · wav)', ['ogg', 'mp3', 'wav']); if (!src) return;
+      const name = pdm.basename(src), ext = (name.split('.').pop() || '').toLowerCase();
+      if (!['ogg', 'mp3', 'wav'].includes(ext)) { toast('ogg, mp3, wav 만 게임에서 재생됩니다', 'bad'); return; }
+      const root = PDM.store.root;
+      let rel = pdm.relative(root, src).replace(/\\/g, '/');
+      if (rel.startsWith('..') || /^[A-Za-z]:/.test(rel)) { rel = `assets/audio/${name}`; try { await pdm.copy(src, pdm.join(root, rel)); } catch (err) { toast('복사 실패: ' + err.message, 'bad'); return; } }
+      set(rel);
+    } }, '📂');
     const play = h('button', { class: 'ib', title: '미리 듣기', onclick: e => { e.preventDefault(); const v = s.value || o.fallback; if (v && v !== 'none') PDM.audio.play(v); } }, '▶');
     const stop = h('button', { class: 'ib', title: '멈춤', onclick: e => { e.preventDefault(); PDM.audio.stop(); } }, '■');
     const edit = h('button', { class: 'ib', title: '사운드 편집기에서 편집 (프로젝트 소리면 그 소리를, 게임 소리면 복사해서 고칠 수 있게)', onclick: async e => {
@@ -213,8 +232,7 @@ PDM.ui = (function () {
       if (v.startsWith('game:') && PDM.sounds.copyGameRef) { const r = await PDM.sounds.copyGameRef(v); if (r) set(r); return; }
       PDM.sounds.select(null);
     } }, '🎚');
-    const rm = h('button', { class: 'ib', title: 'RPG Maker MZ 에서 가져오기', onclick: async e => { e.preventDefault(); const r = await PDM.rmmz.importSound(o.kind === 'se' ? 'se' : o.kind === 'bgm' ? 'bgm' : undefined); if (r) set(r); } }, 'RM');
-    return h('div', { class: 'sndpick' }, s, play, o.mini ? null : stop, edit, o.mini ? null : rm);
+    return h('div', { class: 'sndpick' }, s, play, o.mini ? null : stop, browse, edit);
   }
   /** 시스템별 소리: 비우면 기본 소리(sfxKey 의 기본값) · "(소리 없음)" 가능 */
   F.sysSound = (key, path, sfxKey, o = {}) => {
@@ -394,10 +412,39 @@ PDM.ui = (function () {
   }
   /** 아이템 고르기 칸 (프로젝트 아이템 + 게임 아이템) */
   function itemOptions() {
-    const s = PDM.store;
-    const mine = s.all('item').map(i => ({ value: i.id, label: i.name || i.id, group: '프로젝트 아이템', sprite: i.sprite }));
-    const game = Object.entries(PDM.SPD_ITEM_GROUPS || {}).flatMap(([c, l]) => l.filter(x => !x.mod2 || PDM.isMod2()).map(x => ({ value: 'spd:' + x.p, label: x.n + (x.mod2 ? ' ◆' : ''), group: '게임 · ' + (PDM.ITEM_CATEGORIES[c] || c), sprite: { sheet: 'builtin:items', name: x.img } })));
-    return [...mine, ...game];
+    // 리소스 목록(아이템)과 같은 순서: 분류(project.itemCatOrder) → 세부 종류(project.itemSubOrder) → 그 안에서 프로젝트 아이템(project.itemOrder, 없으면 티어·이름) 다음 게임 아이템
+    const s = PDM.store, proj = s.get('project') || {};
+    const all = s.all('item'), ord = proj.itemOrder || [], catOrd = proj.itemCatOrder || [];
+    const tierOf = it => (it.kind === 'melee' || it.kind === 'missile' ? (it.weapon || {}).tier : it.kind === 'armor' ? (it.armor || {}).tier : it.kind === 'codex' ? (it.codex || {}).tier : it.tier) || 0;
+    const subOf = i => i.subtype !== undefined && i.subtype !== null ? i.subtype : i.kind === 'melee' ? 'melee' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
+    const sortItems = l => l.slice().sort((x, y) => tierOf(x) - tierOf(y) || String(x.name).localeCompare(String(y.name))).map((x, i) => [x, ord.indexOf(x.id) < 0 ? 100000 + i : ord.indexOf(x.id)]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+    const G = PDM.SPD_ITEM_GROUPS || {};
+    const cats = Object.keys(PDM.ITEM_CATEGORY_INFO).map((k, i) => [k, catOrd.indexOf(k) < 0 ? 1000 + i : catOrd.indexOf(k)]).sort((x, y) => x[1] - y[1]).map(x => x[0]);
+    const out = [];
+    const mineOpt = (i, group) => ({ value: i.id, label: '★ ' + (i.name || i.id) + (tierOf(i) ? ' · ' + tierOf(i) + '티어' : ''), group, sprite: i.sprite });
+    const gameOpt = (x, group) => ({ value: 'spd:' + x.p, label: x.n + (x.t ? ' · ' + x.t + '티어' : '') + (x.mod2 ? ' ◆' : ''), group, sprite: { sheet: 'builtin:items', name: x.img } });
+    cats.forEach(cat => {
+      const name = (PDM.ITEM_CATEGORY_INFO[cat] || {}).name || cat;
+      const mine = all.filter(i => (i.category || 'misc') === cat), game = (G[cat] || []).filter(x => !x.mod2 || PDM.isMod2());
+      if (!mine.length && !game.length) return;
+      const subs = PDM.itemSubs(cat);
+      if (subs) {
+        const known = Object.keys(subs);
+        known.forEach(sk => {
+          const g = name + ' · ' + subs[sk];
+          sortItems(mine.filter(i => subOf(i) === sk)).forEach(i => out.push(mineOpt(i, g)));
+          game.filter(x => (x.sub || '') === sk).forEach(x => out.push(gameOpt(x, g)));
+        });
+        sortItems(mine.filter(i => !known.includes(subOf(i)))).forEach(i => out.push(mineOpt(i, name)));
+        game.filter(x => !known.includes(x.sub || '')).forEach(x => out.push(gameOpt(x, name)));
+      } else {
+        sortItems(mine).forEach(i => out.push(mineOpt(i, name)));
+        game.forEach(x => out.push(gameOpt(x, name)));
+      }
+    });
+    // 분류가 목록에 없는 프로젝트 아이템 (예전 데이터)
+    all.filter(i => !out.some(o => o.value === i.id)).forEach(i => out.push(mineOpt(i, '프로젝트 아이템')));
+    return out;
   }
   // ---------------- 숫자 칸: 마우스를 올리고 휠로 올리고 내리기 ----------------
   //  (포커스가 없어도 됨) step 만큼, Shift = ×10. min·max 를 지키고, 휠을 멈추면 한 번만 저장(change)

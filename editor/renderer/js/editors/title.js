@@ -33,10 +33,29 @@
   const MOD2_LAYERS = Array.from({ length: 10 }, (_, i) => `game:interfaces/title${i}.png`);
   const MOD2_SPEED = [2 * .10, 4 * .14, 7 * .18, 11 * .22, 16 * .28, 22 * .34, 30 * .42, 40 * .52, 52 * .66, 66 * .82];
 
+  /** 손대지 않은 기본 타이틀이면 지금 게임 저장소의 모양(3.x ↔ 4.0)으로 맞춤. 바꿨으면 true (app.resolveRepo 가 저장소를 찾은 뒤 부름) */
+  PDM.titleSyncDefaults = function () {
+    if (!store.isOpen || PDM.gameTitle4 === undefined) return false;
+    const cur = store.get(K); if (!cur) return false;
+    const norm = o => { const c = PDM.clone(o); delete c.version; return JSON.stringify(c); };
+    const want = PDM.defaults.title(PDM.gameTitle4 ? '4.0' : '3.x');
+    if (norm(cur) === norm(want)) return false;
+    // 예전 기본값(버전별) 그대로인 경우만 — 사용자가 고친 타이틀은 건드리지 않음
+    const olds = ['4.0', '3.x'].map(v => PDM.defaults.title(v));
+    const legacy = PDM.defaults.title('3.x'); delete legacy.hideButton;   // hideButton 이 생기기 전의 기본값
+    if (![...olds, legacy].some(o => norm(o) === norm(cur))) return false;
+    store.edit(K, '타이틀 화면: 게임 저장소 기본 모양', o => { Object.keys(o).forEach(k => delete o[k]); Object.assign(o, want); });
+    PDM.log('타이틀 화면 기본값을 지금 게임 저장소(' + (PDM.gameTitle4 ? 'SPD 4.0 모양' : '예전 아치 모양') + ')에 맞췄습니다', 'ok');
+    return true;
+  };
+  /** 4.0 타이틀 배경 그림 (ui/TitleBackground) */
+  const T4 = { archs: 'game:splashes/title/archs.png', clusters: 'game:splashes/title/back_clusters.png', mid: 'game:splashes/title/mid_mixed.png', small: 'game:splashes/title/front_small.png' };
   /** 미리 만든 모양 */
   const PRESETS = {
-    // 원작 모양: 원작 아치(arcs1·2)가 위로 흐름 — mod-2 저장소에서도 원작처럼 보임
-    spd: () => { const d = PDM.defaults.title(); d.background.archStyle = 'classic'; return d; },
+    // 지금 게임 저장소의 타이틀 그대로 (4.0: 폐허 시차 배경 + 화면 감추기 버튼, 그 전: 아치)
+    game: () => PDM.defaults.title(),
+    // 원작 아치 모양: 아치(arcs1·2)가 위로 흐름 — 어느 저장소에서도 같은 모습
+    spd: () => { const d = PDM.defaults.title('3.x'); d.background.archStyle = 'classic'; return d; },
     // mod-2 모양: 게임 배경(숲·탑 10겹 시차 배경) + 로고 주변 마나 반딧불
     mod2: () => Object.assign(PDM.defaults.title(), {
       background: { archs: true, archStyle: 'game', archReverse: false, archDir: 'up', archSpeed: 20, archImages: { bg: '', fg: '' }, color: '', gradient: { enabled: false, color: '#0b1b3a', alpha: 0.55, from: 'top' }, vignette: false, effect: 'mana', effectDensity: 1, effectColor: '', effectFront: false, effectArea: 'logo' },
@@ -92,7 +111,7 @@
     const archSt = archStyleOf(bg), aim = bg.archImages || {};
     const ARC_BG = archSt === 'classic' && aim.bg ? aim.bg : 'game:interfaces/arcs1.png', ARC_FG = archSt === 'classic' && aim.fg ? aim.fg : 'game:interfaces/arcs2.png';
     [ARC_BG, ARC_FG, 'game:interfaces/banners.png'].forEach(want);
-    if (archSt === 'game') MOD2_LAYERS.forEach(want);        // mod-2 게임 배경 (없으면 원작 아치)
+    if (archSt === 'game') { MOD2_LAYERS.forEach(want); Object.values(T4).forEach(want); }        // 게임 배경: 4.0 폐허 배경 · mod-2 배경 (없으면 원작 아치)
     (t.layers || []).forEach(l => want(l.image));
     if (lg.mode === 'image') want(lg.image);
     const gateOn = !!gate.enabled;
@@ -167,7 +186,7 @@
     let revealed = !gateOn || st.showMenu, revealT = revealed && gateOn ? 1 : 0, btnClock = 0;
     cv.onclick = () => { if (gateOn && !revealed) { revealed = true; revealT = 0; btnClock = 0; st.showMenu = true; } else if (gateOn) { revealed = false; revealT = 0; st.showMenu = false; } else { t0 = performance.now(); } };
     let t0 = performance.now(), last = t0, stop = false, archOff = 0;
-    const mod2Off = MOD2_LAYERS.map(() => 0);
+    const mod2Off = MOD2_LAYERS.map(() => 0); let t4T = 0;
     // 게임 배경(원작 아치)은 위로 20 — 반대로 흐름이면 아래로. 원작 아치 방식은 설정대로
     const dir = archSt === 'classic' ? (bg.archDir || 'up') : (bg.archReverse ? 'down' : 'up'), aspd = archSt === 'classic' ? (bg.archSpeed ?? 20) : 20;
     function frame(now) {
@@ -179,7 +198,33 @@
       if (bg.color) { g.fillStyle = bg.color; g.fillRect(0, 0, W, H); }
       // 게임 배경: mod-2 = 10겹 가로 시차 배경 (ui/Archs 와 같은 속도), 원작 = 아치가 위로
       const mod2bg = archSt === 'game' && imgs[MOD2_LAYERS[0]];
-      if (mod2bg) {
+      const t4bg = archSt === 'game' && !mod2bg && imgs[T4.archs];
+      if (t4bg) {
+        // SPD 4.0 타이틀 배경 (ui/TitleBackground 를 흉내): 아치 벽이 위로 흐르고, 그 앞에 폐허 조각들이 더 빠르게 떠오름
+        const k = H / 450, sp = 15 * k * (W <= H ? 1 / 1.5 : 1);
+        t4T += e;
+        const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+        const aw = 333 * k, ah = 100 * k, off = (t4T * sp) % ah, row0 = Math.floor(t4T * sp / ah);
+        for (let ry = -1; ry * ah - off < H; ry++) for (let cx = 0; cx * aw < W; cx++) {
+          const f = Math.floor(rnd((row0 + ry) * 31 + cx) * 6);
+          g.drawImage(t4bg, (f % 3) * 333, Math.floor(f / 3) * 100, 333, 100, cx * aw, ry * ah - off, aw + 0.5, ah + 0.5);
+        }
+        const gd = g.createLinearGradient(0, 0, 0, H); gd.addColorStop(0, 'rgba(0,0,0,0)'); gd.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = gd; g.fillRect(0, 0, W, H);
+        const k2 = k * (W <= H ? 1 / 1.5 : 1);
+        // [그림, 프레임 가로, 세로, 열, 프레임 수, 개수, 속도 배율, 크기 배율, 어둡기]
+        [[T4.clusters, 450, 250, 1, 2, 2, 1.33, 0.5, 0.55], [T4.clusters, 450, 250, 1, 2, 2, 2, 0.8, 0.35], [T4.small, 112, 116, 9, 36, 5, 2.66, 0.6, 0.3],
+          [T4.mid, 273, 242, 7, 28, 3, 3.5, 0.9, 0.15], [T4.mid, 273, 242, 7, 28, 2, 4.7, 1.1, 0], [T4.small, 112, 116, 9, 36, 4, 6.2, 1.3, 0]].forEach(([r, fw, fh, cols, nf, cnt, spd, sz, dark], li) => {
+          const im = imgs[r]; if (!im) return;
+          const w2 = fw * k2 * sz, h2 = fh * k2 * sz, span = H + h2 * 2;
+          for (let i = 0; i < cnt; i++) {
+            const seed = li * 17 + i * 5.3, cyc = Math.floor((t4T * sp * spd + rnd(seed) * span) / span);
+            const y = H + h2 - ((t4T * sp * spd + rnd(seed) * span) % span), x = rnd(seed + cyc * 3.1 + 1) * (W + w2) - w2, f = Math.floor(rnd(seed + cyc * 7.7 + 2) * nf);
+            g.filter = dark > 0 ? `brightness(${1 - dark})` : 'none';   // 먼 것일수록 어둡게
+            g.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, x, y - h2, w2, h2);
+            g.filter = 'none';
+          }
+        });
+      } else if (mod2bg) {
         MOD2_LAYERS.forEach((r, i) => {
           const im = imgs[r]; if (!im) return;
           mod2Off[i] -= (bg.archReverse ? -1 : 1) * MOD2_SPEED[i] * e;
@@ -314,7 +359,8 @@
         g.globalAlpha = 1;
       });
       const v = t.version || {};
-      if (v.visible !== false) { g.fillStyle = '#888'; g.font = '5px monospace'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillText(v.text || 'v3.2.0', W - 4, H - 2); }
+      if (v.visible !== false) { g.fillStyle = '#888'; g.font = '5px monospace'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillText(v.text || (PDM.gameTitle4 ? 'v4.0.0' : 'v3.2.0'), W - 4, H - 2); }
+      if ((t.hideButton ?? !!PDM.gameTitle4) && revealed) { g.strokeStyle = '#bbb'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(W / 2 - 4, H - 11); g.lineTo(W / 2, H - 7); g.lineTo(W / 2 + 4, H - 11); g.stroke(); }
       if ((t.exit || {}).visible !== false) { g.fillStyle = '#555'; g.fillRect(W - 12, 0, 12, 12); g.fillStyle = '#ccc'; g.font = '8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('✕', W - 6, 6); }
       requestAnimationFrame(frame);
     }
@@ -342,7 +388,7 @@
     });
     dirSel.onchange = applyDir; spdIn.onchange = applyDir;
     return h('div', {},
-      row(F.text(K, [...p, 'name'], { label: '이름', rerender: true }), F.image(K, [...p, 'image'], { label: '그림', sub: 'title', rmCat: 'titles1', rerender: true }), F.bool(K, [...p, 'front'], { label: '로고 위에 그림', rerender: true }),
+      row(F.text(K, [...p, 'name'], { label: '이름', rerender: true }), F.image(K, [...p, 'image'], { label: '그림', sub: 'title', rerender: true }), F.bool(K, [...p, 'front'], { label: '로고 위에 그림', rerender: true }),
         F.bool(K, [...p, 'titleOnly'], { label: '타이틀에서만 (메뉴 화면엔 안 그림)', rerender: true })),
       row(F.bool(K, [...p, 'tile'], { label: '반복 타일 (끝없이 흐르는 배경)', rerender: true }), F.num(K, [...p, 'scale'], { label: '배율', step: 0.25, min: 0.05, def: 1, rerender: true }),
         F.num(K, [...p, 'alpha'], { label: '투명도', step: 0.05, min: 0, max: 1, def: 1, rerender: true }), F.select(K, [...p, 'blend'], { normal: '보통', light: '빛 (더하기)' }, { label: '섞기', rerender: true })),
@@ -417,14 +463,14 @@
         h('h1', {}, '🏰 타이틀 화면'),
         h('p', { class: 'lead' }, '게임을 켰을 때 처음 나오는 화면입니다. 이 설정을 켜면 게임의 원래 타이틀을 숨기고 아래 설정대로 새로 그립니다. 미리보기는 대략적인 모습이고, 정확한 모습은 ▶ 테스트 플레이로 확인하세요.'),
         row(F.bool(K, ['enabled'], { label: '이 설정 사용 (끄면 게임 원래 타이틀)', def: true, rerender: true }),
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '빠른 시작:'), preset('spd', '원작(SPD) 기본'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null)),
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '빠른 시작:'), preset('game', '지금 게임 기본'), preset('spd', '예전 아치 모양'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null)),
         h('div', { class: 'title-prev-wrap' }, sizeTabs, layoutWrap(t, st, pv, ctx)),
         section('음악',
           h('p', { class: 'hint' }, '비워 두면 게임이 트는 곡 그대로 (원작: theme_1·theme_2' + (PDM.isMod2() ? ', mod-2: title.mp3' : '') + '). 여러 곡이면 무작위, "(음악 끄기)"로 무음.'),
           listEditor(K, ['music', 'tracks'], { addLabel: '곡 추가', compact: true, make: () => '', render: (x, i, ip) => F.sound(K, ip, { kind: 'bgm', allowNone: true, mini: true }) })),
         section('배경',
           row(PDM.ui.field('배경 방식', (() => {
-              const s = h('select', {}, Object.entries(ARCH_STYLES).map(([k, v]) => h('option', { value: k, selected: archStyleOf(bg) === k }, k === 'game' && !PDM.isMod2() ? '게임 배경 그대로 (원작 아치)' : v)));
+              const s = h('select', {}, Object.entries(ARCH_STYLES).map(([k, v]) => h('option', { value: k, selected: archStyleOf(bg) === k }, k === 'game' && !PDM.isMod2() ? (PDM.gameTitle4 ? '게임 배경 그대로 (SPD 4.0: 떠오르는 폐허)' : '게임 배경 그대로 (원작 아치)') : v)));
               s.onchange = () => store.edit(K, '배경 방식', o => { o.background = o.background || {}; o.background.archs = s.value !== 'none'; if (s.value !== 'none') o.background.archStyle = s.value; });
               return s; })()),
             archStyleOf(bg) === 'game' ? F.bool(K, ['background', 'archReverse'], { label: '반대 방향으로 흐름', rerender: true }) : null,
@@ -444,7 +490,7 @@
             F.select(K, ['background', 'effectArea'], { screen: '화면 전체', logo: '로고 주변' }, { label: '위치', rerender: true }),
             F.text(K, ['background', 'effectColor'], { label: '색 (비우면 기본)', rerender: true }), F.bool(K, ['background', 'effectFront'], { label: '로고 위에', rerender: true })),
           h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '그림 레이어 (아래 것이 위에 그려짐) — 스프라이트 시트 애니메이션 · 가로/세로 흐름 · 흔들림 · 깜빡임 · 회전'),
-          listEditor(K, ['layers'], { addLabel: '그림 레이어', emptyText: '레이어가 없습니다. RPG Maker titles1 이나 직접 그린 그림을 넣어 보세요.',
+          listEditor(K, ['layers'], { addLabel: '그림 레이어', emptyText: '레이어가 없습니다. 직접 그린 그림을 넣어 보세요.',
             make: () => ({ name: '레이어', image: '', frame: [0, 0], frames: [], fps: 6, fit: 'cover', x: 0.5, y: 0.5, anchorX: 0.5, anchorY: 0.5, scale: 1, alpha: 1, blend: 'normal', tile: false, scrollX: 0, scrollY: 0, front: false }),
             render: (l, i, p) => h('details', { open: !!st['ly' + i], ontoggle: e => { st['ly' + i] = e.target.open; } },
               h('summary', { style: { cursor: 'pointer' } }, h('b', {}, l.name || '레이어 ' + (i + 1)), h('span', { class: 'hint' }, '  ' + (l.image || '(그림 없음)') + (l.tile ? ' · 반복' : '') + (l.frame && l.frame[0] ? ' · 애니메이션' : '') + (l.scrollX ? (l.scrollX < 0 ? ' · ←' : ' · →') : '') + (l.scrollY ? (l.scrollY < 0 ? ' · ↑' : ' · ↓') : '') + (l.front ? ' · 로고 위' : '') + (l.titleOnly ? ' · 타이틀만' : ''))),
@@ -462,7 +508,7 @@
             F.num(K, ['logo', 'y'], { label: '세로 위치 (0~1, 0 = 자동)', step: 0.05, min: 0, max: 1, def: 0, rerender: true }),
             F.num(K, ['logo', 'offsetY'], { label: '위아래 이동 (px)', step: 1, def: 0, rerender: true }), F.num(K, ['logo', 'offsetX'], { label: '좌우 이동 (px)', step: 1, def: 0, rerender: true }),
             F.select(K, ['logo', 'anim'], LOGO_ANIM, { label: '움직임', rerender: true })),
-          (t.logo || {}).mode === 'image' ? F.image(K, ['logo', 'image'], { label: '로고 그림', sub: 'title', rmCat: 'titles2', rerender: true }) : null,
+          (t.logo || {}).mode === 'image' ? F.image(K, ['logo', 'image'], { label: '로고 그림', sub: 'title', rerender: true }) : null,
           (t.logo || {}).mode === 'text' ? h('div', {},
             row(F.text(K, ['logo', 'text'], { label: '제목 글자 (\\n = 줄바꿈)', rerender: true }), F.num(K, ['logo', 'size'], { label: '글자 크기', int: true, min: 6, max: 40, def: 16, rerender: true }), F.text(K, ['logo', 'color'], { label: '색', rerender: true })),
             row(F.text(K, ['logo', 'subtitle'], { label: '부제', rerender: true }), F.text(K, ['logo', 'subColor'], { label: '부제 색', rerender: true }))) : null,
@@ -495,7 +541,7 @@
             render: (it, i, p) => buttonRow(p, it) })),
         section('기타',
           row(F.bool(K, ['version', 'visible'], { label: '버전 글자', def: true, rerender: true }), F.text(K, ['version', 'text'], { label: '버전 글자 바꾸기 (비우면 게임 버전)', rerender: true }),
-            F.bool(K, ['exit', 'visible'], { label: '종료 버튼 (PC)', def: true, rerender: true }))));
+            F.bool(K, ['exit', 'visible'], { label: '종료 버튼 (PC)', def: true, rerender: true }), F.bool(K, ['hideButton'], { label: '화면 감추기 버튼 (아래 화살표 — 누르면 로고·버튼이 사라지고 배경만 보임)', def: !!PDM.gameTitle4, rerender: true }))));
     }
   });
   PDM.titleEditor = { preview, PRESETS };

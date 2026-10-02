@@ -57,6 +57,7 @@ public class StoryState {
 		return name -> resolveGlobal(name, eventId);
 	}
 	public static Object resolveGlobal(String name, String eventId) {
+		if (name.startsWith("global.")) return MakerDrops.global(name.substring(7));   // 전역 스위치 (새 게임에도 유지)
 		if (name.startsWith("switch.")) return sw(name.substring(7));
 		if (name.startsWith("var.")) return var(name.substring(4));
 		if (name.startsWith("self.")) return eventId != null && self(eventId, name.substring(5));

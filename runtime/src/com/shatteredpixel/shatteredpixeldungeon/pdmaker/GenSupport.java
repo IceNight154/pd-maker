@@ -55,15 +55,33 @@ public class GenSupport {
 		if (reported.add(key)) MakerRuntime.warnOnce("코드 오류: " + owner + " · " + where + " — " + e.getClass().getSimpleName());
 	}
 
+	// 아이템 클래스는 분류/세부 종류 폴더에 있음 (gen/items/<분류>/<세부 종류>/I_<id>) — 생성된 GenIndex 표로 찾음
+	private static java.util.Map<String, String> index;
+	/** 표 읽기 + 예전 위치(gen 바로 아래)로 저장된 세이브가 읽히도록 별칭 등록. MakerRuntime.init 에서 한 번 */
+	public static synchronized void loadIndex() {
+		index = new java.util.HashMap<>();
+		try {
+			String[][] items = (String[][]) Class.forName(GEN + "GenIndex").getField("ITEMS").get(null);
+			for (String[] e : items) {
+				index.put(e[0], e[1]);
+				try { com.watabou.utils.Bundle.addAlias(Class.forName(GEN + e[1]), GEN + e[0]); } catch (Throwable ignored) { }
+			}
+		} catch (Throwable ignored) { /* 생성 코드가 아직 없음 */ }
+	}
+	/** gen 클래스 (없으면 null) */
+	public static Class<?> cls(String simpleName) {
+		if (index == null) loadIndex();
+		String rel = index.get(simpleName);
+		try { return Class.forName(GEN + (rel == null ? simpleName : rel)); } catch (ClassNotFoundException e) { return null; }
+	}
+
 	/** gen 클래스 인스턴스 (없으면 null) */
 	@SuppressWarnings("unchecked")
 	static <T> T instance(String simpleName, Class<T> type) {
 		try {
-			Class<?> c = Class.forName(GEN + simpleName);
-			if (!type.isAssignableFrom(c)) return null;
+			Class<?> c = cls(simpleName);
+			if (c == null || !type.isAssignableFrom(c)) return null;
 			return (T) Reflection.newInstance(c);
-		} catch (ClassNotFoundException e) {
-			return null;
 		} catch (Throwable t) {
 			MakerRuntime.log("생성 코드를 만들지 못함: " + simpleName + " " + t);
 			return null;

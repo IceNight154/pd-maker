@@ -15,7 +15,7 @@ PDM.TERRAIN = [
   { id: 30, key: 'FURROWED_GRASS', name: '짓밟힌 풀',   tile: 51 + 16, color: '#4a6a3a', pass: true },
   { id: 9,  key: 'EMBERS',       name: '잿불',          tile: 3,  color: '#6b4a3a', pass: true },
   { id: 29, key: 'WATER',        name: '물',            tile: -1, color: '#2d5f86', pass: true },
-  { id: 0,  key: 'CHASM',        name: '구덩이',        tile: 24, color: '#111111', pass: false },
+  { id: 0,  key: 'CHASM',        name: '빈 타일 (낭떠러지)', tile: 24, color: '#111111', pass: false },
   { id: 4,  key: 'WALL',         name: '벽',            tile: 48, color: '#2b2622', pass: false },
   { id: 12, key: 'WALL_DECO',    name: '장식 벽',       tile: 49, color: '#30291f', pass: false },
   { id: 27, key: 'BOOKSHELF',    name: '책장',          tile: 50, color: '#4a3526', pass: false },
@@ -43,6 +43,9 @@ PDM.TERRAIN = [
 ];
 PDM.TERRAIN_BY_ID = Object.fromEntries(PDM.TERRAIN.map(t => [t.id, t]));
 
+/** 원작 게임 소스 (게임 저장소로 쓸 수 있는 것) */
+PDM.SPD_REPO_URL = 'https://github.com/00-Evan/shattered-pixel-dungeon';
+
 // ---------- 테마 ----------
 PDM.THEMES = {
   SEWER:  { name: '하수도',       tiles: 'environment/tiles_sewers.png', water: 'environment/water0.png', color: '#3f6b4a', floors: [1, 5] },
@@ -64,6 +67,7 @@ PDM.OBJECT_TYPES = {
   mob:   { name: '몬스터',  color: '#e05a5a', ref: 'character' },
   item:  { name: '아이템',  color: '#e6b95c', ref: 'item' },
   event: { name: '이벤트',  color: '#a58bff', ref: 'event' },
+  prop:  { name: '맵 오브젝트', color: '#c9a36a', ref: 'prop' },
   start: { name: '시작 위치', color: '#63b3ed', ref: null }
 };
 PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구 방', exit: '출구 방', special: '특수 방' };
@@ -73,9 +77,9 @@ PDM.CHAR_KINDS = { npc: 'NPC', companion: '동료', mob: '몬스터', boss: '보
 PDM.AI_MODES = { stand: '제자리', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)' };
 PDM.ANIM_KEYS = ['idle', 'run', 'attack', 'zap', 'die', 'operate'];
 /** 영웅 시트에만 있는 기본 동작 (게임 HeroSprite 의 fly · read) · 캐릭터는 fly 만 */
-PDM.ANIM_KEYS_HERO = [...PDM.ANIM_KEYS, 'fly', 'read'];
+PDM.ANIM_KEYS_HERO = ['idle', 'run', 'attack', 'zap', 'die', 'dead', 'operate', 'fly', 'read'];   // dead = 쓰러진 뒤 이어서 반복 (선택)
 PDM.ANIM_KEYS_CHAR = [...PDM.ANIM_KEYS, 'fly'];
-PDM.ANIM_NAMES = { idle: '가만히', run: '이동', attack: '공격', zap: '마법(원거리)', die: '쓰러짐', operate: '조작(문·상자)', fly: '날기 (공중부양·점프·날개)', read: '읽기 (주문서)' };
+PDM.ANIM_NAMES = { idle: '가만히', run: '이동', attack: '공격', zap: '마법(원거리)', die: '쓰러짐', operate: '조작(문·상자)', fly: '날기 (공중부양·점프·날개)', read: '읽기 (주문서)', dead: '쓰러진 뒤 (die 가 끝나면 이어서 반복 · 선택)' };
 /** 아이템 분류 — 게임 items 폴더 구조를 따름 (mod-2: 코덱스·그리모어 포함). 재료·선물은 PDMaker 추가 분류
  *  dir: 게임 폴더, subs: 세부 종류, use: "사용" 버튼 이름, consumable: 사용하면 1개 사라짐, kind: 게임 동작(무기·갑옷 상속) 추천 */
 PDM.ITEM_CATEGORY_INFO = {
@@ -103,7 +107,7 @@ PDM.ITEM_CATEGORY_INFO = {
 };
 PDM.ITEM_CATEGORIES = Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).map(([k, v]) => [k, v.name]));
 /** 지금 프로젝트의 게임 저장소가 mod-2 인지 (app 이 저장소를 찾을 때 PDM.gameMod2 를 정함 — 모르면 원작으로 봄)
- *  원작(game/shattered-pixel-dungeon) 프로젝트에서는 mod-2 전용 분류·종류·직업·소리를 목록에서 뺌 */
+ *  원작(game/shattered-pixel-dungeon-master) 프로젝트에서는 mod-2 전용 분류·종류·직업·소리를 목록에서 뺌 */
 PDM.isMod2 = () => PDM.gameMod2 === true;
 PDM.itemCategories = () => Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([, v]) => PDM.isMod2() || v.note !== 'mod-2').map(([k, v]) => [k, v.name]));
 /** 분류의 세부 종류 = 기본(schema) + 프로젝트에서 더하거나 이름을 바꾼 것 (project.itemSubs[분류][키] = 이름, null = 숨김) */
@@ -154,6 +158,8 @@ PDM.COMMANDS = {
   wait:      { g: '흐름', name: '대기', params: [{ k: 'turns', t: 'number', label: '시간(0.1초 단위)' }], sum: c => `대기 ${c.turns || 0}` },
   call:      { g: '흐름', name: '커먼 이벤트 호출', params: [{ k: 'event', t: 'event', label: '이벤트' }], sum: c => '호출: ' + PDM.refName('event', c.event) },
   stop:      { g: '흐름', name: '이벤트 중지', params: [], sum: () => '이벤트 중지' },
+  global:    { g: '데이터', name: '전역 스위치 (새 게임에도 유지)', params: [{ k: 'key', t: 'text', label: '이름 (영문)' }, { k: 'value', t: 'bool', label: '켜기' }],
+               sum: c => `전역 스위치 ${c.key || '?'} = ${c.value === false ? '끔' : '켬'}  (조건식 global.${c.key || '이름'} · 영웅 해금)` },
   switch:    { g: '데이터', name: '스위치', params: [{ k: 'id', t: 'switch', label: '스위치' }, { k: 'value', t: 'bool', label: '켜기' }],
                sum: c => `스위치 ${PDM.refName('switch', c.id)} = ${c.value ? '켬' : '끔'}` },
   var:       { g: '데이터', name: '변수', params: [{ k: 'id', t: 'var', label: '변수' }, { k: 'op', t: 'select', label: '연산', options: { set: '=', add: '+=', sub: '-=', mul: '×=' } }, { k: 'value', t: 'number', label: '값' }],
@@ -260,13 +266,19 @@ PDM.make = {
     if (e.exp != null) c.exp = e.exp;
     return c;
   },
-  /** 새 프로젝트를 원작(game/shattered-pixel-dungeon)처럼: 영웅 전부(추가 직업 포함) + 원작 캐릭터 전부 → { 'hero:warrior': …, 'char:rat': … } */
+  /** 새 프로젝트를 원작(game/shattered-pixel-dungeon-master)처럼: 영웅 전부(추가 직업 포함) + 원작 캐릭터 전부 → { 'hero:warrior': …, 'char:rat': … } */
   vanilla() {
     const out = {};
     (PDM.SPD_HEROES || []).forEach(x => {
       const id = x.cls.toLowerCase(), hr = PDM.make.hero(id);
       Object.assign(hr, { name: x.name, desc: String(x.descLong || x.desc || '').replace(/\\n/g, '\n'), baseClass: x.cls, note: '원작 영웅 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 원래 것을 씁니다' });
       hr.spellbook.enabled = false;
+      // 그림: 원작 영웅 시트(행 = 갑옷 단계 0~6)와 원작 HeroSprite 의 애니메이션 — 바로 미리 보고 고칠 수 있게 채워 둠
+      hr.sprite = { sheet: 'game:sprites/' + id + '.png', frame: [12, 15], scale: 0, tierRows: [0, 1, 2, 3, 4, 5, 6], anims: {
+        idle: { frames: [0, 0, 0, 1, 0, 0, 1, 1], fps: 1, loop: true }, run: { frames: [2, 3, 4, 5, 6, 7], fps: 20, loop: true },
+        attack: { frames: [13, 14, 15, 0], fps: 15, loop: false }, zap: { frames: [13, 14, 15, 0], fps: 15, loop: false },
+        die: { frames: [8, 9, 10, 11, 12, 11], fps: 20, loop: false }, operate: { frames: [16, 17, 16, 17], fps: 8, loop: false },
+        fly: { frames: [18], fps: 1, loop: true }, read: { frames: [19, 20, 20, 20, 20, 20, 20, 20, 20, 19], fps: 20, loop: false } } };
       // 시작 아이템: 원작과 같은 목록 (fromGame = 게임이 이미 주는 것 — "목록대로 직접 주기"를 누르기 전에는 게임이 줌)
       hr.inventory = { clearDefault: false, items: (x.items || []).map(e => Object.assign({ item: '', count: 1, level: 0, equip: false, quickslot: false, identify: true, fromGame: true }, e)) };
       hr.knownItems = (x.known || []).slice();
@@ -339,12 +351,20 @@ PDM.make = {
       pages: [PDM.make.page()] };
   },
   page() { return { cond: '', trigger: 'action', turnEvery: 10, heartCond: '', graphic: {}, commands: [] }; },
+  /** 맵 오브젝트: 맵에 놓는 물건 (상자·바위·레버…) — 상태·밀기·상호작용. 런타임 MakerProp */
+  prop(id) {
+    return { format: 'pdmaker-prop', version: PDM.FORMAT_VERSION, id, name: '새 오브젝트', desc: '', note: '',
+      sprite: { sheet: '', frame: [16, 16], scale: 0 },
+      states: [{ name: '기본', frame: 0, solid: true, switch: '' }], start: 0,
+      pushable: false, pushSound: '', goal: { terrain: -1, switch: '', event: '' },
+      interact: 'none', event: '', loop: true, cond: '', sound: '', stepOn: 'none', stepEvent: '' };
+  },
   /** 방 템플릿: 자동 생성 층에 끼워 넣는 직접 그린 방 */
   room(id) {
     const w = 9, hh = 7, t = new Array(w * hh).fill(4);
     for (let y = 1; y < hh - 1; y++) for (let x = 1; x < w - 1; x++) t[y * w + x] = 1;
     t[Math.floor(w / 2)] = 5; t[(hh - 1) * w + Math.floor(w / 2)] = 5; t[Math.floor(hh / 2) * w] = 5; t[Math.floor(hh / 2) * w + w - 1] = 5;
-    return { format: 'pdmaker-room', version: PDM.FORMAT_VERSION, id, name: '새 방', kind: 'standard', keepClean: true, previewTheme: '',
+    return { format: 'pdmaker-room', version: PDM.FORMAT_VERSION, id, name: '새 방', kind: 'standard', keepClean: true, previewTheme: '', cat: '', auto: true, autoChance: 100, autoGroups: [],
       size: { w, h: hh }, layers: { terrain: t }, objects: [], note: '' };
   }
 };

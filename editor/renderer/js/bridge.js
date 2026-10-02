@@ -91,6 +91,7 @@
       return { appDir: here + '/editor', resources: here, sample: here + '/sample-project', builtinPlugins: here + '/editor/builtin-plugins', home: '/', userData: '/' };
     },
     async openExternal(p) { window.open(p, '_blank'); return true; },
+    async showInFolder() { throw new Error('웹 모드에서는 폴더를 열 수 없습니다'); },
     async closeApp() { return true; },
     async runGame() { throw new Error('웹 모드에서는 테스트 플레이를 할 수 없습니다. Electron(PDMaker.exe)으로 실행하세요.'); },
     async stopGame() { return true; },

@@ -11,12 +11,13 @@ PDM.validate = function () {
     if (kind === 'char') return id === '$hero' || id.startsWith('spd:') || s.has('char:' + id);
     if (kind === 'item') return s.has('item:' + id);
     if (kind === 'event') return s.has('event:' + id);
+    if (kind === 'prop') return s.has('prop:' + id);
     if (kind === 'switch') return (story.switches || []).some(x => x.id === id);
     if (kind === 'var') return (story.variables || []).some(x => x.id === id);
     if (kind === 'route') return (story.routes || []).some(x => x.id === id);
     if (kind === 'ending') return (story.endings || []).some(x => x.id === id);
     if (kind === 'node') return !!PDM.World.node(id);
-    if (kind === 'room') return s.has('room:' + id);
+    if (kind === 'room') return String(id).startsWith('game:') ? (PDM.SPD_ROOMS || []).some(r => 'game:' + r.id === id && !r.noUse) : s.has('room:' + id);
     if (kind === 'heartAction') return (heart.actions || []).some(x => x.key === id);
     if (kind === 'heartRequest') return (heart.requests || []).some(x => x.key === id);
     if (kind === 'topic') return (heart.topics || []).some(x => x.key === id);
@@ -52,6 +53,11 @@ PDM.validate = function () {
     if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) add('error', w, '없는 노드를 가리킵니다', 'world');
     cond(e.cond, w, 'world');
   });
+  const blockCheck = (list, where, key) => (list || []).forEach((b, i) => {
+    if (b.type === 'room') { if (!b.room) add('error', `${where} › 구성 블럭 ${i + 1}`, '방을 고르지 않았습니다', key); else if (!has('room', b.room)) add('error', `${where} › 구성 블럭 ${i + 1}`, `방 "${b.room}" 없음`, key); cond(b.cond, `${where} › 구성 블럭 ${i + 1}`, key); }
+    else if ((b.max || 0) < (b.min || 0) && ['standard', 'special', 'secret'].includes(b.type)) add('warn', `${where} › 구성 블럭 ${i + 1}`, '최대가 최소보다 작습니다 (최소 값으로 만듭니다)', key);
+  });
+  (wd.groups || []).forEach(g => blockCheck(g.blocks, `그룹 ${g.name}`, 'world'));
   (wd.groups || []).forEach(g => (g.rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `그룹 ${g.name} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, 'world'); cond(r.cond, `그룹 ${g.name} › 추가 방`, 'world'); }));
   let starts = 0;
   (wd.nodes || []).forEach(n => {
@@ -84,7 +90,7 @@ PDM.validate = function () {
       add('warn', where, '시작 노드에서 닿지 않습니다 (이벤트 "맵 이동"으로만 갈 수 있음)', 'world');
     (f.objects || []).forEach((o, i) => {
       const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
-      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event' }[o.type];
+      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop' }[o.type];
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);
@@ -96,9 +102,19 @@ PDM.validate = function () {
       if (o.type === 'start') starts++;
       cond(o.cond, w, k);
     });
+    blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
   if (starts > 1) add('warn', '맵', `시작 위치가 ${starts}개 있습니다 (시작 맵의 첫 번째만 사용)`, 'world');
+  // 맵 오브젝트
+  s.all('prop').forEach(p => {
+    const k = 'prop:' + p.id, where = `맵 오브젝트 ${p.name}`;
+    if (!(p.sprite || {}).sheet) add('warn', where, '그림(스프라이트 시트)이 없습니다 — 게임에서 기본 그림으로 보입니다', k);
+    if (!(p.states || []).length) add('error', where, '상태가 하나도 없습니다', k);
+    if (p.pushable && !(p.states || []).some(x => x.solid !== false)) add('warn', where, '밀 수 있지만 막힌 상태가 없어 밀 수 없습니다 (지나갈 수 있는 상태에서는 그냥 밟고 지나감)', k);
+    [p.event, p.stepEvent, (p.goal || {}).event].forEach(e => { if (e && !has('event', e)) add('error', where, `이벤트 "${e}" 없음`, k); });
+    cond(p.cond, where, k);
+  });
   // 방 템플릿
   const DOORS = [5, 6, 10, 16, 31];
   s.all('room').forEach(r => {

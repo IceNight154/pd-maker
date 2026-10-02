@@ -166,7 +166,7 @@ MyProject/
 영웅 6명(전사·마법사·도적·사냥꾼·결투가·성직자 — 저장소에 있는 아리아는 `SKIP_CLASSES` 로 뺌, 바탕 직업만, 그림·특성·전직·직업 능력은 비워서 게임 원래 것) + 원작 캐릭터 73명(몬스터 60 · 보스 5 · NPC 8)을
 `tools/data/extract_spd_chars.py`(원작 소스의 이름·설명·능력치·스프라이트·애니메이션 → `spd-chars.js`)로 채움.
 원작 캐릭터는 `game`(게임 클래스, 예 `Rat` · `npcs.Ghost` · `Shaman$RedShaman`) + `useGame: true` → 맵에 놓거나 이벤트로 소환하면 게임 클래스 그대로(`LevelHooks.gameChar`),
-끄면 데이터(능력치·그림·AI·대사)로 도는 PDMaker 캐릭터. 아이템은 게임 아이템(▫)이 트리에 그대로 나오고, 방 템플릿은 원작이 코드로 만드는 방이라 비어 있음.
+끄면 데이터(능력치·그림·AI·대사)로 도는 PDMaker 캐릭터. 아이템은 게임 아이템(▫)이 트리에 그대로 나오고, 방 템플릿은 프로젝트가 직접 그린 것 아래에 **게임 기본 방**(`levels/rooms` 의 모든 클래스 145개, `spd-rooms.js` ← `tools/data/extract_spd_rooms.py`)이 분류별(일반·입구·출구·특수·비밀·연결 통로·퀘스트·하수도 보스·바탕 클래스)로 나옴. 누르면 정보 창(설명·클래스·크기·코드 파일 보기). ▪ 82개는 그룹·노드의 "추가 방"에서 `game:<분류>.<클래스>` 로 고를 수 있고(런타임 `LevelHooks.addList` 가 클래스를 만들어 방 목록에 넣음), ▫ (입구·출구·전용 층·바탕 클래스)는 보기만. **미리보기**: `spd-room-previews.js` 에 게임이 실제로 만든 방 지형 표본(방마다 최대 3개, 지역 테마·아이템/몬스터 위치 포함 — `tools/playtest` 의 `eval:roomdump` 로 뽑음)이 있어, 정보 창에 타일로 그려 주고 [▦ 방 미리보기]로 프로젝트 방 템플릿 + 게임 기본 방 전체를 모아 봄. 표본이 없는 입구·출구 변형은 바탕 방 모양을 빌려 보여 줌.
 
 **진행 방향**: 프로젝트 `direction` 또는 그룹 `direction` 이 `up` 이면 탑 모드(계단 그림·층 이름 반전).
 
@@ -431,7 +431,7 @@ codex.melee · codex.meleeHit · codex.ranged · codex.cast · codex.hit · spel
 
 ### 3.8 그림 관리 · 게임 그림 바꾸기 — 에디터 "🖼 그림 관리"
 
-- 프로젝트 `assets/` 표준 폴더: `sprites/heroes` · `sprites/characters/{npc,companion,monster,boss}` · `sprites/items` · `sprites/effects` · `portraits/<캐릭터>` · `illustrations` · `tiles` · `title` · `ui` · `game` · `rmmz` · `audio` (docs/FOLDERS.md).
+- 프로젝트 `assets/` 표준 폴더: `sprites/heroes` · `sprites/characters/{npc,companion,monster,boss}` · `sprites/items` · `sprites/effects` · `portraits/<캐릭터>` · `illustrations` · `tiles` · `title` · `ui` · `game` · `audio` (docs/FOLDERS.md).
   그림 칸의 "찾기…" 는 리소스에 맞는 표준 폴더로 복사 (`PDM.assets.folderFor(key, what)`).
 - 그림마다 크기 · 쓰는 곳(모든 리소스 JSON 에서 같은 경로 문자열) · 편집 · 바꾸기 · 이동/이름 바꾸기(파일 복사+삭제 후 모든 리소스의 같은 문자열을 새 경로로, 바로 저장) · 삭제(쓰는 곳이 없을 때만).
 - 🧹 자동 정리: 영웅 시트 → sprites/heroes, 캐릭터 시트 → sprites/characters/<종류>, 초상화 → portraits/<id>, 아이템 PNG → sprites/items, 타이틀 그림 → title, 사용자 테마 → tiles, 이벤트·스토리 그림 → illustrations. 미리 보기 후 실행.
@@ -473,12 +473,8 @@ RPG Maker 식 대사창: 화면 아래 넓은 대사 상자 + 말하는 캐릭�
 - 소리: 대사창 열기·넘기기·글자·선택지 옮기기/고르기는 게임 효과음 설정(§3.5)의 dialogue.* · choice.*.
 - "일러스트 표시/숨김" 명령(번호 1~8 · 왼쪽·가운데·오른쪽·전체 화면 · 페이드)은 게임 화면 위, 대사창 아래 층(`MakerStage`)에 그림.
 
-### 3.6 RPG Maker MZ 리소스 가져오기
-- 폴더: 프로젝트 설정 `rpgMakerDir` → 없으면 에디터 기억값 → 없으면 프로젝트 위 4단계까지 "RPG Maker MZ" 폴더 자동 검색 (`newdata/` + `dlc/*`).
-- 소리: `newdata/audio/{bgm,bgs,me,se}` 와 DLC 의 ogg → `assets/audio/rmmz/<종류>/` 로 복사하고 사운드 목록에 `rm_<이름>` 으로 등록. 모든 소리 칸의 **RM** 버튼.
-- 그림: characters · faces · enemies · sv_actors · sv_enemies · pictures · tilesets · parallaxes · battlebacks · titles · system → `assets/rmmz/<종류>/`. 그림 칸의 **RM…** 버튼.
-- 캐릭터 시트: 576×384(8명, 48×48, 행 = 아래/왼/오른/위, `$` 접두 = 1명 3×4)에서 한 명을 클릭해 고르면 `sprite.armorRows=false` + 프레임 번호(시트 전체 기준)로 idle·run 등을 채움.
-- 라이선스: RPG Maker 기본/DLC 리소스는 보통 RPG Maker 로 만든 게임에만 쓰도록 허용됨 → 배포 전에 각 팩의 이용 약관 확인 (가져오기 창에 경고 표시).
+### 3.6 (없앰) RPG Maker MZ 리소스 가져오기
+- 저작권(이용 조건) 문제로 가져오기 기능과 `rmmz.js`, 그림·소리 칸의 RM 버튼, `rpgMakerDir` 설정, `assets/rmmz` 표준 폴더를 모두 없앰. PDMaker 는 RPG Maker 리소스를 읽거나 복사하지 않음.
 
 - 런타임 `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 안에 끼워 넣어 게임 설정의 음량·음소거·일시정지를 그대로 따름.
 
@@ -715,7 +711,7 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 | `MakerDialogue` | 대사창 (§3.9) — 아래 대사 상자·스탠딩 일러스트·이름표·▼·한 글자씩·선택지 |
 | `MakerStage` | "일러스트 표시/숨김" 명령의 그림 층 (번호 1~8, 페이드) |
 
-### 8.1 원본 코드에 넣는 연결점 (19개 파일, 줄 38개 — 자동 설치기가 추가/제거, ▶ 테스트 플레이 때 자동 갱신)
+### 8.1 원본 코드에 넣는 연결점 (21개 파일, 줄 43개 — 자동 설치기가 추가/제거, ▶ 테스트 플레이 때 자동 갱신)
 
 1. `Dungeon.init()`: `StoryState.reset()`, 그리고 `initHero(hero)` 뒤 `HeroRuntime.afterInit(hero)` (영웅·시작 층)
 2. `Dungeon.newLevel()` 의 `level.create()` 앞: `MakerRuntime.createLevel(depth, branch)` 가 null 이 아니면 그 층으로 교체
@@ -724,6 +720,23 @@ GameMaker `.gmplugin` 매니페스트 + RPG Maker `@param` 방식을 합친다.
 5. `GameScene.create()` 의 `fadeIn()` 뒤: `MakerRuntime.onFloorEnter()` (시작·입장 이벤트, 데일리)
 6. `Level.occupyCell()`: `LevelHooks.onOccupy()` (이벤트 칸 밟기)
 7. `InterlevelScene.create()`: `MakerRuntime.onFloorLeave()` (감정 결정화·일기·떠난 계단 기록)
+- **구성 블럭** (자동 생성 층의 구성을 블럭을 쌓아 정함): `<노드>.procedural.blocks` (없으면 `<그룹>.blocks`, 둘 다 없으면 게임 기본 구성). 블럭 = `layout`(구조: auto·loop·figure8·line, 통로 default·none·long) · `feeling`(분위기) · `standard`/`special`/`secret`(무작위 방 min~max, 일반 방은 `big`) · `room`(방 템플릿/게임 기본 방, count·chance·cond). 런타임: `LevelHooks.addRooms` 가 입구·출구만 남기고 블럭대로 방 목록을 다시 채우고, `RegularLevel.build()` 의 `builder = builder();` 뒤 `LevelHooks.builder()` 가 구조·분위기를 적용. 방 위치·연결·내용은 게임 생성기가 매번 만듦. 편집기: 노드 속성·그룹 속성의 "구성 블럭" (`PDM.mapUtil.blockListEditor`). 예전 "절차 생성" 칸(크기 배율·일반/특수 방 수·몬스터 수·분위기)은 런타임에서 쓰이지 않던 값이라 없앰. BranchesBuilder 는 출구를 잇지 않아 쓰지 않음.
+- **아이템 생성 코드의 폴더 = 분류/세부 종류**: `pdmaker/gen/items/<분류>/<세부 종류>/I_<id>.java` (패키지 `…pdmaker.gen.items.<분류>.<세부 종류>`, 이름 조각은 `codegen.pkgSeg` — 영문 소문자·숫자·_). 리소스 목록에서 아이템을 다른 분류로 옮기면 다음 코드 생성 때 파일이 새 폴더로 가고 package 줄도 바뀜 (예전 파일·빈 폴더는 설치기가 지움). 런타임은 생성된 `gen/GenIndex.java` 표(`GenSupport.loadIndex/cls`)로 클래스를 찾고, 예전 위치(`gen.I_<id>`) 세이브는 Bundle 별칭으로 읽음. 영웅(`H_<id>`)은 gen 바로 아래 그대로. 프로젝트의 `items/<id>.json` 은 옮기지 않음.
+- **소리 칸의 다른 파일**: 소리 고르기(`ui.soundPicker`)에 📂(파일 고르기 — 프로젝트 밖이면 `assets/audio/` 로 복사) 와 "✎ 파일 경로 직접 입력…" 추가. 값은 프로젝트 기준 경로(`assets/audio/x.ogg`)로 저장 (런타임 `MakerAudio.resolve` 가 원래 경로 참조를 받음).
+- **영웅 `dead` 애니메이션 (선택)**: `sprite.anims.dead` 가 있으면 `die` 가 끝난 뒤 이어서 반복 재생 (`HeroRuntime.applySprite` 가 스프라이트의 완료 알림을 가로채 `play(dead, true)` — CharSprite.play 는 die 중 무시하므로 force).
+- **기준 게임 저장소 = `pd-maker/game/shattered-pixel-dungeon-master` (SPD 4.0.0)**: `main.js REPO_NAME`, `app.js REPO_NAMES` (없으면 예전 기준 `game/shattered-pixel-dungeon`). 예전 기준 저장소(같은 game 폴더의 `shattered-pixel-dungeon` · `-mod-2`)를 가리키는 프로젝트는 열 때 master 로 자동 변경 (`findRepo`). mod-2 저장소 연결과 시작 화면·메뉴의 "샘플 열기"는 없앰 (폴더는 남아 있음, exe·release zip 에도 안 넣음). `spd-items/chars/rooms(.previews).js` 는 4.0.0 기준으로 다시 만듦 — 방 172개 (금고 방 23개 = 금고 층 전용, 보기만).
+- **맵 오브젝트** (`prop:<id>` → `props/<id>.json`, 편집기 `editors/prop.js`, 런타임 `MakerProp` = 게임 CustomTilemap 으로 층에 저장): 그림(sheet·frame·scale, 0 = 한 칸에 맞춤) · 상태 여러 개(frame 또는 frames+fps, solid, switch) · `pushable`(옆에서 누르면 반대쪽으로 한 칸, `goal{terrain,switch,event}`) · `interact` none/next/event(+event·loop·cond·sound) · `stepOn` none/next/event. 막힌 상태의 칸은 지형 CUSTOM_DECO(23), 아니면 원래 지형. 맵·방 템플릿 오브젝트 종류 `prop`. 연결 줄: `Hero.actMove` 맨 앞 `LevelHooks.propInteract`, 밟기는 `LevelHooks.onOccupy`. 코드에서 `MakerProp.setState(id, n)`.
+- **UI 그림 · 맵 그림 페이지** (`editors/gameart.js`): `uiart` = 게임 interfaces 그림을 종류별 한글 이름으로 (고치기·바꾸기·원래대로 = assets/game 덮어쓰기), `mapart` = 사용자 테마 만들기·편집 + 게임 테마 타일셋·물·지형 그림.
+- **픽셀 편집기**: 불투명도(0~100%, 칸을 그 색·투명도로 바꿈), 표시 배율 숫자 입력·프레임 하나에 맞춤·전체 맞춤, 모서리 ◢ 끌기, 다른 이름으로 저장. **아이템 `groundScale`**: 바닥에 놓였을 때 그림 배율 (`ItemSprite.link(Heap)` 연결 줄 → `MakerItem.heapScale`).
+- **타이틀 화면 기본값 = 지금 게임 저장소의 타이틀**: `app.resolveRepo` 가 `PDM.gameTitle4` (저장소에 `assets/splashes/title/archs.png` 가 있음 = SPD 4.0 이상)를 정하고, `defaults.title(style)` 이 그에 맞춤 — 4.0: 버튼 순서 …news, settings, changes, about · `hideButton: true`, 그 전: …news, changes, settings, about. 손대지 않은 기본 타이틀은 `PDM.titleSyncDefaults()` 가 저장소에 맞게 자동으로 바꿈 (고친 타이틀은 그대로). 런타임 `MakerTitle`: 배경 "game" 은 타이틀에서 `ui.TitleBackground`(있으면, 리플렉션) → 없으면 Archs · `hideButton`(아래 화살표 — 로고·버튼 감추기, 기본 = TitleBackground 가 있을 때) · 지원 버튼 글자 노랑. 편집기 미리보기도 4.0 배경(아치 벽 + 떠오르는 폐허)을 흉내. 빠른 시작: "지금 게임 기본" · "예전 아치 모양".
+- **영웅 해금 조건** `hero.unlock { mode: always|game|badge|global|cond, badge, key, cond, text }` (`HeroSelect.locked/lockText`; 정하지 않으면 원작 영웅 = game, 그 밖 = always). **전역 스위치**: 새 게임에도 남는 값 — 이벤트 명령 `global {key, value}`, 조건식 `global.<이름>` (`MakerDrops.global/setGlobal`, GameSettings 에 저장).
+- **드랍 테이블 · 등장 금지** (`MakerDrops`): 아이템의 `drops [{ src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond }]` (게임 아이템은 `gameitems.json` 의 `items["spd:…"].drops`), 캐릭터 `noGameLoot`(게임 원래 전리품 끔) · `noSpawn`(등장 금지) · `project.bannedMobs[]`(삭제한 원작 몬스터), 게임 아이템 `banned`(Generator 확률 0 — 무작위 생성에서만 빠짐). 연결 줄: `Mob.rollToDropLoot` 맨 앞 `MakerDrops.mobDrop`, `MobSpawner.getMobRotation` 의 shuffle 앞 `MakerDrops.filterMobs` (전부 금지하면 무시), 층 드랍은 `LevelHooks.afterCreate`.
+- **드랍 테이블 화면** (`editors/loot.js`, 탭 `loot`, 런타임 `MakerDrops.chestLoot`/`roll`): 출처 쪽에서 편집. 캐릭터 `drops [{ item, chance, min, max, cond }]` (캐릭터 편집기 "등장 · 전리품"과 드랍 테이블 화면의 몬스터 표 — 아이템 쪽 `drops` 와 함께 적용). 상자류 `project.loot.<chest|locked|crystal|tomb|skeleton> { mode: add|replace, pick: each|one, rows: [{ item, chance, min, max, depthMin, depthMax, cond }] }` — each = 줄마다 확률, one = chance 를 가중치로 하나만. `LevelHooks.afterCreate` 에서 게임이 만든 상자에만 적용(직접 그린 맵 `MakerLevel` 제외, 오브젝트 배치보다 먼저). replace 는 unique·열쇠를 남기고, 아무것도 안 뽑히면 원래 내용물 유지. 맵 오브젝트 `item` 의 `container`(chest/locked/crystal/tomb/skeleton)로 직접 상자에 담아 놓기 (`MakerDrops.heapType`). 4.0.0 헤드리스에서 확인(`eval:droptest`), 실제 PDMaker 창은 미확인.
+- **리소스 검색** (`app.js` `filterTree`/`drawTreeSearch`, `#treeSearch`): 이름 검색(항목·분류 이름, 분류 이름이 맞으면 그 아래 전부), 세부 검색(☰ — 분류 root · 세부 종류 group 으로 좁히기), 전체 체크(켜면 접힌 분류까지, 끄면 펼쳐 놓은 분류 안에서만). 드랍 확률은 0.1% 단위 (`F.num` 의 `dec`).
+- **게임 저장소에 맞춘 목록** (`gamescan.js` `PDM.gameScan(repo, force)`, `app.resolveRepo` 에서 호출, `fs:walk`): 저장소의 `items` · `levels/rooms` · `actors/mobs` 를 훑어 묶여 있는 `SPD_ITEM_GROUPS`/`SPD_ROOMS` 에서 파일이 없는 것은 빼고, 저장소에만 있는 것은 소스(분류·`image`·`tier`·messages 이름)에서 읽어 덧붙임(`added`, 목록에 ＋). 캐릭터는 프로젝트 리소스라 지우지 않고 `game` 클래스 파일이 없으면 ⚠ 표시, 저장소에만 있는 몬스터는 캐릭터 › "게임 저장소에서 새로 찾음"에서 눌러 추가. 요약 `PDM.GAME_SCAN`, 프로젝트 설정에 "게임 저장소 다시 읽기". 웹 모드에서만 확인.
+- **확장 기능의 편집 화면 칸**: `charPortrait`·`charHeart`·`charDialogue`·`charBehavior` — 체크해야 캐릭터 편집 화면에 그 칸이 보임 (extensions 가 아예 없는 예전 프로젝트는 모두 보임).
+- **픽셀 편집기 영역 선택**: ⬚ 영역 선택 도구 (끌어서 선택, 빈 곳 클릭·Esc = 해제, 선택 안쪽을 끌면 옮김), Ctrl+C/X/V · Delete · Ctrl+A, 붙여넣은 그림은 끌어서 옮기고 Enter(또는 해제·저장)로 놓음. 클립보드는 편집 창끼리 공유 (`PDM._pixClip`).
+- **방 템플릿 추가 기능**: `auto`·`autoChance`·`autoGroups` (자동 생성 — 켠 방은 `LevelHooks.addRooms` 가 모든 자동 생성 맵에 확률대로 넣음, 그룹 제한 가능, 이미 들어간 것은 중복 안 함. 새 방은 기본 켜짐) · `cat` (분류: `project.roomCats`, 순서 `project.roomOrder` — 리소스 목록에서 끌어 놓기) · 편집 화면: 빈 타일(낭떠러지 = CHASM 0) 버튼, 구역 색(벽 빨강·바닥 파랑·문 초록), Ctrl+끌기 = 공간 추가(끈 영역 바닥 + 둘레 벽이 되도록 맵을 넓힘)·Alt+끌기 = 공간 빼기(벽으로 메우고 벽만 남은 바깥 줄을 잘라냄), 테마 "자동"(방을 쓰는 그룹·노드의 테마), 타일 그림 편집(고른 타일 16×16 / 타일셋 전체 / PNG 불러오기 — 게임 기본 테마면 타일셋을 복사한 사용자 테마를 만들어 고침).
 - `RegularLevel.initRooms()`: `LevelHooks.addRooms()` (방 템플릿), `GameScene.create()` 앞부분: `MakerRuntime.beforeScene()` (탑 모드 계단 그림)
 8. `Hero.attackSkill/defenseSkill/damageRoll/drRoll/speed` 첫 줄: `if (HeroRuntime.wrap(n)) return HeroRuntime.x(this, …, x(…));` (원래 값을 계산한 뒤 영웅 코드/세부 능력치로 바꿈), `attackProc/defenseProc`: `damage = HeroRuntime.attackProc(this, enemy, damage);`
 9. `Mob.die(cause)` 첫 줄: `HeroRuntime.onMobDie(this, cause)` (영웅 코드 onKill)

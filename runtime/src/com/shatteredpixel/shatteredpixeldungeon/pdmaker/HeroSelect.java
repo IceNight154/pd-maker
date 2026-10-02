@@ -73,6 +73,60 @@ public class HeroSelect {
 	/** 원작 영웅 (id 가 직업 이름) — 원작처럼 잠금·정보 창 */
 	static boolean vanilla(JsonValue h) { return !HeroRuntime.zeroBase(h) && h.getString("id", "").equalsIgnoreCase(classOf(h).name()); }
 
+	/** 게임 직업을 바탕으로 한 영웅(원작 영웅의 사본 등)에서, 프로젝트의 그 원작 영웅 데이터 (없으면 null) */
+	static JsonValue baseHero(JsonValue h) {
+		if (h == null || HeroRuntime.zeroBase(h)) return null;
+		String cn = classOf(h).name();
+		for (JsonValue o : MakerRuntime.heroes.values()) if (o != h && o.getString("id", "").equalsIgnoreCase(cn)) return o;
+		return null;
+	}
+	/** 설명을 따로 쓰지 않은 영웅 — 원작 영웅이거나, 바탕 직업의 설명을 그대로 둔 사본 → 선택 화면에 게임의 짧은 직업 설명을 씀 */
+	static boolean stockDesc(JsonValue h) {
+		if (vanilla(h)) return true;
+		if (HeroRuntime.zeroBase(h)) return false;
+		String d = h.getString("desc", "").trim();
+		if (d.isEmpty()) return true;
+		JsonValue b = baseHero(h);
+		if (b != null && d.equals(b.getString("desc", "").trim())) return true;
+		try { return d.equals(classOf(h).desc().trim()); } catch (Throwable t) { return false; }
+	}
+	/** 그림을 바꾸지 않은 영웅 — 원작 영웅이거나, 바탕 직업의 시트를 그대로 쓰는 사본 → 선택 화면에 게임의 직업 일러스트를 그대로 둠 */
+	static boolean stockArt(JsonValue h) {
+		if (vanilla(h)) return true;
+		if (HeroRuntime.zeroBase(h)) return false;
+		JsonValue sp = h.get("sprite"); String sheet = sp == null ? "" : sp.getString("sheet", "");
+		if (sheet.isEmpty()) return true;
+		JsonValue b = baseHero(h); JsonValue bs = b == null ? null : b.get("sprite");
+		if (bs != null && sheet.equals(bs.getString("sheet", ""))) return true;
+		return sheet.equals("game:" + classOf(h).spritesheet());
+	}
+
+	/** 해금 조건 (영웅 편집기 unlock { mode, badge, key, cond, text }) — 잠겨 있으면 true.
+	 *  mode: always(항상) · game(바탕 직업의 게임 규칙) · badge(게임 배지: 보스 처치·승리 등) · global(전역 스위치) · cond(조건식 — global.<이름> 등)
+	 *  정하지 않았으면 원작 영웅은 game, 그 밖은 always */
+	static boolean locked(JsonValue h) {
+		try {
+			JsonValue u = h.get("unlock");
+			String mode = u == null ? "" : u.getString("mode", "");
+			if (mode.isEmpty()) mode = vanilla(h) ? "game" : "always";
+			switch (mode) {
+				case "game": return !HeroRuntime.zeroBase(h) && !classOf(h).isUnlocked();
+				case "badge": return !com.shatteredpixel.shatteredpixeldungeon.Badges.isUnlocked(com.shatteredpixel.shatteredpixeldungeon.Badges.Badge.valueOf(u.getString("badge", "VICTORY")));
+				case "global": return !MakerDrops.global(u.getString("key", ""));
+				case "cond": return !Cond.eval(u.getString("cond", ""), StoryState.globalResolver());
+				default: return false;
+			}
+		} catch (Throwable t) { MakerRuntime.log("해금 조건 오류 (" + h.getString("id", "") + "): " + t); return false; }
+	}
+	static String lockText(JsonValue h) {
+		JsonValue u = h.get("unlock");
+		String t = u == null ? "" : u.getString("text", "").replace("\\n", "\n");
+		if (!t.trim().isEmpty()) return t;
+		String mode = u == null ? "game" : u.getString("mode", "game");
+		if (mode.equals("game") || mode.isEmpty()) return classOf(h).unlockMsg();
+		return name(h) + "\n\n" + MakerRuntime.term("hero.locked", "아직 잠겨 있습니다.");
+	}
+
 	/** 직업 버튼 대신 영웅 버튼을 넣음. 넣었으면 true (게임의 직업 버튼은 만들지 않음) */
 	public static boolean addButtons(PixelScene sc, ArrayList<StyledButton> list) {
 		try {
@@ -100,7 +154,7 @@ public class HeroSelect {
 	}
 	static String desc(JsonValue h) {
 		if (!sel(h, "desc").trim().isEmpty()) return sel(h, "desc");
-		if (vanilla(h)) return classOf(h).shortDesc();
+		if (stockDesc(h)) return classOf(h).shortDesc();
 		String d = h.getString("desc", "").replace("\\n", "\n");
 		if (d.trim().isEmpty()) d = h.getString("title", "");
 		if (d.trim().isEmpty()) d = " ";          // 빈 글자는 바뀌지 않아 직업 설명이 남음
@@ -116,24 +170,9 @@ public class HeroSelect {
 				Object t = MakerRuntime.texture(ic);
 				if (t != null) { Image im = new Image(t); float k = Math.min(1f, 20f / Math.max(im.width, im.height)); im.scale.set(k); return im; }
 			}
-			JsonValue sp = h.get("sprite");
-			String sheet = sp == null ? "" : sp.getString("sheet", "");
-			if (!sheet.isEmpty()) {
-				Object tx = MakerRuntime.texture(sheet);
-				if (tx != null) {
-					int fw = 12, fh = 15;
-					JsonValue fr = sp.get("frame");
-					if (fr != null && fr.size >= 2) { fw = fr.getInt(0); fh = fr.getInt(1); }
-					int f = 0;
-					JsonValue a = sp.get("anims") == null ? null : sp.get("anims").get("idle");
-					if (a != null && a.get("frames") != null && a.get("frames").size > 0) f = a.get("frames").getInt(0);
-					Image probe = new Image(tx);
-					int cols = Math.max(1, (int) (probe.width / fw));
-					Image img = new Image(tx, (f % cols) * fw, (f / cols) * fh, fw, fh);
-					if (fh > 20) img.scale.set(20f / fh);
-					return img;
-				}
-			}
+			// 영웅 시트의 가장 좋은 갑옷 줄(원작 선택 화면처럼), 가만히 있는 첫 프레임
+			Image img = HeroRuntime.avatarOf(h, 6);
+			if (img != null) { if (img.height > 20) img.scale.set(20f / img.height); return img; }
 		} catch (Throwable t) { MakerRuntime.log("영웅 선택 그림 오류: " + t); }
 		return new Image(classOf(h).spritesheet(), 0, 90, 12, 15);
 	}
@@ -178,7 +217,7 @@ public class HeroSelect {
 		Image bg = (Image) field(sc, "background");
 		if (bg == null) return;
 		Image ill = illust(h);
-		if (ill == null && vanilla(h)) return;
+		if (ill == null && stockArt(h)) return;
 		if (!PixelScene.landscape()) return;          // 세로 화면은 게임도 배경을 숨김
 		JsonValue s = h.get("select");
 		String fit = s == null ? "right" : s.getString("fit", "right");
@@ -220,12 +259,12 @@ public class HeroSelect {
 	static void infoButton(Object sc, JsonValue h) throws Exception {
 		if (myInfo != null) { if (myInfo.parent != null) myInfo.parent.remove(myInfo); myInfo = null; }
 		Component info = (Component) field(sc, "infoButton");
-		if (info == null || (vanilla(h) && sel(h, "info").trim().isEmpty())) return;   // 원작 영웅은 게임 정보 창 (정보 글자를 정하면 그것)
+		if (info == null || (vanilla(h) && gameInfo(h))) return;   // 원작 영웅은 게임 정보 창 (정보 글자·줄을 정하면 그것)
 		final JsonValue hh = h;
 		myInfo = new com.shatteredpixel.shatteredpixeldungeon.ui.IconButton(com.shatteredpixel.shatteredpixeldungeon.ui.Icons.get(com.shatteredpixel.shatteredpixeldungeon.ui.Icons.INFO)) {
 			@Override protected void onClick() {
 				super.onClick();
-				Window w = new WndTitledMessage(HeroSelect.icon(hh), name(hh), fullDesc(hh));
+				Window w = infoWindow(hh);
 				if (PixelScene.landscape()) w.offset(Camera.main.width / 6, 0);
 				ShatteredPixelDungeon.scene().addToFront(w);
 			}
@@ -233,6 +272,73 @@ public class HeroSelect {
 		myInfo.setRect(info.left(), info.top(), info.width(), info.height());
 		info.visible = info.active = false;
 		((PixelScene) sc).add(myInfo);
+	}
+	// ------------------------------------------------------------ 영웅 정보 창
+
+	/** 정보 창의 줄: select.infoRows [{ icon(아이템 id · spd:게임 아이템), text }] → 없으면 select.info / 영웅 설명을 빈 줄마다 나눔 (아이콘 없음) */
+	static boolean hasRows(JsonValue h) { JsonValue s = h.get("select"); return s != null && s.get("infoRows") != null && s.get("infoRows").size > 0; }
+	/** 게임의 직업 정보 창을 그대로 쓰는 영웅: 원작 영웅 + 설명을 손대지 않은 사본 (정보 글자·줄을 정하지 않았을 때) */
+	static boolean gameInfo(JsonValue h) { return stockDesc(h) && !hasRows(h) && sel(h, "info").trim().isEmpty(); }
+	/** 영웅 정보 창 열기 */
+	static Window infoWindow(JsonValue h) {
+		if (gameInfo(h)) {
+			WndHeroInfo w = new WndHeroInfo(classOf(h));
+			if (!vanilla(h)) try {   // 사본: 제목만 영웅 이름으로
+				java.lang.reflect.Field f = WndHeroInfo.class.getDeclaredField("heroInfo"); f.setAccessible(true);
+				Object tab = f.get(w);
+				java.lang.reflect.Field t = tab.getClass().getDeclaredField("title"); t.setAccessible(true);
+				com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock tb = (com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock) t.get(tab);
+				tb.text(name(h)); tb.setPos((120 - tb.width()) / 2f, tb.top());
+			} catch (Throwable ignored) { }
+			return w;
+		}
+		return new InfoWnd(h);
+	}
+	/** 게임의 직업 정보 창 첫 탭과 같은 모양: 제목 + (아이콘 · 글) 줄. 글의 _밑줄_ 은 노란 강조 */
+	static class InfoWnd extends Window {
+		static final int W = 120, M = 2;
+		InfoWnd(JsonValue h) {
+			com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock title = PixelScene.renderTextBlock(name(h), 9);
+			title.hardlight(TITLE_COLOR);
+			add(title);
+			title.setPos((W - title.width()) / 2f, M);
+			List<String> texts = new ArrayList<>(); List<Image> icons = new ArrayList<>();
+			if (hasRows(h)) {
+				for (JsonValue r : h.get("select").get("infoRows")) {
+					String t = r.getString("text", "").replace("\\n", "\n");
+					if (t.trim().isEmpty()) continue;
+					texts.add(t); icons.add(rowIcon(r.getString("icon", "")));
+				}
+			} else {
+				for (String t : fullDesc(h).split("\n\\s*\n")) if (!t.trim().isEmpty()) { texts.add(t.trim()); icons.add(null); }
+			}
+			boolean anyIcon = false; for (Image im : icons) if (im != null) anyIcon = true;
+			float left = anyIcon ? 20 : M, pos = title.bottom() + 4 * M;
+			for (int i = 0; i < texts.size(); i++) {
+				com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock tb = PixelScene.renderTextBlock(texts.get(i), 6);
+				tb.maxWidth((int) (W - left - M));
+				tb.setPos(left, pos);
+				add(tb);
+				Image im = icons.get(i);
+				if (im != null) {
+					if (im.height() > 16 || im.width() > 16) im.scale.set(16f / Math.max(im.width, im.height));
+					im.x = (20 - im.width()) / 2f; im.y = tb.top() + (tb.height() - im.height()) / 2f;
+					PixelScene.align(im); add(im);
+					if (im.height() > tb.height()) pos += (im.height() - tb.height());
+				}
+				pos = tb.bottom() + 4 * M;
+			}
+			resize(W, (int) Math.max(40, pos - 2 * M));
+		}
+		/** 줄 아이콘: 프로젝트 아이템 id · spd:게임 아이템 · 그림 파일(assets/… · game:…) */
+		static Image rowIcon(String ref) {
+			if (ref == null || ref.trim().isEmpty()) return null;
+			try {
+				if (ref.startsWith("assets/") || ref.startsWith("game:")) { Object t = MakerRuntime.texture(ref); return t == null ? null : new Image(t); }
+				com.shatteredpixel.shatteredpixeldungeon.items.Item it = MakerItem.create(ref);
+				return it == null ? null : new com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite(it.image(), null);
+			} catch (Throwable t) { MakerRuntime.log("영웅 정보 아이콘 오류 (" + ref + "): " + t); return null; }
+		}
 	}
 	static String fullDesc(JsonValue h) {
 		if (!sel(h, "info").trim().isEmpty()) return sel(h, "info");
@@ -291,7 +397,7 @@ public class HeroSelect {
 			this.sc = sc; this.h = h; this.id = h.getString("id", ""); this.cl = classOf(h);
 			icon(HeroSelect.icon(h));
 		}
-		boolean locked() { return vanilla(h) && !cl.isUnlocked(); }
+		boolean locked() { return HeroSelect.locked(h); }
 		@Override public void update() {
 			super.update();
 			// 전에 고른 직업으로 화면이 열리면 → 그 직업의 영웅 (없으면 첫 영웅) 으로 다시 고름
@@ -299,7 +405,8 @@ public class HeroSelect {
 				initDone = true;
 				if (GamesInProgress.selectedClass != null) {
 					JsonValue pickH = null;
-					for (JsonValue e : entries()) if (classOf(e) == GamesInProgress.selectedClass) { pickH = e; break; }
+					for (JsonValue e : entries()) if (classOf(e) == GamesInProgress.selectedClass && !HeroSelect.locked(e)) { pickH = e; break; }
+					if (pickH == null) for (JsonValue e : entries()) if (!HeroSelect.locked(e)) { pickH = e; break; }
 					if (pickH == null) pickH = entries().get(0);
 					select(sc, pickH);
 				}
@@ -308,9 +415,9 @@ public class HeroSelect {
 		}
 		@Override protected void onClick() {
 			super.onClick();
-			if (locked()) { ShatteredPixelDungeon.scene().addToFront(new WndMessage(cl.unlockMsg())); return; }
+			if (locked()) { ShatteredPixelDungeon.scene().addToFront(new WndMessage(lockText(h))); return; }
 			if (id.equals(selected) && GamesInProgress.selectedClass == cl) {
-				Window w = vanilla(h) && sel(h, "info").trim().isEmpty() ? new WndHeroInfo(cl) : new WndTitledMessage(HeroSelect.icon(h), name(h), fullDesc(h));
+				Window w = infoWindow(h);
 				if (PixelScene.landscape()) w.offset(Camera.main.width / 6, 0);
 				ShatteredPixelDungeon.scene().addToFront(w);
 			} else select(sc, h);

@@ -130,9 +130,20 @@
   //  예전 프로젝트(값 없음)는 모두 켜짐, 새 프로젝트는 꺼짐
   const EXTENSIONS = [
     { id: 'event', name: '이벤트', desc: '커먼 이벤트 · 장면(연출) · 이정표 · 층 이벤트 — 대화·연출·스위치로 게임 진행을 만듦' },
-    { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' }
+    { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' },
+    // 캐릭터 편집 화면의 칸 (켜야 보임)
+    { id: 'charPortrait', name: '캐릭터: 초상화 · 표정 · 대사창 일러스트', desc: '캐릭터 편집 화면에 초상화·표정 칸을 보입니다 (대사창에 서는 그림)', section: true },
+    { id: 'charHeart', name: '캐릭터: 마음 시스템', desc: '캐릭터 편집 화면에 마음 시스템(호감·신뢰·좋아하는 것) 칸을 보입니다', section: true },
+    { id: 'charDialogue', name: '캐릭터: 상황별 대사', desc: '캐릭터 편집 화면에 상황(토픽)별 대사 칸을 보입니다', section: true },
+    { id: 'charBehavior', name: '캐릭터: 행동 이벤트', desc: '캐릭터 편집 화면에 행동 이벤트(상황마다 실행할 명령) 칸을 보입니다', section: true }
   ];
-  const extOn = id => { const x = (store.get('project') || {}).extensions; return !x || x[id] !== false; };
+  /** 켜져 있는지. 리소스 목록 항목(event·sys)은 값이 없으면 켬, 편집 화면 칸(section)은 확장 기능에서 체크해야 켬 (설정이 아예 없는 예전 프로젝트는 모두 켬) */
+  const extOn = id => {
+    const x = (store.get('project') || {}).extensions;
+    if (!x) return true;
+    const e = EXTENSIONS.find(v => v.id === id);
+    return e && e.section ? x[id] === true : x[id] !== false;
+  };
   function allRoots() {
     const roots = [];
     PDM.registry.editors.forEach(e => { if (e.tree) { try { roots.push(...e.tree()); } catch (err) { console.error(err); } } });
@@ -143,13 +154,13 @@
     const roots = allRoots();
     const box = h('div', { style: { minWidth: '520px', maxWidth: '640px' } });
     const draw = () => {
-      box.replaceChildren(h('p', { class: 'hint' }, '켠 확장 기능만 왼쪽 리소스 목록에 보입니다. 꺼도 데이터는 지워지지 않고 게임에서도 그대로 동작합니다. 여기서 바로 열 수도 있습니다.'),
+      box.replaceChildren(h('p', { class: 'hint' }, '켠 확장 기능만 왼쪽 리소스 목록과 편집 화면에 보입니다. 꺼도 데이터는 지워지지 않고 게임에서도 그대로 동작합니다. 여기서 바로 열 수도 있습니다.'),
         ...EXTENSIONS.map(x => {
           const r = roots.find(n => n.id === x.id);
           const cb = h('input', { type: 'checkbox', checked: extOn(x.id), onchange: () => { store.edit('project', (cb.checked ? '확장 기능 켜기: ' : '확장 기능 끄기: ') + x.name, p => { p.extensions = Object.assign({}, p.extensions || {}, { [x.id]: cb.checked }); }); drawTree(); draw(); } });
           const kids = r && r.children ? r.children : [];
           return h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '8px 10px', margin: '8px 0' } },
-            h('label', { class: 'check', style: { fontWeight: 600 } }, cb, h('span', {}, `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
+            h('label', { class: 'check', style: { fontWeight: 600 } }, cb, h('span', {}, x.section ? `${x.name} — 편집 화면에 표시` : `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
             h('div', { class: 'hint', style: { margin: '2px 0 6px 24px' } }, x.desc),
             ...kids.map(k => {
               const openBtn = n => h('button', { class: 'btn sm', onclick: () => { PDM.tabs.open(n.open); document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); } }, `${n.icon || ''} ${n.label}`);
@@ -170,6 +181,53 @@
     const roots = allRoots().filter(n => !EXTENSIONS.some(x => x.id === n.id) || extOn(n.id));
     return roots.sort((a, b) => (a.order || 50) - (b.order || 50));
   }
+  // ---- 리소스 검색: 이름(q) · 세부(분류 root / 세부 분류 group) · 전체(all = 접혀 있는 분류도. 끄면 펼쳐 놓은 분류 안에서만)
+  const search = { q: '', detail: false, root: '', group: '', all: true };
+  let forced = null;   // 검색 중에 펼쳐 보일 그룹 id
+  const labelOf = n => String(n.label || '').toLowerCase();
+  /** 검색 조건에 맞는 것만 남긴 목록 { nodes, open, count } — 조건이 없으면 null */
+  function filterTree(roots) {
+    const q = search.q.trim().toLowerCase();
+    const scopeId = search.detail ? (search.group || search.root) : '';
+    if (!q && !scopeId) return null;
+    const open = new Set(); let count = 0;
+    // inScope: 세부 분류 안인지, hit: 조상 그룹 이름이 이미 맞았는지 (그 아래는 전부 보임)
+    const rec = (nodes, inScope, hit) => nodes.map(n => {
+      const sc = inScope || n.id === scopeId;
+      const me = !q || hit || labelOf(n).includes(q);
+      if (!n.children) { if (sc && me) { count++; return n; } return null; }
+      if (!search.all && !expanded.has(n.id)) return sc && q && labelOf(n).includes(q) ? Object.assign({}, n, { children: [] }) : null;   // 접힌 분류는 건너뜀
+      const kids = rec(n.children, sc, hit || (!!q && labelOf(n).includes(q)));
+      if (kids.length) { open.add(n.id); return Object.assign({}, n, { children: kids, count: undefined }); }
+      return null;
+    }).filter(Boolean);
+    return { nodes: rec(roots, !scopeId, false), open, count };
+  }
+  function drawTreeSearch(roots) {
+    const box = $('#treeSearch'); if (!box) return;
+    if (!box.firstChild) {
+      const inp = h('input', { type: 'search', id: 'treeSearchInput', placeholder: '이름 검색…', style: { flex: 1, minWidth: 0 } });
+      let tm = 0; inp.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { search.q = inp.value; drawTree(); }, 120); });
+      inp.addEventListener('keydown', e => { if (e.key === 'Escape') { inp.value = ''; search.q = ''; drawTree(); } });
+      box.append(h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, inp,
+          h('button', { class: 'ib', id: 'treeSearchDetail', title: '세부 검색 — 분류·종류로 좁히기', onclick: () => { search.detail = !search.detail; drawTree(); } }, '☰'),
+          h('label', { title: '전체 검색 — 체크하면 접혀 있는 분류까지 목록 전체에서 찾습니다. 끄면 지금 펼쳐 놓은 분류 안에서만 찾습니다', style: { display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', whiteSpace: 'nowrap' } },
+            h('input', { type: 'checkbox', checked: search.all, onchange: e => { search.all = e.target.checked; drawTree(); } }), '전체'),
+          h('span', { id: 'treeSearchCount', class: 'hint', style: { fontSize: '11px', minWidth: '28px', textAlign: 'right' } })),
+        h('div', { id: 'treeSearchMore', style: { display: 'none', gap: '4px', marginTop: '4px' } }));
+    }
+    $('#treeSearchDetail').classList.toggle('on', search.detail);
+    const more = $('#treeSearchMore'); more.style.display = search.detail ? 'flex' : 'none';
+    if (!search.detail) return;
+    const groups = roots.filter(n => n.children);
+    if (search.root && !groups.some(n => n.id === search.root)) { search.root = ''; search.group = ''; }
+    const subs = []; const rec = (nodes, d) => nodes.forEach(n => { if (n.children) { subs.push([n.id, '　'.repeat(d) + String(n.label)]); rec(n.children, d + 1); } });
+    const r = groups.find(n => n.id === search.root); if (r) rec(r.children, 0);
+    if (search.group && !subs.some(x => x[0] === search.group)) search.group = '';
+    const sel = (opts, val, first, on) => { const s = h('select', { style: { flex: 1, minWidth: 0 }, onchange: () => on(s.value) }, h('option', { value: '' }, first), opts.map(([v, t]) => h('option', { value: v }, t))); s.value = val; return s; };
+    more.replaceChildren(sel(groups.map(n => [n.id, `${n.icon || ''} ${n.label}`]), search.root, '(모든 분류)', v => { search.root = v; search.group = ''; drawTree(); }),
+      sel(subs, search.group, '(모든 종류)', v => { search.group = v; drawTree(); }));
+  }
   let treeDrag = null;   // 리소스 목록에서 끌고 있는 것
   function drawTree() {
     const body = $('#treeBody'); if (!body) return;
@@ -178,10 +236,10 @@
     const dirty = new Set(store.dirtyKeys());
     const walk = (nodes, d) => nodes.forEach(n => {
       const hasKids = n.children && n.children.length;
-      const open = expanded.has(n.id);
+      const open = forced ? forced.has(n.id) : expanded.has(n.id);
       const el = h('div', { class: 'tn' + (n.children ? ' group' : '') + (n.open && active && active.key === n.open ? ' sel' : '') + (n.open && dirty.has(n.open) ? ' dirty' : ''),
         style: { '--d': d }, 'data-open': n.open || '',
-        onclick: () => { if (n.open) PDM.tabs.open(n.open); else if (n.children) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
+        onclick: () => { if (n.open) PDM.tabs.open(n.open); else if (n.run) n.run(); else if (n.children) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         ondblclick: () => { if (n.children && n.open) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         oncontextmenu: e => { e.preventDefault(); if (n.menu) PDM.ui.menu(e.clientX, e.clientY, typeof n.menu === 'function' ? n.menu() : n.menu); } },
         h('span', { class: 'tw', onclick: e => { if (hasKids) { e.stopPropagation(); open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } } }, hasKids ? (open ? '▾' : '▸') : ''),
@@ -210,7 +268,13 @@
       body.append(el);
       if (hasKids && open) walk(n.children, d + 1);
     });
-    walk(treeRoots(), 0);
+    let roots = treeRoots();
+    drawTreeSearch(roots);
+    const f = filterTree(roots);
+    if (f) { roots = f.nodes; if (!roots.length) body.append(h('div', { class: 'empty', style: { padding: '10px' } }, '찾는 것이 없습니다' + (search.all ? '' : ' — "전체"를 체크하면 접혀 있는 분류에서도 찾습니다'))); }
+    forced = f ? f.open : null;
+    const cnt = $('#treeSearchCount'); if (cnt) cnt.textContent = f ? f.count + '개' : '';
+    walk(roots, 0);
     body.scrollTop = sc;
   }
   const drawTreeSoon = PDM.debounce(drawTree, 80);
@@ -224,7 +288,6 @@
     '파일': () => [
       { label: '새 프로젝트…', hint: 'Ctrl+N', run: newProject },
       { label: '프로젝트 열기…', hint: 'Ctrl+O', run: openProject },
-      { label: '샘플 프로젝트 열기', run: openSample },
       '-',
       { label: '저장', hint: 'Ctrl+S', run: saveAll, disabled: !store.isOpen },
       { label: '다른 이름으로 저장…', hint: 'Ctrl+Shift+S', run: saveAs, disabled: !store.isOpen || !pdm.isElectron },
@@ -387,12 +450,11 @@
     } catch (e) { PDM.log(e.message, 'err'); toast('열기 실패: ' + e.message, 'bad'); }
   }
   async function openProject() { const d = await pdm.openFolder('프로젝트 폴더 열기 (project.json 이 있는 폴더)'); if (d) loadProject(d); }
-  async function openSample() { const p = await pdm.paths(); loadProject(p.sample); }
   // ---------------- 게임 저장소 경로 찾기 ----------------
   //  project.json 의 gameRepo(프로젝트 기준 상대 경로)가 틀리면(새 프로젝트를 다른 깊이의 폴더에 만든 경우 등)
-  //  ① PDMaker 폴더 안 game/shattered-pixel-dungeon ② 전에 쓴 저장소 ③ 프로젝트 위쪽 폴더들에서 찾아 고칩니다.
+  //  ① PDMaker 폴더 안 game/shattered-pixel-dungeon-master ② 전에 쓴 저장소 ③ 프로젝트 위쪽 폴더들에서 찾아 고칩니다.
   const REPO_KEY = 'pdm.lastGameRepo';
-  const REPO_NAMES = ['game/shattered-pixel-dungeon', 'shattered-pixel-dungeon', 'pd-maker/game/shattered-pixel-dungeon', 'game/shattered-pixel-dungeon-mod-2', 'shattered-pixel-dungeon-mod-2', 'git-hub/shattered-pixel-dungeon', 'git-hub/shattered-pixel-dungeon-mod-2'];
+  const REPO_NAMES = ['game/shattered-pixel-dungeon-master', 'shattered-pixel-dungeon-master', 'pd-maker/game/shattered-pixel-dungeon-master', 'game/shattered-pixel-dungeon', 'shattered-pixel-dungeon', 'pd-maker/game/shattered-pixel-dungeon', 'git-hub/shattered-pixel-dungeon'];
   async function isRepo(d) {
     if (!d) return false;
     try { return (await pdm.exists(pdm.join(d, 'gradlew'))) || (await pdm.exists(pdm.join(d, 'gradlew.bat'))); } catch (_) { return false; }
@@ -400,8 +462,15 @@
   async function findRepo() {
     const p = store.get('project') || {};
     const cur = p.gameRepo ? store.abs(p.gameRepo) : '';
-    if (await isRepo(cur)) return { dir: cur, changed: false };
-    try { const P = await pdm.paths(); if (await isRepo(P.gameRepo)) return { dir: P.gameRepo, changed: true }; } catch (_) { /* 무시 */ }
+    let bundled = ''; try { const P = await pdm.paths(); if (await isRepo(P.gameRepo)) bundled = P.gameRepo; } catch (_) { /* 무시 */ }
+    const same = (a, b) => String(a).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase() === String(b).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+    if (await isRepo(cur)) {
+      // 예전 기준 저장소(PDMaker 의 game 폴더 안 shattered-pixel-dungeon · -mod-2)를 가리키면 지금 기준(-master)으로 바꿈
+      const old = /^shattered-pixel-dungeon(-mod-2)?$/.test(pdm.basename(cur)) && bundled && same(pdm.dirname(cur), pdm.dirname(bundled)) && !same(cur, bundled);
+      if (!old) return { dir: cur, changed: false };
+      return { dir: bundled, changed: true };
+    }
+    if (bundled) return { dir: bundled, changed: true };
     let last = null; try { last = localStorage.getItem(REPO_KEY); } catch (_) { /* 무시 */ }
     if (await isRepo(last)) return { dir: last, changed: true };
     let dir = store.root;
@@ -425,9 +494,18 @@
       drawAll();
     }
     if (!r.missing) { try { localStorage.setItem(REPO_KEY, r.dir); } catch (_) { /* 무시 */ } }
-    else if (!quiet) PDM.log('게임 저장소(pd-maker/game/shattered-pixel-dungeon)를 찾지 못했습니다. 프로젝트 설정 → 게임 저장소 경로를 지정하세요: ' + r.dir, 'err');
+    else if (!quiet) PDM.log('게임 저장소(pd-maker/game/shattered-pixel-dungeon-master)를 찾지 못했습니다. 프로젝트 설정 → 게임 저장소 경로를 지정하세요: ' + r.dir, 'err');
+    // 게임 저장소의 타이틀 모양 (4.0 이상: splashes/title 의 폐허 배경) → 타이틀 화면 기본값을 거기에 맞춤
+    try {
+      const was4 = PDM.gameTitle4;
+      PDM.gameTitle4 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, 'core', 'src', 'main', 'assets', 'splashes', 'title', 'archs.png'));
+      if (PDM.gameTitle4 !== undefined && PDM.titleSyncDefaults && PDM.titleSyncDefaults()) { try { await store.save(); } catch (_) { /* 무시 */ } }
+      if (was4 !== PDM.gameTitle4) drawAll();
+    } catch (_) { /* 무시 */ }
     // mod-2 전용 아이템(코덱스 등)은 그 저장소일 때만 목록에 보임
     try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
+    // 리소스 목록의 게임 기본 아이템·방·몬스터를 이 저장소의 실제 파일에 맞춤 (gamescan.js)
+    try { if (PDM.gameScan && await PDM.gameScan(r.missing ? '' : r.dir)) { drawAll(); if (active) PDM.tabs.refresh(active.key); } } catch (e) { console.error(e); }
     return r.dir;
   }
 
@@ -465,8 +543,22 @@
     PDM.tabs.closeAll();
     await store.createNew(d, name);
     await resolveRepo(true);   // 기본값(../../git-hub/…)이 이 폴더에서 틀리면 찾아서 고쳐 둠
-    const rel = await PDM.ui.prompt('게임 저장소(shattered-pixel-dungeon) 경로', store.get('project').gameRepo, '프로젝트 폴더 기준 상대 경로 또는 절대 경로');
-    if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; }); await store.save(); }
+    // 게임 저장소 경로: 왜 필요한지 설명 + 찾았는지 표시
+    const cur = store.get('project').gameRepo || '';
+    const found = cur && await isRepo(store.abs(cur));
+    const inp = h('input', { type: 'text', value: cur, placeholder: '예: ../pd-maker/game/shattered-pixel-dungeon-master' });
+    const pick = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const f = await pdm.openFolder('게임 저장소 폴더 선택 (gradlew 가 들어 있는 폴더)'); if (f) inp.value = pdm.relative(d, f).replace(/\\/g, '/') || f; } }, '폴더 찾기…');
+    const rel = await PDM.ui.modal('게임 저장소 경로', h('div', { style: { maxWidth: '620px' } },
+      h('p', {}, 'PDMaker 는 게임을 처음부터 만드는 것이 아니라, ', h('b', {}, 'Shattered Pixel Dungeon 의 소스 코드(게임 저장소)'), ' 위에 프로젝트를 얹어서 실행합니다. 그래서 테스트 플레이와 게임 내보내기를 하려면 게임 저장소 폴더가 꼭 있어야 합니다.'),
+      h('p', {}, '아래 둘 중 하나를 준비해 주세요.'),
+      h('ul', { style: { margin: '4px 0 10px 18px' } },
+        h('li', {}, '원작 소스: ', h('a', { href: '#', onclick: e => { e.preventDefault(); pdm.openExternal && pdm.openExternal(PDM.SPD_REPO_URL); } }, PDM.SPD_REPO_URL), ' 에서 받은 폴더 (Code → Download ZIP 을 풀거나 git clone)'),
+        h('li', {}, '원래 작업하던 픽셀 던전(모드) 소스 폴더 — gradlew 파일이 들어 있는 맨 위 폴더')),
+      h('p', { class: 'hint' }, '받은 폴더를 PDMaker 폴더의 game 안에 shattered-pixel-dungeon-master 라는 이름으로 넣어 두면 자동으로 찾습니다. 다른 곳에 두었다면 아래에 경로를 적거나 [폴더 찾기…] 로 고르세요. 나중에 프로젝트 설정 → 게임 저장소 연결에서도 바꿀 수 있습니다.'),
+      h('p', { class: 'hint', style: { color: found ? 'var(--good, #5fd66a)' : 'var(--bad)' } }, found ? '✓ 게임 저장소를 찾았습니다: ' + cur : '✗ 아직 게임 저장소를 찾지 못했습니다 — 경로를 지정하지 않으면 그림 미리보기·테스트 플레이가 되지 않습니다.'),
+      PDM.ui.field('게임 저장소 경로 (프로젝트 폴더 기준 상대 경로 또는 절대 경로)', h('div', { style: { display: 'flex', gap: '6px' } }, inp, pick))),
+      [['나중에', null], ['확인', () => inp.value.trim(), 'pri']]);
+    if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; }); await store.save(); await resolveRepo(true); if (PDM.assets && PDM.assets.clear) PDM.assets.clear(); }
     pushRecent(d); drawAll(); PDM.tabs.open('world');
     PDM.log('새 프로젝트를 만들었습니다: ' + d, 'ok');
   }
@@ -480,7 +572,7 @@
   function rebasePaths(oldRoot, newRoot) {
     const p = store.get('project') || {};
     const fix = {};
-    ['gameRepo', 'rpgMakerDir', 'legacyMaker'].forEach(k => {
+    ['gameRepo', 'legacyMaker'].forEach(k => {
       const v = p[k]; if (!v || /^([A-Za-z]:[\\/]|\/)/.test(v)) return;
       const abs = pdm.resolve ? pdm.resolve(oldRoot, v) : pdm.join(oldRoot, v);
       fix[k] = pdm.relative(newRoot, abs).replace(/\\/g, '/');
@@ -639,7 +731,6 @@
       h('p', { class: 'lead' }, 'Shattered Pixel Dungeon 기반 게임 제작 도구. 맵 · 캐릭터 · 아이템 · 이벤트 · 스토리를 만들고 바로 테스트 플레이합니다.'),
       !pdm.isElectron ? h('p', { class: 'hint bad' }, '웹 모드로 실행 중입니다. 저장은 브라우저 안에만 되고, 테스트 플레이는 할 수 없습니다.') : null,
       h('div', { class: 'cards' },
-        h('div', { class: 'card', onclick: openSample }, h('b', {}, '샘플 열기'), h('span', {}, '위츨링 픽셀 타워 샘플 — 아리아·미레유, 1층 이벤트, 마음 시스템 예시')),
         h('div', { class: 'card', onclick: newProject }, h('b', {}, '새 프로젝트'), h('span', {}, '빈 폴더에 26층 기본 구조로 시작')),
         h('div', { class: 'card', onclick: openProject }, h('b', {}, '프로젝트 열기'), h('span', {}, 'project.json 이 있는 폴더 선택')),
         h('div', { class: 'card', onclick: importProject }, h('b', {}, '프로젝트 가져오기'), h('span', {}, '내보낸 .pdmproj 파일을 빈 폴더에 풀어서 열기'))),
@@ -742,6 +833,6 @@
     const q = new URLSearchParams(location.search).get('project');
     if (q) loadProject(q);
   }
-  PDM.app = { loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
+  PDM.app = { redraw: () => drawAll(), loadProject, saveAll, saveAs, exportProject, importProject, exportGame, cleanBuild, playtest, runCheck, showBottom, bundleRepo, resolveRepo };
   document.readyState === 'loading' ? addEventListener('DOMContentLoaded', init) : init();
 })();

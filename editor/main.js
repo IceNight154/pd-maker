@@ -81,6 +81,13 @@ ipcMain.handle('fs:list', wrap(dir => {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).map(d => ({ name: d.name, dir: d.isDirectory() }));
 }));
+// 폴더 아래의 모든 파일 (상대 경로, / 구분) — 게임 저장소 훑기 (renderer/js/gamescan.js)
+ipcMain.handle('fs:walk', wrap(dir => {
+  const out = [];
+  const rec = (d, rel) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { if (e.isDirectory()) rec(path.join(d, e.name), rel + e.name + '/'); else out.push(rel + e.name); } };
+  if (fs.existsSync(dir)) rec(dir, '');
+  return out;
+}));
 ipcMain.handle('fs:mkdir', wrap(p => { fs.mkdirSync(p, { recursive: true }); return true; }));
 ipcMain.handle('fs:remove', wrap(p => { if (fs.existsSync(p)) fs.rmSync(p, { recursive: true }); return true; }));
 ipcMain.handle('fs:readDataURL', wrap(p => {
@@ -110,10 +117,10 @@ ipcMain.handle('dlg:confirm', wrap(async (message, buttons) => {
   return r.response;
 }));
 // ---------------- PDMaker 폴더 안의 게임 저장소 (다른 PC 에서도 그대로 쓰도록) ----------------
-//  기준: pd-maker/game/shattered-pixel-dungeon  (없으면 game/shattered-pixel-dungeon-mod-2)
+//  기준: pd-maker/game/shattered-pixel-dungeon-master  (없으면 예전 기준 game/shattered-pixel-dungeon)
 //  exe 로 만든 경우: exe 옆 game/ 또는 resources/game/
-const REPO_NAME = 'shattered-pixel-dungeon';
-const REPO_NAMES = [REPO_NAME, 'shattered-pixel-dungeon-mod-2'];
+const REPO_NAME = 'shattered-pixel-dungeon-master';
+const REPO_NAMES = [REPO_NAME, 'shattered-pixel-dungeon'];
 function bundledRepoDirs() {
   const c = [];
   for (const n of REPO_NAMES) {
@@ -129,7 +136,7 @@ function bundledRepo() { return bundledRepoDirs().find(isRepoDir) || null; }
 /** 바깥에 있는 게임 저장소를 PDMaker 폴더 안(game/)으로 옮김. 같은 드라이브면 통째로 옮기고, 안 되면 복사(빌드 결과·.gradle 제외) */
 ipcMain.handle('repo:bundle', wrap(({ from }) => {
   if (!isRepoDir(from)) throw new Error('게임 저장소가 아닙니다 (gradlew 없음): ' + from);
-  const dest = path.join(__dirname, '..', 'game', path.basename(from) === 'shattered-pixel-dungeon-mod-2' ? 'shattered-pixel-dungeon-mod-2' : REPO_NAME);
+  const dest = path.join(__dirname, '..', 'game', REPO_NAME);
   if (path.resolve(from) === path.resolve(dest)) return { dest, moved: false };
   if (fs.existsSync(dest)) throw new Error('이미 있습니다: ' + dest);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -152,7 +159,9 @@ ipcMain.handle('app:paths', wrap(() => ({
   home: app.getPath('home'),
   userData: app.getPath('userData')
 })));
-ipcMain.handle('app:openExternal', wrap(p => shell.openPath(p)));
+ipcMain.handle('app:openExternal', wrap(p => /^https?:\/\//i.test(String(p)) ? shell.openExternal(p) : shell.openPath(p)));
+// 파일 위치 열기: 탐색기에서 그 파일을 선택한 채로 폴더를 엶 (파일이 없으면 폴더만)
+ipcMain.handle('app:showInFolder', wrap(p => { if (fs.existsSync(p)) shell.showItemInFolder(path.normalize(p)); else shell.openPath(path.dirname(p)); return true; }));
 ipcMain.handle('app:close', wrap(() => { win.__forceClose = true; win.close(); return true; }));
 
 // ---------------- 테스트 플레이 ----------------
@@ -258,7 +267,7 @@ function repairRepo(repo) {
   const mods = ['SPD-classes', 'core', 'desktop', 'services'];
   const missing = mods.filter(m => fs.existsSync(path.join(repo, m)) && !fs.existsSync(path.join(repo, m, 'build.gradle')));
   if (!missing.length) return;
-  const donors = [path.join(path.dirname(repo), 'shattered-pixel-dungeon'), path.join(__dirname, '..', 'game', 'shattered-pixel-dungeon')];
+  const donors = [path.join(path.dirname(repo), REPO_NAME), path.join(__dirname, '..', 'game', REPO_NAME), path.join(path.dirname(repo), 'shattered-pixel-dungeon'), path.join(__dirname, '..', 'game', 'shattered-pixel-dungeon')];
   const left = [];
   for (const m of missing) {
     const d = donors.map(x => path.join(x, m, 'build.gradle')).find(f => fs.existsSync(f));
@@ -298,10 +307,10 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   // 생성 코드(gen/*.java)의 컴파일 오류 → 어느 영웅/아이템의 어느 칸 몇째 줄인지 덧붙임
   const genDir = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker', 'gen');
   const explain = l => {
-    const m = l.match(/pdmaker[\\/]gen[\\/]((?:H|I)_\w+\.java):(\d+)/);
+    const m = l.match(/pdmaker[\\/]gen[\\/]((?:[\w]+[\\/])*(?:H|I)_\w+\.java):(\d+)/);
     if (!m) return;
     try {
-      const where = codegen.locate(fs.readFileSync(path.join(genDir, m[1]), 'utf8'), +m[2]);
+      const where = codegen.locate(fs.readFileSync(path.join(genDir, ...m[1].split(/[\\/]/)), 'utf8'), +m[2]);
       if (where) log(`  ↳ 에디터 코드 오류: ${where.what} · ${where.where} · ${where.line}번째 줄`);
     } catch (_) { /* 무시 */ }
   };

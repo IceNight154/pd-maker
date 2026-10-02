@@ -5,16 +5,15 @@
 ```
 Pixel Dungeon modding/
 ├─ pd-maker/                  ← PDMaker (이 폴더). 에디터·런타임·샘플·도구·문서 + 게임 저장소(game/)가 모두 여기에 있음
-│  └─ game/shattered-pixel-dungeon-mod-2/   위츨링 픽셀 타워 (게임 저장소 — 테스트 플레이 때 pdmaker 런타임이 설치되는 곳)
+│  └─ game/shattered-pixel-dungeon-master/   Shattered Pixel Dungeon 원작 (게임 저장소 — 테스트 플레이 때 pdmaker 런타임이 설치되는 곳)
 ├─ git-hub/
 │  └─ shattered-pixel-dungeon/          원작 SPD 저장소 (참고)
-├─ RPG Maker MZ/             리소스 가져오기용 (그림 칸 RM… · 소리 칸 RM)
 ├─ era/                      시스템 참고 자료
 └─ Claude outputs/           이전 작업 결과 그림
 ```
 
-게임 저장소는 **`pd-maker/game/shattered-pixel-dungeon-mod-2`** 에 둡니다. 그래야 PDMaker 폴더만 다른 PC 로 옮겨도 테스트 플레이·게임 내보내기가 됩니다.
-- 샘플 프로젝트의 `gameRepo` 는 `../game/shattered-pixel-dungeon-mod-2` (기준: `pd-maker/sample-project`). 새 프로젝트는 비워 두면 에디터가 찾아 채웁니다.
+게임 저장소는 **`pd-maker/game/shattered-pixel-dungeon-master`** 에 둡니다. 그래야 PDMaker 폴더만 다른 PC 로 옮겨도 테스트 플레이·게임 내보내기가 됩니다.
+- 새 프로젝트는 `gameRepo` 를 비워 두면 에디터가 찾아 채웁니다. 예전 기준 저장소(`game/shattered-pixel-dungeon`)를 가리키던 프로젝트는 열 때 자동으로 바뀝니다.
 - 프로젝트의 경로가 틀리면 에디터가 ① PDMaker 폴더 안의 game/ ② 전에 쓴 저장소 ③ 프로젝트 위쪽 폴더들을 찾아 고칩니다.
 - 바깥에 있는 저장소는 프로젝트 설정 → "게임 저장소를 PDMaker 폴더 안으로 옮기기" 로 옮깁니다 (같은 드라이브면 통째로 이동, 아니면 복사).
 - 다른 PC 에 필요한 것: Node.js(에디터 실행, `start-editor.bat` 가 Electron 을 내려받음) · 인터넷(처음 빌드 때 Gradle·라이브러리 내려받기).
@@ -59,7 +58,6 @@ assets/                                 ← 그림·소리 (아래 표준 폴더
 | `title/` | 타이틀 레이어·로고·아치 그림 | 타이틀 화면 편집기 |
 | `ui/` | 그 밖의 화면 그림 | 그림 관리에서 가져오기 |
 | `game/<게임 경로>` | **게임 그림 바꾸기.** 예: `game/interfaces/title3.png`, `game/sprites/items.png` | 그림 관리 → 게임 그림 바꾸기, 타이틀 → 타이틀 스프라이트 |
-| `rmmz/<분류>/` | RPG Maker MZ에서 가져온 그림 | RM… 버튼 |
 | `audio/` | 소리 파일 | 사운드 편집기 |
 
 - **🖼 그림 관리 → 🧹 자동 정리**를 누르면, 이미 쓰고 있는 그림이 위 폴더로 옮겨집니다. 쓰는 곳의 경로도 함께 고쳐지고 바로 저장됩니다.

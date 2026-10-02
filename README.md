@@ -1,7 +1,7 @@
 # 픽셀 던전 메이커 (가제) — PDMaker
 
 Shattered Pixel Dungeon 기반 게임을 **코드 없이** 만드는 도구입니다.
-에디터(exe)가 프로젝트 폴더에 JSON·PNG 를 저장하고, 게임(game/shattered-pixel-dungeon + pdmaker 런타임)이 그 폴더를 읽어 바로 실행합니다.
+에디터(exe)가 프로젝트 폴더에 JSON·PNG 를 저장하고, 게임(game/shattered-pixel-dungeon-master + pdmaker 런타임)이 그 폴더를 읽어 바로 실행합니다.
 
 자세한 설계: [DESIGN.md](DESIGN.md) · 게임 연결: [runtime/INTEGRATION.md](runtime/INTEGRATION.md)
 
@@ -13,8 +13,7 @@ pd-maker/
 ├─ start-editor.bat       에디터 실행 (함께 든 Electron 이 있으면 바로, 없으면 Node.js 로 내려받아 실행)
 ├─ build-exe.bat          PDMaker.exe 만들기
 ├─ make-release.bat       다른 PC 에 줄 zip 만들기 (game/ · Electron 포함 → 받는 사람은 Node.js 없이 실행 · .git·build 제외)
-├─ game/shattered-pixel-dungeon/       기준 게임 저장소 — 새 프로젝트·테스트 플레이·게임 내보내기에 씀
-├─ game/shattered-pixel-dungeon-mod-2/  (예전 기준) mod-2 저장소 — 기준 저장소가 없을 때나 프로젝트 설정에서 고를 때
+├─ game/shattered-pixel-dungeon-master/       기준 게임 저장소 — 새 프로젝트·테스트 플레이·게임 내보내기에 씀
 ├─ docs/FOLDERS.md        폴더 구조 안내 (프로젝트 assets 표준 폴더 포함)
 ├─ editor/                에디터 (Electron)
 │  ├─ main.js · preload.js 파일·테스트 플레이·런타임 설치 (메인 프로세스)
@@ -24,7 +23,7 @@ pd-maker/
 │  │  └─ js/…             store(저장·실행취소) · assets(그림 불러오기) · schema · cond(조건식) · heart-core · codegen …
 │  └─ builtin-plugins/    내장 예제 플러그인 (screen-fx)
 ├─ runtime/               게임 런타임 Java 패키지 (…/pdmaker/*.java) + INTEGRATION.md
-├─ sample-project/        샘플: 위츨링 픽셀 타워
+├─ sample-project/        (예전 mod-2 기준 샘플 — 시작 화면에는 더 나오지 않음)
 ├─ tools/
 │  ├─ sample/             샘플 프로젝트 만들기 (make_sample.py · make_heart.js · make_sounds.js)
 │  ├─ data/               게임 소스에서 에디터 데이터 뽑기 (extract_spd_items.py · itemsheet.py · gen_terms_java.js)
@@ -41,7 +40,7 @@ Java(JDK 17+)가 없으면 처음 테스트 플레이 때 에디터가 내려받
 
 1. (release zip 이 아니면) [Node.js LTS](https://nodejs.org) 설치 (한 번만) — `make-release.bat` 로 만든 zip 에는 Electron 이 들어 있어 필요 없음
 2. `start-editor.bat` 더블클릭 → 처음에는 `npm install` 로 Electron 을 받습니다 (1~2분)
-3. 시작 화면에서 **샘플 열기**
+3. 시작 화면에서 **새 프로젝트** (또는 **프로젝트 열기**)
 4. **▶ 테스트 플레이** (F5) — 게임 저장소에 pdmaker 런타임을 자동으로 설치·갱신한 뒤 gradle 로 게임을 켭니다.
    새 게임을 시작하면 (어느 직업을 골라도) 영웅 아리아로 샘플 1층(시험장 입구)에서 시작합니다.
    - 1층 입구 계단 → 마녀의 마을(던전 밖 맵), 마을 광장의 봉인석을 밟으면 1구역 3층에 "잿불 갈림길" 계단이 생겨 4-2층 → 2-2구역으로 갈라짐
@@ -78,7 +77,7 @@ Node 없이 화면만 보고 싶으면: `editor/renderer/index.html` 을 웹 서
 
 ## exe 만들기
 
-`build-exe.bat` → `editor/dist/PDMaker x.y.z.exe` (포터블). 샘플 프로젝트와 런타임 소스가 함께 들어갑니다.
+`build-exe.bat` → `editor/dist/PDMaker x.y.z.exe` (포터블). 런타임 소스가 함께 들어갑니다.
 게임 exe 는 게임 저장소에서 `gradlew desktop:jpackageImage` (JRE 포함) 로 만들고, 실행 파일 옆에 프로젝트 폴더를 `project` 로 복사하면 됩니다.
 
 ## 사운드
@@ -87,11 +86,6 @@ Node 없이 화면만 보고 싶으면: `editor/renderer/index.html` 을 웹 서
 파형 편집으로 자르기·페이드·음량·속도 조절 후 WAV 로 저장합니다. 등록한 소리는 `sound:<id>` 로 불리며,
 이벤트 명령 "효과음/음악", 주문·직업 능력의 소리 칸, 맵 그래프에서 고릅니다.
 맵 그래프에서 **그룹**을 고르면 인스펙터의 "음악"에서 테마 기본 음악 대신 탐험 곡(여러 곡 무작위)·긴장 곡(조건)·보스 곡을 그룹마다 정할 수 있고, 노드마다 따로 정한 배경음이 가장 우선입니다.
-
-## RPG Maker MZ 리소스
-
-소리 칸의 **RM** 버튼, 그림 칸의 **RM…** 버튼, 캐릭터 그림의 **RPG Maker 캐릭터 시트…** 로 `RPG Maker MZ` 폴더(프로젝트 위 폴더에서 자동으로 찾음, 프로젝트 설정에서 바꿀 수 있음)의
-bgm/se/캐릭터/얼굴 등을 프로젝트로 복사해 씁니다. RPG Maker 리소스는 보통 RPG Maker 로 만든 게임에만 쓰도록 허용되니 배포 전에 약관을 확인하세요.
 
 ## 주문 · 전직 · 직업 능력 · 특성 · 과열 · 코덱스 (원작 구조)
 

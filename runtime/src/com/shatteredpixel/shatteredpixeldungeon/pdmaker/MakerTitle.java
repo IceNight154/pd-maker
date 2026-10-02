@@ -150,6 +150,8 @@ public class MakerTitle {
 		final List<Btn> btns = new ArrayList<>();
 		// 상태
 		boolean revealed; float revealT = 0, btnClock = 0, returnT = 0, idleT = 0, t = 0; boolean returning = false;
+		// 화면 감추기 (4.0 타이틀의 아래 화살표): 누르면 로고·버튼이 사라져 배경만 보이고, 화면을 누르면 돌아옴
+		boolean uiHidden = false; float hideK = 0; com.shatteredpixel.shatteredpixeldungeon.ui.IconButton btnHide;
 
 		Root() {
 			revealed = !gateOn || showMenuOnStart;
@@ -164,6 +166,7 @@ public class MakerTitle {
 				@Override protected void onPointerDown(PointerEvent e) { idleT = 0; }
 				@Override protected void onClick(PointerEvent e) {
 					idleT = 0;
+					if (uiHidden) { uiHidden = false; return; }
 					if (!revealed && !returning) { revealed = true; revealT = 0; btnClock = 0; }
 				}
 			});
@@ -186,6 +189,16 @@ public class MakerTitle {
 			}
 			JsonValue ex = d.get("exit");
 			if (DeviceCompat.isDesktop() && (ex == null || ex.getBoolean("visible", true))) { ExitButton b = new ExitButton(); b.setPos(w - b.width(), 0); add(b); }
+			if (d.getBoolean("hideButton", titleBgClass() != null)) {
+				try {
+					btnHide = new com.shatteredpixel.shatteredpixeldungeon.ui.IconButton(Icons.get(Icons.valueOf("CHEVRON"))) {
+						@Override protected void onClick() { idleT = 0; uiHidden = true; }
+					};
+					btnHide.icon().originToCenter(); btnHide.icon().angle = 180f;
+					btnHide.setRect((w - 16) / 2f, h - 16, 16, 16);
+					add(btnHide);
+				} catch (Throwable ignored) { btnHide = null; }   // 이 아이콘이 없는 게임 버전
+			}
 			if (revealed && gateOn) { revealT = 1; btnClock = 0; }
 			step(0);
 		}
@@ -282,6 +295,7 @@ public class MakerTitle {
 						if (it != null && !it.getString("action", "").isEmpty()) action(it); else if (gameId != null) gameAction(gameId);
 					}
 				};
+				if ("support".equals(id) && (it == null || it.getString("label", "").isEmpty())) b.textColor(com.shatteredpixel.shatteredpixeldungeon.ui.Window.TITLE_COLOR);   // 게임처럼 노란 글자
 				String icon = it == null ? "" : it.getString("icon", "");
 				if (icon.isEmpty() && gi >= 0) icon = ICONS[gi];
 				if (!icon.isEmpty() && !icon.equals("NONE")) { try { b.icon(Icons.get(Icons.valueOf(icon))); } catch (Exception ignored) { } }
@@ -363,6 +377,9 @@ public class MakerTitle {
 				if (after.equals("fade")) { la = 1 - k; lift = -10 * k; }
 				else if (after.equals("up")) { lift = -(logoBaseY - 4) * k; }
 			}
+			hideK = Math.max(0, Math.min(1, hideK + (uiHidden ? e : -e) * 2f));
+			la *= 1 - hideK;
+			if (btnHide != null) { boolean on = hideK < 0.5f && revealed && !returning; btnHide.visible = on; btnHide.active = on && !uiHidden; btnHide.icon().alpha(1 - hideK); }
 			String la2 = lg.getString("anim", "none");
 			float ax = 0, ay = 0, am = 1;
 			if (la2.equals("float")) ay = (float) Math.sin(t * 1.6f) * 2f;
@@ -408,7 +425,7 @@ public class MakerTitle {
 					case "pop": bw = b.bw * (0.6f + 0.4f * back(a)); k = Math.min(1, a * 2); break;
 				}
 				dy += dist * 0.5f * out;
-				float alpha = (enter.equals("none") ? 1 : k) * (1 - out);
+				float alpha = (enter.equals("none") ? 1 : k) * (1 - out) * (1 - hideK);
 				if (a >= 1 && !returning) {
 					float ph = t * spd * 2.5f + b.i * 0.7f;
 					if (idle.equals("bob")) dy += (float) Math.sin(ph) * amt;
@@ -471,6 +488,13 @@ public class MakerTitle {
 		if (!bg.getBoolean("archs", true)) return "none";
 		return bg.getString("archStyle", "game");
 	}
+	static Class<?> titleBgClass() {
+		try { return Class.forName("com.shatteredpixel.shatteredpixeldungeon.ui.TitleBackground"); } catch (Throwable t) { return null; }
+	}
+	static Gizmo gameTitleBackground(int w, int h) {
+		try { Class<?> c = titleBgClass(); return c == null ? null : (Gizmo) c.getConstructor(int.class, int.class).newInstance(w, h); }
+		catch (Throwable t) { return null; }
+	}
 	/** 배경을 g 에 추가: 색 · 게임 배경 · 그라데이션 · (뒤)레이어 · 아래쪽 어둡게 · (메뉴) 입자 */
 	static void addBackground(Group g, JsonValue d, int w, int h, boolean title) {
 		JsonValue bg = d.get("background") == null ? new JsonValue(JsonValue.ValueType.object) : d.get("background");
@@ -479,6 +503,8 @@ public class MakerTitle {
 		if (!col.isEmpty()) g.add(new ColorBlock(w, h, 0xFF000000 | color(col, 0)));
 		switch (archStyle(bg)) {
 			case "game": {
+				// 타이틀: 게임에 타이틀 전용 배경(4.0 의 ui.TitleBackground — 폐허가 떠오르는 시차 배경)이 있으면 그것, 없으면 아치
+				if (title) { Gizmo tb = gameTitleBackground(w, h); if (tb != null) { g.add(tb); break; } }
 				com.shatteredpixel.shatteredpixeldungeon.ui.Archs a = new com.shatteredpixel.shatteredpixeldungeon.ui.Archs();
 				a.setSize(w, h);
 				a.reversed = bg.getBoolean("archReverse", false);

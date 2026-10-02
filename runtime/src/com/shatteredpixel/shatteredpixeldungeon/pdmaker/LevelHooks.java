@@ -51,6 +51,47 @@ public class LevelHooks {
 		String id = WorldGraph.current();
 		JsonValue f = WorldGraph.node(id);
 		if (f == null) return;
+		// 0) 구성 블럭: 있으면 게임 기본 구성(입구·출구 빼고)을 지우고 블럭대로 다시 채움
+		JsonValue blocks = blocks(id);
+		if (blocks != null) {
+			while (initRooms.size() > 2) initRooms.remove(initRooms.size() - 1);
+			boolean specialInit = false;
+			int std = 0, spc = 0, sec = 0;
+			for (JsonValue b : blocks) {
+				String type = b.getString("type", "");
+				int min = Math.max(0, b.getInt("min", 1)), max = Math.max(min, b.getInt("max", min));
+				int n = Random.IntRange(min, max);
+				try {
+					switch (type) {
+						case "standard": {   // 무작위 일반 방 (게임과 같은 방식: 큰 방은 여러 칸으로 셈)
+							n = Math.min(n, 24 - std); std += Math.max(0, n);
+							boolean big = b.getBoolean("big", true);
+							for (int i = 0; i < n; i++) {
+								com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom r;
+								do { r = com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom.createRoom(); } while (!r.setSizeCat(big ? n - i : 1));
+								i += r.sizeFactor() - 1;
+								initRooms.add(r);
+							}
+							break;
+						}
+						case "special": {    // 무작위 특수 방 (같은 종류는 한 층에 한 번)
+							n = Math.min(n, 6 - spc); spc += Math.max(0, n);
+							if (!specialInit) { com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.SpecialRoom.initForFloor(); specialInit = true; }
+							for (int i = 0; i < n; i++) initRooms.add(com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.SpecialRoom.createRoom());
+							break;
+						}
+						case "secret": {     // 무작위 비밀 방
+							n = Math.min(n, 4 - sec); sec += Math.max(0, n);
+							for (int i = 0; i < n; i++) initRooms.add(com.shatteredpixel.shatteredpixeldungeon.levels.rooms.secret.SecretRoom.createRoom());
+							break;
+						}
+						case "room": addOne(initRooms, b); break;   // 지정한 방 (방 템플릿 · 게임 기본 방)
+						default: break;                              // layout · feeling 은 builder() 에서
+					}
+				} catch (Throwable ex) { MakerRuntime.log("구성 블럭 오류 (" + type + "): " + ex); }
+			}
+			if (std == 0) initRooms.add(com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom.createRoom());   // 일반 방이 하나도 없으면 층을 못 만듦
+		}
 		// 1) 혼합 노드: 직접 그린 방
 		if ("hybrid".equals(f.getString("mode", "")) && f.get("layers") != null && f.get("layers").get("terrain") != null
 				&& f.get("layers").get("terrain").size == f.get("size").getInt("w", 0) * f.get("size").getInt("h", 0)) {
@@ -61,17 +102,88 @@ public class LevelHooks {
 		JsonValue g = WorldGraph.group(id);
 		addList(initRooms, g == null ? null : g.get("rooms"));
 		addList(initRooms, f.get("procedural") == null ? null : f.get("procedural").get("rooms"));
+		// 3) "자동 생성"을 켠 방 템플릿 (그룹 제한·확률, 이미 들어간 것은 건너뜀)
+		String gid = g == null ? "" : g.getString("id", "");
+		for (Map.Entry<String, JsonValue> e : MakerRuntime.rooms.entrySet()) {
+			JsonValue t = e.getValue();
+			if (!t.getBoolean("auto", false)) continue;
+			JsonValue ag = t.get("autoGroups");
+			if (ag != null && ag.size > 0) { boolean ok = false; for (JsonValue x : ag) if (gid.equals(x.asString())) ok = true; if (!ok) continue; }
+			String tk = "room:" + e.getKey();
+			boolean has = false;
+			for (Room r : initRooms) if ((r instanceof TemplateRoom && tk.equals(((TemplateRoom) r).templateKey)) || (r instanceof TemplateSpecialRoom && tk.equals(((TemplateSpecialRoom) r).templateKey))) has = true;
+			if (has || Random.Int(100) >= t.getInt("autoChance", 100)) continue;
+			initRooms.add("special".equals(t.getString("kind", "standard")) ? new TemplateSpecialRoom(tk) : new TemplateRoom(tk));
+		}
+	}
+	/** 이 노드의 구성 블럭 (노드에 없으면 그룹 것). 없으면 null = 게임 기본 구성 */
+	static JsonValue blocks(String id) {
+		if (id == null) return null;   // 맵 그래프에 없는 층
+		JsonValue f = WorldGraph.node(id);
+		JsonValue b = f == null || f.get("procedural") == null ? null : f.get("procedural").get("blocks");
+		if (b == null || b.size == 0) { JsonValue g = WorldGraph.group(id); b = g == null ? null : g.get("blocks"); }
+		return b == null || b.size == 0 ? null : b;
+	}
+	/** 구성 블럭의 "구조"·"분위기" (RegularLevel.build 의 builder = builder() 바로 뒤에서 호출) */
+	public static com.shatteredpixel.shatteredpixeldungeon.levels.builders.Builder builder(Level level, com.shatteredpixel.shatteredpixeldungeon.levels.builders.Builder def) {
+		try {
+			if (!MakerRuntime.isActive()) return def;
+			JsonValue blocks = blocks(WorldGraph.current());
+			if (blocks == null) return def;
+			com.shatteredpixel.shatteredpixeldungeon.levels.builders.Builder out = def;
+			for (JsonValue b : blocks) {
+				String type = b.getString("type", "");
+				if (type.equals("feeling")) {
+					String fe = b.getString("feeling", "NONE");
+					Level.Feeling want = null;
+					for (Level.Feeling x : Level.Feeling.values()) if (x.name().equals(fe)) want = x;
+					if (want != null && level.feeling != want) {
+						if (want == Level.Feeling.DARK) level.viewDistance = Math.round(5 * level.viewDistance / 8f);
+						level.feeling = want;
+					}
+				} else if (type.equals("layout")) {
+					String shape = b.getString("shape", "auto");
+					com.shatteredpixel.shatteredpixeldungeon.levels.builders.RegularBuilder rb = null;
+					switch (shape) {
+						case "loop": rb = new com.shatteredpixel.shatteredpixeldungeon.levels.builders.LoopBuilder().setLoopShape(2, Random.Float(0f, 0.65f), Random.Float(0f, 0.50f)); break;
+						case "figure8": rb = new com.shatteredpixel.shatteredpixeldungeon.levels.builders.FigureEightBuilder().setLoopShape(2, Random.Float(0.3f, 0.8f), 0f); break;
+						case "line": rb = new com.shatteredpixel.shatteredpixeldungeon.levels.builders.LineBuilder(); break;
+						default: if (def instanceof com.shatteredpixel.shatteredpixeldungeon.levels.builders.RegularBuilder) rb = (com.shatteredpixel.shatteredpixeldungeon.levels.builders.RegularBuilder) def;
+					}
+					if (rb != null) {
+						String tn = b.getString("tunnels", "default");
+						if (tn.equals("none")) rb.setTunnelLength(new float[]{1, 0, 0}, new float[]{1, 0, 0});
+						else if (tn.equals("long")) rb.setTunnelLength(new float[]{0, 2, 3}, new float[]{1, 2, 1});
+						int extra = b.getInt("extra", -1);
+						if (extra >= 0) rb.setExtraConnectionChance(Math.min(100, extra) / 100f);
+						out = rb;
+					}
+				}
+			}
+			return out;
+		} catch (Throwable t) { MakerRuntime.log("구성 블럭(구조) 오류: " + t); return def; }
 	}
 	private static void addList(ArrayList<Room> initRooms, JsonValue list) {
 		if (list == null) return;
-		for (JsonValue e : list) {
+		for (JsonValue e : list) addOne(initRooms, e);
+	}
+	private static void addOne(ArrayList<Room> initRooms, JsonValue e) {
+		{
 			String rid = e.getString("room", "");
-			JsonValue t = MakerRuntime.rooms.get(rid);
-			if (t == null) { MakerRuntime.log("없는 방 템플릿: " + rid); continue; }
-			if (!Cond.eval(e.getString("cond", ""), StoryState.globalResolver())) continue;
+			boolean game = rid.startsWith("game:");   // 게임 기본 방: "game:<분류>.<클래스>" (levels.rooms 아래)
+			JsonValue t = game ? null : MakerRuntime.rooms.get(rid);
+			if (!game && t == null) { MakerRuntime.log("없는 방 템플릿: " + rid); return; }
+			if (!Cond.eval(e.getString("cond", ""), StoryState.globalResolver())) return;
 			int count = Math.max(1, e.getInt("count", 1));
 			for (int i = 0; i < count; i++) {
 				if (Random.Int(100) >= e.getInt("chance", 100)) continue;
+				if (game) {
+					try {
+						Object o = Class.forName("com.shatteredpixel.shatteredpixeldungeon.levels.rooms." + rid.substring(5)).getDeclaredConstructor().newInstance();
+						if (o instanceof Room) initRooms.add((Room) o);
+					} catch (Throwable ex) { MakerRuntime.log("게임 기본 방을 만들 수 없음: " + rid + " (" + ex + ")"); break; }
+					continue;
+				}
 				initRooms.add("special".equals(t.getString("kind", "standard")) ? new TemplateSpecialRoom("room:" + rid) : new TemplateRoom("room:" + rid));
 			}
 		}
@@ -82,7 +194,9 @@ public class LevelHooks {
 	public static void afterCreate(Level level) {
 		if (!MakerRuntime.isActive()) return;
 		WorldGraph.wire(level, false);
+		if (!(level instanceof MakerLevel)) MakerDrops.chestLoot(level);   // 게임이 만든 상자만 (직접 놓은 상자보다 먼저)
 		placeTemplateObjects(level);
+		MakerDrops.floorDrops(level);
 		if (level instanceof MakerLevel) return;
 		JsonValue f = MakerRuntime.here();
 		if (f == null || f.get("objects") == null) return;
@@ -113,7 +227,8 @@ public class LevelHooks {
 				}
 				break;
 			}
-			case "item": { Item it = MakerItem.create(ref); if (it != null) { it.quantity(Math.max(1, o.getInt("count", 1))); level.drop(it, cell); } break; }
+			case "item": { Item it = MakerItem.create(ref); if (it != null) { it.quantity(Math.max(1, o.getInt("count", 1))); level.drop(it, cell).type = MakerDrops.heapType(o.getString("container", "")); } break; }
+			case "prop": MakerProp.place(level, ref, cell); break;
 			case "event":
 				if (level instanceof MakerLevel) ((MakerLevel) level).eventCells.put(cell, ref);
 				else eventCells.put(Dungeon.depth + ":" + Dungeon.branch + ":" + cell, ref);
@@ -192,8 +307,23 @@ public class LevelHooks {
 	}
 
 	/** 절차 생성 층에서 영웅이 칸을 밟았을 때 (Level.occupyCell 에 한 줄 추가) */
+	/** 영웅이 맵 오브젝트 옆에서 그것을 눌렀을 때 (Hero.actMove 맨 앞 연결 줄) — true 면 처리함 (한 턴 씀) */
+	public static boolean propInteract(com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h, int dst) {
+		try {
+			if (!MakerRuntime.isActive() || Dungeon.level == null || dst == h.pos || dst < 0 || dst >= Dungeon.level.length()) return false;
+			MakerProp p = MakerProp.at(Dungeon.level, dst);
+			if (p == null || !p.solid() || !Dungeon.level.adjacent(h.pos, dst)) return false;
+			if (!p.interact(h)) return false;
+			h.curAction = null;
+			if (h.sprite != null) h.sprite.turnTo(h.pos, dst);
+			h.spendAndNext(1f);
+			return true;
+		} catch (Throwable t) { MakerRuntime.log("맵 오브젝트 오류: " + t); return false; }
+	}
 	public static void onOccupy(Level level, Char ch) {
-		if (!MakerRuntime.isActive() || level instanceof MakerLevel || ch != Dungeon.hero) return;
+		if (!MakerRuntime.isActive() || ch != Dungeon.hero) return;
+		try { MakerProp p = MakerProp.at(level, ch.pos); if (p != null) p.stepOn(); } catch (Throwable t) { MakerRuntime.log("맵 오브젝트 오류: " + t); }
+		if (level instanceof MakerLevel) return;
 		String ev = eventCells.get(Dungeon.depth + ":" + Dungeon.branch + ":" + ch.pos);
 		if (ev != null && !EventInterpreter.busy()) EventInterpreter.runEvent(ev, null, "touch");
 	}

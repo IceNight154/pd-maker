@@ -20,7 +20,7 @@
 PDM.store = (function () {
   const em = PDM.Emitter();
   const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json' };
-  const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events' };
+  const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events', prop: 'props' };
   let version = 0;           // 바뀔 때마다 +1 (계산 캐시용)
 
   let root = null;            // 프로젝트 폴더 경로
@@ -173,7 +173,7 @@ PDM.store = (function () {
     data.project.heartButton = false;
     if (data.dialogue) data.dialogue.mode = 'window';
     if (data.title) data.title.enabled = false;      // 타이틀 화면: 게임 원래 그대로 (켜면 꾸미기)
-    // 게임 저장소: PDMaker 폴더 안 game/shattered-pixel-dungeon (원작 기준)
+    // 게임 저장소: PDMaker 폴더 안 game/shattered-pixel-dungeon-master (원작 기준)
     try { const P = await pdm.paths(); if (P && P.gameRepo) data.project.gameRepo = pdm.relative(dir, P.gameRepo).replace(/\\/g, '/'); } catch (_) { /* 무시 */ }
     const dw = PDM.World.defaultWorld();
     data.world = dw.world;

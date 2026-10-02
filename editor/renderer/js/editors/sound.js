@@ -351,11 +351,10 @@
           h('button', { class: 'btn pri', onclick: importFile }, '파일 가져오기 (ogg·mp3·wav)'),
           h('button', { class: 'btn', onclick: () => sfxMaker() }, '효과음 만들기'),
           h('button', { class: 'btn', onclick: copyGame }, '게임 소리 복사해 오기'),
-          h('button', { class: 'btn', onclick: async () => { const r = await PDM.rmmz.importSound(); if (r) { st.sel = r.slice(6); ctx.refresh(); } } }, 'RPG Maker MZ 에서 가져오기'),
           h('span', { class: 'tb-sep' }),
           ...[['', '전체'], ['bgm', '배경음'], ['se', '효과음']].map(([k, t]) => h('button', { class: 'chip' + (st.filter === k ? ' on' : ''), onclick: () => { st.filter = k; ctx.refresh(); } }, `${t} ${k ? all.filter(s => (s.kind || 'se') === k).length : all.length}`)),
           h('button', { class: 'btn sm', onclick: () => PDM.audio.stop() }, '■ 모두 멈춤')),
-        shown.length ? h('div', { class: 'snd-list' }, rows) : h('div', { class: 'empty' }, '소리가 없습니다. 파일을 가져오거나(RPG Maker MZ 소리도 가능) 효과음을 만들어 보세요.'),
+        shown.length ? h('div', { class: 'snd-list' }, rows) : h('div', { class: 'empty' }, '소리가 없습니다. 파일을 가져오거나 효과음을 만들어 보세요.'),
         detail);
     }
   });

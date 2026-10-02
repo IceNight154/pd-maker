@@ -460,7 +460,7 @@ public class HeroRuntime {
 	private static Object heroTex;
 	/** 영웅 시트의 추가 애니메이션 (기본 8종 밖의 이름) — 이벤트 명령 "애니메이션 재생"에서 씀 */
 	static final Map<String, MovieClip.Animation> heroExtra = new HashMap<>();
-	static final String[] STD_ANIMS = { "idle", "run", "attack", "zap", "operate", "die", "fly", "read" };
+	static final String[] STD_ANIMS = { "idle", "run", "attack", "zap", "operate", "die", "dead", "fly", "read" };
 
 	/** 영웅 시트로 그림 바꾸기 (행 = 갑옷 단계 → tierRows 로 바꿀 수 있음) */
 	static void applySprite(Hero hero) {
@@ -502,7 +502,14 @@ public class HeroRuntime {
 			setAnim(s, "zap", has(anims, "zap") ? anim(anims, "zap", film, cols, row, null, 15, false) : attack.clone());
 			MovieClip.Animation operate = anim(anims, "operate", film, cols, row, new int[]{16, 17, 16, 17}, 8, false);
 			setAnim(s, "operate", operate);
-			setAnim(s, "die", anim(anims, "die", film, cols, row, new int[]{8, 9, 10, 11, 12, 11}, 20, false));
+			final MovieClip.Animation dieA = anim(anims, "die", film, cols, row, new int[]{8, 9, 10, 11, 12, 11}, 20, false);
+			setAnim(s, "die", dieA);
+			// dead (선택): 쓰러짐(die)이 끝나면 이어서 반복하는 동작 — 완료 알림을 가로채서 이어 틂
+			final MovieClip.Animation deadA = has(anims, "dead") ? anim(anims, "dead", film, cols, row, null, 5, true) : null;
+			final CharSprite fs = s;
+			s.listener = deadA == null ? s : new MovieClip.Listener() {
+				@Override public void onComplete(MovieClip.Animation a) { fs.onComplete(a); if (a == dieA) fs.play(deadA, true); }   // CharSprite.play(anim) 은 die 중에는 무시하므로 force
+			};
 			// 날기(공중부양·점프 중) · 읽기(주문서) — 게임 HeroSprite 의 private 필드. 없으면 가만히 / 조작 동작으로
 			setAnim(s, "fly", has(anims, "fly") ? anim(anims, "fly", film, cols, row, null, 5, true) : idle.clone());
 			setAnim(s, "read", has(anims, "read") ? anim(anims, "read", film, cols, row, null, 20, false) : operate.clone());

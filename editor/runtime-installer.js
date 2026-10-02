@@ -1,5 +1,5 @@
 // ================================================================
-//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 19개 파일에 연결 줄 38개를 추가합니다.
+//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 21개 파일에 연결 줄 43개를 추가합니다.
 //  · 추가한 줄에는 모두 "// >>> pdmaker" 표시가 붙어 있어서, 제거(uninstall)하면 깨끗이 되돌아갑니다.
 //  · 원본 줄은 고치거나 지우지 않습니다 (줄을 "추가"만 함).
 //  사용: node runtime-installer.js <게임저장소> [--uninstall]   또는 main.js 에서 require
@@ -31,10 +31,20 @@ const PATCHES = [
     anchor: /\n([ \t]*)fadeIn\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.onFloorEnter();` },
   { file: 'levels/RegularLevel.java', name: '자동 생성 층에 직접 만든 방 추가',
     anchor: /\n([ \t]*)return initRooms;/, where: 'before', line: `${PKG}.LevelHooks.addRooms(this, initRooms);` },
+  { file: 'levels/RegularLevel.java', name: '구성 블럭: 층 구조·분위기',
+    anchor: /\n([ \t]*)builder = builder\(\);[^\n]*\n/, where: 'after', line: `builder = ${PKG}.LevelHooks.builder(this, builder);` },
   { file: 'scenes/GameScene.java', name: '진행 방향(탑 모드) 계단 그림',
     anchor: /\n([ \t]*)Dungeon\.level\.playLevelMusic\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.beforeScene();` },
   { file: 'levels/Level.java', name: '칸을 밟았을 때 이벤트',
     anchor: /public void occupyCell\(\s*Char ch\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.LevelHooks.onOccupy(this, ch);` },
+  { file: 'actors/hero/Hero.java', name: '맵 오브젝트: 옆에서 누르면 밀기·상호작용',
+    anchor: /private boolean actMove\(\s*HeroAction\.Move action\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.LevelHooks.propInteract(this, action.dst)) return false;` },
+  { file: 'actors/mobs/Mob.java', name: '드랍 테이블: 몬스터가 죽을 때',
+    anchor: /public void rollToDropLoot\(\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.MakerDrops.mobDrop(this)) return;` },
+  { file: 'actors/mobs/MobSpawner.java', name: '등장 금지한 몬스터 빼기',
+    anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
+  { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
+    anchor: /public void link\(\s*Heap heap\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.heapScale(this, heap);` },
   // ---- 영웅 코드 (영웅 편집기의 "코드" 칸 · 세부 능력치) ----
   { file: 'actors/hero/Hero.java', name: '영웅 코드: 명중', anchor: /public int attackSkill\(\s*Char target\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.HeroRuntime.wrap(1)) return ${PKG}.HeroRuntime.attackSkill(this, target, attackSkill(target));` },
@@ -147,17 +157,26 @@ function uninstall(repo, log = console.log) {
   if (fs.existsSync(pkgDir)) { fs.rmSync(pkgDir, { recursive: true }); log('pdmaker 패키지 제거'); }
 }
 
-/** 프로젝트의 영웅·아이템 → pdmaker/gen/*.java (바뀐 파일만 씀). 돌려줌: 파일 수 */
+/** 프로젝트의 영웅·아이템 → pdmaker/gen/*.java · 아이템은 gen/items/<분류>/<세부 종류>/ (바뀐 파일만 씀). 돌려줌: 파일 수 */
 function generate(repo, projectDir, log = console.log) {
   const codegen = require('./renderer/js/codegen');
   const gen = path.join(javaDir(repo), 'pdmaker', 'gen');
   const readAll = dir => { const d = path.join(projectDir, dir); if (!fs.existsSync(d)) return []; return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')); } catch (e) { log(`읽기 실패 ${dir}/${f}: ${e.message}`); return null; } }).filter(Boolean); };
   const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items')) : {};
   fs.mkdirSync(gen, { recursive: true });
-  for (const f of fs.readdirSync(gen)) if (f.endsWith('.java') && !files[f]) fs.rmSync(path.join(gen, f));
+  // 이제 안 쓰는 파일 지우기 (분류를 옮기면 예전 폴더의 파일) + 빈 폴더 정리
+  const sweep = (dir, rel) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? rel + '/' + e.name : e.name, fp = path.join(dir, e.name);
+      if (e.isDirectory()) { sweep(fp, r); if (!fs.readdirSync(fp).length) fs.rmdirSync(fp); }
+      else if (e.name.endsWith('.java') && !files[r]) fs.rmSync(fp);
+    }
+  };
+  sweep(gen, '');
   let changed = 0;
   for (const [f, src] of Object.entries(files)) {
-    const fp = path.join(gen, f);
+    const fp = path.join(gen, ...f.split('/'));
+    fs.mkdirSync(path.dirname(fp), { recursive: true });
     if (fs.existsSync(fp) && fs.readFileSync(fp, 'utf8') === src) continue;
     fs.writeFileSync(fp, src, 'utf8'); changed++;
   }

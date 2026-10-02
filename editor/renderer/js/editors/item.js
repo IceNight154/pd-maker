@@ -360,7 +360,7 @@
         F.code(key, [...p, 'code'], { sig: `case "PDM_${a.id}": {   // Hero hero, 이 아이템 = this`, rows: 3 }))
     });
     return [
-      h('p', { class: 'hint' }, `게임 클래스로 만들어집니다: pdmaker/gen/${cg.itemClass(it.id)}.java (${it.kind === 'game' ? 'items.' + (it.base || 'Item') : kind === 'misc' ? 'MakerItem' : { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' }[kind]} 상속). 코드 오류는 게임을 멈추지 않고 경고만 뜹니다.${it.kind === 'game' ? ' "추가 멤버"에 @Override 로 게임 함수를 직접 다시 쓸 수 있습니다 (예: public void execute(Hero hero, String action) { … super.execute(hero, action); }).' : ''}`),
+      h('p', { class: 'hint' }, `게임 클래스로 만들어집니다: pdmaker/gen/${cg.itemPath(it)} (${it.kind === 'game' ? 'items.' + (it.base || 'Item') : kind === 'misc' ? 'MakerItem' : { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' }[kind]} 상속). 코드 오류는 게임을 멈추지 않고 경고만 뜹니다.${it.kind === 'game' ? ' "추가 멤버"에 @Override 로 게임 함수를 직접 다시 쓸 수 있습니다 (예: public void execute(Hero hero, String action) { … super.execute(hero, action); }).' : ''}`),
       tabs, body,
       h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '행동 버튼'), acts,
       h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center' } },
@@ -388,7 +388,7 @@
       h('p', { class: 'hint mono' }, txt != null ? f : '아직 파일이 없습니다 (▶ 테스트 플레이 때 만들어짐) — 에디터가 만들 코드를 보여 줍니다'),
       txt != null && fallback != null && txt !== fallback ? h('p', { class: 'hint' }, '※ 파일은 마지막 테스트 플레이 때 만든 것입니다. 지금 에디터 내용과 다르면 다음 테스트 플레이 때 바뀝니다.') : null, pre),
       [['복사', () => { navigator.clipboard && navigator.clipboard.writeText(src); return null; }],
-        ...(txt != null && pdm.isElectron ? [['외부 편집기로 열기', () => { pdm.openExternal(f); return null; }]] : []), ['닫기', null, 'pri']]);
+        ...(txt != null && pdm.isElectron ? [['파일 위치 열기', () => { pdm.showInFolder(f).catch(e => toast(e.message, 'bad')); return null; }], ['외부 편집기로 열기', () => { pdm.openExternal(f); return null; }]] : []), ['닫기', null, 'pri']]);
   }
   PDM.showCodeFile = showCodeFile;
 
@@ -438,8 +438,9 @@
           { label: '다른 분류로 옮기기…', run: () => moveDialog(i) }, '-',
           { label: '복제', run: () => { const c = PDM.clone(i); c.id = i.id + '_copy'; c.name += ' 사본'; if (!store.has('item:' + c.id)) store.add('item:' + c.id, c, '아이템 복제'); } },
           { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${i.name}」 을(를) 삭제할까요?`)) store.remove('item:' + i.id, '아이템 삭제'); } }] });
-      const gameNode = g => ({ id: 'g_' + g.p, label: `${g.n}${g.t ? ' · ' + g.t + '티어' : ''}${g.mod2 ? ' ◆' : ''}`, icon: '▫', open: 'spditem:' + g.p,
-        menu: [{ label: '프로젝트 아이템으로 복사해서 고치기', run: () => copyGameItem(g) }, { label: 'id 복사 (spd:' + g.p + ')', run: () => { navigator.clipboard && navigator.clipboard.writeText('spd:' + g.p); toast('spd:' + g.p); } }] });
+      const gameNode = g => ({ id: 'g_' + g.p, label: `${g.n}${g.t ? ' · ' + g.t + '티어' : ''}${g.mod2 ? ' ◆' : ''}${g.added ? ' ＋' : ''}${gameBanned(g.p) ? ' — 등장 금지' : ''}`, icon: gameBanned(g.p) ? '⦸' : '▫', open: 'spditem:' + g.p,
+        menu: [{ label: '프로젝트 아이템으로 복사해서 고치기', run: () => copyGameItem(g) },
+          { label: gameBanned(g.p) ? '다시 나오게 (등장 금지 풀기)' : '게임에 나오지 않게 (삭제 · 등장 금지)', run: () => toggleBan(g.p) }, { label: 'id 복사 (spd:' + g.p + ')', run: () => { navigator.clipboard && navigator.clipboard.writeText('spd:' + g.p); toast('spd:' + g.p); } }] });
       const leaf = (mine, game) => { const l = sortItems(mine); return [...l.map((x, k) => projNode(x, k, l)), ...game.map(gameNode)]; };
       /** 다른 분류로 옮기기 (끌어 놓기 대신 고르기) */
       const moveDialog = async it => {
@@ -500,7 +501,7 @@
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' } }, prev,
           h('div', {}, h('h1', {}, it.name), h('div', { class: 'hint' }, `${it.id} · ${PDM.ITEM_CATEGORIES[it.category] || it.category}${it.tier ? ' · ' + it.tier + '티어' : ''}`),
             h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
-              h('button', { class: 'btn sm', title: '이 아이템으로 만들어지는 게임 클래스 (pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java)', onclick: () => showCodeFile('pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemSource(store.get(key))) }, '코드 파일 보기'),
+              h('button', { class: 'btn sm', title: '이 아이템으로 만들어지는 게임 클래스 (pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java)', onclick: () => showCodeFile('pdmaker/gen/' + PDM.codegen.itemPath(it), PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemSource(store.get(key))) }, '코드 파일 보기'),
               it.kind === 'game' && it.base ? h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + it.base.replace(/\./g, '/') + '.java', '게임 코드 — items.' + it.base) }, '바탕 게임 코드 보기') : null))),
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true })),
@@ -521,6 +522,10 @@
           h('p', { class: 'hint' }, 'PNG 그림은 게임에서 아이템 시트 아래에 붙여 씁니다 (가방·바닥·퀵슬롯 모두). 칸(16px)보다 크면 줄여서 씁니다.' + (PDM.isMod2() ? ' 16px 그림은 mod-2(32px 칸)에서 두 배로 키웁니다.' : '')),
           custom ? F.image(key, ['sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true })
             : h('div', {}, row(F.text(key, ['sprite', 'name'], { label: '그림 이름 (ItemSpriteSheet 상수)', rerender: true, transform: v => v.trim().toUpperCase() }), F.num(key, ['sprite', 'index'], { label: '번호 (이름이 없을 때)', int: true, min: 0, rerender: true, onchange: () => store.edit(key, '그림 번호', o => { delete o.sprite.name; }) })), sheetPicker(key, it))),
+        section('그림 배율', F.num(key, ['groundScale'], { label: '바닥에 놓였을 때 배율 (0 = 기본 1배)', step: 0.1, min: 0, max: 4, hint: '맵 바닥에 떨어져 있는 모습의 크기. 가방·퀵슬롯 칸에서는 항상 칸 크기에 맞춥니다.' })),
+        section('드랍 테이블 (어디서 나오는지)',
+          h('p', { class: 'hint' }, '몬스터가 죽을 때 떨어뜨리거나, 층을 만들 때 바닥에 놓이게 합니다. 여러 줄을 넣으면 줄마다 따로 확률을 굴립니다.'),
+          dropsEditor(key, ['drops'])),
         section('종류와 수치', ...statsSection(key, it)),
         section('소리', ...itemSoundFields(key, it)),
         section('코드 (Java) — 세부 동작', ...codeSection(key, it, ctx)),
@@ -530,6 +535,34 @@
           h('p', { class: 'hint' }, '캐릭터 편집기의 "좋아하는 것/싫어하는 것" 에 이 아이템 id 나 태그를 넣으면 반영됩니다.')));
     }
   });
+  // ---------------- 드랍 테이블 (아이템이 어디서 나오는지) — 런타임 MakerDrops ----------------
+  /** 드랍 줄 편집: { src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond } */
+  function dropsEditor(skey, path) {
+    const { F, row } = PDM.ui;
+    const mobs = () => store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
+    const groups = () => ((store.get('world') || {}).groups || []).filter(g => !g.safe);
+    return PDM.ui.listEditor(skey, path, { addLabel: '드랍 추가', emptyText: '드랍 없음 — 이 아이템은 시작 아이템·맵에 놓기·이벤트·게임 원래 규칙으로만 나옵니다',
+      make: () => ({ src: 'mob', char: (mobs()[0] || [''])[0], chance: 10, min: 1, max: 1, cond: '' }),
+      render: (it, i, p) => h('div', {},
+        row(F.select(skey, [...p, 'src'], { mob: '몬스터가 죽을 때', floor: '층 바닥에 (층을 만들 때)' }, { label: '어디서', rerender: true }),
+          it.src === 'floor' ? null : F.select(skey, [...p, 'char'], mobs(), { label: '몬스터', empty: '(고르기)' }),
+          F.num(skey, [...p, 'chance'], { label: '확률(%)', min: 0, max: 100, step: 0.1, dec: 1 }),
+          F.num(skey, [...p, 'min'], { label: '개수 최소', int: true, min: 1 }), F.num(skey, [...p, 'max'], { label: '최대', int: true, min: 1 })),
+        it.src === 'floor' ? row(F.num(skey, [...p, 'depthMin'], { label: '깊이 최소 (0 = 제한 없음)', int: true, min: 0 }), F.num(skey, [...p, 'depthMax'], { label: '깊이 최대 (0 = 제한 없음)', int: true, min: 0 }),
+          PDM.ui.field('그룹 (안 고르면 전부)', h('div', {}, groups().map(g => h('label', { style: { marginRight: '8px' } },
+            h('input', { type: 'checkbox', checked: (it.groups || []).includes(g.id), onchange: e => store.edit(skey, '드랍 그룹', o => { const d = PDM.deepGet(o, p); const a = new Set(d.groups || []); e.target.checked ? a.add(g.id) : a.delete(g.id); d.groups = [...a]; }) }), ' ' + g.name))))) : null,
+        F.cond(skey, [...p, 'cond'], { label: '조건 (선택)' })) });
+  }
+  /** 이 캐릭터가 떨어뜨리는 아이템 [[탭 키, 이름 확률]] */
+  PDM.dropsFrom = function (charId) {
+    const out = [];
+    store.all('item').forEach(it => (it.drops || []).forEach(d => { if (d.src !== 'floor' && d.char === charId) out.push(['item:' + it.id, `${it.name} ${d.chance}%`]); }));
+    Object.entries((store.get('gameitems') || {}).items || {}).forEach(([k, v]) => (v.drops || []).forEach(d => { if (d.src !== 'floor' && d.char === charId) { const [, g] = findGame(k.slice(4)); out.push(['spditem:' + k.slice(4), `${g ? g.n : k} ${d.chance}%`]); } }));
+    return out;
+  };
+  const gameBanned = p => !!((((store.get('gameitems') || {}).items || {})['spd:' + p] || {}).banned);
+  const toggleBan = p => store.edit('gameitems', '게임 아이템 등장 금지', r => { r.items = r.items || {}; const e = r.items['spd:' + p] = r.items['spd:' + p] || {}; if (e.banned) { delete e.banned; if (!Object.keys(e).length) delete r.items['spd:' + p]; } else e.banned = true; });
+
   /** 게임 아이템 보기 (spditem:<경로>) — 보기 전용, 복사해서 프로젝트 아이템으로 */
   const findGame = p => { for (const [c, l] of Object.entries(PDM.SPD_ITEM_GROUPS || {})) { const g = l.find(x => x.p === p); if (g) return [c, g]; } return [null, null]; };
   PDM.registerEditor({
@@ -563,6 +596,10 @@
             spriteTools('gameitems', ['items', gk, 'sprite'], cur, g.p.split('.').pop().toLowerCase(), { sheet: 'builtin:items', name: g.img }),
             cur && cur.png ? PDM.ui.F.image('gameitems', ['items', gk, 'sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true }) : null);
         })(),
+        PDM.ui.section('등장 · 드랍 테이블',
+          PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'banned'], { label: '게임에 나오지 않게 (등장 금지) — 게임의 무작위 아이템 생성(바닥·상자·전리품·상점 무작위 칸)에서 뺍니다', rerender: true }),
+          h('p', { class: 'hint' }, '등장 금지는 "무작위로 뽑는 곳"에만 적용됩니다. 직업의 시작 아이템, 퀘스트 보상처럼 게임 코드가 정해 놓고 주는 것은 그대로 나옵니다. 아래 드랍은 게임 원래 규칙에 더해집니다.'),
+          dropsEditor('gameitems', ['items', 'spd:' + g.p, 'drops'])),
         PDM.ui.section('코드로 고치기',
           h('p', { class: 'hint' }, '이 게임 아이템을 바탕(상속)으로 한 프로젝트 아이템을 만들고, 그 아이템의 "코드"에서 훅·행동 버튼·추가 멤버(@Override)로 동작을 직접 고칩니다. 게임 효과·강화는 그대로 유지됩니다. 만든 아이템은 시작 아이템·상점·이벤트에서 그 id 로 씁니다.'),
           h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },

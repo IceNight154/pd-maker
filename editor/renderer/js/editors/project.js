@@ -19,10 +19,24 @@ PDM.registerEditor({
         row(F.select(key, ['startHero'], heroes, { label: '시작 영웅', empty: '(직업 선택 화면에서 고름)', hint: '비우면 영웅 편집기의 "바탕 직업"이 맞는 영웅이 적용됩니다' }),
           h('div', { class: 'field' }, h('span', { class: 'fl' }, '시작 맵'), h('div', {}, PDM.refName('node', (PDM.store.get('world') || {}).start), ' ', h('span', { class: 'hint' }, '(맵 그래프에서 노드 오른쪽 클릭 → 시작 노드로)')))),
         F.bool(key, ['heartButton'], { label: '게임 화면에 마음 창 버튼(하트) 표시' })),
+      (() => {
+        const bm = p.bannedMobs || [], gi = Object.entries((PDM.store.get('gameitems') || {}).items || {}).filter(([, v]) => v.banned).map(([k]) => k);
+        const noSp = PDM.store.all('char').filter(c => c.noSpawn);
+        if (!bm.length && !gi.length && !noSp.length) return null;
+        const chip = (t, run, title) => h('button', { class: 'chip', title: title || '눌러서 금지 풀기', onclick: run }, t + ' ✕');
+        return section('등장 금지 목록',
+          h('p', { class: 'hint' }, '게임에 원래 있지만 이 프로젝트에서는 나오지 않게 한 것들입니다. 누르면 다시 나오게 됩니다.'),
+          bm.length ? h('div', { style: { marginBottom: '6px' } }, h('b', {}, '삭제한 원작 몬스터: '), bm.map(n => chip(n, () => PDM.store.edit('project', '등장 금지 풀기', o => { o.bannedMobs = (o.bannedMobs || []).filter(x => x !== n); })))) : null,
+          noSp.length ? h('div', { style: { marginBottom: '6px' } }, h('b', {}, '등장 금지한 몬스터: '), noSp.map(c => chip(c.name, () => PDM.store.edit('char:' + c.id, '등장 금지 풀기', o => { o.noSpawn = false; })))) : null,
+          gi.length ? h('div', {}, h('b', {}, '등장 금지한 게임 아이템: '), gi.map(k => chip(k.slice(4), () => PDM.store.edit('gameitems', '등장 금지 풀기', r => { delete r.items[k].banned; if (!Object.keys(r.items[k]).length) delete r.items[k]; })))) : null);
+      })(),
       section('게임 저장소 연결',
-        F.text(key, ['rpgMakerDir'], { label: 'RPG Maker MZ 설치 폴더 (리소스 가져오기)', hint: '비우면 프로젝트 위쪽 폴더에서 "RPG Maker MZ" 를 찾습니다. newdata 가 들어 있는 폴더' }),
-        F.text(key, ['gameRepo'], { label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon 을 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
+        h('p', { class: 'hint' }, 'PDMaker 는 Shattered Pixel Dungeon 의 소스 코드(게임 저장소) 위에 프로젝트를 얹어 실행합니다. 원작 소스(', h('a', { href: '#', onclick: e => { e.preventDefault(); pdm.openExternal && pdm.openExternal(PDM.SPD_REPO_URL); } }, PDM.SPD_REPO_URL), ')나 원래 작업하던 픽셀 던전 소스 폴더(gradlew 가 있는 맨 위 폴더)를 넣어야 테스트 플레이·게임 내보내기가 됩니다.'),
+        F.text(key, ['gameRepo'], { label: '게임 저장소 경로', hint: '프로젝트 폴더 기준 상대 경로 또는 절대 경로. 비우면 PDMaker 폴더 안의 game/shattered-pixel-dungeon-master 을 씁니다', rerender: true, onchange: () => PDM.assets.clear() }),
         status,
+        (() => { const g = PDM.GAME_SCAN; const part = (n, x) => `${n} ${x.total}개` + (x.added.length ? ` (+${x.added.length})` : '') + (x.removed.length ? ` (−${x.removed.length})` : '');
+          return h('div', { class: 'hint', style: { marginTop: '6px' } }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
+            h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기')); })(),
         (() => {
           const box = h('div', { style: { marginTop: '6px' } });
           if (!pdm.paths || !pdm.repoBundle) return box;
@@ -36,7 +50,7 @@ PDM.registerEditor({
             } else if (valid) {
               box.append(h('p', { class: 'hint' }, 'PDMaker 폴더 밖의 게임 저장소를 쓰고 있습니다. 다른 PC 로 PDMaker 를 옮기면 찾지 못하므로, PDMaker 폴더 안(game/)으로 옮겨 두는 것을 권장합니다.'),
                 h('button', { class: 'btn sm pri', onclick: () => PDM.app.bundleRepo(repo) }, '게임 저장소를 PDMaker 폴더 안으로 옮기기'));
-            } else box.append(h('p', { class: 'hint', style: { color: 'var(--bad)' } }, '게임 저장소가 없습니다. shattered-pixel-dungeon 폴더를 PDMaker 폴더의 game/ 안에 넣거나 위 경로를 지정하세요: ' + P.gameRepoDefault));
+            } else box.append(h('p', { class: 'hint', style: { color: 'var(--bad)' } }, '게임 저장소가 없습니다. shattered-pixel-dungeon-master 폴더를 PDMaker 폴더의 game/ 안에 넣거나 위 경로를 지정하세요: ' + P.gameRepoDefault));
           }).catch(() => { });
           return box;
         })(),

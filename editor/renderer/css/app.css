@@ -240,6 +240,10 @@ table.grid td input, table.grid td select { padding: 3px 5px; }
 /* ---- 픽셀 편집기 ---- */
 .px-wrap { display: flex; gap: 12px; align-items: flex-start; flex-wrap: nowrap; }
 .px-canvas { image-rendering: pixelated; border: 1px solid var(--line); cursor: crosshair; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
+.px-panebox { position: relative; flex: 0 1 auto; min-width: 0; padding: 0 12px 12px 0; }
+.px-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 3px;
+  background: linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 55%, transparent 55% 65%, var(--accent) 65% 75%, transparent 75% 85%, var(--accent) 85%); opacity: .75; }
+.px-grip:hover { opacity: 1; }
 .px-pal { display: grid; grid-template-columns: repeat(8, 20px); gap: 3px; }
 .px-sw { width: 20px; height: 20px; border-radius: 3px; border: 2px solid transparent; cursor: pointer; }
 .px-sw.on { border-color: var(--fg); }

@@ -38,6 +38,8 @@ public class MakerRuntime {
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> items = new LinkedHashMap<>();
+	/** 맵 오브젝트 (props/<id>.json) */
+	public static final Map<String, JsonValue> props = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> events = new LinkedHashMap<>();
 	/** 플레이어블 영웅 (heroes/<id>.json) */
 	public static final Map<String, JsonValue> heroes = new LinkedHashMap<>();
@@ -66,10 +68,13 @@ public class MakerRuntime {
 			gameitems = readOpt(r, "gameitems.json");   // 게임 아이템 그림 바꾸기 { items: { "spd:<경로>": { sprite } } }
 			for (FileHandle f : list("characters")) if (f.extension().equals("json")) { JsonValue v = r.parse(f); chars.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("rooms"))      if (f.extension().equals("json")) { JsonValue v = r.parse(f); rooms.put(v.getString("id", f.nameWithoutExtension()), v); }
+			for (FileHandle f : list("props"))      if (f.extension().equals("json")) { JsonValue v = r.parse(f); props.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("items"))      if (f.extension().equals("json")) { JsonValue v = r.parse(f); items.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("heroes"))     if (f.extension().equals("json")) { JsonValue v = r.parse(f); heroes.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("events"))     if (f.extension().equals("json")) { JsonValue v = r.parse(f); events.put(v.getString("id", f.nameWithoutExtension()), v); }
 			PluginHost.loadAll(root);
+			MakerDrops.load();          // 드랍 테이블 · 등장 금지
+			GenSupport.loadIndex();     // 아이템 클래스 위치 표 (분류/세부 종류 폴더) + 예전 세이브 별칭
 			MakerCatalog.register();   // 아이템 도감에 프로젝트 아이템
 			log("PDMaker 프로젝트 불러옴: " + project.getString("name", "?") + " (" + root.path() + ")"
 					+ " · 맵 노드 " + WorldGraph.ids.size() + " · 영웅 " + heroes.size() + " · 캐릭터 " + chars.size() + " · 아이템 " + items.size() + " · 이벤트 " + events.size());

@@ -1,10 +1,10 @@
 import re, os, json, sys
-# 사용: python tools/data/extract_spd_items.py [기준 저장소(game/shattered-pixel-dungeon)] [mod-2 저장소 — 있으면 mod-2 전용 아이템을 ◆ 로 덧붙임]
+# 사용: python tools/data/extract_spd_items.py [기준 저장소(game/shattered-pixel-dungeon-master)] [mod-2 저장소 — 있으면 mod-2 전용 아이템을 ◆ 로 덧붙임]
 #   이름·설명·그림은 기준 저장소 것 (mod-2 는 주문서를 '보석'으로 바꾸는 등 다름)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from itemsheet import parse
 _GH=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','..','game')   # pd-maker/game
-V=(sys.argv[1] if len(sys.argv)>1 else os.path.join(_GH,'shattered-pixel-dungeon'))+'/core/src/main'; M=(sys.argv[2] if len(sys.argv)>2 else os.path.join(_GH,'shattered-pixel-dungeon-mod-2'))+'/core/src/main'
+V=(sys.argv[1] if len(sys.argv)>1 else os.path.join(_GH,'shattered-pixel-dungeon-master'))+'/core/src/main'; M=(sys.argv[2] if len(sys.argv)>2 else os.path.join(_GH,'shattered-pixel-dungeon-mod-2'))+'/core/src/main'
 HAS_M=os.path.isdir(M)
 J='java/com/shatteredpixel/shatteredpixeldungeon'
 van,_=parse(f'{V}/{J}/sprites/ItemSpriteSheet.java'); mod2,_=parse(f'{M}/{J}/sprites/ItemSpriteSheet.java') if HAS_M else ({},1)
@@ -61,7 +61,7 @@ for which in (['V','M'] if HAS_M else ['V']):
             if which=='M': e['mod2']=True
             out.setdefault(c,[]).append(e)
 for c in out: out[c].sort(key=lambda e:(e['sub'],e.get('t',0),e['n']))
-js=("// 자동 생성 (tools/extract_spd_items.py): 게임 items 폴더의 모든 아이템 — game/shattered-pixel-dungeon 기준 (mod2: mod-2 저장소에만 있는 것)\n"
+js=("// 자동 생성 (tools/extract_spd_items.py): 게임 items 폴더의 모든 아이템 — game/shattered-pixel-dungeon-master 기준 (mod2: mod-2 저장소에만 있는 것)\n"
     "// p: spd: 뒤에 쓰는 경로, sub: 세부 종류, n/d: 한국어 이름·설명, img: ItemSpriteSheet 상수, t: 티어\n"
     "PDM.SPD_ITEM_GROUPS = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
     "// ItemSpriteSheet 상수 → 번호 (원작 16px 시트 / mod-2 32px 시트)\n"

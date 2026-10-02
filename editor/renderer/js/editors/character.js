@@ -149,7 +149,7 @@
     const pvTier = st.pvTier || 0;
     const rowOf = armorRows ? img => { const rows = Math.max(1, Math.floor(img.height / c.sprite.frame[1])); const tr = c.sprite.tierRows; const r = tr && tr.length ? tr[Math.min(pvTier, tr.length - 1)] : pvTier; return Math.max(0, Math.min(rows - 1, r | 0)); } : null;
     const animRows = h('div', {});
-    const create = (ak, def) => { st.anim = ak; store.edit(key, '애니메이션 추가', o => { o.sprite.anims[ak] = def || { frames: [0], fps: 10, loop: ak === 'idle' || ak === 'run' || ak === 'fly' }; }); };
+    const create = (ak, def) => { st.anim = ak; store.edit(key, '애니메이션 추가', o => { o.sprite.anims[ak] = def || { frames: [0], fps: 10, loop: ak === 'idle' || ak === 'run' || ak === 'fly' || ak === 'dead' }; }); };
     keys.forEach(ak => {
       const a = (c.sprite.anims || {})[ak];
       const custom = !BASE.includes(ak);
@@ -171,7 +171,7 @@
         if ((c.sprite.anims || {})[id]) { st.anim = id; ctx.refresh(); return; }
         create(id, { frames: [0], fps: 10, loop: false });
       } }, '+ 새 애니메이션 추가'),
-      h('span', { class: 'hint' }, isHero ? 'fly = 공중부양·점프 중, read = 주문서 읽을 때. 비워 두면 가만히 / 조작 동작을 씁니다.' : 'fly = 날개가 있거나 떠 있는 캐릭터가 가만히·이동할 때.')));
+      h('span', { class: 'hint' }, isHero ? 'fly = 공중부양·점프 중, read = 주문서 읽을 때. 비워 두면 가만히 / 조작 동작을 씁니다. dead = die(쓰러짐)가 끝난 뒤 이어서 반복할 동작 — 비워 두면 die 의 마지막 프레임에서 멈춥니다.' : 'fly = 날개가 있거나 떠 있는 캐릭터가 가만히·이동할 때.')));
 
     // 갑옷 단계 → 시트 행 (영웅)
     const tierBox = armorRows ? (() => {
@@ -197,12 +197,8 @@
 
     return [
 
-          row(F.image(key, ['sprite', 'sheet'], { label: '스프라이트 시트', sub: PDM.assets.folderFor(key), rerender: true, rmCat: 'characters' }), h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), quick),
-            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', title: 'RPG Maker MZ 걷기 시트(3×4)를 잘라서 프레임·애니메이션을 자동으로 맞춥니다', onclick: async () => {
-              const sp = await PDM.rmmz.characterSprite(); if (!sp) return;
-              store.edit(key, 'RPG Maker 캐릭터 시트', o => { o.sprite = Object.assign({}, o.sprite, sp); }); toast('RPG Maker 캐릭터 시트를 적용했습니다');
-            } }, 'RPG Maker 캐릭터 시트…'))),
-          c.sprite.armorRows === false ? h('p', { class: 'hint' }, `RPG Maker 시트 (${(c.sprite.rmmz || {}).file || ''}): 프레임 번호는 시트 전체 기준, 영웅은 갑옷 단계에 따라 줄이 바뀌지 않습니다. 게임 배율 0 = 자동(높이 15px).`) : null,
+          row(F.image(key, ['sprite', 'sheet'], { label: '스프라이트 시트', sub: PDM.assets.folderFor(key), rerender: true }), h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), quick)),
+          c.sprite.armorRows === false ? h('p', { class: 'hint' }, `갑옷 단계 줄을 쓰지 않는 시트: 프레임 번호는 시트 전체 기준, 영웅은 갑옷 단계에 따라 줄이 바뀌지 않습니다. 게임 배율 0 = 자동(높이 15px).`) : null,
           row(F.num(key, ['sprite', 'frame', 0], { label: '프레임 가로(px)', int: true, min: 1, rerender: true }), F.num(key, ['sprite', 'frame', 1], { label: '프레임 세로(px)', int: true, min: 1, rerender: true }),
             F.num(key, ['sprite', 'scale'], { label: '게임 배율 (0=자동)', step: 0.05, min: 0 }),
             h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: async () => {
@@ -213,7 +209,8 @@
                 rel = dest; store.edit(key, '시트 경로', o => { o.sprite.sheet = dest; }, { silent: true });
               }
               const out = await PDM.editPixelsModal('스프라이트 시트 편집 — ' + c.name, rel, c.sprite.frame[0] * 12, c.sprite.frame[1], c.sprite.frame[0], null, { rowStep: c.sprite.frame[1] });
-              if (out) ctx.refresh();
+              if (out && out !== rel) { PDM.assets.invalidate(out); store.edit(key, '시트 경로 (다른 이름으로 저장)', o => { o.sprite.sheet = out; }); }   // 새 파일을 이 캐릭터의 시트로
+              else if (out) ctx.refresh();
             } }, '시트 그리기/편집…'))),
           c.sprite.sheet ? sheetView(key, c, st) : h('div', { class: 'hint' }, '시트를 고르면 프레임 번호가 표시됩니다'),
           tierBox, h('h3', {}, '애니메이션'), animRows];
@@ -228,16 +225,33 @@
     tree() {
       if (!store.isOpen) return [];
       const all = store.all('char');
+      const scan = PDM.GAME_SCAN, missing = c => !!(scan && c.game && scan.missingMob(c.game));
+      // 게임 저장소에만 있는 몬스터 (묶여 있는 목록·프로젝트에 없는 클래스) — 누르면 프로젝트 캐릭터로 추가
+      const fresh = ((scan && scan.newMobs) || []).filter(e => !all.some(c => c.game === e.cls));
+      const addFresh = e => { const c = PDM.make.vanillaChar(Object.assign({}, e, { sprite: PDM.make.character('x', e.kind).sprite })); if (store.has('char:' + c.id)) { PDM.tabs.open('char:' + c.id); return; } c.note = '게임 저장소에서 새로 찾은 캐릭터 (actors.mobs.' + e.cls + ') — 그림·능력치는 게임 원래 것을 씁니다'; store.add('char:' + c.id, c, '게임 캐릭터 추가'); PDM.tabs.open('char:' + c.id); };
       return [{ id: 'char', label: '캐릭터', icon: '☺', order: 20, count: all.length,
         menu: Object.entries(PDM.CHAR_KINDS).map(([k, v]) => ({ label: `새 ${v}…`, run: () => newCharacter(k) })),
         children: Object.entries(PDM.CHAR_KINDS).map(([kind, label]) => {
           const list = all.filter(c => c.kind === kind);
           return { id: 'char_' + kind, label, icon: KIND_ICON[kind], count: list.length,
             menu: [{ label: `새 ${label}…`, run: () => newCharacter(kind) }],
-            children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})`, icon: '', open: 'char:' + c.id,
+            children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})` + (c.noSpawn ? ' — 등장 금지' : '') + (missing(c) ? ' — ⚠ 게임 저장소에 없음' : ''), icon: missing(c) ? '⚠' : c.noSpawn ? '⦸' : '', open: 'char:' + c.id,
               menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, '-',
-                { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); } }] })) };
-        }) }];
+                c.game && ['mob', 'boss'].includes(c.kind) ? { label: c.noSpawn ? '다시 등장하게 (등장 금지 풀기)' : '등장하지 않게 (등장 금지)', run: () => store.edit('char:' + c.id, '등장 금지', o => { o.noSpawn = !o.noSpawn; }) } : null,
+                { label: '삭제', run: async () => {
+                  if (!c.game || !['mob', 'boss'].includes(c.kind)) { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); return; }
+                  // 원작 몬스터: 목록에서 지워도 게임 코드에는 남아 있으므로, 게임에서도 안 나오게 할지 물음
+                  const r = await PDM.ui.modal('원작 캐릭터 삭제', h('div', {}, h('p', {}, `「${c.name}」 은(는) 게임에 원래 있는 몬스터입니다.`),
+                    h('p', { class: 'hint' }, '목록에서만 지우면 게임에서는 계속 나옵니다. "삭제 + 등장 금지"를 고르면 던전에 자동으로 나오지 않게도 합니다 (프로젝트 설정 → 등장 금지 목록에서 되돌릴 수 있음).')),
+                    [['취소', null], ['목록에서만 삭제', () => 'del'], ['삭제 + 등장 금지', () => 'ban', 'pri']]);
+                  if (!r) return;
+                  store.transaction('캐릭터 삭제', () => {
+                    if (r === 'ban') store.edit('project', '등장 금지', p => { p.bannedMobs = [...new Set([...(p.bannedMobs || []), c.game])]; });
+                    store.remove('char:' + c.id, '캐릭터 삭제');
+                  });
+                } }].filter(Boolean) })) };
+        }).concat(fresh.length ? [{ id: 'char_fresh', label: '게임 저장소에서 새로 찾음', icon: '＋', count: fresh.length,
+          children: fresh.map(e => ({ id: 'cf_' + e.cls, label: `${e.name} (${e.cls})`, icon: '＋', run: () => addFresh(e), menu: [{ label: '프로젝트 캐릭터로 추가', run: () => addFresh(e) }] })) }] : []) }];
     },
     render(key, ctx) {
       const c = store.get(key);
@@ -282,7 +296,7 @@
           row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' })),
           F.textarea(key, ['desc'], { label: '설명(도감)', rows: 2 })),
         section('스프라이트 · 애니메이션', ...spriteEditor(key, c, ctx, st)),
-        section('초상화 · 표정 · 대사창 일러스트',
+        !PDM.extensions.on('charPortrait') ? null : section('초상화 · 표정 · 대사창 일러스트',
           h('div', { class: 'dlg-prev-wrap' },
             (() => { const stg = h('div', { class: 'scene-prev dlg-stage dlg-mini', title: '대사창 미리보기 (대사창 편집기 설정)' });
               requestAnimationFrame(() => PDM.Dialogue && PDM.Dialogue.render(stg, PDM.Dialogue.line(c.id, st.pvFace || '', '', `${c.name}의 대사는 이렇게 보여요.`), { static: true }));
@@ -308,8 +322,13 @@
             const fighter = ['mob', 'boss'].includes(c.kind);
             return h('div', {},
               row(fighter ? S('공격할 때', 'attack', '공격이 맞을 때') : null, fighter ? S('다칠 때', 'hurt') : null, fighter ? S('쓰러질 때', 'die') : null, !fighter ? S('말 걸 때', 'talk', '영웅이 말을 걸 때') : null),
-              h('p', { class: 'hint' }, '목소리(대사 글자 소리)는 위의 "초상화 · 표정" 칸에 있습니다. 🎚 로 사운드 편집기에서 편집합니다.'));
+              PDM.extensions.on('charPortrait') ? h('p', { class: 'hint' }, '목소리(대사 글자 소리)는 위의 "초상화 · 표정" 칸에 있습니다. 🎚 로 사운드 편집기에서 편집합니다.') : null);
           })()),
+        ['mob', 'boss'].includes(c.kind) ? section('등장 · 전리품',
+          c.game ? F.bool(key, ['noSpawn'], { label: '던전에 자동으로 나오지 않게 (등장 금지) — 게임이 층마다 뽑는 몬스터 목록에서 뺍니다. 맵에 직접 놓거나 이벤트로 소환한 것은 그대로 나옵니다', rerender: true }) : null,
+          F.bool(key, ['noGameLoot'], { label: '게임 원래 전리품을 떨어뜨리지 않음 (아래 드랍 테이블만 적용)' }),
+          h('h4', { style: { margin: '10px 0 4px' } }, '드랍 테이블'),
+          PDM.charLootEditor(key, c)) : null,
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '체력', min: 1, int: true }), F.num(key, ['stats', 'attackMin'], { label: '공격 최소', int: true }), F.num(key, ['stats', 'attackMax'], { label: '공격 최대', int: true })),
           row(F.num(key, ['stats', 'defense'], { label: '방어', int: true }), F.num(key, ['stats', 'accuracy'], { label: '명중', int: true }), F.num(key, ['stats', 'evasion'], { label: '회피', int: true }), F.num(key, ['stats', 'speed'], { label: '속도', step: 0.1 }))),
@@ -318,17 +337,17 @@
           ['patrol', 'schedule'].includes(c.ai.mode) ? pathPicker(key, c) : null,
           ['patrol', 'schedule'].includes(c.ai.mode) ? listEditor(key, ['ai', 'path'], { addLabel: '점 추가', compact: true, make: () => ({ x: 1, y: 1 }),
             render: (it, i, p) => row(F.num(key, [...p, 'x'], { label: 'x', int: true, rerender: true }), F.num(key, [...p, 'y'], { label: 'y', int: true, rerender: true }), c.ai.mode === 'schedule' ? F.num(key, [...p, 'turn'], { label: '도착 턴(하루=1000)', int: true }) : h('span')) }) : null),
-        section(PDM.T('sys.heart') + ' (era 방식)',
+        !PDM.extensions.on('charHeart') ? null : section(PDM.T('sys.heart') + ' (era 방식)',
           F.bool(key, ['heart', 'enabled'], { label: '이 캐릭터에 마음 시스템 사용' }),
           c.heart.enabled ? h('div', {},
             h('div', { class: 'fl', style: { margin: '6px 0 4px' } }, PDM.T('sys.trait')),
             F.chips(key, ['heart', 'traits'], (sys.traits || []).map(t => [t.key, t.name, `호감 ${t.favorAdd >= 0 ? '+' : ''}${t.favorAdd} / 신뢰 ${t.trustAdd >= 0 ? '+' : ''}${t.trustAdd}`])),
             row(F.list(key, ['heart', 'likes'], { label: '좋아하는 것', hint: '아이템 id 또는 tag:태그 (예: tag:herb)' }), F.list(key, ['heart', 'dislikes'], { label: '싫어하는 것' })),
             row(F.num(key, ['heart', 'initial', 'favor'], { label: '처음 ' + PDM.T('rel.favor'), int: true }), F.num(key, ['heart', 'initial', 'trust'], { label: '처음 ' + PDM.T('rel.trust'), int: true }))) : null),
-        section(PDM.T('sys.dialogue') + ' — 상황(토픽)별 대사',
+        !PDM.extensions.on('charDialogue') ? null : section(PDM.T('sys.dialogue') + ' — 상황(토픽)별 대사',
           h('p', { class: 'hint' }, '조건이 맞는 대사 중 가장 구체적인(조건에 쓴 이름이 많은) 것을 고르고, 같으면 무작위입니다. 맞는 게 없으면 공용 대사를 씁니다.'),
           dlg, h('h3', {}, '대사 테스트'), dialogueTester(c)),
-        section('행동 이벤트 (GameMaker 식)', h('p', { class: 'hint' }, '상황마다 실행할 이벤트 명령. 비워 두면 기본 동작을 합니다.'), behaviors));
+        !PDM.extensions.on('charBehavior') ? null : section('행동 이벤트 (GameMaker 식)', h('p', { class: 'hint' }, '상황마다 실행할 이벤트 명령. 비워 두면 기본 동작을 합니다.'), behaviors));
     }
   });
   PDM.characters = { newCharacter };

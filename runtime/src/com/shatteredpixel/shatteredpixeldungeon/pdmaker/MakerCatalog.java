@@ -59,9 +59,8 @@ public class MakerCatalog {
 			fs.setAccessible(true); fu.setAccessible(true);
 			for (JsonValue it : MakerRuntime.items.values()) {
 				if (!it.getBoolean("catalog", true)) continue;
-				Class<?> c;
-				try { c = Class.forName(GenSupport.GEN + "I_" + GenSupport.safe(it.getString("id", ""))); }
-				catch (ClassNotFoundException e) { continue; }   // 아직 생성 코드가 없음 (테스트 플레이 때 만들어짐)
+				Class<?> c = GenSupport.cls("I_" + GenSupport.safe(it.getString("id", "")));
+				if (c == null) continue;   // 아직 생성 코드가 없음 (테스트 플레이 때 만들어짐)
 				Catalog cat = catalogOf(it);
 				Map<Class<?>, Boolean> seen = (Map<Class<?>, Boolean>) fs.get(cat);
 				Map<Class<?>, Integer> uses = (Map<Class<?>, Integer>) fu.get(cat);

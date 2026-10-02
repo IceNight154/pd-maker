@@ -162,15 +162,70 @@
       const I = W_.info();
       const sortN = ns => ns.slice().sort((a, b) => I.depth[a.id] - I.depth[b.id] || a.y - b.y);
       const rooms = store.all('room');
+      // ---- 방 템플릿: 분류(project.roomCats) · 순서(project.roomOrder) — 끌어 놓기로 옮김
+      const proj = store.get('project') || {};
+      const roomCats = proj.roomCats || [], rOrd = proj.roomOrder || [];
+      const sortedRooms = rooms.map((r, i) => [r, rOrd.indexOf(r.id) < 0 ? 100000 + i : rOrd.indexOf(r.id)]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
+      const roomInto = (id, cat) => store.edit('room:' + id, '방 분류', r => { r.cat = cat; });
+      const placeRoom = (id, targetId, pos) => store.transaction('방 옮기기', () => {
+        const tg = store.get('room:' + targetId); if (!tg || id === targetId) return;
+        store.edit('room:' + id, '방 분류', r => { r.cat = tg.cat || ''; });
+        const ids = sortedRooms.map(r => r.id).filter(x => x !== id); const k = ids.indexOf(targetId);
+        ids.splice(pos === 'before' ? k : k + 1, 0, id);
+        store.edit('project', '방 순서', p => { p.roomOrder = ids; });
+      });
+      const newRoomCat = async () => {
+        const n = (await PDM.ui.prompt('새 분류 이름', '', '예: 보물 방, 함정 방, 이벤트 방') || '').trim(); if (!n) return;
+        if (roomCats.includes(n)) { toast('같은 이름의 분류가 있습니다', 'bad'); return; }
+        store.edit('project', '방 분류 추가', p => { p.roomCats = [...(p.roomCats || []), n]; });
+      };
+      const renameRoomCat = async c => {
+        const n = (await PDM.ui.prompt('분류 이름', c) || '').trim(); if (!n || n === c) return;
+        if (roomCats.includes(n)) { toast('같은 이름의 분류가 있습니다', 'bad'); return; }
+        store.transaction('방 분류 이름', () => {
+          store.edit('project', '방 분류 이름', p => { p.roomCats = (p.roomCats || []).map(x => x === c ? n : x); });
+          rooms.filter(r => r.cat === c).forEach(r => store.edit('room:' + r.id, '방 분류', o => { o.cat = n; }));
+        });
+      };
+      const deleteRoomCat = c => store.transaction('방 분류 삭제', () => {
+        store.edit('project', '방 분류 삭제', p => { p.roomCats = (p.roomCats || []).filter(x => x !== c); });
+        rooms.filter(r => r.cat === c).forEach(r => store.edit('room:' + r.id, '방 분류', o => { o.cat = ''; }));
+      });
+      const moveRoomCat = (c, target, pos) => store.edit('project', '방 분류 순서', p => {
+        const a = (p.roomCats || []).filter(x => x !== c); const k = a.indexOf(target); a.splice(pos === 'before' ? k : k + 1, 0, c); p.roomCats = a;
+      });
+      const roomItem = r => ({ id: 'r_' + r.id, label: `${r.name} (${r.id})`, icon: r.auto ? '⟳' : r.kind === 'special' ? '◈' : '▣', open: 'room:' + r.id,
+        drag: { kind: 'room', id: r.id },
+        canDrop: d => d.kind === 'room' && d.id !== r.id ? ['before', 'after'] : null,
+        drop: (d, pos) => placeRoom(d.id, r.id, pos),
+        actions: [{ label: r.auto ? '☑' : '☐', title: r.auto ? `자동 생성 켜짐 (${r.autoChance ?? 100}%) — 눌러서 끄기` : '자동 생성 꺼짐 — 눌러서 모든 자동 생성 맵에 넣기', run: () => store.edit('room:' + r.id, '자동 생성', o => { o.auto = !o.auto; if (o.autoChance == null) o.autoChance = 100; }) }],
+        menu: [{ label: r.auto ? '자동 생성 끄기' : '자동 생성 켜기', run: () => store.edit('room:' + r.id, '자동 생성', o => { o.auto = !o.auto; if (o.autoChance == null) o.autoChance = 100; }) },
+          ...roomCats.filter(c => c !== r.cat).map(c => ({ label: `분류로 옮기기: ${c}`, run: () => roomInto(r.id, c) })),
+          r.cat ? { label: '분류에서 빼기', run: () => roomInto(r.id, '') } : null,
+          { label: '복제', run: () => { const c = PDM.clone(r); c.id = r.id + '_copy'; c.name += ' 사본'; if (!store.has('room:' + c.id)) store.add('room:' + c.id, c, '방 템플릿 복제'); } },
+          { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${r.name}」 방 템플릿을 삭제할까요?`)) store.remove('room:' + r.id, '방 템플릿 삭제'); } }].filter(Boolean) });
       return [{ id: 'map', label: '맵', icon: '🗺', order: 10, open: 'world',
         children: [
           ...(wd.groups || []).map(g => ({ id: 'grp_' + g.id, label: g.name, icon: g.safe ? '⌂' : '▣', count: (wd.nodes || []).filter(n => n.group === g.id).length,
             children: sortN((wd.nodes || []).filter(n => n.group === g.id)).map(nodeItem) })),
           ...sortN((wd.nodes || []).filter(n => !n.group || !W_.group(n.group))).map(nodeItem),
-          { id: 'rooms', label: '방 템플릿', icon: '▣', count: rooms.length, menu: [{ label: '새 방 템플릿…', run: PDM.mapUtil.newRoom }],
-            children: rooms.map(r => ({ id: 'r_' + r.id, label: `${r.name} (${r.id})`, icon: r.kind === 'special' ? '◈' : '▣', open: 'room:' + r.id,
-              menu: [{ label: '복제', run: () => { const c = PDM.clone(r); c.id = r.id + '_copy'; c.name += ' 사본'; if (!store.has('room:' + c.id)) store.add('room:' + c.id, c, '방 템플릿 복제'); } },
-                { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${r.name}」 방 템플릿을 삭제할까요?`)) store.remove('room:' + r.id, '방 템플릿 삭제'); } }] })) }] }];
+          { id: 'rooms', label: '방 템플릿', icon: '▣', count: rooms.length + (PDM.SPD_ROOMS || []).length,
+            menu: [{ label: '새 방 템플릿…', run: PDM.mapUtil.newRoom }, { label: '새 분류…', run: newRoomCat }, { label: '방 미리보기 (모아 보기)…', run: PDM.mapUtil.showRoomGallery }],
+            actions: [{ label: '＋', title: '새 분류', run: newRoomCat }, { label: '▦', title: '방 미리보기 (모아 보기)', run: PDM.mapUtil.showRoomGallery }],
+            canDrop: d => d.kind === 'room' ? ['into'] : null, drop: d => roomInto(d.id, ''),
+            children: [
+              // 분류 (project.roomCats) — 방을 끌어다 놓으면 그 분류로
+              ...roomCats.map(c => ({ id: 'rcat_' + c, label: c, icon: '▤', count: sortedRooms.filter(r => r.cat === c).length,
+                drag: { kind: 'rcat', cat: c },
+                canDrop: d => d.kind === 'room' ? ['into'] : d.kind === 'rcat' && d.cat !== c ? ['before', 'after'] : null,
+                drop: (d, pos) => d.kind === 'room' ? roomInto(d.id, c) : moveRoomCat(d.cat, c, pos),
+                menu: [{ label: '이름 바꾸기…', run: () => renameRoomCat(c) }, { label: '분류 삭제 (방은 남김)', run: () => deleteRoomCat(c) }],
+                children: sortedRooms.filter(r => r.cat === c).map(roomItem) })),
+              ...sortedRooms.filter(r => !r.cat || !roomCats.includes(r.cat)).map(roomItem),
+              // 게임 기본 방 (levels/rooms 전체) — 누르면 정보 창
+              { id: 'grooms', label: '게임 기본 방', icon: '▤', count: (PDM.SPD_ROOMS || []).length,
+                children: PDM.mapUtil.gameRoomGroups().map(g => ({ id: 'grc_' + g.cat, label: g.name, icon: '▤', count: g.rooms.length,
+                  children: g.rooms.map(r => ({ id: 'gr_' + r.id, label: r.added ? `${r.cls} ＋` : `${r.name} (${r.cls})`, icon: r.noUse ? '▫' : '▪', run: () => PDM.mapUtil.showGameRoom(r) })) })) }] }] }];
     },
     onActivate() { setTimeout(() => PDM.worldInspect && PDM.worldInspect(), 0); },
     render(key, ctx) {
@@ -555,6 +610,7 @@
             row(h('div', { class: 'field' }, h('span', { class: 'fl' }, '색'), (() => { const c = h('input', { type: 'color', value: g.color || '#5fd6b4' }); c.addEventListener('change', () => PDM.ui.commit('world', [...p, 'color'], c.value, '그룹 색')); return c; })()),
               F.bool('world', [...p, 'safe'], { label: '던전 밖 (마을 등: 층 번호 대신 이름, 데일리 이벤트 없음)' })),
             groupMusic(g, p),
+            section('구성 블럭 (이 그룹의 자동 생성 노드 전체)', h('div', { class: 'hint' }, '블럭을 쌓아 층의 구성을 정합니다. 노드에 따로 블럭을 쌓으면 그 노드는 자기 것을 씁니다.'), PDM.mapUtil.blockListEditor('world', [...p, 'blocks'])),
             section('이 그룹의 자동 생성 노드마다 추가할 방', PDM.mapUtil.roomListEditor('world', [...p, 'rooms'])),
             F.textarea('world', [...p, 'note'], { label: '메모', rows: 2 }),
             h('p', { class: 'hint' }, `노드 ${wd.nodes.filter(n => n.group === g.id).length}개. 제목을 끌면 그룹째 움직입니다.`)));
@@ -611,13 +667,21 @@
                       try { await pdm.copy(PDM.assets.resolvePath('game:' + PDM.THEMES[it.base || 'SEWER'].tiles), store.abs(rel)); } catch (err) { toast('기본 타일셋 복사 실패: ' + err.message, 'bad'); return; }
                       store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], rel); });
                     }
-                    if (await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16)) { PDM.assets.clear(); PDM.tabs.refresh(); }
+                    const out = await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16);
+                    if (out && out !== rel) store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], out); });   // 다른 이름으로 저장
+                    if (out) { PDM.assets.clear(); PDM.tabs.refresh(); }
                   } }, '타일셋 편집…'))))
             })),
           section('방 템플릿',
             h('p', { class: 'hint' }, '자동 생성 노드에 끼워 넣을 직접 그린 방. 그룹이나 노드 속성의 "추가 방"에서 고릅니다.'),
             ...store.all('room').map(r => h('div', {}, h('a', { href: '#', onclick: ev => { ev.preventDefault(); PDM.tabs.open('room:' + r.id); } }, `▣ ${r.name}`), h('span', { class: 'hint' }, `  ${r.size.w}×${r.size.h} · 쓰는 곳 ${PDM.mapUtil.roomUsage(r.id).length}`))),
-            h('button', { class: 'btn sm add', onclick: PDM.mapUtil.newRoom }, '+ 방 템플릿 만들기'))));
+            h('button', { class: 'btn sm add', onclick: PDM.mapUtil.newRoom }, '+ 방 템플릿 만들기'),
+            h('button', { class: 'btn sm', style: { marginLeft: '6px' }, onclick: PDM.mapUtil.showRoomGallery }, '▦ 방 미리보기'),
+            h('p', { class: 'hint', style: { marginTop: '10px' } }, `게임 기본 방 ${(PDM.SPD_ROOMS || []).length}개 — ▪ 는 "추가 방"으로 쓸 수 있고, ▫ 는 전용 층·자동 배치라 볼 수만 있습니다. 누르면 설명과 코드 파일.`),
+            ...PDM.mapUtil.gameRoomGroups().map(g => h('details', {}, h('summary', {}, `▤ ${g.name} (${g.rooms.length})`),
+              h('div', { style: { padding: '2px 0 6px 14px' } }, g.rooms.map(r => h('div', {},
+                h('a', { href: '#', title: r.desc || '', onclick: ev => { ev.preventDefault(); PDM.mapUtil.showGameRoom(r); } }, `${r.noUse ? '▫' : '▪'} ${r.name}`),
+                h('span', { class: 'hint' }, `  ${r.cls}${r.noUse ? '' : ' · 쓰는 곳 ' + PDM.mapUtil.roomUsage('game:' + r.id).length}`)))))))));
       }
       PDM.worldInspect = inspect;
 

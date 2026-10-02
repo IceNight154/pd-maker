@@ -106,6 +106,8 @@ public class MakerLevel extends Level {
 					m.pos = i == 0 ? cell : LevelHooks.freeNeighbour(this, cell);
 					if (m.pos >= 0) mobs.add(m);
 				}
+			} else if (type.equals("prop")) {
+				MakerProp.place(this, ref, cell);
 			} else if (type.equals("event")) {
 				eventCells.put(cell, ref);
 			}
@@ -125,7 +127,7 @@ public class MakerLevel extends Level {
 			Item it = MakerItem.create(o.getString("ref", ""));
 			if (it == null) continue;
 			it.quantity(Math.max(1, o.getInt("count", 1)));
-			drop(it, at.getInt("x") + at.getInt("y") * width());
+			drop(it, at.getInt("x") + at.getInt("y") * width()).type = MakerDrops.heapType(o.getString("container", ""));
 		}
 	}
 

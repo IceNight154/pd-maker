@@ -4,8 +4,8 @@
 #   actors/mobs · actors/mobs/npcs 의 몬스터·NPC·보스: 이름·설명(한국어), 능력치(HP·명중·회피·피해·방어·경험치), 스프라이트(시트·프레임 크기·애니메이션)
 #   새 프로젝트를 만들 때 이것으로 원작과 같은 캐릭터·영웅을 채웁니다 (editor/renderer/js/store.js createNew)
 import re, os, json, sys
-_GH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'game')   # pd-maker/game — 기준 저장소: game/shattered-pixel-dungeon
-V = (sys.argv[1] if len(sys.argv) > 1 else os.path.join(_GH, 'shattered-pixel-dungeon')) + '/core/src/main'
+_GH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'game')   # pd-maker/game — 기준 저장소: game/shattered-pixel-dungeon-master
+V = (sys.argv[1] if len(sys.argv) > 1 else os.path.join(_GH, 'shattered-pixel-dungeon-master')) + '/core/src/main'
 J = V + '/java/com/shatteredpixel/shatteredpixeldungeon'
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'editor', 'renderer', 'js', 'spd-chars.js')
 

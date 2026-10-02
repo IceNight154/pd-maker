@@ -34,6 +34,21 @@ public class MakerItem extends Item {
 		stackable = true;
 	}
 
+	/** 바닥에 놓인 아이템 그림의 배율 (아이템 groundScale, 0·1 = 그대로). ItemSprite.link(Heap) 연결 줄 — 그림은 재활용되므로 매번 다시 정함 */
+	public static void heapScale(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite spr, com.shatteredpixel.shatteredpixeldungeon.items.Heap heap) {
+		try {
+			float sc = 1f;
+			if (MakerRuntime.isActive() && heap != null && heap.items != null && heap.size() > 0
+					&& (heap.type == com.shatteredpixel.shatteredpixeldungeon.items.Heap.Type.HEAP || heap.type == com.shatteredpixel.shatteredpixeldungeon.items.Heap.Type.FOR_SALE)) {
+				Item it = heap.peek();
+				String id = it instanceof GenSupport.Coded ? ((GenSupport.Coded) it).makerId() : it instanceof MakerItem ? ((MakerItem) it).makerId : null;
+				JsonValue d = id == null ? null : MakerRuntime.item(id);
+				if (d != null && d.getFloat("groundScale", 0f) > 0f) sc = d.getFloat("groundScale", 1f);
+			}
+			spr.scale.set(sc);
+		} catch (Throwable ignored) { }
+	}
+
 	/** 프로젝트 아이템 id → MakerItem,  'spd:ClassName' → 게임 기본 아이템 */
 	public static Item create(String id) {
 		if (id == null || id.isEmpty()) return null;

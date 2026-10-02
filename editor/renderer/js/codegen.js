@@ -79,10 +79,30 @@
     const lines = String(code || '').replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map(l => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
     return lines.length > 0 && /^return\b/.test(lines[lines.length - 1]);
   }
-  function header(extraImports, what) {
+  // ---- 아이템 클래스가 놓이는 폴더 = 분류/세부 종류 (pdmaker/gen/items/<분류>/<세부 종류>/I_<id>.java)
+  const JAVA_WORDS = new Set('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null'.split(' '));
+  /** 분류·세부 종류 이름 → 자바 패키지 이름 조각 (영문 소문자·숫자·_). 한글처럼 못 쓰는 글자뿐이면 'c' + 글자 코드 */
+  function pkgSeg(v) {
+    const raw = String(v == null ? '' : v).trim(); if (!raw) return '';
+    let out = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    if (!out) out = 'c' + Array.from(raw).map(ch => ch.codePointAt(0).toString(36)).join('').slice(0, 24);
+    if (/^[0-9]/.test(out) || JAVA_WORDS.has(out)) out = '_' + out;
+    return out;
+  }
+  const itemSub = i => i.subtype !== undefined && i.subtype !== null ? i.subtype
+    : i.kind === 'melee' ? 'melee' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
+  /** ['items', 분류, 세부 종류] */
+  const itemDirs = it => ['items', pkgSeg(it.category || 'misc') || 'misc', pkgSeg(itemSub(it))].filter(Boolean);
+  /** gen 폴더 기준 파일 경로: items/weapon/melee/I_sword.java */
+  const itemPath = it => [...itemDirs(it), itemClass(it.id) + '.java'].join('/');
+  /** gen 패키지 뒤에 붙는 부분: .items.weapon.melee */
+  const itemPkg = it => '.' + itemDirs(it).join('.');
+
+  function header(extraImports, what, sub) {
+    if (sub) extraImports = `${PKG}.pdmaker.gen.*\n` + (extraImports || '');
     const imps = [...IMPORTS, ...String(extraImports || '').split(/[\n;]+/).map(x => x.trim().replace(/^import\s+/, '')).filter(Boolean)];
     return `// 자동 생성 파일 — PDMaker 가 ${what} 데이터로 만듭니다. 직접 고치지 말고 에디터에서 고치세요.\n` +
-      `package ${PKG}.pdmaker.gen;\n\n` + [...new Set(imps)].map(i => `import ${i};`).join('\n') + '\n\n';
+      `package ${PKG}.pdmaker.gen${sub || ''};\n\n` + [...new Set(imps)].map(i => `import ${i};`).join('\n') + '\n\n';
   }
 
   // ---------------------------------------------------------------- 영웅의 전직·직업 능력·특성·패시브 코드
@@ -182,7 +202,7 @@
     const name = itemClass(it.id);
     const w = it.weapon || {}, a = it.armor || {};
     const hk = key => { const h = ITEM_HOOKS.find(x => x.key === key); return h && h.kinds.includes(kind) && has(code[key]) ? h : null; };
-    let s = header(code.imports, `아이템 「${it.name || it.id}」`);
+    let s = header(code.imports, `아이템 「${it.name || it.id}」`, itemPkg(it));
     s += `@SuppressWarnings("unused")\npublic class ${name} extends ${KIND_BASE[kind]} implements GenSupport.Coded {\n\n`;
     s += `\tpublic static final String ID = ${lit(it.id)};\n\t@Override public String makerId() { return ID; }\n\n`;
     if (kind === 'armor') s += `\tpublic ${name}() { super(${num(a.tier, 1) | 0}); }\n\n`;
@@ -257,7 +277,7 @@
     const base = String(it.base || 'Item').replace(/^items\./, '').replace(/^spd:/, '');
     const kind = gameBaseKind(base);
     const hk = key => { const h = ITEM_HOOKS.find(x => x.key === key); return h && h.kinds.includes(kind) && has(code[key]) ? h : null; };
-    let s = header(code.imports, `아이템 「${it.name || it.id}」 (게임 ${base} 상속)`);
+    let s = header(code.imports, `아이템 「${it.name || it.id}」 (게임 ${base} 상속)`, itemPkg(it));
     s += `@SuppressWarnings("unused")\npublic class ${name} extends com.shatteredpixel.shatteredpixeldungeon.items.${base} implements GenSupport.Coded {\n\n`;
     s += `\tpublic static final String ID = ${lit(it.id)};\n\t@Override public String makerId() { return ID; }\n\n`;
     s += `\t{\n\t\timage = GenSupport.image(ID, image);\n\t}\n\n`;
@@ -299,7 +319,11 @@
   function generate(heroes, items) {
     const out = {};
     (heroes || []).forEach(h => { if (h && h.id && heroNeedsClass(h)) out[heroClass(h.id) + '.java'] = heroSource(h); });
-    (items || []).forEach(it => { if (it && it.id && itemNeedsClass(it)) out[itemClass(it.id) + '.java'] = itemSource(it); });
+    const index = [];
+    (items || []).forEach(it => { if (it && it.id && itemNeedsClass(it)) { out[itemPath(it)] = itemSource(it); index.push([itemClass(it.id), itemPkg(it).slice(1) + '.' + itemClass(it.id)]); } });
+    // 클래스 찾기 표: 런타임(GenSupport)이 아이템 id 로 클래스를 찾을 때 씀 (분류를 옮기면 패키지가 바뀌므로)
+    out['GenIndex.java'] = `// 자동 생성 파일 — PDMaker 가 만듭니다. 아이템 클래스가 어느 폴더(분류/세부 종류)에 있는지.\npackage ${PKG}.pdmaker.gen;\n\npublic class GenIndex {\n\tpublic static final String[][] ITEMS = {\n`
+      + index.map(([a, b]) => `\t\t{ ${lit(a)}, ${lit(b)} },\n`).join('') + '\t};\n}\n';
     return out;
   }
 
@@ -341,5 +365,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
 });

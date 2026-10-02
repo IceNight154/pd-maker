@@ -180,6 +180,137 @@ public class Hooks {
 				}
 				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
 				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
+				case "roomtest": { // roomtest,<id 목록 파일> — 게임 기본 방을 하나씩 "추가 방"으로 넣어 층을 만들어 봄
+					com.badlogic.gdx.utils.JsonValue f = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.here();
+					if (f.get("procedural") == null) f.addChild("procedural", new com.badlogic.gdx.utils.JsonValue(com.badlogic.gdx.utils.JsonValue.ValueType.object));
+					int ok = 0, bad = 0;
+					for (String id : new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(p[1])), "UTF-8").split("\n")) {
+						id = id.trim(); if (id.isEmpty()) continue;
+						f.get("procedural").remove("rooms");
+						f.get("procedural").addChild("rooms", new com.badlogic.gdx.utils.JsonReader().parse("[{\"room\":\"game:" + id + "\",\"count\":1,\"chance\":100,\"cond\":\"\"}]"));
+						for (int tries = 0; tries < 30; tries++) try {
+							com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getClass().getDeclaredConstructor().newInstance();
+							l.create();
+							boolean found = false; String cn = id.substring(id.lastIndexOf('.') + 1);
+							for (com.shatteredpixel.shatteredpixeldungeon.levels.rooms.Room r : ((com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) l).rooms()) if (r.getClass().getSimpleName().equals(cn)) found = true;
+							if (found) ok++; else { bad++; System.out.println("[TEST] room MISSING " + id); }
+							break;
+						} catch (Throwable t) {
+							if (tries < 29 && t.getStackTrace().length > 1 && t.getStackTrace()[1].getClassName().endsWith("GameScene")) continue;   // 화면 갱신(함정) — 테스트에서만 생김
+							bad++; System.out.println("[TEST] room FAIL " + id + " " + t); t.printStackTrace(System.out); break; }
+					}
+					System.out.println("[TEST] roomtest ok=" + ok + " bad=" + bad + " level=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getClass().getSimpleName());
+					break; }
+				case "roomdump": { // roomdump,<쓸 수 있는 방 id 목록 파일>,<출력 파일> — 게임 기본 방을 실제로 만들어 지형을 뽑음 (편집기 미리보기용, 게임 화면 밖에서 실행)
+					final String PK = "com.shatteredpixel.shatteredpixeldungeon.levels.";
+					String[][] LV = { { "SewerLevel", "SEWER", "2" }, { "PrisonLevel", "PRISON", "7" }, { "CavesLevel", "CAVES", "12" }, { "CityLevel", "CITY", "17" }, { "HallsLevel", "HALLS", "22" }, { "SewerBossLevel", "SEWER", "5" } };
+					java.util.Map<String, java.util.List<String>> got = new java.util.LinkedHashMap<>();
+					java.util.Map<String, java.util.Set<String>> sizes = new java.util.HashMap<>();
+					com.badlogic.gdx.utils.JsonValue f = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.here();
+					if (f.get("procedural") == null) f.addChild("procedural", new com.badlogic.gdx.utils.JsonValue(com.badlogic.gdx.utils.JsonValue.ValueType.object));
+					java.util.List<String> ids = new java.util.ArrayList<>();
+					for (String id : new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(p[1])), "UTF-8").split("\n")) if (!id.trim().isEmpty()) ids.add(id.trim());
+					int depth0 = com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth, fails = 0;
+					// pass 0: 자연 생성 (지역마다 40번) · pass 1: 아직 표본이 모자란 방을 지역을 돌려 가며 강제로 추가
+					for (int pass = 0; pass < 2; pass++) {
+						int rounds = pass == 0 ? LV.length * 40 : ids.size() * 5;
+						for (int n = 0; n < rounds; n++) {
+							String[] lv = pass == 0 ? LV[n / 40] : LV[n % 5];
+							f.get("procedural").remove("rooms");
+							if (pass == 1) {
+								String id = ids.get(n / 5);
+								if (got.containsKey(id) && got.get(id).size() >= 3) continue;
+								if (n % 5 == 0) { System.out.println("[TEST] force " + id); java.nio.file.Files.write(java.nio.file.Paths.get(p[2] + ".now"), id.getBytes("UTF-8")); }
+								f.get("procedural").addChild("rooms", new com.badlogic.gdx.utils.JsonReader().parse("[{\"room\":\"game:" + id + "\",\"count\":1,\"chance\":100,\"cond\":\"\"}]"));
+							}
+							try {
+								com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth = pass == 0 ? Integer.parseInt(lv[2]) : depth0;   // 강제 추가는 지금 노드의 "추가 방"으로 (깊이를 바꾸면 다른 노드가 됨)
+								com.shatteredpixel.shatteredpixeldungeon.levels.Level l = (com.shatteredpixel.shatteredpixeldungeon.levels.Level) Class.forName(PK + lv[0]).getDeclaredConstructor().newInstance();
+								l.create();
+								for (com.shatteredpixel.shatteredpixeldungeon.levels.rooms.Room r : ((com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) l).rooms()) {
+									String id = r.getClass().getName(); if (!id.startsWith(PK + "rooms.") || id.contains("$")) continue;
+									id = id.substring((PK + "rooms.").length());
+									java.util.List<String> g = got.computeIfAbsent(id, k -> new java.util.ArrayList<>());
+									String sz = r.width() + "x" + r.height() + lv[1];
+									if (g.size() >= 3 || !sizes.computeIfAbsent(id, k -> new java.util.HashSet<>()).add(g.size() < 1 ? "first" : sz)) continue;
+									sizes.get(id).add(sz);
+									StringBuilder sb = new StringBuilder("{\"id\":\"" + id + "\",\"theme\":\"" + lv[1] + "\",\"w\":" + r.width() + ",\"h\":" + r.height() + ",\"t\":[");
+									for (int y = r.top; y <= r.bottom; y++) for (int x = r.left; x <= r.right; x++) sb.append(y == r.top && x == r.left ? "" : ",").append(l.map[x + y * l.width()]);
+									sb.append("],\"o\":[");
+									boolean first = true;
+									for (com.shatteredpixel.shatteredpixeldungeon.items.Heap hp : l.heaps.valueList()) { int x = hp.pos % l.width(), y = hp.pos / l.width(); if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { sb.append(first ? "" : ",").append("[\"item\",").append(x - r.left).append(",").append(y - r.top).append("]"); first = false; } }
+									for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : l.mobs) { int x = m.pos % l.width(), y = m.pos / l.width(); if (!(m instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.NPC) && pass == 0) continue; if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { sb.append(first ? "" : ",").append("[\"" + (m instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.NPC ? "npc" : "mob") + "\",").append(x - r.left).append(",").append(y - r.top).append("]"); first = false; } }
+									g.add(sb.append("]}").toString());
+									java.nio.file.Files.write(java.nio.file.Paths.get(p[2]), (g.get(g.size() - 1) + "\n").getBytes("UTF-8"), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+								}
+							} catch (Throwable t) { if (fails++ < 8) { System.out.println("[TEST] roomdump fail " + lv[0] + " " + t); t.printStackTrace(System.out); } }
+						}
+					}
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth = depth0; f.get("procedural").remove("rooms");
+					StringBuilder out = new StringBuilder(); int cnt = 0;
+					for (java.util.List<String> g : got.values()) for (String s : g) { out.append(s).append("\n"); cnt++; }
+					System.out.println("[TEST] roomdump rooms=" + got.size() + " samples=" + cnt + " fails=" + fails);
+					break; }
+				case "blocktest": { // blocktest,<파일: 줄마다 구성 블럭 JSON 배열> — 그 구성으로 층을 5번씩 만들어 방 종류를 셈 (게임 화면 밖에서)
+					com.badlogic.gdx.utils.JsonValue f = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.here();
+					if (f.get("procedural") == null) f.addChild("procedural", new com.badlogic.gdx.utils.JsonValue(com.badlogic.gdx.utils.JsonValue.ValueType.object));
+					for (String line : new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(p[1])), "UTF-8").split("\n")) {
+						if (line.trim().isEmpty()) continue;
+						f.get("procedural").remove("blocks");
+						f.get("procedural").addChild("blocks", new com.badlogic.gdx.utils.JsonReader().parse(line));
+						for (int n = 0; n < 5; n++) try {
+							com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel l = (com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.getClass().getDeclaredConstructor().newInstance();
+							l.create();
+							int std = 0, spc = 0, sec = 0, con = 0, oth = 0; StringBuilder names = new StringBuilder();
+							for (com.shatteredpixel.shatteredpixeldungeon.levels.rooms.Room r : l.rooms()) {
+								if (r instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.secret.SecretRoom) sec++;
+								else if (r instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.SpecialRoom) { spc++; names.append(r.getClass().getSimpleName()).append(' '); }
+								else if (r instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.connection.ConnectionRoom) con++;
+								else if (r.getClass().getSimpleName().startsWith("Template")) { int ch = 0; for (int y = r.top; y <= r.bottom; y++) for (int x = r.left; x <= r.right; x++) if (l.map[x + y * l.width()] == 0) ch++; names.append("TPL(" + r.width() + "x" + r.height() + ",chasm=" + ch + ") "); }
+								else if (r instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom) std += ((com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom) r).sizeFactor();
+								else oth++;
+							}
+							java.lang.reflect.Field bf = com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel.class.getDeclaredField("builder"); bf.setAccessible(true);
+							System.out.println("[TEST] blocks " + bf.get(l).getClass().getSimpleName() + " feeling=" + l.feeling + " std(칸)=" + std + " special=" + spc + " secret=" + sec + " tunnel=" + con + " other=" + oth + " " + l.width() + "x" + l.height() + " | " + names);
+						} catch (Throwable t) { System.out.println("[TEST] blocks FAIL " + t); t.printStackTrace(System.out); }
+					}
+					f.get("procedural").remove("blocks");
+					System.out.println("[TEST] blocktest done");
+					break; }
+				case "killhero": { com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.HP = 0; com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.die(null); break; }
+				case "heroanim": { java.lang.reflect.Field f = com.watabou.noosa.MovieClip.class.getDeclaredField("curAnim"); f.setAccessible(true); com.watabou.noosa.MovieClip.Animation an = (com.watabou.noosa.MovieClip.Animation) f.get(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite);
+					System.out.println("[TEST] heroanim listener=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.listener.getClass().getName() + " active=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.active + " alive=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.alive + " paused=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.paused + " parent=" + (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.parent != null) + " frames=" + an.frames.length + " looped=" + an.looped + " alive=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.isAlive()); break; }
+				case "proptest": { // proptest,<propId> — 영웅 오른쪽 칸에 맵 오브젝트를 놓고, 그 칸을 눌러 봄 (밀기·상호작용)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; int hp = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos;
+					int c = -1; for (int d : new int[]{1, -1, l.width(), -l.width()}) if (l.passable[hp + d] && l.passable[hp + 2 * d] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(hp + d) == null && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(hp + 2 * d) == null) { c = hp + d; break; }
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp pr = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp.place(l, p[1], c);
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(pr, false); com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.updateMap(c);
+					System.out.println("[TEST] prop placed " + p[1] + " at " + c + " hero " + hp + " terrain " + l.map[c] + " passable " + l.passable[c]);
+					break; }
+				case "propinfo": { com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : l.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp m = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp) t; int c = t.tileX + t.tileY * l.width();
+						System.out.println("[TEST] prop " + m.propId + " cell " + c + " state " + m.state + " terrain " + l.map[c] + " passable " + l.passable[c] + " under " + m.under + " hero " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos); }
+					break; }
+				case "tapcell": { // tapcell,<칸> 또는 tapcell,prop — 맵 칸을 누른 것처럼 (영웅 행동)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; int c = -1;
+					if (p[1].equals("prop")) { for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : l.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerProp) c = t.tileX + t.tileY * l.width(); } else c = Integer.parseInt(p[1]);
+					if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.handle(c)) com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.next();
+					break; }
+				case "droptest": { // 드랍 테이블 · 등장 금지 확인
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					StringBuilder rot = new StringBuilder(); for (Class<?> c : com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner.getMobRotation(1)) rot.append(c.getSimpleName()).append(' ');
+					System.out.println("[TEST] rotation d1: " + rot);
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; int pots = 0;
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Heap hp : l.heaps.valueList()) for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : hp.items) if (it instanceof com.shatteredpixel.shatteredpixeldungeon.items.potions.PotionOfHealing) pots++;
+					System.out.println("[TEST] healing potions on floor: " + pots);
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Heap hp : l.heaps.valueList()) if (hp.type != com.shatteredpixel.shatteredpixeldungeon.items.Heap.Type.HEAP) System.out.println("[TEST] container " + hp.type + ": " + hp.items);
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob g = (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob) Class.forName(P + "actors.mobs.Gnoll").getDeclaredConstructor().newInstance();
+					g.pos = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + 1; g.rollToDropLoot();
+					com.shatteredpixel.shatteredpixeldungeon.items.Heap hh = l.heaps.get(g.pos);
+					System.out.println("[TEST] gnoll drop: " + (hh == null ? "none" : hh.items.toString()));
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category cat : com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category.values()) if (cat.classes != null) for (int i = 0; i < cat.classes.length; i++) if (cat.classes[i].getSimpleName().equals("Dagger")) System.out.println("[TEST] Dagger prob in " + cat + " = " + cat.probs[i] + " / default " + (cat.defaultProbs == null ? "-" : "" + cat.defaultProbs[i]));
+					break; }
+				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;
 				case "nointro": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro(false); break;
 				case "lastse": System.out.println("[TEST] lastse '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'"); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = ""; break;
 				case "sfx": // 게임 효과음 설정이 실제로 어떤 파일로 풀리는지

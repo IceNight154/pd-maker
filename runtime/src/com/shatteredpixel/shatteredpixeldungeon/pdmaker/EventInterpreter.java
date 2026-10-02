@@ -280,6 +280,7 @@ public class EventInterpreter {
 			}
 			case "comment": return true;
 			// ---------------- 데이터
+			case "global": MakerDrops.setGlobal(c.getString("key", ""), c.getBoolean("value", true)); return true;
 			case "switch": StoryState.setSw(c.getString("id", ""), c.getBoolean("value", false)); return true;
 			case "var": {
 				String id = c.getString("id", ""); int v = StoryState.var(id), x = c.getInt("value", 0);

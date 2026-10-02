@@ -19,7 +19,7 @@
     "productName": "PDMaker",
     "directories": { "output": "dist" },
     "files": ["main.js", "preload.js", "runtime-installer.js", "zip.js", "renderer/**/*", "builtin-plugins/**/*"],
-    "extraResources": [{ "from": "../sample-project", "to": "sample-project" }, { "from": "../runtime", "to": "runtime" }, { "from": "../DESIGN.md", "to": "DESIGN.md" }],
+    "extraResources": [{ "from": "../runtime", "to": "runtime" }, { "from": "../DESIGN.md", "to": "DESIGN.md" }],
     "win": { "target": "portable" }
   }
 }

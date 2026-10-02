@@ -1,7 +1,7 @@
 // ================================================================
 //  그림 관리 — 프로젝트 assets 폴더의 모든 그림을 폴더별로 보고 고칩니다.
 //   · 표준 폴더: sprites/heroes · sprites/characters/{npc,companion,monster,boss} · sprites/items · sprites/effects
-//                portraits/<캐릭터> · illustrations · tiles · title · ui · game(게임 그림 바꾸기) · rmmz
+//                portraits/<캐릭터> · illustrations · tiles · title · ui · game(게임 그림 바꾸기)
 //   · 그림마다: 크기 · 쓰는 곳 · 편집(픽셀 편집기) · 바꾸기 · 이동/이름 바꾸기(참조 자동 수정) · 삭제(안 쓰는 것만)
 //   · 게임 그림 바꾸기: 게임의 sprites/interfaces/effects/environment/splashes 그림을
 //       assets/game/<같은 경로> 로 복사해서 고치면 게임과 에디터 모두 그 그림을 씀 (원래대로 = 삭제)
@@ -24,8 +24,7 @@
     ['illustrations', '일러스트 · 이벤트 그림', '🎞'],
     ['tiles', '타일셋', '▦'],
     ['title', '타이틀 화면', '🏰'],
-    ['ui', 'UI', '▭'],
-    ['rmmz', 'RPG Maker 에서 가져온 그림', 'RM']
+    ['ui', 'UI', '▭']
   ];
   const GAME_DIRS = [['sprites', '캐릭터·아이템 스프라이트'], ['interfaces', '화면·아이콘·타이틀'], ['effects', '효과'], ['environment', '타일·지형'], ['splashes', '직업 선택 그림']];
   const folderLabel = d => { const f = FOLDERS.find(x => x[0] === d); return f ? f[1] : d; };
