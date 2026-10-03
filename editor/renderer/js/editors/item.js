@@ -58,7 +58,7 @@
         h('div', { class: 'spd-list' }, game.map(x => h('code', { title: 'spd:' + x.p, class: x.mod2 ? 'mod2' : '' }, x.p.split('.').pop())))) : null);
   }
 
-  /** 아이템 소리 (프로젝트 아이템: sound · throwSound · pickupSound · equipSound / 게임 아이템: sounds.json 의 gameItems) */
+  /** 아이템 소리 (프로젝트 아이템: sound · throwSound · landSound · pickupSound · equipSound / 게임 아이템: sounds.json 의 gameItems) */
   const EQUIP_KINDS = ['melee', 'armor', 'ring', 'artifact', 'codex', 'grimoire', 'wand'];
   function itemSoundFields(key, it, game) {
     const { F, row } = PDM.ui;
@@ -67,12 +67,14 @@
     const o = (label, f, empty, hint) => F.sound(K, P(f), { label, kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty, hint, rerender: true });
     const kind = game ? '' : (it.kind || 'misc');
     const codex = kind === 'codex' || kind === 'grimoire';
+    const weapon = ['melee', 'missile', 'ranged', 'weapon'].includes(kind);
     const fields = [
-      codex ? null : o(game ? '사용할 때 (행동 버튼)' : '쓸 때', 'use', game ? '(게임 소리만: 먹기 eat · 마시기 drink · 읽기 read · 마법봉 zap)' : kind === 'misc' ? '(기본: 분류에 맞는 소리)' : '(없음)', game ? '먹기·마시기·읽기·휘두르기 등 행동 버튼을 누를 때 — 게임 원래 소리에 더해 납니다' : null),
+      codex ? null : o(game ? '사용할 때 (행동 버튼 · 무기는 공격이 맞을 때)' : weapon ? '쓸 때 (공격이 맞을 때)' : '쓸 때', 'use', game ? '(게임 소리만: 먹기 eat · 마시기 drink · 읽기 read · 마법봉 zap)' : kind === 'misc' ? '(기본: 분류에 맞는 소리)' : '(없음)', game ? '먹기·마시기·읽기 등 행동 버튼을 누를 때 — 게임 원래 소리에 더해 납니다. 무기는 행동 버튼이 없으므로 이 무기로 한 공격이 맞을 때 납니다 (게임의 타격음 대신)' : weapon ? '이 무기로 한 공격이 맞을 때 — 게임의 타격음 대신 납니다' : null),
       o('던질 때', 'throw', game ? '(게임 소리만: miss — Assets.Sounds.MISS)' : '(게임 소리: miss — Assets.Sounds.MISS)'),
+      o('떨어졌을 때 · 맞혔을 때', 'land', '(게임 소리만)', '던진 아이템이 바닥에 떨어지거나 적에게 맞는 순간. 던지는 무기는 이 소리가 타격음을 대신합니다'),
       o('주울 때', 'pickup', '(게임 소리: item — Assets.Sounds.ITEM)', '고르면 게임의 줍는 소리 대신 이 소리'),
       game || EQUIP_KINDS.includes(kind) ? o('장착 · 해제할 때', 'equip', '(게임: 소리 없음 · 저주받은 장비면 cursed)') : null].filter(Boolean);
-    return [row(...fields.slice(0, 2)), row(...fields.slice(2)),
+    return [row(...fields.slice(0, 3)), row(...fields.slice(3)),
       codex ? h('p', { class: 'hint' }, '쓸 때·맞을 때·빗나갈 때 소리는 위의 코덱스 설정에 있습니다.') : null,
       h('p', { class: 'hint' }, '🎚 을 누르면 사운드 편집기에서 그 소리를 편집합니다 (게임 소리는 프로젝트로 복사해서 편집). "(소리 없음)"을 고르면 조용해집니다.')];
   }

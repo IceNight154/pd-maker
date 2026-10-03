@@ -267,7 +267,7 @@ PDM.pixelEditor = function (o) {
     if (SEL_TOOLS.includes(tool)) {
       if (e.button !== 0) { deselect(); return; }
       e.preventDefault();
-      const mode = e.ctrlKey || e.metaKey ? 'add' : e.altKey ? 'sub' : 'new';   // Ctrl = 선택에 더하기 · Alt = 선택에서 빼기
+      const mode = e.shiftKey ? 'add' : e.altKey ? 'sub' : 'new';   // Shift = 선택에 더하기 · Alt = 선택에서 빼기
       const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y));
       if (mode === 'new' && tool !== 'wand' && (floating ? x >= sel.x && y >= sel.y && x < sel.x + sel.w && y < sel.y + sel.h : inSel(x, y))) {   // 선택 안쪽을 끌면 그 그림을 옮김 (처음이면 들어 올림)
         if (!floating) { snap(); floating = { cv: regionCanvas(sel), x: sel.x, y: sel.y }; clearRegion(sel); sel = { x: sel.x, y: sel.y, w: sel.w, h: sel.h }; }
@@ -347,7 +347,7 @@ PDM.pixelEditor = function (o) {
       toolBtn('select', '⬚ 사각 선택', 'M'), toolBtn('lasso', '➰ 올가미', 'L — 끌어서 그린 모양 안쪽을 선택'), toolBtn('wand', '✦ 마법봉', 'W — 누른 칸과 이어진 같은 색을 선택')),
     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, brushLbl, brushIn,
       h('button', { class: 'btn xs', title: '[', onclick: e => { e.preventDefault(); setBrush(brush - 1); } }, '[ 작게'), h('button', { class: 'btn xs', title: ']', onclick: e => { e.preventDefault(); setBrush(brush + 1); } }, '크게 ]')),
-    h('small', { class: 'hint' }, '선택 도구: Ctrl+조작 = 선택에 더하기 · Alt+조작 = 선택에서 빼기. Ctrl+Z 되돌리기 · Ctrl+Shift+Z 다시 실행 · Space+끌기 = 이동 · Z+끌기 = 확대(바깥으로)/축소(안쪽으로)'),
+    h('small', { class: 'hint' }, '선택 도구: Shift+조작 = 선택에 더하기 · Alt+조작 = 선택에서 빼기. Ctrl+Z 되돌리기 · Ctrl+Shift+Z 다시 실행 · Space+끌기 = 이동 · Z+끌기 = 확대(바깥으로)/축소(안쪽으로)'),
     h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' } },
       h('button', { class: 'btn xs', title: 'Ctrl+C — 선택한 영역 복사 (선택이 없으면 그림 전체)', onclick: e => { e.preventDefault(); copySel(false); } }, '복사'),
       h('button', { class: 'btn xs', title: 'Ctrl+X', onclick: e => { e.preventDefault(); copySel(true); } }, '잘라내기'),
@@ -458,7 +458,10 @@ PDM.editPixelsModal = async function (title, relPath, w, h_, gridStep, saveAsPat
     pv = PDM.levelPreview.panel({ theme: tp.theme, tiles: () => tp.kind === 'tiles' ? ed.dataCanvas : other, water: () => tp.kind === 'tiles' ? other : ed.dataCanvas });
     body = PDM.h('div', { class: 'px-preview', style: { display: 'flex', gap: '12px', alignItems: 'flex-start' } }, ed, pv.el);
   }
-  const ok = await PDM.ui.modal(title, body, [['취소', false], ['저장', () => true, 'pri']]);
+  // 노드 합성기(확장 기능)가 켜져 있으면: 이 그림을 노드 합성기로 보내기 (저장하면 이 파일이 바뀜)
+  const canCompose = PDM.compose && PDM.compose.fromImage && PDM.extensions && PDM.extensions.on('compose') && src;
+  const ok = await PDM.ui.modal(title, body, [['취소', false], ...(canCompose ? [['🧩 노드 합성기에서 편집', 'compose']] : []), ['저장', () => true, 'pri']]);
+  if (ok === 'compose') { await PDM.compose.fromImage(relPath, asPath || saveAsPath || (inProject ? relPath : ''), W, H); return null; }
   if (!ok) return null;
   const data = result || ed.toDataURL();
   let out = asPath || saveAsPath || relPath;

@@ -19,7 +19,8 @@
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
     g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
     if (!tiles) return;
-    const cell = (v, x, y) => { if (v >= 0) g.drawImage(tiles, (v % 16) * 16, Math.floor(v / 16) * 16, 16, 16, x * s, y * s, s, s); };
+    const tc = Math.max(1, Math.round(tiles.width / 16));   // 타일셋 한 칸 px
+    const cell = (v, x, y) => { if (v >= 0) g.drawImage(tiles, (v % 16) * tc, Math.floor(v / 16) * tc, tc, tc, x * s, y * s, s, s); };
     for (let i = 0; i < lv.map.length; i++) {
       const x = i % lv.w, y = (i / lv.w) | 0;
       if (lv.map[i] === WATER_T) {

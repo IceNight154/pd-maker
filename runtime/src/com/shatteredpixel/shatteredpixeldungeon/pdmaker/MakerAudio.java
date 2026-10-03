@@ -199,7 +199,7 @@ public class MakerAudio {
 	}
 
 	// ------------------------------------------------------------ 아이템 · 캐릭터마다 정한 소리
-	//   프로젝트 아이템 : 아이템 데이터의 sound(사용) · throwSound · pickupSound · equipSound
+	//   프로젝트 아이템 : 아이템 데이터의 sound(사용 · 무기는 공격이 맞을 때) · throwSound · landSound(던진 것이 닿을 때) · pickupSound · equipSound
 	//   게임 아이템     : audio/sounds.json 의 gameItems["spd:<경로>"] = { use, throw, pickup, equip }
 	//   캐릭터         : 캐릭터 데이터의 sounds = { attack, hurt, die, talk }
 	//   값: "" = 게임 원래 소리만 · "none" = 소리 없음(줍기는 원래 소리도 끔) · 그 밖 = 참조
@@ -241,6 +241,32 @@ public class MakerAudio {
 			String r = itemSound(it, key);
 			if (!r.isEmpty() && !r.equals("none")) playSe(r);
 		} catch (Throwable t) { MakerRuntime.log("아이템 소리 실패: " + t); }
+	}
+	// 던진 아이템이 닿을 때 (Item.cast 의 onThrow 직전) — key "land": 떨어졌을 때 · 맞혔을 때
+	static com.shatteredpixel.shatteredpixeldungeon.items.Item landed;   // 방금 떨어지는 소리를 낸 아이템 (던진 무기의 타격음을 한 번 건너뜀)
+	public static void onItemLandHit(com.shatteredpixel.shatteredpixeldungeon.items.Item it, int cell) { land(it); }
+	public static void onItemLandGround(com.shatteredpixel.shatteredpixeldungeon.items.Item it, int cell) { land(it); }
+	static void land(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {
+		landed = null;
+		if (!MakerRuntime.isActive() || it == null) return;
+		try {
+			String r = itemSound(it, "land");
+			if (r.isEmpty()) return;
+			landed = it;
+			if (!r.equals("none")) playSe(r);
+		} catch (Throwable t) { MakerRuntime.log("아이템 소리 실패: " + t); }
+	}
+	/** KindOfWeapon.hitSound 맨 앞 — 무기로 공격이 맞을 때. true 면 게임의 타격음을 내지 않음.
+	 *  던진 무기에 "떨어졌을 때" 소리가 있으면 그것이 이미 났으므로 조용히, 아니면 "사용할 때" 소리를 타격음 대신 */
+	public static boolean onWeaponHit(com.shatteredpixel.shatteredpixeldungeon.items.Item w) {
+		if (!MakerRuntime.isActive() || w == null) return false;
+		try {
+			if (landed == w) { landed = null; return true; }
+			String r = itemSound(w, "use");
+			if (r.isEmpty()) return false;
+			if (!r.equals("none")) playSe(r);
+			return true;
+		} catch (Throwable t) { return false; }
 	}
 	/** Item.doPickUp 의 줍는 소리 대신 — true 면 원래 소리를 내지 않음 */
 	public static boolean onItemPickup(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {

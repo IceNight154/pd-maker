@@ -13,6 +13,8 @@ PDM.validate = function () {
     if (kind === 'event') return s.has('event:' + id);
     if (kind === 'prop') return s.has('prop:' + id);
     if (kind === 'effect') return ((s.get('effects') || {}).list || []).some(x => x.id === id);
+    if (kind === 'trailer') return ((s.get('trailers') || {}).list || []).some(x => x.id === id);
+    if (kind === 'filter') return ((s.get('filters') || {}).list || []).some(x => x.id === id);
     if (kind === 'switch') return (story.switches || []).some(x => x.id === id);
     if (kind === 'var') return (story.variables || []).some(x => x.id === id);
     if (kind === 'route') return (story.routes || []).some(x => x.id === id);
@@ -72,8 +74,8 @@ PDM.validate = function () {
       const t = (f.layers || {}).terrain || [];
       if (t.length !== f.size.w * f.size.h) add('error', where, '타일 수가 크기와 맞지 않습니다', k);
       const incoming = (wd.edges || []).some(e => e.to === n.id) || n.id === wd.start;
-      if (incoming && !t.includes(7) && !t.includes(37)) add('error', where, '들어오는 연결이 있는데 입구 계단(<)이 없습니다', k);
-      const exits = t.filter(v => v === 8 || v === 21 || v === 22).length;
+      if (incoming && !t.includes(7) && !t.includes(37) && !(f.objects || []).some(o => o.type === 'entrance')) add('error', where, '들어오는 연결이 있는데 입구 계단(<)이 없습니다', k);
+      const exits = t.filter(v => v === 8 || v === 21 || v === 22).length + (f.objects || []).filter(o => o.type === 'exit').length;
       if (outs.length && !exits) add('warn', where, '나가는 연결이 있는데 출구 계단(>)이 없습니다', k);
       const P_ = W_.ports(n.id), unused = P_.exits.filter(x => !x.what).length;
       if (unused) add('warn', where, `출구 계단 ${unused}개가 어느 연결에도 쓰이지 않습니다 (통로 연결을 더 만들거나 타일을 지우세요)`, k);
@@ -91,7 +93,7 @@ PDM.validate = function () {
       add('warn', where, '시작 노드에서 닿지 않습니다 (이벤트 "맵 이동"으로만 갈 수 있음)', 'world');
     (f.objects || []).forEach((o, i) => {
       const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
-      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', prop: 'prop', effect: 'effect' }[o.type];
+      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect' }[o.type];
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);

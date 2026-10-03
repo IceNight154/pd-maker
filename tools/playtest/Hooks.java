@@ -173,7 +173,10 @@ public class Hooks {
 					try { it = (com.shatteredpixel.shatteredpixeldungeon.items.Item) Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p[1]).getDeclaredConstructor().newInstance(); }
 					catch (Exception e) { it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); }
 					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = "";
-					if (p[2].equals("PICKUP")) System.out.println("[TEST] pickup replaced=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemPickup(it));
+					if (p[2].equals("HIT")) { ((com.shatteredpixel.shatteredpixeldungeon.items.KindOfWeapon) it).hitSound(1f); }
+					else if (p[2].equals("LAND")) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemLandGround(it, 0); }
+					else if (p[2].equals("LANDHIT")) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemLandHit(it, 0); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe += "+"; ((com.shatteredpixel.shatteredpixeldungeon.items.KindOfWeapon) it).hitSound(1f); }
+					else 					if (p[2].equals("PICKUP")) System.out.println("[TEST] pickup replaced=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemPickup(it));
 					else com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemAction(it, p[2]);
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
@@ -324,6 +327,8 @@ public class Hooks {
 					System.out.println(sb.append(" npcs=").append(n)); break; }
 				case "killmob": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs.toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob[0])) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) { m.die(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break; } break; }
 				case "pickgold": new com.shatteredpixel.shatteredpixeldungeon.items.food.Food().doPickUp(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break;
+				case "winsize": { // winsize,<가로>,<세로> — 창 크기 바꾸기 (세로 화면 = 모바일 흉내)
+					com.badlogic.gdx.Gdx.graphics.setWindowedMode(Integer.parseInt(p[1]), Integer.parseInt(p[2])); break; }
 				case "godepth": { // godepth,<깊이> — 원작 던전의 그 깊이로
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.RETURN;
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnDepth = Integer.parseInt(p[1]);

@@ -33,7 +33,7 @@ public class MakerRuntime {
 	private static boolean loaded = false;
 	private static FileHandle root = null;
 
-	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects;
+	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects, filters, trailers;
 	/** 방 템플릿 (rooms/<id>.json) */
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
@@ -66,6 +66,8 @@ public class MakerRuntime {
 			title    = readOpt(r, "title.json");
 			dialogue = readOpt(r, "dialogue.json");
 			MakerTexts.load(readOpt(r, "texts.json"));   // 게임 글자 바꾸기
+			trailers = readOpt(r, "trailers.json");   // 예고편 컷신 (MakerTrailer)
+			filters = readOpt(r, "filters.json");   // 화면 필터 (MakerFilter)
 			effects = readOpt(r, "effects.json");   // 이펙트 · 파티클 (MakerEffect)
 			textfx = readOpt(r, "textfx.json");   // 글자 연출 (MakerTextFx)
 			gameitems = readOpt(r, "gameitems.json");   // 게임 아이템 그림 바꾸기 { items: { "spd:<경로>": { sprite } } }
@@ -243,6 +245,7 @@ public class MakerRuntime {
 		} catch (Throwable t) { log("몬스터 스폰 끄기 실패: " + t); }
 		HeroRuntime.onFloorEnter();
 		HeartUI.attach();
+		MakerFilter.attach();
 		HeartSystem.onFloorEnter(depth, safe);
 		EventTriggers.onFloorEnter(id);
 	}

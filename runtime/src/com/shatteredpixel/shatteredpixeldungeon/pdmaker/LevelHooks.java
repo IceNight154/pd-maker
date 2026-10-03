@@ -324,7 +324,7 @@ public class LevelHooks {
 			if (!MakerRuntime.isActive() || Dungeon.level == null || dst == h.pos || dst < 0 || dst >= Dungeon.level.length()) return false;
 			MakerProp p = MakerProp.at(Dungeon.level, dst);
 			if (p == null || !p.solid() || !Dungeon.level.adjacent(h.pos, dst)) return false;
-			if (!p.interact(h)) return false;
+			if (!p.interact(h, dst)) return false;
 			h.curAction = null;
 			if (h.sprite != null) h.sprite.turnTo(h.pos, dst);
 			h.spendAndNext(1f);
@@ -351,6 +351,22 @@ public class LevelHooks {
 
 	/** 사용자 타일셋 PNG 를 TextureCache 에 문자열 키로 등록하고 그 키를 돌려줌 (실패하면 null → 바탕 테마) */
 	@SuppressWarnings("unchecked")
+	/** 큰(또는 작은) 타일셋: 타일셋 PNG 의 가로가 256 이 아니면 한 칸 = 가로 ÷ 16 px 로 읽음 (화면에서는 그대로 한 칸 16) — DungeonTilemap 생성자 연결 줄 */
+	public static void hiresTiles(com.watabou.noosa.Tilemap tm, Object tex) {
+		try {
+			if (!(tex instanceof String) || !((String) tex).startsWith("pdmaker:tiles:")) return;
+			SmartTexture t = TextureCache.get(tex);
+			int cell = t.width / 16;
+			if (cell == 16 || cell < 1 || t.width % 16 != 0) return;
+			Field f = com.watabou.noosa.Tilemap.class.getDeclaredField("tileset");
+			f.setAccessible(true);
+			f.set(tm, new com.watabou.noosa.TextureFilm(tex, cell, cell));
+		} catch (Throwable e) { MakerRuntime.log("큰 타일셋 적용 실패: " + e); }
+	}
+	/** 타일 한 칸짜리 그림(발견 연출 · 정보 창)을 한 칸 크기로 맞춤 */
+	public static void tileImg(com.watabou.noosa.Image img) {
+		try { if (img != null && img.width > 0 && img.width != 16) img.scale.set(16f / img.width); } catch (Throwable ignored) { }
+	}
 	public static String customTiles(String id) {
 		JsonValue c = customTheme(id);
 		if (c == null || c.getString("tiles", "").isEmpty()) return null;

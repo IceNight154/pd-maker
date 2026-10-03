@@ -287,6 +287,7 @@ abstract public class KindOfWeapon extends EquipableItem {
 	}
 
 	public void hitSound( float pitch ){
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onWeaponHit(this)) return; // >>> pdmaker
 		Sample.INSTANCE.play(hitSound, 1, pitch * hitSoundPitch);
 	}
 	

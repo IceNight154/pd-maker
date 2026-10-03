@@ -1,6 +1,8 @@
 /*
  * 맵 오브젝트 (props/<id>.json) — 맵 위에 놓는 물건: 상자·바위·레버·문짝 같은 것.
- *   · 그림: sprite { sheet, frame:[w,h], scale(0 = 한 칸에 맞춤) } — 칸 아래 가운데에 맞춰 그림
+ *   · 그림(표시): sprite { sheet, frame:[w,h], scale(0 = 설치 칸에 맞춤 · 1 = 그림 크기 그대로: 16px 이 한 칸), ox, oy(px 옮김), over(윗부분이 캐릭터를 가림) }
+ *       — 설치 칸의 아래 가운데에 맞춰 그림. 그림이 설치 칸보다 크면 위로(옆으로) 솟음 (예: 가로등 = 설치 1칸, 표시 1×2칸)
+ *   · 설치 칸: foot [가로, 세로] (기본 1×1) — 놓은 칸이 왼쪽 아래. 막힌 상태면 이 칸들이 모두 막힘 (밀 수 있음이면 통째로 한 칸씩 밀림)
  *   · 상태 여러 개: states[i] { name, frame 또는 frames+fps, solid(막힘), switch(이 상태일 때 켜지는 스위치) }
  *   · 밀기: pushable — 영웅이 옆에서 누르면 반대쪽으로 한 칸 밀림 (막혀 있으면 안 밀림)
  *       goal { terrain, switch, event } — 그 지형 위로 밀어 올리면 스위치 켜짐 · 이벤트
@@ -52,7 +54,13 @@ public class MakerProp extends CustomTilemap {
 		Image img; int[] frames = {0}; float delay = 0, timer = 0; int cur = 0; TextureFilm film;
 		Vis(Object tx, int fw, int fh) { super(tx, new TextureFilm(tx, fw, fh)); film = new TextureFilm(tx, fw, fh); img = new Image(tx); }
 		void show(int[] fr, int fps) { frames = fr == null || fr.length == 0 ? new int[]{0} : fr; delay = frames.length > 1 && fps > 0 ? 1f / fps : 0; cur = 0; timer = 0; frame(); }
-		void frame() { try { img.frame(film.get(frames[cur])); } catch (Exception ignored) { } }
+		/** part: 0 = 전체 · 1 = 아랫부분만 · 2 = 윗부분만.  cut = 위에서부터 잘리는 자리 (0~1) */
+		int part = 0; float cut = 0;
+		void frame() { try {
+			com.watabou.utils.RectF r = film.get(frames[cur]);
+			if (part != 0 && r != null) { float m = r.top + (r.bottom - r.top) * cut; r = part == 2 ? new com.watabou.utils.RectF(r.left, r.top, r.right, m) : new com.watabou.utils.RectF(r.left, m, r.right, r.bottom); }
+			img.frame(r);
+		} catch (Exception ignored) { } }
 		@Override public void update() {
 			super.update();
 			if (delay > 0 && (timer += Game.elapsed) >= delay) { timer -= delay; cur = (cur + 1) % frames.length; frame(); }
@@ -73,23 +81,34 @@ public class MakerProp extends CustomTilemap {
 		refresh();
 		return vis;
 	}
+	int[] foot() { JsonValue d = def(), f = d == null ? null : d.get("foot"); return new int[]{ f != null && f.size >= 2 ? Math.max(1, f.getInt(0)) : 1, f != null && f.size >= 2 ? Math.max(1, f.getInt(1)) : 1 }; }
+	boolean over() { JsonValue d = def(), sp = d == null ? null : d.get("sprite"); return sp != null && sp.getBoolean("over", false); }
 	/** 지금 상태·위치대로 그림 맞추기 */
 	void refresh() {
-		if (!(vis instanceof Vis)) return;
-		Vis v = (Vis) vis;
+		if (vis instanceof Vis) layout((Vis) vis, over() ? 1 : 0);
+		MakerPropTop t = MakerPropTop.of(Dungeon.level, this);
+		if (t != null) t.sync(this);
+	}
+	/** part: 0 전체 · 1 설치 칸 높이까지의 아랫부분 · 2 그 위로 솟은 윗부분 */
+	void layout(Vis v, int part) {
 		JsonValue d = def(), s = st(), sp = d == null ? null : d.get("sprite");
 		int[] fr = null; int fps = 0;
 		if (s != null) {
 			if (s.get("frames") != null && s.get("frames").size > 0) { fr = s.get("frames").asIntArray(); fps = s.getInt("fps", 6); }
 			else fr = new int[]{ s.getInt("frame", 0) };
 		}
-		v.show(fr, fps);
+		int[] ft = foot();
+		v.part = 0; v.show(fr, fps);
 		float fw = v.img.width, fh = v.img.height;
 		float sc = sp == null ? 0 : sp.getFloat("scale", 0f);
-		if (sc <= 0) sc = Math.min(1f, Math.min(SIZE / fw, SIZE / fh));
+		if (sc <= 0) sc = Math.min(1f, Math.min(ft[0] * SIZE / fw, ft[1] * SIZE / fh));
+		float left = tileX * SIZE + (ft[0] * SIZE - fw * sc) / 2f + (sp == null ? 0 : sp.getFloat("ox", 0)), top = tileY * SIZE + SIZE - fh * sc + (sp == null ? 0 : sp.getFloat("oy", 0));
+		float topPx = Math.max(0, fh * sc - ft[1] * SIZE);   // 설치 칸 위로 솟은 높이 (화면 px)
+		v.cut = fh * sc <= 0 ? 0 : topPx / (fh * sc);
+		v.part = part; v.frame();
 		v.img.scale.set(sc);
-		v.img.x = tileX * SIZE + (SIZE - fw * sc) / 2f;
-		v.img.y = tileY * SIZE + SIZE - fh * sc;
+		v.img.x = left; v.img.y = part == 1 ? top + topPx : top;
+		v.img.visible = !(part == 2 && topPx <= 0);
 		v.x = tileX * SIZE; v.y = tileY * SIZE;
 	}
 
@@ -101,9 +120,21 @@ public class MakerProp extends CustomTilemap {
 	public static MakerProp at(Level l, int cell) {
 		if (l == null || cell < 0) return null;
 		int x = cell % l.width(), y = cell / l.width();
-		for (CustomTilemap t : l.customTiles) if (t instanceof MakerProp && t.tileX == x && t.tileY == y) return (MakerProp) t;
+		for (CustomTilemap t : l.customTiles) if (t instanceof MakerProp) {
+			MakerProp p = (MakerProp) t; int[] f = p.foot();
+			if (x >= p.tileX && x < p.tileX + f[0] && y <= p.tileY && y > p.tileY - f[1]) return p;
+		}
 		return null;
 	}
+	/** 설치 칸들 (놓은 칸이 왼쪽 아래) — 층 밖으로 나가는 칸은 뺌 */
+	java.util.List<Integer> cells(Level l) {
+		java.util.List<Integer> r = new java.util.ArrayList<>(); int[] f = foot();
+		for (int j = 0; j < f[1]; j++) for (int i = 0; i < f[0]; i++) { int x = tileX + i, y = tileY - j; if (x >= 0 && y >= 0 && x < l.width() && y < l.height()) r.add(x + y * l.width()); }
+		return r;
+	}
+	/** 설치 칸마다 놓이기 전의 지형 (첫 칸은 under) */
+	public int[] unders = null;
+
 	/** 층을 만들 때 놓기 */
 	public static MakerProp place(Level l, String id, int cell) {
 		JsonValue d = MakerRuntime.props.get(id);
@@ -113,16 +144,25 @@ public class MakerProp extends CustomTilemap {
 		p.propId = id; p.state = d.getInt("start", 0);
 		p.pos(cell, l);
 		p.under = l.map[cell];
+		java.util.List<Integer> cs = p.cells(l);
+		for (int c : cs) if (c != cell && at(l, c) != null) return null;   // 다른 오브젝트와 겹침
+		p.unders = new int[cs.size()];
+		for (int i = 0; i < cs.size(); i++) p.unders[i] = l.map[cs.get(i)];
 		l.customTiles.add(p);
+		if (p.over()) { MakerPropTop t = new MakerPropTop(); t.propId = id; t.pos(cell, l); l.customWalls.add(t); }
 		p.applyTerrain(l, false);
 		p.applySwitch(-1);
 		return p;
 	}
 	/** 상태에 맞게 칸의 지형 바꾸기 (막힘 = CUSTOM_DECO, 아니면 원래 지형) */
 	void applyTerrain(Level l, boolean live) {
-		int c = cell(l);
-		Level.set(c, solid() ? Terrain.CUSTOM_DECO : under, l);
-		if (live && l == Dungeon.level) { GameScene.updateMap(c); Dungeon.observe(); }
+		java.util.List<Integer> cs = cells(l);
+		for (int i = 0; i < cs.size(); i++) {
+			int c = cs.get(i), u = i == 0 || unders == null || i >= unders.length ? under : unders[i];
+			Level.set(c, solid() ? Terrain.CUSTOM_DECO : u, l);
+			if (live && l == Dungeon.level) GameScene.updateMap(c);
+		}
+		if (live && l == Dungeon.level) Dungeon.observe();
 	}
 	/** 상태마다 정한 스위치: 지금 상태 것은 켜고, 앞 상태 것은 끔 */
 	void applySwitch(int prev) {
@@ -149,22 +189,34 @@ public class MakerProp extends CustomTilemap {
 	// ------------------------------------------------------------ 영웅이 건드릴 때
 
 	/** 영웅이 옆에서 눌렀을 때 (Hero.actMove 연결 줄 → LevelHooks.propInteract). true = 한 턴 씀 */
-	boolean interact(Hero h) {
+	boolean interact(Hero h, int dst) {
 		JsonValue d = def(); if (d == null) return false;
 		Level l = Dungeon.level;
 		int c = cell(l);
 		if (!Cond.eval(d.getString("cond", ""), StoryState.globalResolver())) return false;
 		if (d.getBoolean("pushable", false)) {
-			int dx = c % l.width() - h.pos % l.width(), dy = c / l.width() - h.pos / l.width();
-			int tx = tileX + dx, ty = tileY + dy, t = tx + ty * l.width();
-			boolean ok = tx >= 0 && ty >= 0 && tx < l.width() && ty < l.height() && l.passable[t] && !l.solid[t]
-					&& Actor.findChar(t) == null && at(l, t) == null && l.heaps.get(t) == null;
+			// 누른 칸 쪽으로 한 칸: 설치 칸 전체가 옮겨 갈 자리가 모두 비어 있어야 함 (제 칸과 겹치는 자리는 괜찮음)
+			int dx = Integer.signum(dst % l.width() - h.pos % l.width()), dy = Integer.signum(dst / l.width() - h.pos / l.width());
+			java.util.List<Integer> old = cells(l);
+			boolean ok = dx != 0 || dy != 0;
+			for (int oc : old) {
+				int nx = oc % l.width() + dx, ny = oc / l.width() + dy, t = nx + ny * l.width();
+				if (nx < 0 || ny < 0 || nx >= l.width() || ny >= l.height()) { ok = false; break; }
+				if (old.contains(t)) continue;
+				if (!l.passable[t] || l.solid[t] || Actor.findChar(t) != null || at(l, t) != null || l.heaps.get(t) != null) { ok = false; break; }
+			}
 			if (!ok) { GLog.i(MakerRuntime.term("prop.stuck", "꿈쩍도 하지 않는다.")); return true; }
-			Level.set(c, under, l);
-			under = l.map[t];
-			pos(t, l);
-			Level.set(t, solid() ? Terrain.CUSTOM_DECO : under, l);
-			GameScene.updateMap(c); GameScene.updateMap(t);
+			for (int i = 0; i < old.size(); i++) Level.set(old.get(i), i == 0 || unders == null || i >= unders.length ? under : unders[i], l);
+			MakerPropTop top = MakerPropTop.of(l, this);
+			pos(tileX + dx, tileY + dy);
+			if (top != null) top.pos(tileX, tileY);
+			java.util.List<Integer> now = cells(l);
+			unders = new int[now.size()];
+			for (int i = 0; i < now.size(); i++) unders[i] = l.map[now.get(i)];
+			under = unders.length > 0 ? unders[0] : under;
+			for (int nc : now) Level.set(nc, solid() ? Terrain.CUSTOM_DECO : l.map[nc], l);
+			for (int oc : old) GameScene.updateMap(oc);
+			for (int nc : now) GameScene.updateMap(nc);
 			refresh();
 			Dungeon.observe();
 			MakerAudio.playSe(d.getString("pushSound", "game:sounds/rocks.mp3"));
@@ -205,6 +257,6 @@ public class MakerProp extends CustomTilemap {
 
 	// ------------------------------------------------------------ 저장
 
-	@Override public void storeInBundle(Bundle b) { super.storeInBundle(b); b.put("pdm_prop", propId); b.put("pdm_state", state); b.put("pdm_under", under); }
-	@Override public void restoreFromBundle(Bundle b) { super.restoreFromBundle(b); propId = b.getString("pdm_prop"); state = b.getInt("pdm_state"); under = b.getInt("pdm_under"); }
+	@Override public void storeInBundle(Bundle b) { super.storeInBundle(b); b.put("pdm_prop", propId); b.put("pdm_state", state); b.put("pdm_under", under); if (unders != null) b.put("pdm_unders", unders); }
+	@Override public void restoreFromBundle(Bundle b) { super.restoreFromBundle(b); propId = b.getString("pdm_prop"); state = b.getInt("pdm_state"); under = b.getInt("pdm_under"); if (b.contains("pdm_unders")) unders = b.getIntArray("pdm_unders"); }
 }

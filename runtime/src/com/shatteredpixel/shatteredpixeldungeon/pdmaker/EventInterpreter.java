@@ -418,6 +418,18 @@ public class EventInterpreter {
 				});
 				return !fwait;
 			}
+			case "trailer": {   // 예고편 컷신 재생 (MakerTrailer)
+				final String tid = c.getString("id", ""); final boolean twait = !c.getBoolean("nowait", false);
+				final EventInterpreter self = this;
+				Game.runOnRenderThread(() -> {
+					renderThread = Thread.currentThread();
+					MakerTrailer g = MakerTrailer.show(tid, twait ? () -> resume() : null);
+					if (!twait) return;
+					if (g == null) resume(); else if (current == self) waitingOn(g);
+				});
+				return !twait;
+			}
+			case "filter": { String m = c.getString("mode", "set"); MakerFilter.set(m.equals("map") ? "" : m.equals("off") ? "-" : c.getString("id", "")); return true; }   // 화면 필터: id · "" = 맵 설정대로 · "-" = 끄기
 			case "shake": PixelScene.shake(c.getInt("power", 3), c.getInt("time", 5) / 10f); return true;
 			case "flash": {
 				String hex = c.getString("color", "#ffffff").replace("#", "");

@@ -93,15 +93,16 @@ PDM.assets = (function () {
   function drawTerrain(g, tilesImg, terrainId, x, y, size, up) {
     if (up && terrainId === 7) terrainId = 8; else if (up && terrainId === 8) terrainId = 7;   // 탑 모드: 계단 그림 뒤바꿈
     const t = PDM.TERRAIN_BY_ID[terrainId];
-    if (!t) { g.fillStyle = '#000'; g.fillRect(x, y, size, size); return; }
+    if (!t) { g.fillStyle = terrainId < 0 ? '#1b1922' : '#000'; g.fillRect(x, y, size, size); return; }
     if (t.key === 'WATER') {
       g.fillStyle = '#2d5f86'; g.fillRect(x, y, size, size);
       g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(x + size * .15, y + size * .3, size * .5, Math.max(1, size * .08));
       return;
     }
     if (tilesImg && t.tile >= 0) {
-      const sx = (t.tile % 16) * 16, sy = Math.floor(t.tile / 16) * 16;
-      g.drawImage(tilesImg, sx, sy, 16, 16, x, y, size, size);
+      const c = Math.max(1, Math.round(tilesImg.width / 16));   // 타일셋 한 칸 px (기본 16 · 큰 타일셋은 32 · 48 …)
+      const sx = (t.tile % 16) * c, sy = Math.floor(t.tile / 16) * c;
+      g.drawImage(tilesImg, sx, sy, c, c, x, y, size, size);
     } else { g.fillStyle = t.color; g.fillRect(x, y, size, size); }
     if (t.mark) {
       g.fillStyle = t.key.includes('TRAP') ? 'rgba(170,40,110,.55)' : 'rgba(0,0,0,.35)';

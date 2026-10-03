@@ -98,6 +98,9 @@ PDM.World = (function () {
   function tiles(id, exit) {
     const d = nodeData(id) || {}, t = (d.layers || {}).terrain || [], out = [];
     t.forEach((v, i) => { if (exit ? (v === 8 || v === 21 || v === 22) : (v === 7 || v === 37)) out.push(i); });
+    // 투명 출구·입구 오브젝트 (타일 뒤에, 놓은 순서대로)
+    const W = (d.size || {}).w || 0;
+    (d.objects || []).forEach(o => { if (o.type === (exit ? 'exit' : 'entrance') && o.at && o.at.x != null) { const c = o.at.y * W + o.at.x; if (!out.includes(c)) out.push(c); } });
     return out;
   }
   const kindOf = e => e.kind || 'main';
@@ -115,7 +118,11 @@ PDM.World = (function () {
       const used = new Set(), auto = [];
       const next = () => { for (let i = 0; i < ex.length; i++) if (!used.has(i)) { used.add(i); return i; } return -1; };
       outs.filter(e => kindOf(e) === 'door').forEach(e => { const k = e.exit ?? -1; if (k >= 0 && k < ex.length && !used.has(k)) { used.add(k); Object.assign(exits[k], { what: 'door', edge: e }); } else auto.push(e); });
-      if (hasMain || !hasDoorOut) { const k = next(); if (k >= 0) exits[k].what = hasMain ? 'main' : 'back'; }
+      if (hasMain || !hasDoorOut) {   // 출구 연결: 번호를 고정해 둔 것이 있으면 그 타일, 아니면 남은 첫 타일
+        const pin = outs.find(e => kindOf(e) === 'main' && (e.exit ?? -1) >= 0 && e.exit < ex.length && !used.has(e.exit));
+        let k; if (pin) { k = pin.exit; used.add(k); } else k = next();
+        if (k >= 0) { exits[k].what = hasMain ? 'main' : 'back'; if (pin) exits[k].edge = pin; }
+      }
       auto.forEach(e => { const k = next(); if (k >= 0) Object.assign(exits[k], { what: 'door', edge: e }); else extraOut.push(e); });
       const stairs = outs.filter(e => kindOf(e) === 'stair');
       for (const e of stairs) { const k = next(); if (k < 0) break; Object.assign(exits[k], { what: 'stair', edge: e }); }

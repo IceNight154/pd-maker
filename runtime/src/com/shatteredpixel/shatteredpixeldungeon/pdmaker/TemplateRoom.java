@@ -83,6 +83,7 @@ public class TemplateRoom extends StandardRoom {
 		for (int y = 0; y < h && y < r.height(); y++) {
 			for (int x = 0; x < w && x < r.width(); x++) {
 				int v = ter.getInt(y * w + x);
+				if (v < 0) v = Terrain.WALL;                              // 에디터의 빈 칸
 				boolean border = x == 0 || y == 0 || x == w - 1 || y == h - 1;
 				if (border && isDoor(v)) v = Terrain.WALL;               // 문 자리 → 연결 안 되면 벽
 				if (v == Terrain.ENTRANCE || v == Terrain.EXIT) v = Terrain.EMPTY_SP; // 템플릿 안의 계단은 장식으로

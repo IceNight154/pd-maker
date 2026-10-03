@@ -141,6 +141,52 @@
   const imgCache = {};
   const loadSprite = png => { if (!png) return null; const c = imgCache[png]; if (c !== undefined) return c; imgCache[png] = null; PDM.assets.load(png).then(im => { imgCache[png] = im || null; }).catch(() => { }); return null; };
   const tintCv = document.createElement('canvas');
+  /** 알갱이들을 그림 (미리보기 · 굽기 공용). Z = 배율, imgOf(png) → 그림(없으면 네모) */
+  function drawSim(g, sim, c, Z, imgOf) {
+    sim.each(c, (s, p, v) => {
+        if (v.w <= 0 || v.alpha <= 0) return;
+        const e = s.e, sp = e.sprite || {}, img = imgOf(sp.png);
+        g.globalCompositeOperation = { add: 'lighter', mult: 'multiply', screen: 'screen' }[e.blend] || 'source-over'; g.globalAlpha = v.alpha;
+        g.save(); g.translate(v.x * Z, v.y * Z); g.rotate(v.angle * Math.PI / 180);
+        const col = `rgb(${v.color.map(x => Math.round(x)).join(',')})`;
+        if (!img) { g.fillStyle = col; const w = v.w * v.sx * Z, hh = v.w * v.sy * Z; g.fillRect(-w / 2, -hh / 2, w, hh); }
+        else {
+          const fw = num(sp.fw, 0) > 0 ? sp.fw : img.width, fh = num(sp.fh, 0) > 0 ? sp.fh : img.height, cols = Math.max(1, Math.floor(img.width / fw));
+          const fxp = (v.frame % cols) * fw, fyp = Math.floor(v.frame / cols) * fh, w = v.w * v.sx * Z, hh = v.w * fh / fw * v.sy * Z;
+          let src = img, sxp = fxp, syp = fyp;
+          if (v.color.some(x => x < 254)) { tintCv.width = fw; tintCv.height = fh; const t = tintCv.getContext('2d'); t.drawImage(img, fxp, fyp, fw, fh, 0, 0, fw, fh); t.globalCompositeOperation = 'multiply'; t.fillStyle = col; t.fillRect(0, 0, fw, fh); t.globalCompositeOperation = 'destination-in'; t.drawImage(img, fxp, fyp, fw, fh, 0, 0, fw, fh); src = tintCv; sxp = 0; syp = 0; }
+          g.drawImage(src, sxp, syp, fw, fh, -w / 2, -hh / 2, w, hh);
+        }
+        g.restore();
+      });
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  }
+  /** 씨앗 난수 (굽기: 같은 값이면 언제나 같은 그림) */
+  const seeded = seed => { let a = (seed | 0) || 1; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const bakeCache = new Map();
+  /** 이펙트를 프레임 그림들로 굽기 (노드 합성기의 "이펙트" 노드가 씀)
+   *  o: { w, h, frames, fps, x(%), y(%), scale, seed, warm(초 — 미리 돌려 둠), loop } → Promise<canvas[]> */
+  async function bake(fx, o) {
+    if (!fx || !fx.emitters) return [];
+    const key = JSON.stringify([fx, o]);
+    if (bakeCache.has(key)) return bakeCache.get(key);
+    const imgs = {};
+    for (const e of fx.emitters) { const png = (e.sprite || {}).png; if (png && !(png in imgs)) { try { imgs[png] = await PDM.assets.load(png); } catch (_) { imgs[png] = null; } } }
+    const n = Math.max(1, o.frames | 0), dt = 1 / Math.max(1, num(o.fps, 8)), Z = Math.max(0.1, num(o.scale, 1)), out = [];
+    const c = { x: o.w * num(o.x, 50) / 100 / Z, y: o.h * num(o.y, 50) / 100 / Z, vx: 0, vy: 0 };
+    const rnd = Math.random; Math.random = seeded(num(o.seed, 1));
+    try {
+      const sim = Sim(fx, o.loop !== false), sub = 4;
+      for (let w = Math.max(0, num(o.warm, 0)); w > 0; w -= 1 / 30) sim.update(Math.min(w, 1 / 30), c);
+      for (let f = 0; f < n; f++) {
+        const cv = document.createElement('canvas'); cv.width = o.w; cv.height = o.h; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+        drawSim(g, sim, c, Z, png => imgs[png] || null); out.push(cv);
+        for (let k = 0; k < sub; k++) sim.update(dt / sub, c);
+      }
+    } finally { Math.random = rnd; }
+    if (bakeCache.size > 12) bakeCache.delete(bakeCache.keys().next().value);
+    bakeCache.set(key, out); return out;
+  }
   function simulator(cv, getFx, getOpt) {
     const g = cv.getContext('2d'); let sim = null, key = '', last = performance.now(), raf = 0, idle = 0;
     const restart = () => { sim = null; };
@@ -169,22 +215,7 @@
         const sx = K0(e.sizeX, 0, 0) * Z, sy = K0(e.sizeY, 0, 0) * Z;
         if (e.type === 'box') g.rect(-sx / 2, -sy / 2, sx, sy); else if (e.type === 'cone') { g.moveTo(0, 0); g.lineTo(-sx / 2, -sy); g.lineTo(sx / 2, -sy); g.closePath(); } else g.arc(0, 0, Math.max(1, sx / 2), 0, Math.PI * 2);
         g.moveTo(0, 0); g.lineTo(0, -6 * Z); g.stroke(); g.restore(); });
-      sim.each(c, (s, p, v) => {
-        if (v.w <= 0 || v.alpha <= 0) return;
-        const e = s.e, sp = e.sprite || {}, img = loadSprite(sp.png);
-        g.globalCompositeOperation = { add: 'lighter', mult: 'multiply', screen: 'screen' }[e.blend] || 'source-over'; g.globalAlpha = v.alpha;
-        g.save(); g.translate(v.x * Z, v.y * Z); g.rotate(v.angle * Math.PI / 180);
-        const col = `rgb(${v.color.map(x => Math.round(x)).join(',')})`;
-        if (!img) { g.fillStyle = col; const w = v.w * v.sx * Z, hh = v.w * v.sy * Z; g.fillRect(-w / 2, -hh / 2, w, hh); }
-        else {
-          const fw = num(sp.fw, 0) > 0 ? sp.fw : img.width, fh = num(sp.fh, 0) > 0 ? sp.fh : img.height, cols = Math.max(1, Math.floor(img.width / fw));
-          const fxp = (v.frame % cols) * fw, fyp = Math.floor(v.frame / cols) * fh, w = v.w * v.sx * Z, hh = v.w * fh / fw * v.sy * Z;
-          let src = img, sxp = fxp, syp = fyp;
-          if (v.color.some(x => x < 254)) { tintCv.width = fw; tintCv.height = fh; const t = tintCv.getContext('2d'); t.drawImage(img, fxp, fyp, fw, fh, 0, 0, fw, fh); t.globalCompositeOperation = 'multiply'; t.fillStyle = col; t.fillRect(0, 0, fw, fh); t.globalCompositeOperation = 'destination-in'; t.drawImage(img, fxp, fyp, fw, fh, 0, 0, fw, fh); src = tintCv; sxp = 0; syp = 0; }
-          g.drawImage(src, sxp, syp, fw, fh, -w / 2, -hh / 2, w, hh);
-        }
-        g.restore();
-      });
+      drawSim(g, sim, c, Z, loadSprite);
       if (o.onCount) o.onCount(sim.count());
     };
     raf = requestAnimationFrame(frame);
@@ -192,7 +223,9 @@
   }
   const ops = PDM.listOps({ K, label: '이펙트', title: '이펙트 · 파티클', icon: '🎇', prefix: 'fx', make, presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.name])),
     cmdType: 'effect', objType: 'effect', fields: ['fxUse', 'fxThrow', 'fxEquip'] });
-  PDM.effects = { make, PRESETS, simulator, Sim, migrate, emitter, mod, ops };
+  PDM.effects = { make, PRESETS, simulator, Sim, migrate, emitter, mod, ops, bake, K,
+    /** 그림 파일이 바뀌었을 때 (노드 합성기에서 다시 저장 등) 미리보기 · 굽기 캐시를 비움 */
+    invalidate(png) { if (png) delete imgCache[png]; else Object.keys(imgCache).forEach(k => delete imgCache[k]); bakeCache.clear(); } };
 
   // ---------------- 기본 모양 그림 (assets/fx/shapes/*.png — 흰색으로 그려 두고 색은 이펙트에서 입힘)
   const SHAPES = {
@@ -310,6 +343,8 @@
               const out = await PDM.editPixelsModal('알갱이 그리기 — ' + fx.name, rel, num(sp.fw, 0) || 16, num(sp.fh, 0) || 16);
               if (out) { delete imgCache[out]; if (PDM.assets.invalidate) PDM.assets.invalidate(out); setPng(out); sim.restart(); }
             } }, sp.png && !sp.png.startsWith('game:') ? '그림 편집…' : '직접 그리기…'),
+            PDM.compose && PDM.compose.forEffect ? h('button', { class: 'btn sm', title: '노드 합성기에서 이 알갱이 그림을 만들거나 고칩니다. 합성기에서 저장하면 이 이미터의 그림 · 프레임 설정이 바로 바뀝니다 (확장 기능 "노드 합성기"가 켜짐)',
+              onclick: async () => { const em = st.em, rel = await PDM.compose.forEffect(fx, em); if (rel && rel !== sp.png) { delete imgCache[rel]; } } }, '🧩 노드 합성기로…') : null,
             sp.png ? h('button', { class: 'btn sm', onclick: () => setPng('') }, '네모로') : null),
           h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', margin: '6px 0' } }, h('span', { class: 'hint' }, '기본 모양:'),
             Object.entries(SHAPES).map(([k, v]) => h('button', { class: 'btn xs', onclick: async () => { try { setPng(await makeShape(k), { fw: 0, fh: 0, frames: '', anim: 'none' }); } catch (er) { PDM.log && PDM.log(er.message, 'err'); } } }, v[0]))),

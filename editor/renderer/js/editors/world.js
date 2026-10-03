@@ -638,6 +638,7 @@
           const gi = wd.groups.findIndex(x => x.id === sel.group); const g = wd.groups[gi]; const p = ['groups', gi];
           PDM.inspector.show('그룹: ' + g.name, h('div', {},
             F.text('world', [...p, 'name'], { label: '이름' }),
+            PDM.filters ? PDM.filters.field('world', [...p, 'filter'], '화면 필터 (이 그룹의 모든 맵)', '(없음)') : null,
             row(F.ref('world', [...p, 'theme'], 'theme', { label: '테마', empty: '(깊이 기본)' }),
               F.select('world', [...p, 'direction'], { down: '▼ 내려가기', up: '▲ 올라가기' }, { label: '진행 방향', empty: `(프로젝트: ${proj.direction === 'up' ? '▲' : '▼'})` })),
             row(h('div', { class: 'field' }, h('span', { class: 'fl' }, '색'), (() => { const c = h('input', { type: 'color', value: g.color || '#5fd6b4' }); c.addEventListener('change', () => PDM.ui.commit('world', [...p, 'color'], c.value, '그룹 색')); return c; })()),

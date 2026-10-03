@@ -55,7 +55,7 @@
   function render(t) {
     const body = $('#tabbody');
     const keep = active === t ? body.scrollTop : (t.scroll || 0);
-    if (t.key.includes(':') && store.isOpen && !store.has(t.key)) { setTimeout(() => PDM.tabs.close(t.key), 0); return; }   // 지워진 리소스의 탭은 닫음 (그리다 오류 나지 않게)
+    if (/^(node|room|char|hero|item|event|prop):/.test(t.key) && store.isOpen && !store.has(t.key)) { setTimeout(() => PDM.tabs.close(t.key), 0); return; }   // 지워진 리소스의 탭은 닫음 (그리다 오류 나지 않게)
     t.dispose && t.dispose(); t.dispose = null;
     // ctx 는 탭마다 하나 (ctx.state / ctx.st 에 둔 화면 상태가 다시 그려도 유지됨)
     const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { t.dispose = fn; }, key: t.key };
@@ -135,8 +135,10 @@
   const EXTENSIONS = [
     { id: 'story', name: '스토리', desc: '스위치 · 변수 · 루트 · 엔딩 — 이벤트의 조건과 게임 진행 상태를 관리' },
     { id: 'event', name: '이벤트', desc: '커먼 이벤트 · 장면(연출) · 이정표 · 층 이벤트 — 대화·연출·스위치로 게임 진행을 만듦' },
-    { id: 'textfx', name: '글자 연출 (APNG)', desc: 'CSS 로 움직이는 글자 그림(전투 시작 · 장소 이름 자막 등)을 만들어 APNG 로 저장하고, 이벤트 명령 "글자 연출 표시"로 게임 화면에 띄움' },
+    { id: 'textfx', name: '글자 연출 (APNG)', desc: '예고편 컷신(제목 · 등장인물 소개 · 맺음말 · 크레딧 장면을 순서대로 — 이벤트 명령 "예고편 컷신 재생")과, CSS 로 움직이는 글자 그림(전투 시작 · 장소 이름 자막 등)을 만들어 APNG 로 저장하고, 이벤트 명령 "글자 연출 표시"로 게임 화면에 띄움' },
     { id: 'effects', name: '이펙트 · 파티클', desc: '불꽃·연기·반짝임 같은 파티클 이펙트를 만들어 맵에 놓거나(오브젝트 "이펙트"), 아이템을 쓸 때·이벤트 명령 "이펙트 재생"으로 띄움' },
+    { id: 'compose', name: '노드 합성기 (배경 · 오브젝트 그림)', desc: '노드를 이어서 배경 타일 · 오브젝트 스프라이트를 만듭니다 (무늬 · 노이즈 · 그라데이션 · 색 보정 · 외곽선 · 그림자 · 겹치기 …). 결과를 PNG 로 저장해 스프라이트 · 타일셋으로 씁니다' },
+    { id: 'filters', name: '화면 필터 (날씨 · 노이즈 · 글리치)', desc: '화면 전체에 덮는 연출(비 · 눈 · 안개 · 밤 · 노이즈 · 주사선 · 글리치 · 번개)을 층으로 쌓아 만들고, 맵 노드 · 방 템플릿 · 그룹에 정하거나 이벤트 명령 "화면 필터"로 바꿉니다. 그림 층은 노드 합성기로 만들 수 있습니다' },
     { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' },
     // 캐릭터 편집 화면의 칸 (켜야 보임)
     { id: 'charPortrait', name: '캐릭터: 초상화 · 표정 · 대사창 일러스트', desc: '캐릭터 편집 화면에 초상화·표정 칸을 보입니다 (대사창에 서는 그림)', section: true },

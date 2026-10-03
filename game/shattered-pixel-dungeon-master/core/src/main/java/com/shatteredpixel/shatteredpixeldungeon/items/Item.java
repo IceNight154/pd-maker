@@ -664,6 +664,7 @@ public class Item implements Bundlable {
 						public void call() {
 							curUser = user;
 							Item i = Item.this.detach(user.belongings.backpack);
+							if (i != null) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemLandHit(i, cell); // >>> pdmaker
 							if (i != null) i.onThrow(cell);
 							if (curUser.hasTalent(Talent.IMPROVISED_PROJECTILES)
 									&& !(Item.this instanceof MissileWeapon)
@@ -693,6 +694,7 @@ public class Item implements Bundlable {
 							curUser = user;
 							Item i = Item.this.detach(user.belongings.backpack);
 							user.spend(delay);
+							if (i != null) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemLandGround(i, cell); // >>> pdmaker
 							if (i != null) i.onThrow(cell);
 							user.next();
 						}

@@ -12,11 +12,18 @@
   const store = PDM.store;
 
   async function newProp() {
-    const id = await PDM.ui.prompt('새 맵 오브젝트 id (영문)', '', '파일 이름이 됩니다. 예: crate, lever, gate'); if (!id) return;
-    const clean = PDM.slugId(id);
-    if (!clean) return;
+    // 만들 때 바로 정함: id · 이름 · 밀 수 있는(이동 가능) 오브젝트인지
+    const idI = h('input', { type: 'text', placeholder: '예: crate, lever, gate, lamp' }), nmI = h('input', { type: 'text', placeholder: '(비우면 id)' }), mv = h('input', { type: 'checkbox' });
+    setTimeout(() => idI.focus(), 30);
+    const ok = await PDM.ui.modal('새 맵 오브젝트', h('div', { style: { minWidth: '380px' } },
+      PDM.ui.field('id (영문 — 파일 이름이 됩니다)', idI), PDM.ui.field('이름', nmI),
+      h('label', { class: 'check', style: { marginTop: '8px' } }, mv, '이동 가능 오브젝트 — 영웅이 옆에서 누르면 한 칸씩 밀립니다 (상자 · 바위)'),
+      h('p', { class: 'hint' }, '끄면 제자리에 고정된 오브젝트(가로등 · 문 · 레버)가 되고, 대신 "상호작용"을 정할 수 있습니다. 나중에 오브젝트 편집 화면의 "밀기"에서 바꿀 수 있습니다.')), [['취소', false], ['만들기', true, 'pri']]);
+    if (!ok) return;
+    const clean = PDM.slugId(idI.value);
+    if (!clean) { toast('id 를 적어 주세요 (영문)', 'bad'); return; }
     if (store.has('prop:' + clean)) { toast('같은 id 가 있습니다', 'bad'); return; }
-    const p = PDM.make.prop(clean); p.name = id;
+    const p = PDM.make.prop(clean); p.name = nmI.value.trim() || idI.value.trim(); p.pushable = mv.checked;
     store.add('prop:' + clean, p, '맵 오브젝트 추가'); PDM.tabs.open('prop:' + clean);
   }
   /** 이 오브젝트를 놓은 맵·방 */
@@ -48,6 +55,7 @@
       const { F, section, row } = PDM.ui;
       const st = ctx.state = ctx.state || { sel: 0 };
       p.sprite = p.sprite || { sheet: '', frame: [16, 16], scale: 0 };
+      if (!Array.isArray(p.foot)) p.foot = [1, 1];   // 예전 오브젝트: 설치 칸 1×1
       const states = p.states || [];
       if (st.sel >= states.length) st.sel = Math.max(0, states.length - 1);
       const fw = Math.max(1, p.sprite.frame[0] || 16), fh = Math.max(1, p.sprite.frame[1] || 16);
@@ -117,14 +125,20 @@
           row(F.image(key, ['sprite', 'sheet'], { label: '스프라이트 시트', sub: 'sprites/props', rerender: true }),
             h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: drawSheet }, p.sprite.sheet ? '시트 그리기/편집…' : '새로 그리기…'))),
           row(F.num(key, ['sprite', 'frame', 0], { label: '프레임 가로(px)', int: true, min: 1, rerender: true }), F.num(key, ['sprite', 'frame', 1], { label: '프레임 세로(px)', int: true, min: 1, rerender: true }),
-            F.num(key, ['sprite', 'scale'], { label: '게임 배율 (0 = 한 칸에 맞춤)', step: 0.05, min: 0, hint: '한 칸은 16px. 16px 보다 큰 프레임은 0 이면 한 칸 안에 들어오게 줄이고, 1 이면 그대로(칸 위로 솟음) 그립니다.' })),
+            F.num(key, ['sprite', 'scale'], { label: '표시 배율 (0 = 설치 칸에 맞춤 · 1 = 그림 크기 그대로)', step: 0.05, min: 0, rerender: true, hint: '한 칸은 16px. 1 이면 16×32 그림이 가로 1칸 × 세로 2칸으로 보입니다 (설치 칸 위로 솟음).' })),
+          row(F.num(key, ['foot', 0], { label: '설치 칸 가로', int: true, min: 1, max: 8, def: 1, rerender: true }), F.num(key, ['foot', 1], { label: '설치 칸 세로', int: true, min: 1, max: 8, def: 1, rerender: true }),
+            F.num(key, ['sprite', 'ox'], { label: '그림 옮김 → (px)', def: 0 }), F.num(key, ['sprite', 'oy'], { label: '그림 옮김 ↓ (px)', def: 0 })),
+          F.bool(key, ['sprite', 'over'], { label: '설치 칸 위로 솟은 부분이 캐릭터를 가림 (가로등 · 나무처럼 뒤에 선 캐릭터 위에 그려짐)' }),
+          (() => { const fw = (p.sprite.frame || [16, 16])[0] || 16, fh = (p.sprite.frame || [16, 16])[1] || 16, ft = p.foot || [1, 1], fx = Math.max(1, ft[0] | 0), fy = Math.max(1, ft[1] | 0);
+            const sc = p.sprite.scale > 0 ? p.sprite.scale : Math.min(1, fx * 16 / fw, fy * 16 / fh), dw = fw * sc / 16, dh = fh * sc / 16;
+            return h('div', { class: 'hint', style: { margin: '2px 0 6px' } }, `설치(막히는 칸): 가로 ${fx} × 세로 ${fy}칸 — 맵에 놓은 칸이 왼쪽 아래.  표시: 가로 ${+dw.toFixed(2)} × 세로 ${+dh.toFixed(2)}칸 (설치 칸의 아래 가운데에 맞춤).`); })(),
           sheetBox),
         section(`상태 (${states.length})`,
           h('p', { class: 'hint' }, '상태마다 그림과 "막힘" 여부를 정합니다. 예) 문짝: 닫힘(막힘) → 열림(지나감), 레버: 꺼짐 → 켜짐(스위치 ON).'),
           h('div', { class: 'listed' }, stateCards),
           h('button', { class: 'btn sm add', style: { marginTop: '6px' }, onclick: () => store.edit(key, '상태 추가', o => { o.states = o.states || []; o.states.push({ name: '상태 ' + o.states.length, frame: (frameOf(o.states[o.states.length - 1] || {}) || 0) + 1, solid: true, switch: '' }); }) }, '+ 상태 추가')),
         section('밀기',
-          F.bool(key, ['pushable'], { label: '밀 수 있음 — 영웅이 옆에서 누르면 반대쪽으로 한 칸 밀립니다 (벽·다른 물건·캐릭터·아이템이 있으면 안 밀림)', rerender: true }),
+          F.bool(key, ['pushable'], { label: '이동 가능 (밀 수 있음) — 영웅이 옆에서 누르면 반대쪽으로 한 칸 밀립니다. 설치 칸이 여러 칸이면 통째로 밀립니다 (벽·다른 물건·캐릭터·아이템이 있으면 안 밀림)', rerender: true }),
           p.pushable ? h('div', {},
             F.sound(key, ['pushSound'], { label: '밀릴 때 소리', kind: 'se', empty: '(기본: 돌 구르는 소리)' }),
             row(F.select(key, ['goal', 'terrain'], terrainOpts, { label: '목표 지형 (그 위로 밀어 올리면)', number: true, rerender: true }),

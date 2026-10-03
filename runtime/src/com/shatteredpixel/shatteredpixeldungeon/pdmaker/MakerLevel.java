@@ -43,6 +43,7 @@ public class MakerLevel extends Level {
 
 	@Override
 	public String tilesTex() {
+		if (MakerPaint.on(data())) return MakerPaint.blank();   // 맵 세부 그림: 타일 그림 대신 통째로 그린 그림만
 		String t = theme();
 		if (t.startsWith("custom:")) { String k = LevelHooks.customTiles(t.substring(7)); if (k != null) return k; t = LevelHooks.customBase(t.substring(7)); }
 		switch (t) {
@@ -55,6 +56,7 @@ public class MakerLevel extends Level {
 	}
 	@Override
 	public String waterTex() {
+		if (MakerPaint.on(data())) return MakerPaint.blank();
 		String t = theme();
 		if (t.startsWith("custom:")) t = LevelHooks.customBase(t.substring(7));
 		switch (t) {
@@ -73,11 +75,18 @@ public class MakerLevel extends Level {
 		int w = f.get("size").getInt("w", 16), h = f.get("size").getInt("h", 16);
 		setSize(w, h);
 		JsonValue t = f.get("layers").get("terrain");
-		for (int i = 0; i < w * h && i < t.size; i++) map[i] = t.getInt(i);
+		for (int i = 0; i < w * h && i < t.size; i++) { int v = t.getInt(i); map[i] = v < 0 ? Terrain.WALL : v; }   // 음수 = 에디터의 빈 칸 → 벽
 		for (int i = 0; i < map.length; i++) {
 			if (map[i] == Terrain.ENTRANCE || map[i] == Terrain.ENTRANCE_SP) {
 				transitions.add(new LevelTransition(this, i, LevelTransition.Type.REGULAR_ENTRANCE));   // 목적지·출구는 WorldGraph.wire 에서
 			}
+		}
+		if (MakerPaint.on(f)) { MakerPaint mp = new MakerPaint(); mp.setRect(0, 0, w, h); customTiles.add(mp); }
+		if (f.get("objects") != null) for (JsonValue o : f.get("objects")) {   // 투명 입구 오브젝트
+			JsonValue at = o.get("at");
+			if (!"entrance".equals(o.getString("type", "")) || at == null || !at.has("x")) continue;
+			int c = at.getInt("x") + at.getInt("y") * w;
+			if (c >= 0 && c < map.length && getTransition(c) == null) transitions.add(new LevelTransition(this, c, LevelTransition.Type.REGULAR_ENTRANCE));
 		}
 		return true;
 	}
@@ -110,6 +119,8 @@ public class MakerLevel extends Level {
 				MakerProp.place(this, ref, cell);
 			} else if (type.equals("effect")) {
 				MakerEffect.place(this, ref, cell);
+			} else if (type.equals("plate")) {   // 투명 발판: 밟으면 이벤트 ("!" = 한 번만, "*" = 매번)
+				if (!ref.isEmpty()) eventCells.put(cell, (o.getBoolean("once", false) ? "!" : "*") + ref);
 			} else if (type.equals("event")) {
 				if (!EventTriggers.placeEvent(this, ref, cell)) eventCells.put(cell, ref);
 			}
@@ -233,8 +244,30 @@ public class MakerLevel extends Level {
 	public void occupyCell(Char ch) {
 		super.occupyCell(ch);
 		if (ch == Dungeon.hero && eventCells.containsKey(ch.pos) && !EventInterpreter.busy()) {
-			EventInterpreter.runEvent(eventCells.get(ch.pos), null, "touch");
+			String ev = eventCells.get(ch.pos);
+			boolean plate = ev.startsWith("!") || ev.startsWith("*");   // 투명 발판: 발동 방식과 상관없이 실행
+			if (ev.startsWith("!")) eventCells.remove(ch.pos);
+			if (plate) EventInterpreter.runEvent(ev.substring(1), null, null);
+			else EventInterpreter.runEvent(ev, null, "touch");
 		}
+		// 투명 출구·입구: 걸어서 밟으면 바로 넘어감 (도착했을 때·순간이동으로 놓였을 때는 아님)
+		if (ch == Dungeon.hero && Dungeon.level == this && !locked && !EventInterpreter.busy()
+				&& Dungeon.hero.curAction instanceof com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroAction.Move && warpCells().contains(ch.pos)) {
+			LevelTransition t = getTransition(ch.pos);
+			if (t != null && activateTransition(Dungeon.hero, t)) Dungeon.hero.curAction = null;
+		}
+	}
+	private java.util.Set<Integer> warp;
+	java.util.Set<Integer> warpCells() {
+		if (warp == null) {
+			warp = new java.util.HashSet<>();
+			JsonValue f = data();
+			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) {
+				String ty = o.getString("type", ""); JsonValue at = o.get("at");
+				if ((ty.equals("exit") || ty.equals("entrance")) && at != null && at.has("x")) warp.add(at.getInt("x") + at.getInt("y") * width());
+			}
+		}
+		return warp;
 	}
 
 	@Override

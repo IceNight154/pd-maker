@@ -337,7 +337,7 @@ public class MakerDialogue {
 				com.watabou.noosa.Gizmo g = member(sc, i);
 				if (g == null || g == this || !g.visible) continue;
 				if (g.camera != PixelScene.uiCamera) continue;
-				if (g instanceof Window || g instanceof MakerStage) continue;
+				if (g instanceof Window || g instanceof MakerStage || g instanceof MakerFilter.Host) continue;   // 화면 필터(날씨 등)는 대사 중에도 그대로
 				g.visible = false;
 				hidden.add(g);
 			}

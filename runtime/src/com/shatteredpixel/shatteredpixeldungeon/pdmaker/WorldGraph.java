@@ -228,6 +228,17 @@ public class WorldGraph {
 			int m = t.getInt(i);
 			if (exit ? (m == Terrain.EXIT || m == Terrain.UNLOCKED_EXIT || m == Terrain.LOCKED_EXIT) : (m == Terrain.ENTRANCE || m == Terrain.ENTRANCE_SP)) r.add(i);
 		}
+		// 투명 출구·입구 오브젝트 (타일 뒤에, 놓은 순서대로)
+		if (d.get("objects") != null && d.get("size") != null) {
+			int w = d.get("size").getInt("w", 0);
+			for (JsonValue o : d.get("objects")) {
+				if (!(exit ? "exit" : "entrance").equals(o.getString("type", ""))) continue;
+				JsonValue at = o.get("at");
+				if (at == null || !at.has("x")) continue;
+				int c = at.getInt("x") + at.getInt("y") * w;
+				if (c >= 0 && c < t.size && !r.contains(c)) r.add(c);
+			}
+		}
 		return r;
 	}
 
@@ -283,7 +294,11 @@ public class WorldGraph {
 				if (k >= 0 && k < ex.size() && !used.contains(k)) { used.add(k); p.put(e, "out", ex.get(k)); }
 				else auto.add(e);
 			}
-			if (hasMain || !hasDoorOut) p.mainTile = nextFree(ex, used);   // 출구 연결(또는 되돌아가기)용
+			if (hasMain || !hasDoorOut) {   // 출구 연결(또는 되돌아가기)용: 번호를 고정한 출구 연결이 있으면 그 타일
+				int pin = -1;
+				for (JsonValue e : outs) if ("main".equals(kind(e))) { int k = e.getInt("exit", -1); if (k >= 0 && k < ex.size() && !used.contains(k)) { pin = k; break; } }
+				if (pin >= 0) { used.add(pin); p.mainTile = ex.get(pin); } else p.mainTile = nextFree(ex, used);
+			}
 			for (JsonValue e : auto) { int c = nextFree(ex, used); if (c >= 0) p.put(e, "out", c); else p.missing.add(new Object[]{e, "out"}); }
 			for (JsonValue e : outs) if ("stair".equals(kind(e))) { int c = nextFree(ex, used); if (c < 0) break; p.stairTiles.add(c); }
 		} else {

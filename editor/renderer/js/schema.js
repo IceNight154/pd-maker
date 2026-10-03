@@ -15,7 +15,7 @@ PDM.TERRAIN = [
   { id: 30, key: 'FURROWED_GRASS', name: '짓밟힌 풀',   tile: 51 + 16, color: '#4a6a3a', pass: true },
   { id: 9,  key: 'EMBERS',       name: '잿불',          tile: 3,  color: '#6b4a3a', pass: true },
   { id: 29, key: 'WATER',        name: '물',            tile: -1, color: '#2d5f86', pass: true },
-  { id: 0,  key: 'CHASM',        name: '빈 타일 (낭떠러지)', tile: 24, color: '#111111', pass: false },
+  { id: 0,  key: 'CHASM',        name: '낭떠러지', tile: 24, color: '#111111', pass: false },
   { id: 4,  key: 'WALL',         name: '벽',            tile: 48, color: '#2b2622', pass: false },
   { id: 12, key: 'WALL_DECO',    name: '장식 벽',       tile: 49, color: '#30291f', pass: false },
   { id: 27, key: 'BOOKSHELF',    name: '책장',          tile: 50, color: '#4a3526', pass: false },
@@ -69,7 +69,10 @@ PDM.OBJECT_TYPES = {
   event: { name: '이벤트',  color: '#a58bff', ref: 'event' },
   prop:  { name: '맵 오브젝트', color: '#c9a36a', ref: 'prop' },
   effect: { name: '이펙트', color: '#ff8fd0', ref: 'effect' },
-  start: { name: '시작 위치', color: '#63b3ed', ref: null }
+  plate: { name: '투명 발판', color: '#b48cff', ref: 'event' },
+  start: { name: '시작 위치', color: '#63b3ed', ref: null },
+  entrance: { name: '입구 (투명)', color: '#3aa0c8', ref: null, nodeOnly: true },
+  exit: { name: '출구 (투명)', color: '#d05a5a', ref: null, nodeOnly: true }
 };
 PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구 방', exit: '출구 방', special: '특수 방' };
 
@@ -200,6 +203,10 @@ PDM.COMMANDS = {
                  { k: 'pos', t: 'select', label: '위치', options: { left: '왼쪽', center: '가운데', right: '오른쪽', full: '전체 화면' } }, { k: 'fade', t: 'number', label: '페이드(0.1초)' }],
                sum: c => `일러스트 #${c.slot || 1}: ${c.image || '(없음)'} (${c.pos || 'center'})` },
   illustHide:{ g: '연출', name: '일러스트 숨김', params: [{ k: 'slot', t: 'number', label: '번호(0=전부)' }, { k: 'fade', t: 'number', label: '페이드(0.1초)' }], sum: c => `일러스트 숨김 #${c.slot || '전부'}` },
+  trailer:   { g: '연출', name: '예고편 컷신 재생', params: [{ k: 'id', t: 'trailer', label: '예고편 컷신' }, { k: 'nowait', t: 'bool', label: '끝나기를 기다리지 않음' }],
+               sum: c => `예고편 컷신: ${(((PDM.store.get('trailers') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
+  filter:    { g: '연출', name: '화면 필터', params: [{ k: 'mode', t: 'select', label: '동작', options: { set: '이 필터로 바꾸기', map: '맵 설정대로 되돌리기', off: '필터 끄기' } }, { k: 'id', t: 'filter', label: '필터 (바꾸기일 때)' }],
+               sum: c => c.mode === 'map' ? '화면 필터: 맵 설정대로' : c.mode === 'off' ? '화면 필터: 끄기' : `화면 필터: ${(((PDM.store.get('filters') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
   shake:     { g: '연출', name: '화면 흔들림', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
   effect:    { g: '연출', name: '이펙트 재생', params: [{ k: 'fx', t: 'effect', label: '이펙트' }, { k: 'at', t: 'select', label: '위치', options: { char: '캐릭터 위치', xy: '칸 좌표' } },
                { k: 'target', t: 'charHero', label: '캐릭터 (위치가 캐릭터일 때)' }, { k: 'x', t: 'number', label: 'x (칸 좌표일 때)' }, { k: 'y', t: 'number', label: 'y' }],
@@ -394,7 +401,7 @@ PDM.make = {
   /** 맵 오브젝트: 맵에 놓는 물건 (상자·바위·레버…) — 상태·밀기·상호작용. 런타임 MakerProp */
   prop(id) {
     return { format: 'pdmaker-prop', version: PDM.FORMAT_VERSION, id, name: '새 오브젝트', desc: '', note: '',
-      sprite: { sheet: '', frame: [16, 16], scale: 0 },
+      sprite: { sheet: '', frame: [16, 16], scale: 0, ox: 0, oy: 0, over: false }, foot: [1, 1],
       states: [{ name: '기본', frame: 0, solid: true, switch: '' }], start: 0,
       pushable: false, pushSound: '', goal: { terrain: -1, switch: '', event: '' },
       interact: 'none', event: '', loop: true, cond: '', sound: '', stepOn: 'none', stepEvent: '' };

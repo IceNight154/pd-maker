@@ -63,6 +63,12 @@ PDM.defaults = {
   /** 글자 연출 (editors/textfx.js · 런타임 MakerTextFx) */
   /** 이펙트 · 파티클 (editors/effect.js · 런타임 MakerEffect) */
   /** 게임 글자 바꾸기 (editors/texts.js · 런타임 MakerTexts) */
+  /** 노드 합성기 (editors/compose.js — 편집기에서만 계산, 게임에는 저장한 PNG 만) */
+  compose() { return { format: 'pdmaker-compose', version: PDM.FORMAT_VERSION, list: [] }; },
+  /** 화면 필터 (editors/filter.js · 런타임 MakerFilter) */
+  /** 예고편 컷신 (editors/trailer.js · 런타임 MakerTrailer) */
+  trailers() { return { format: 'pdmaker-trailers', version: PDM.FORMAT_VERSION, list: [] }; },
+  filters() { return { format: 'pdmaker-filters', version: PDM.FORMAT_VERSION, list: [] }; },
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },
   textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },
