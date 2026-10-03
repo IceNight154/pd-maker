@@ -331,6 +331,8 @@
       const ERASE = { all: '전부', wall: '벽', floor: '바닥·타일', object: '오브젝트', spawn: '스폰 구역' };
       if (!ui.eraseKind) ui.eraseKind = 'all'; if (ui.port === undefined) ui.port = -1;
       const pickTile = v => { ui.terrain = v; if (!tileTool() || ui.tool === 'pick') ui.tool = 'pen'; drawPalette(); drawTools(); };
+      /** 확장 기능이 꺼진 종류는 팔레트에서 숨김 (이 맵에 이미 놓은 것이 있으면 보임) */
+      const typeOn = k => k !== 'prop' || (PDM.extensions && PDM.extensions.on('prop')) || (fl.objects || []).some(o => o.type === 'prop');
       function drawPalette() {
         palette.innerHTML = '';
         if (drawable) {
@@ -372,7 +374,8 @@
         }
         palette.append(h('div', { class: 'fl' }, '오브젝트 놓기'));
         const typeSel = h('select', { onchange: () => { ui.objType = typeSel.value; ui.objRef = ''; ui.tool = 'object'; drawPalette(); drawTools(); } },
-          Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => (k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))).map(([k, v]) => h('option', { value: k }, v.name)));
+          Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => ((k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))) && typeOn(k)).map(([k, v]) => h('option', { value: k }, v.name)));
+        if (!typeOn(ui.objType)) ui.objType = 'npc';
         typeSel.value = ui.objType;
         const refKind = PDM.OBJECT_TYPES[ui.objType].ref;
         const opts = refKind === 'character' ? store.all('char').filter(c => ui.objType === 'mob' ? ['mob', 'boss'].includes(c.kind) : !['mob', 'boss', 'hero'].includes(c.kind)).map(c => [c.id, c.name])
@@ -382,7 +385,7 @@
         if (!ui.objRef && opts[0]) ui.objRef = opts[0][0];
         refSel.value = ui.objRef;
         palette.append(h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '4px' } },
-          ...Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => (k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))).map(([k, v]) => h('button', { class: 'btn xs' + (ui.tool === 'object' && ui.objType === k ? ' pri' : ''), style: { borderColor: v.color },
+          ...Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => ((k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))) && typeOn(k)).map(([k, v]) => h('button', { class: 'btn xs' + (ui.tool === 'object' && ui.objType === k ? ' pri' : ''), style: { borderColor: v.color },
             onclick: () => { if (ui.objType !== k) ui.objRef = ''; ui.objType = k; ui.tool = 'object'; drawPalette(); drawTools(); } }, v.name))));
         const quick = h('div', { class: 'pal-grid', style: { marginTop: '6px' } });
         if (ui.objType === 'prop') store.all('prop').forEach(pr => {

@@ -135,6 +135,7 @@
   const EXTENSIONS = [
     { id: 'story', name: '스토리', desc: '스위치 · 변수 · 루트 · 엔딩 — 이벤트의 조건과 게임 진행 상태를 관리' },
     { id: 'event', name: '이벤트', desc: '커먼 이벤트 · 장면(연출) · 이정표 · 층 이벤트 — 대화·연출·스위치로 게임 진행을 만듦' },
+    { id: 'prop', name: '맵 오브젝트', desc: '맵 위에 놓는 물건(상자 · 바위 · 레버 · 문짝 · 가로등)을 만듭니다 — 상태 · 밀기 · 상호작용 · 설치 칸과 표시 크기. 켜면 리소스 목록에 "맵 오브젝트"가, 맵 편집기의 "오브젝트 놓기"에 "맵 오브젝트"가 나타납니다' },
     { id: 'textfx', name: '글자 연출 (APNG)', desc: '예고편 컷신(제목 · 등장인물 소개 · 맺음말 · 크레딧 장면을 순서대로 — 이벤트 명령 "예고편 컷신 재생")과, CSS 로 움직이는 글자 그림(전투 시작 · 장소 이름 자막 등)을 만들어 APNG 로 저장하고, 이벤트 명령 "글자 연출 표시"로 게임 화면에 띄움' },
     { id: 'effects', name: '이펙트 · 파티클', desc: '불꽃·연기·반짝임 같은 파티클 이펙트를 만들어 맵에 놓거나(오브젝트 "이펙트"), 아이템을 쓸 때·이벤트 명령 "이펙트 재생"으로 띄움' },
     { id: 'compose', name: '노드 합성기 (배경 · 오브젝트 그림)', desc: '노드를 이어서 배경 타일 · 오브젝트 스프라이트를 만듭니다 (무늬 · 노이즈 · 그라데이션 · 색 보정 · 외곽선 · 그림자 · 겹치기 …). 결과를 PNG 로 저장해 스프라이트 · 타일셋으로 씁니다' },
@@ -959,7 +960,8 @@
     $$('.btab').forEach(b => b.addEventListener('click', () => showBottom(b.dataset.b)));
     $('#logClear').addEventListener('click', () => { $('#logBody').innerHTML = ''; $('#checkBody').innerHTML = ''; });
     $('#treeCollapse').addEventListener('click', () => { expanded.clear(); drawTree(); });
-    store.on('load', () => { drawAll(); resolveRepo(true).then(() => offerBundle()).then(() => { if (!creating) offerLegacyRepo(); }); });
+    store.on('load', () => { try { const pj = store.get('project'); if (pj && (!pj.extensions || pj.extensions.prop === undefined) && store.all('prop').length) store.edit('project', '확장 기능 켜기: 맵 오브젝트', r => { r.extensions = Object.assign({}, r.extensions, { prop: true }); }, { silent: true }); } catch (_) { /* 무시 */ }
+      drawAll(); resolveRepo(true).then(() => offerBundle()).then(() => { if (!creating) offerLegacyRepo(); }); });
     store.on('change', () => drawToolbar());
     addEventListener('keydown', e => {
       const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
