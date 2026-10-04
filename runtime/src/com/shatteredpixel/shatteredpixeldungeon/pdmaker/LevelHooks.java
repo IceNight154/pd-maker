@@ -37,6 +37,81 @@ public class LevelHooks {
 
 	/** 층을 떠나기 직전 위치 (돌아올 계단 고르기용) */
 	public static int fromDepth = -1, fromBranch = 0;
+
+	/** Dungeon.switchLevel 연결 줄: 맵에 놓은 "플레이어 스폰 위치" 오브젝트가 있으면 영웅을 그 칸에 세움.
+	 *  when: start = 게임을 시작할 때(이번 판에서 처음 서는 맵에서 한 번) · always = 이 맵에 들어올 때마다 · from = 고른 맵에서 넘어올 때.  저장 불러오기 · 추락 등은 건드리지 않음 */
+	/** 맵에 놓은 것의 좌표 → 층 좌표로 옮길 양: 직접 그린 맵 {0,0} · 혼합 맵은 직접 그린 방이 놓인 자리 · 자동 생성 맵은 null (좌표 없음) */
+	@SuppressWarnings("unchecked")
+	public static int[] nodeOffset(Level level, String id) {
+		try {
+			JsonValue f = WorldGraph.node(id); if (f == null) return null;
+			String mode = f.getString("mode", "");
+			if ("handmade".equals(mode)) return new int[]{ 0, 0 };
+			if ("hybrid".equals(mode) && level instanceof com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) {
+				java.lang.reflect.Field rf = com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel.class.getDeclaredField("rooms"); rf.setAccessible(true);
+				java.util.List<Room> rs = (java.util.List<Room>) rf.get(level);
+				if (rs != null) for (Room r : rs) {
+					String k = r instanceof TemplateRoom ? ((TemplateRoom) r).templateKey : r instanceof TemplateSpecialRoom ? ((TemplateSpecialRoom) r).templateKey : null;
+					if (("node:" + id).equals(k)) return new int[]{ r.left, r.top };
+				}
+			}
+		} catch (Throwable t) { MakerRuntime.log("맵 좌표 오류: " + t); }
+		return null;
+	}
+	/** 입구도 출구도 없는 맵(직접 그린 맵에 계단을 안 놓음)에서 게임이 멈추지 않게: 설 자리가 없으면 맵 가운데에서 가장 가까운 지나갈 수 있는 칸 */
+	static int safePos(Level level, int pos) {
+		try {
+			if (pos >= 0 && pos < level.length() && !level.invalidHeroPos(pos)) return pos;
+			if (pos == -2 && level.getTransition(com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition.Type.REGULAR_EXIT) != null) return pos;
+			if (level.getTransition(null) != null) return pos;
+			int w = level.width(), cx = w / 2, cy = level.height() / 2, best = -1, bd = Integer.MAX_VALUE;
+			for (int i = 0; i < level.length(); i++) { if (level.invalidHeroPos(i) || Actor.findChar(i) != null) continue; int d = Math.abs(i % w - cx) + Math.abs(i / w - cy); if (d < bd) { bd = d; best = i; } }
+			if (best >= 0) { MakerRuntime.warnOnce("이 맵에는 입구 · 출구 · 플레이어 스폰 위치가 없어서 가운데 근처 빈 칸에 세웠습니다 — 맵 그리기에서 「플레이어 스폰 위치」를 놓으세요"); return best; }
+		} catch (Throwable t) { MakerRuntime.log("스폰 위치 오류: " + t); }
+		return pos;
+	}
+	@SuppressWarnings("unchecked")
+	public static int heroSpawn(Level level, int pos) {
+		try {
+			if (!MakerRuntime.isActive() || level == null) return pos;
+			if (com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode == com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.CONTINUE) return pos;
+			com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode md = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode;
+			if (md != com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.DESCEND && md != com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.ASCEND) return safePos(level, pos);
+			String id = WorldGraph.current(); JsonValue f = WorldGraph.node(id);
+			if (f == null || f.get("objects") == null) return safePos(level, pos);
+			boolean first = !StoryState.flag("pdm_spawned");   // 이번 판에서 처음 맵에 서는 순간 (시작 맵이 아니어도 — 테스트 플레이로 다른 맵에서 시작할 때 포함)
+			String from = fromDepth < 0 ? null : WorldGraph.at(fromDepth, fromBranch);
+			// 오브젝트 좌표 → 층 좌표: 직접 그린 맵은 그대로, 혼합 맵은 그 방(직접 그린 방)이 층 안에 놓인 자리만큼 옮김
+			int[] off = { 0, 0 };
+			String mode = f.getString("mode", "");
+			if (!"handmade".equals(mode)) {
+				off = null;
+				if ("hybrid".equals(mode) && level instanceof com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) {
+					java.lang.reflect.Field rf = com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel.class.getDeclaredField("rooms"); rf.setAccessible(true);
+					java.util.List<Room> rs = (java.util.List<Room>) rf.get(level);
+					if (rs != null) for (Room r : rs) {
+						String k = r instanceof TemplateRoom ? ((TemplateRoom) r).templateKey : r instanceof TemplateSpecialRoom ? ((TemplateSpecialRoom) r).templateKey : null;
+						if (("node:" + id).equals(k)) { off = new int[]{ r.left, r.top }; break; }
+					}
+				}
+				if (off == null) { if (first) StoryState.setFlag("pdm_spawned", true); return safePos(level, pos); }
+			}
+			int best = -1, rank = 0;
+			for (JsonValue o : f.get("objects")) {
+				if (!"start".equals(o.getString("type", ""))) continue;
+				JsonValue at = o.get("at"); if (at == null || !at.has("x")) continue;
+				if (!Cond.eval(o.getString("cond", ""), StoryState.globalResolver())) continue;
+				int c = (off[0] + at.getInt("x")) + (off[1] + at.getInt("y")) * level.width();
+				if (c < 0 || c >= level.length() || level.invalidHeroPos(c)) { MakerRuntime.warnOnce("플레이어 스폰 위치가 설 수 없는 칸에 있습니다 (" + id + " 의 " + at.getInt("x") + "," + at.getInt("y") + ") — 지나갈 수 있는 바닥 위에 놓으세요"); continue; }
+				String w = o.getString("when", "start");
+				int r = w.equals("from") ? (!first && from != null && from.equals(o.getString("from", "")) ? 3 : 0) : w.equals("start") ? (first ? 2 : 0) : 1;
+				if (r > rank) { rank = r; best = c; }
+			}
+			if (first) StoryState.setFlag("pdm_spawned", true);
+			if (best >= 0) { MakerRuntime.log("스폰 위치: " + id + " 의 칸 " + (best % level.width()) + "," + (best / level.width()) + (off[0] != 0 || off[1] != 0 ? " (직접 그린 방이 놓인 자리 " + off[0] + "," + off[1] + ")" : "")); return best; }
+			return safePos(level, pos);
+		} catch (Throwable t) { MakerRuntime.log("스폰 위치 오류: " + t); return pos; }
+	}
 	/** 떠날 때 밟은 계단 종류 (던전 밖 맵에서 "돌아가기" 할 때 같은 계단으로) */
 	public static LevelTransition.Type fromType = null;
 	/** 이번 층 생성 중 칠해진 템플릿 방 (오브젝트 배치용) */
@@ -341,7 +416,7 @@ public class LevelHooks {
 
 	// ------------------------------------------------------------ 사용자 테마 타일
 
-	static JsonValue customTheme(String id) {
+	public static JsonValue customTheme(String id) {
 		JsonValue w = WorldGraph.world;
 		if (w == null || w.get("customThemes") == null) return null;
 		for (JsonValue c : w.get("customThemes")) if (id.equals(c.getString("id"))) return c;
@@ -351,6 +426,22 @@ public class LevelHooks {
 
 	/** 사용자 타일셋 PNG 를 TextureCache 에 문자열 키로 등록하고 그 키를 돌려줌 (실패하면 null → 바탕 테마) */
 	@SuppressWarnings("unchecked")
+	/** 잠긴 맵 (스토리의 locks): 이 계단이 가는 맵이 아직 잠겨 있으면 문구를 내고 true — Level.activateTransition 맨 앞 연결 줄 */
+	public static boolean lockedNode(com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t) {
+		try {
+			if (!MakerRuntime.isActive() || t == null || MakerRuntime.story == null || MakerRuntime.story.get("locks") == null) return false;
+			String dest = WorldGraph.at(t.destDepth, t.destBranch);
+			if (dest == null) return false;
+			for (JsonValue l : MakerRuntime.story.get("locks")) {
+				if (!dest.equals(l.getString("node", "")) || l.getString("cond", "").trim().isEmpty()) continue;
+				if (Cond.eval(l.getString("cond", ""), StoryState.globalResolver())) continue;
+				String msg = l.getString("message", "");
+				com.shatteredpixel.shatteredpixeldungeon.utils.GLog.w(msg.isEmpty() ? MakerRuntime.term("node.locked", "아직 이곳으로는 갈 수 없다.") : StoryState.expand(msg));
+				return true;
+			}
+		} catch (Throwable e) { MakerRuntime.log("잠긴 맵 확인 실패: " + e); }
+		return false;
+	}
 	/** 큰(또는 작은) 타일셋: 타일셋 PNG 의 가로가 256 이 아니면 한 칸 = 가로 ÷ 16 px 로 읽음 (화면에서는 그대로 한 칸 16) — DungeonTilemap 생성자 연결 줄 */
 	public static void hiresTiles(com.watabou.noosa.Tilemap tm, Object tex) {
 		try {

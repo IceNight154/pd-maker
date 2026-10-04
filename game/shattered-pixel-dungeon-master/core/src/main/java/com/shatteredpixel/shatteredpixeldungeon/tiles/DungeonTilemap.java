@@ -39,6 +39,7 @@ public abstract class DungeonTilemap extends Tilemap {
 
 	public DungeonTilemap(String tex) {
 		super(tex, new TextureFilm( tex, SIZE, SIZE ) );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.hiresTiles(this, tex); // >>> pdmaker
 	}
 
 	@Override
@@ -139,6 +140,7 @@ public abstract class DungeonTilemap extends Tilemap {
 		final Image tile = new Image( texture );
 		tile.frame( tileset.get( getTileVisual( pos, oldValue, false)));
 		tile.point( tileToWorld( pos ) );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.tileImg(tile); // >>> pdmaker
 
 		parent.add( tile );
 		

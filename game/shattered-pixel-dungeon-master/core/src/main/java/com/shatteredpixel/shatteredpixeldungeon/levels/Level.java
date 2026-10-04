@@ -593,6 +593,7 @@ public abstract class Level implements Bundlable {
 
 	//returns true if we immediately transition, false otherwise
 	public boolean activateTransition(Hero hero, LevelTransition transition){
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.lockedNode(transition)) return false; // >>> pdmaker
 		if (locked){
 			return false;
 		}

@@ -239,8 +239,13 @@ table.grid td input, table.grid td select { padding: 3px 5px; }
 
 /* ---- 픽셀 편집기 ---- */
 .px-wrap { display: flex; gap: 12px; align-items: flex-start; flex-wrap: nowrap; }
+.px-preview > .px-wrap { flex: 1 1 auto; min-width: 0; }
+.lp-grip { position: absolute; left: -4px; bottom: -4px; width: 18px; height: 18px; cursor: nesw-resize; border-radius: 3px; opacity: .6; background: linear-gradient(225deg, transparent 0 45%, var(--accent, #a58bff) 45% 55%, transparent 55% 65%, var(--accent, #a58bff) 65% 75%, transparent 75%); }
+.lp-grip:hover { opacity: 1; }
+.lp-edge { position: absolute; left: -8px; top: 0; bottom: 18px; width: 8px; cursor: col-resize; }
+.lp-edge:hover { background: var(--accent-soft, rgba(165,139,255,.25)); border-radius: 3px; }
 .px-canvas { image-rendering: pixelated; border: 1px solid var(--line); cursor: crosshair; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
-.px-panebox { position: relative; flex: 0 1 auto; min-width: 0; padding: 0 12px 12px 0; }
+.px-panebox { position: relative; flex: 0 0 auto; padding: 0 12px 12px 0; }   /* 줄어들지 않음 — 크게 늘려도 옆의 도구 칸을 덮지 않고 밀어냄 */
 .px-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 3px;
   background: linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 55%, transparent 55% 65%, var(--accent) 65% 75%, transparent 75% 85%, var(--accent) 85%); opacity: .75; }
 .px-grip:hover { opacity: 1; }

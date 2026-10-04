@@ -131,6 +131,35 @@
   }
 
 
+  /** 상인 기능: 파는 물건 목록 (런타임 MakerShop — 사고파는 창을 따로 띄움) */
+  function shopEditor(key, c) {
+    const sh = c.shop || {}, { F, row } = PDM.ui;
+    const on = h('input', { type: 'checkbox', checked: !!sh.on });
+    on.onchange = () => store.edit(key, '상인 기능', o => { o.shop = Object.assign({ title: '', greet: '', items: [], priceRate: 300, sell: true, sellRate: 50, direct: false }, o.shop || {}, { on: on.checked }); });
+    const head = h('label', { class: 'check' }, on, h('b', {}, '🛒 이 캐릭터를 상인으로 쓰기'), h('span', { class: 'hint', style: { marginLeft: '6px' } }, '말을 걸면 아이템을 사고파는 창이 뜹니다'));
+    if (!sh.on) return [head, h('p', { class: 'hint' }, '게임 원래 상점(바닥에 놓인 물건을 직접 집어서 사는 방식)과 달리, 파는 물건 목록을 여기서 정하고 창에서 사고팝니다.')];
+    const ed = (lbl, fn, rr) => store.edit(key, lbl, o => fn(o.shop), rr === false ? { silent: true } : undefined);
+    const numI = (v, fn, min, ph) => { const i = h('input', { type: 'number', value: v, min, placeholder: ph || '', style: { width: '84px' } }); i.onchange = () => fn(Math.max(min, i.value | 0)); return i; };
+    const rows = (sh.items || []).map((e, i) => h('tr', {},
+      h('td', {}, PDM.itemInput ? PDM.itemInput(e.item, v => ed('파는 물건', s => { s.items[i].item = v; }, false)) : null),
+      h('td', {}, numI(e.price || 0, v => ed('값', s => { s.items[i].price = v; }, false), 0)),
+      h('td', {}, numI(e.stock ?? -1, v => ed('재고', s => { s.items[i].stock = v; }, false), -1)),
+      h('td', { style: { whiteSpace: 'nowrap' } },
+        h('button', { class: 'btn xs', disabled: i === 0, onclick: () => ed('순서', s => { [s.items[i - 1], s.items[i]] = [s.items[i], s.items[i - 1]]; }) }, '↑'),
+        h('button', { class: 'btn xs', disabled: i === sh.items.length - 1, onclick: () => ed('순서', s => { [s.items[i + 1], s.items[i]] = [s.items[i], s.items[i + 1]]; }) }, '↓'),
+        h('button', { class: 'btn xs danger', onclick: () => ed('물건 삭제', s => { s.items.splice(i, 1); }) }, '×'))));
+    return [head,
+      row(F.text(key, ['shop', 'title'], { label: '가게 이름 (비우면 캐릭터 이름)' }), F.text(key, ['shop', 'greet'], { label: '창 위쪽 인사말 (선택)' })),
+      h('div', { class: 'fl', style: { marginTop: '6px' } }, `파는 물건 (${(sh.items || []).length})`),
+      h('table', { class: 'grid' }, h('tr', {}, h('th', {}, '아이템 (프로젝트 아이템 · 게임 아이템)'), h('th', { style: { width: '100px' } }, '값 (0 = 자동)'), h('th', { style: { width: '100px' } }, '재고 (-1 = 무제한)'), h('th', { style: { width: '90px' } }, '')), ...rows),
+      h('button', { class: 'btn xs add', style: { marginTop: '4px' }, onclick: () => ed('물건 추가', s => { s.items = s.items || []; s.items.push({ item: '', price: 0, stock: -1 }); }) }, '+ 물건 추가'),
+      row(F.num(key, ['shop', 'priceRate'], { label: '자동 값 = 아이템 가치의 몇 %', int: true, min: 1, def: 300 }),
+        F.bool(key, ['shop', 'sell'], { label: '영웅이 가진 물건을 팔 수 있음 ("팔기" 탭)', def: true, rerender: true }),
+        sh.sell !== false ? F.num(key, ['shop', 'sellRate'], { label: '사 주는 값 = 아이템 가치의 몇 %', int: true, min: 1, def: 50 }) : null),
+      F.bool(key, ['shop', 'direct'], { label: '말을 걸면 묻지 않고 바로 상인 창 (끄면: 다른 대화 · 이벤트가 있을 때 "물건 보기 / 대화하기"를 먼저 고름)' }),
+      h('p', { class: 'hint' }, '재고는 저장 파일에 함께 저장됩니다. 이벤트에서 열려면 명령 "상인 창 열기"를 씁니다 (대화 선택지 안에 넣을 수 있음).')];
+  }
+
   /** 스프라이트 시트 · 프레임 · 배율 · 애니메이션 편집 (캐릭터 편집기와 영웅 편집기가 함께 씀) */
   function spriteEditor(key, c, ctx, st) {
     const { F, row } = PDM.ui;
@@ -208,10 +237,16 @@
                 if (rel) { try { await pdm.copy(PDM.assets.resolvePath(rel), store.abs(dest)); } catch (e) { toast('복사 실패', 'bad'); return; } }
                 rel = dest; store.edit(key, '시트 경로', o => { o.sprite.sheet = dest; }, { silent: true });
               }
-              const out = await PDM.editPixelsModal('스프라이트 시트 편집 — ' + c.name, rel, c.sprite.frame[0] * 12, c.sprite.frame[1], c.sprite.frame[0], null, { rowStep: c.sprite.frame[1] });
+              const out = await PDM.editPixelsModal('스프라이트 시트 편집 — ' + c.name, rel, c.sprite.frame[0] * 12, c.sprite.frame[1], c.sprite.frame[0], null, { rowStep: c.sprite.frame[1], light: key.startsWith('char:') ? { bloom: c.sprite.lightBloom || 0, onBloom: v => store.edit(key, '효과 레이어 번짐', o => { o.sprite.lightBloom = v; }, { silent: true }), mode: c.sprite.lightMode || 'add', onMode: m => store.edit(key, '효과 레이어 합성 방식', o => { o.sprite.lightMode = m; }, { silent: true }) } : null });
               if (out && out !== rel) { PDM.assets.invalidate(out); store.edit(key, '시트 경로 (다른 이름으로 저장)', o => { o.sprite.sheet = out; }); }   // 새 파일을 이 캐릭터의 시트로
               else if (out) ctx.refresh();
             } }, '시트 그리기/편집…'))),
+          key.startsWith('char:') ? row(F.select(key, ['sprite', 'lightMode'], { add: '발광 (더하기)', screen: '스크린', overlay: '오버레이', dodge: '닷지 (색상 닷지)' }, { label: '✨ 효과 레이어 합성 방식', def: 'add' }),
+            F.num(key, ['sprite', 'lightBloom'], { label: '번짐 반경 (px, 0 = 없음)', int: true, min: 0, max: 48, def: 0 }),
+            F.num(key, ['sprite', 'lightBloomPower'], { label: '번짐 세기 (%)', int: true, min: 0, max: 300, def: 100 }),
+            F.num(key, ['sprite', 'lightPower'], { label: '효과 레이어 세기 (%)', int: true, min: 0, max: 300, def: 100, hint: '"시트 그리기/편집"의 빛 레이어가 게임에서 더해지는 세기' }),
+            F.num(key, ['sprite', 'lightPulse'], { label: '빛 깜빡임 주기 (초, 0 = 일정)', min: 0, step: 0.1, def: 0 }),
+            F.num(key, ['sprite', 'lightPulseMin'], { label: '깜빡일 때 가장 어두운 세기 (%)', int: true, min: 0, max: 100, def: 40 })) : null,
           c.sprite.sheet ? sheetView(key, c, st) : h('div', { class: 'hint' }, '시트를 고르면 프레임 번호가 표시됩니다'),
           tierBox, h('h3', {}, '애니메이션'), animRows];
   }
@@ -331,6 +366,7 @@
           c.game ? (() => { const el = h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 코드의 전리품: 읽는 중…'); PDM.gameMobLoot(c.game).then(t => { el.textContent = '게임 코드의 전리품: ' + (t || '없음') + ' — 자세한 코드는 위 "게임 코드의 실제 값"'; }); return el; })() : h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 클래스가 아닌 PDMaker 캐릭터라 게임 코드의 전리품은 없습니다.'),
           h('h4', { style: { margin: '10px 0 4px' } }, '드랍 테이블'),
           PDM.charLootEditor(key, c)) : null,
+        ['npc', 'companion'].includes(c.kind) ? section('상인 기능 (사고파는 창)', shopEditor(key, c)) : null,
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '체력', min: 1, int: true }), F.num(key, ['stats', 'attackMin'], { label: '공격 최소', int: true }), F.num(key, ['stats', 'attackMax'], { label: '공격 최대', int: true })),
           row(F.num(key, ['stats', 'defense'], { label: '방어', int: true }), F.num(key, ['stats', 'accuracy'], { label: '명중', int: true }), F.num(key, ['stats', 'evasion'], { label: '회피', int: true }), F.num(key, ['stats', 'speed'], { label: '속도', step: 0.1 }))),

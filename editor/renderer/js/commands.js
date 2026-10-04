@@ -84,6 +84,18 @@
         redraw();
         return h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start' } }, h('div', { style: { width: '230px', flex: 'none' } }, lb, detail, optBox), cols);
       }
+      case 'cell': {   // 칸 좌표 (x, y) + 맵에서 보면서 고르기. p.yk = y 를 넣는 키, p.nodeKey = 맵을 넣는 키 (없으면 같은 맵 — 볼 맵을 창에서 고름)
+        const yk = p.yk || 'y';
+        const xi = h('input', { type: 'number', value: obj[p.k] ?? 0, style: { width: '70px' }, title: 'x (왼쪽에서 몇 번째 칸 — 0부터)' }), yi = h('input', { type: 'number', value: obj[yk] ?? 0, style: { width: '70px' }, title: 'y (위에서 몇 번째 칸 — 0부터)' });
+        xi.addEventListener('input', () => { obj[p.k] = parseInt(xi.value, 10) || 0; }); yi.addEventListener('input', () => { obj[yk] = parseInt(yi.value, 10) || 0; });
+        const b = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault();
+          const r = await PDM.pickCell({ node: p.nodeKey ? obj[p.nodeKey] : (ctx.nodeId || ''), x: obj[p.k], y: obj[yk], title: p.pickTitle });
+          if (!r) return;
+          obj[p.k] = r.x; obj[yk] = r.y; xi.value = r.x; yi.value = r.y;
+          if (p.nodeKey && obj[p.nodeKey] !== r.node) { obj[p.nodeKey] = r.node; ctx.redraw && ctx.redraw(); }
+        } }, '🗺 맵에서 고르기…');
+        return h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, 'x'), xi, h('span', { class: 'hint' }, 'y'), yi, b);
+      }
       case 'sound': return PDM.ui.soundPicker(cur, set, { allowNone: true });
       case 'switch': return sel(R('switch'), { create: () => createStoryVar('switches', '스위치') });
       case 'var': return sel(R('var'), { create: () => createStoryVar('variables', '변수') });
@@ -94,7 +106,7 @@
         const b = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const r = await PDM.ui.pickImage('illustrations'); if (r) { i.value = r; set(r); } } }, '찾기…');
         return h('div', { class: 'imgpick' }, i, b);
       }
-      case 'char': case 'charHero': case 'item': case 'event': case 'node': case 'group': case 'room': case 'route': case 'ending': case 'heartAction': case 'heartRequest': case 'topic': case 'heartStat': case 'face': case 'trait': case 'textfx': case 'effect': case 'filter': case 'trailer':
+      case 'char': case 'charHero': case 'item': case 'event': case 'node': case 'group': case 'room': case 'route': case 'ending': case 'heartAction': case 'heartRequest': case 'topic': case 'heartStat': case 'face': case 'trait': case 'textfx': case 'effect': case 'filter': case 'trailer': case 'badge': case 'quest':
         return sel(R(p.t), { empty: p.t === 'face' ? '(기본)' : '(선택 안 함)' });
       default: { const i = h('input', { type: 'text', value: cur ?? '' }); i.addEventListener('input', () => set(i.value)); return i; }
     }
@@ -122,7 +134,7 @@
     const draw = () => {
       body.innerHTML = '';
       if (!def.params.length) body.append(h('p', { class: 'hint' }, '설정할 값이 없습니다.'));
-      def.params.forEach(p => body.append(PDM.ui.field(p.label, paramInput(obj, p, { onCharChange: () => { if (def.params.some(x => x.t === 'face')) draw(); } }))));
+      def.params.forEach(p => body.append(PDM.ui.field(p.label, paramInput(obj, p, { onCharChange: () => { if (def.params.some(x => x.t === 'face')) draw(); }, redraw: () => draw() }))));
     };
     draw();
     const ok = await PDM.ui.modal((isNew ? '새 명령: ' : '명령 편집: ') + def.name, body, [['취소', false], ['확인', true, 'pri']]);

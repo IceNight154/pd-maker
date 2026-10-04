@@ -100,7 +100,7 @@
       let rel = c.tiles;
       if (!rel) { rel = `assets/tiles/${c.id}.png`; try { await pdm.copy(PDM.assets.resolvePath('game:' + PDM.THEMES[c.base || 'SEWER'].tiles), store.abs(rel)); } catch (err) { toast('타일셋 복사 실패: ' + err.message, 'bad'); return; } }
       const tim = await PDM.assets.load(rel).catch(() => null), tcell = tim ? Math.max(1, Math.round(tim.width / 16)) : 16;
-      const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, rel, 256, 256, tcell, null, { tilePreview: c.base || 'SEWER' });
+      const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, rel, 256, 256, tcell, null, { tilePreview: c.base || 'SEWER', light: { bloom: c.lightBloom || 0, unit: tcell / 16, onBloom: v => store.edit('world', '타일 효과 레이어 번짐', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.lightBloom = v; }, { silent: true }), mode: c.lightMode || 'add', onMode: m => store.edit('world', '타일 효과 레이어 합성 방식', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.lightMode = m; }, { silent: true }) } });
       if (out && out !== c.tiles) store.edit('world', '타일셋 경로', w => { w.customThemes[i].tiles = out; });
       if (out) { PDM.assets.clear(); ctx.refresh(); }
     };

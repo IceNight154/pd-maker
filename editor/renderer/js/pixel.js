@@ -11,14 +11,25 @@ PDM.pixelEditor = function (o) {
   const { h } = PDM;
   let W = o.width || 16, H = o.height || 16;
   let scale = o.scale || Math.max(2, Math.floor(384 / Math.max(W, H)));
-  let color = PDM.PALETTE[4], alpha = 1, tool = 'pen', grid = true, gridStep = o.gridStep || 0;   // alpha: 칠할 색의 불투명도 0~1
+  let color = PDM.PALETTE[4], alpha = 1, tool = 'pen', grid = true, tileGrid = true, gridStep = o.gridStep || 0;   // alpha: 칠할 색의 불투명도 0~1
   const data = document.createElement('canvas'); data.width = W; data.height = H;
   const dg = data.getContext('2d', { willReadFrequently: true });
+  // ---- 빛 레이어 (o.light): 그림과 같은 크기의 둘째 그림. 게임에서 그림 위에 "덧셈 합성"으로 그려져 실제로 빛나 보임 (<파일>_light.png)
+  //  data 는 언제나 "지금 고치는 레이어", other 는 나머지 레이어 — 레이어를 바꾸면 두 캔버스의 내용을 맞바꿈
+  const hasLight = !!o.light;
+  const other = document.createElement('canvas'); other.width = W; other.height = H;
+  const og = other.getContext('2d', { willReadFrequently: true });
+  let layer = 'base', darkBg = true, showLight = true, lightMode = (o.light && o.light.mode) || 'add', lightBloom = +((o.light && o.light.bloom) || 0);
+  const LIGHT_OPS = { add: 'lighter', screen: 'screen', overlay: 'overlay', dodge: 'color-dodge' };
+  const baseCv = () => layer === 'base' ? data : other, lightCv = () => layer === 'light' ? data : other;
+  function swapTo(l) { if (!hasLight || l === layer) return; const a = dg.getImageData(0, 0, W, H), b = og.getImageData(0, 0, W, H); dg.putImageData(b, 0, 0); og.putImageData(a, 0, 0); layer = l; if (typeof layerState === 'function') layerState(); }
+  function setLayer(l) { if (!hasLight || l === layer) return; commitFloating(); fxCommit(); swapTo(l); draw(); }
   const view = h('canvas', { class: 'px-canvas' });
   const hist = [], fut = [];
-  const cap = () => ({ img: dg.getImageData(0, 0, W, H), w: W, h: H });
-  const put = st => { if (st.w !== W || st.h !== H) { W = st.w; H = st.h; data.width = W; data.height = H; syncSize(); } dg.putImageData(st.img, 0, 0); };
-  const snap = () => { hist.push(cap()); if (hist.length > 60) hist.shift(); fut.length = 0; };
+  const cap = () => ({ img: dg.getImageData(0, 0, W, H), w: W, h: H, layer });
+  const put = st => { if (st.layer && st.layer !== layer) swapTo(st.layer);
+    if (st.w !== W || st.h !== H) { const t = document.createElement('canvas'); t.width = other.width; t.height = other.height; t.getContext('2d').drawImage(other, 0, 0); W = st.w; H = st.h; data.width = W; data.height = H; other.width = W; other.height = H; og.drawImage(t, 0, 0); syncSize(); } dg.putImageData(st.img, 0, 0); };
+  const snap = () => { fxCommit(); hist.push(cap()); if (hist.length > 60) hist.shift(); fut.length = 0; };
   /** 작업 영역 크기 바꾸기 — anchor: 기존 그림을 어디에 둘지 (nw·n·ne·w·c·e·sw·s·se) */
   function resizeCanvas(nw, nh, anchor) {
     nw = Math.max(1, Math.min(4096, nw | 0)); nh = Math.max(1, Math.min(4096, nh | 0));
@@ -28,8 +39,9 @@ PDM.pixelEditor = function (o) {
     const ax = /w$/.test(anchor) || anchor === 'w' ? 0 : /e$/.test(anchor) ? 1 : 0.5;
     const ay = /^n/.test(anchor) ? 0 : /^s/.test(anchor) ? 1 : 0.5;
     const dx = Math.round((nw - W) * ax), dy = Math.round((nh - H) * ay);
-    W = nw; H = nh; data.width = W; data.height = H;
-    dg.clearRect(0, 0, W, H); dg.drawImage(old, dx, dy);
+    const old2 = document.createElement('canvas'); old2.width = W; old2.height = H; old2.getContext('2d').drawImage(other, 0, 0);
+    W = nw; H = nh; data.width = W; data.height = H; other.width = W; other.height = H;
+    dg.clearRect(0, 0, W, H); dg.drawImage(old, dx, dy); og.drawImage(old2, dx, dy);
     scale = Math.max(1, Math.min(48, Math.floor(384 / Math.max(W, H)) || 1));
     syncSize(); draw();
   }
@@ -38,18 +50,25 @@ PDM.pixelEditor = function (o) {
   function syncSize() { wIn.value = W; hIn.value = H; sizeInfo.textContent = '오른쪽 클릭 = 지우기 · Ctrl+휠 = 확대 · 그림 창 모서리 ◢ 끌기 = 표시 크기·배율. 크기 ' + W + '×' + H + (gridStep ? ` (칸 ${gridStep}px → ${Math.floor(W / gridStep)}×${Math.floor(H / gridStep)})` : ''); }
 
   function draw() {
+    strokeFlush();
     if (document.activeElement !== zoomIn) zoomIn.value = scale;
     view.width = W * scale; view.height = H * scale;
     const g = view.getContext('2d'); g.imageSmoothingEnabled = false;
     g.clearRect(0, 0, view.width, view.height);
-    g.drawImage(data, 0, 0, W * scale, H * scale);
+    if (hasLight) {   // 그림 + 빛 레이어를 게임처럼 겹쳐 보기 (빛은 덧셈 합성)
+      if (darkBg) { g.fillStyle = '#14121a'; g.fillRect(0, 0, view.width, view.height); }
+      g.drawImage(baseCv(), 0, 0, W * scale, H * scale);
+      if (showLight || layer === 'light') { g.globalCompositeOperation = LIGHT_OPS[lightMode] || 'lighter'; g.drawImage(lightCv(), 0, 0, W * scale, H * scale);
+        if (lightBloom > 0) { g.globalCompositeOperation = 'lighter'; g.filter = `blur(${(lightBloom * (o.light.unit || 1) / 2.2 * scale).toFixed(1)}px) brightness(${(1 + lightBloom * (o.light.unit || 1) / 2.2 * 0.9).toFixed(2)})`; g.drawImage(lightCv(), 0, 0, W * scale, H * scale); g.filter = 'none'; }   // 번짐 (게임의 MakerBloom 과 같은 가우시안)
+        g.globalCompositeOperation = 'source-over'; }
+    } else g.drawImage(data, 0, 0, W * scale, H * scale);
     if (grid && scale >= 6) {
       g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1; g.beginPath();
       for (let x = 0; x <= W; x++) { g.moveTo(x * scale + .5, 0); g.lineTo(x * scale + .5, H * scale); }
       for (let y = 0; y <= H; y++) { g.moveTo(0, y * scale + .5); g.lineTo(W * scale, y * scale + .5); }
       g.stroke();
     }
-    if (gridStep) {
+    if (gridStep && tileGrid) {
       g.strokeStyle = 'rgba(165,139,255,.5)'; g.beginPath();
       for (let x = 0; x <= W; x += gridStep) { g.moveTo(x * scale + .5, 0); g.lineTo(x * scale + .5, H * scale); }
       for (let y = 0; y <= H; y += gridStep) { g.moveTo(0, y * scale + .5); g.lineTo(W * scale, y * scale + .5); }
@@ -93,6 +112,11 @@ PDM.pixelEditor = function (o) {
   let sel = null, floating = null, selDrag = null;
   const selInfo = h('small', { class: 'hint' });
   let brush = 1, hov = null;
+  // 브러쉬 합성 방식 (그림 프로그램의 브러쉬 합성 모드) — 칠하는 색을 밑그림과 이 식으로 섞음 (b = 밑그림, s = 칠하는 색, 0~1)
+  let brushMode = 'normal', brushSoft = false, lockAlpha = false, stroke = null;
+  const BLEND = { normal: (b, s) => s, add: (b, s) => Math.min(1, b + s), dodge: (b, s) => s >= 1 ? 1 : Math.min(1, b / (1 - s)), screen: (b, s) => 1 - (1 - b) * (1 - s),
+    overlay: (b, s) => b < .5 ? 2 * b * s : 1 - 2 * (1 - b) * (1 - s), multiply: (b, s) => b * s };
+  const BRUSH_MODES = { normal: '보통', add: '발광 (더하기)', dodge: '발광 닷지 (색상 닷지)', screen: '스크린', overlay: '오버레이', multiply: '곱하기 (어둡게)' };
   const sizes = { pen: 1, erase: 1 };   // 브러쉬 · 지우개 크기는 따로 기억
   const sizeKey = () => tool === 'erase' ? 'erase' : 'pen';
   const inSel = (x, y) => sel && x >= sel.x && y >= sel.y && x < sel.x + sel.w && y < sel.y + sel.h && (!sel.mask || sel.mask[y * W + x] === 1);
@@ -141,7 +165,7 @@ PDM.pixelEditor = function (o) {
     for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (r.mask[(r.y + y) * W + r.x + x]) { const i = (y * r.w + x) * 4; d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0; }
     dg.putImageData(img, r.x, r.y);
   }
-  const undo = () => { if (hist.length) { fut.push(cap()); put(hist.pop()); floating = null; draw(); } };
+  const undo = () => { if (fx.base) { fxCancel(); return; } if (hist.length) { fut.push(cap()); put(hist.pop()); floating = null; draw(); } };
   const redo = () => { if (fut.length) { hist.push(cap()); put(fut.pop()); floating = null; draw(); } };
   function setBrush(n) { brush = sizes[sizeKey()] = Math.max(1, Math.min(64, Math.round(n) || 1)); brushIn.value = brush; draw(); }
   function syncBrush() { brush = sizes[sizeKey()]; try { brushIn.value = brush; brushLbl.textContent = tool === 'erase' ? '지우개 크기' : '브러쉬 크기'; } catch (_) { /* 아직 화면을 만들기 전 */ } }
@@ -213,7 +237,7 @@ PDM.pixelEditor = function (o) {
   };
   addEventListener('keyup', onKeyUpNav, true);
   addEventListener('blur', () => { navKey = null; nav = null; view.style.cursor = ''; });
-  addEventListener('mousemove', e => {
+  addEventListener('pointermove', e => {
     if (!nav) return;
     const pn = view.parentNode;
     if (nav.type === 'pan') { pn.scrollLeft = nav.l - (e.clientX - nav.x); pn.scrollTop = nav.t - (e.clientY - nav.y); return; }
@@ -225,7 +249,7 @@ PDM.pixelEditor = function (o) {
       pn.scrollLeft = fx * scale - pn.clientWidth / 2; pn.scrollTop = fy * scale - pn.clientHeight / 2;
     }
   });
-  addEventListener('mouseup', () => { if (nav) { nav = null; view.style.cursor = navKey === 'pan' ? 'grab' : navKey === 'zoom' ? 'zoom-in' : ''; } });
+  addEventListener('pointerup', () => { if (nav) { nav = null; view.style.cursor = navKey === 'pan' ? 'grab' : navKey === 'zoom' ? 'zoom-in' : ''; } });
   const hex = (r, g, b) => '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
   const SEL_TOOLS = ['select', 'lasso', 'wand'];
   function px1(x, y, c) {
@@ -235,7 +259,30 @@ PDM.pixelEditor = function (o) {
     if (c !== null && alpha > 0) { dg.globalAlpha = alpha; dg.fillStyle = c; dg.fillRect(x, y, 1, 1); dg.globalAlpha = 1; }
   }
   /** 브러쉬 크기만큼 (정사각형, 누른 칸이 가운데) */
-  function setPx(x, y, c) { const o0 = Math.floor(brush / 2); for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) px1(x - o0 + dx, y - o0 + dy, c); }
+  function setPx(x, y, c) {
+    const o0 = Math.floor(brush / 2);
+    if (c === null || (brushMode === 'normal' && !brushSoft && !lockAlpha)) { for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) px1(x - o0 + dx, y - o0 + dy, c); return; }
+    // 합성 브러쉬 (발광 · 닷지 · 오버레이 …) / 부드러운 브러쉬 / 알파 잠금: 한 번 긋는 동안은 같은 칸을 여러 번 지나가도 한 번만 칠해지게, 긋기 전 그림(stroke.base)에서 다시 계산
+    if (!stroke) { const img = dg.getImageData(0, 0, W, H); stroke = { base: new Uint8ClampedArray(img.data), img, mask: new Float32Array(W * H), dirty: false }; }
+    const cr = parseInt(c.slice(1, 3), 16) / 255, cg = parseInt(c.slice(3, 5), 16) / 255, cb = parseInt(c.slice(5, 7), 16) / 255, rad = brush / 2;
+    for (let dy = 0; dy < brush; dy++) for (let dx = 0; dx < brush; dx++) {
+      const px = x - o0 + dx, py = y - o0 + dy;
+      if (px < 0 || py < 0 || px >= W || py >= H || (sel && !floating && !inSel(px, py))) continue;
+      let cov = 1;
+      if (brushSoft && brush > 1) { const d = Math.hypot(dx + .5 - rad, dy + .5 - rad) / rad; if (d >= 1) continue; cov = Math.pow(1 - d, 1.3); }
+      const i = py * W + px; if (cov <= stroke.mask[i]) continue; stroke.mask[i] = cov;
+      const k = cov * alpha, b = stroke.base, d2 = stroke.img.data, q = i * 4, ab = b[q + 3] / 255;
+      if (lockAlpha && ab === 0) continue;
+      const ao = lockAlpha ? ab : k + ab * (1 - k);
+      [cr, cg, cb].forEach((sv, ch) => { const bv = b[q + ch] / 255; const m = BLEND[brushMode](bv, sv);
+        const cs = (1 - ab) * sv + ab * m;                               // 투명한 곳에는 색 그대로, 그려진 곳에는 합성 결과
+        const co = lockAlpha ? (k * m + (1 - k) * bv) * ab : k * cs + (1 - k) * ab * bv;
+        d2[q + ch] = ao > 0 ? Math.round(Math.min(1, co / ao) * 255) : 0; });
+      d2[q + 3] = Math.round(ao * 255);
+      stroke.dirty = true;
+    }
+  }
+  const strokeFlush = () => { if (stroke && stroke.dirty) { dg.putImageData(stroke.img, 0, 0); stroke.dirty = false; } };
   function fill(x0, y0, c) {
     const img = dg.getImageData(0, 0, W, H), d = img.data;
     const at = (x, y) => (y * W + x) * 4, t = at(x0, y0);
@@ -254,7 +301,8 @@ PDM.pixelEditor = function (o) {
   }
   const cell = e => { const r = view.getBoundingClientRect(); return [Math.floor((e.clientX - r.left) / scale), Math.floor((e.clientY - r.top) / scale)]; };
   let down = false;
-  view.addEventListener('mousedown', e => {
+  view.addEventListener('pointerdown', e => {
+    stroke = null;   // 새로 긋기 시작
     if (navKey && e.button === 0) {   // 이동 · 확대/축소 중에는 그리지 않음
       e.preventDefault();
       const pn = view.parentNode, r = pn.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -284,11 +332,11 @@ PDM.pixelEditor = function (o) {
     if (floating) commitFloating();
     if (tool === 'pick') { const p = dg.getImageData(x, y, 1, 1).data; if (p[3]) { color = hex(p[0], p[1], p[2]); colorIn.value = color; setAlpha(p[3] / 255); drawPal(); } return; }
     snap();
-    if (tool === 'fill') { if (e.button !== 2) useColor(color); fill(x, y, e.button === 2 ? null : color); draw(); return; }
-    if (tool !== 'erase' && e.button !== 2) useColor(color);
-    down = [x, y]; setPx(x, y, tool === 'erase' || e.button === 2 ? null : color); draw();
+    if (tool === 'fill') { if (e.button !== 2) useColor(color); fill(x, y, e.button === 2 || e.button === 5 ? null : color); draw(); return; }
+    if (tool !== 'erase' && e.button !== 2 && e.button !== 5) useColor(color);
+    down = [x, y]; setPx(x, y, tool === 'erase' || e.button === 2 || e.button === 5 ? null : color); draw();
   });
-  view.addEventListener('mousemove', e => {
+  view.addEventListener('pointermove', e => {
     if (!selDrag) return;
     const [x, y] = cell(e);
     if (selDrag.move) { floating.x = x - selDrag.ox; floating.y = y - selDrag.oy; sel = { x: floating.x, y: floating.y, w: floating.cv.width, h: floating.cv.height }; }
@@ -298,22 +346,26 @@ PDM.pixelEditor = function (o) {
         sel = selDrag.mode === 'new' ? r : combine(selDrag.base, rectMask(r), selDrag.mode); } }
     draw();
   });
-  view.addEventListener('mousemove', e => {
+  view.addEventListener('pointermove', e => {
     const [x, y] = cell(e);
     if (!down) { if (brush > 1 && (tool === 'pen' || tool === 'erase') && (!hov || hov[0] !== x || hov[1] !== y)) { hov = [x, y]; draw(); } return; }
     hov = [x, y];
-    const c = tool === 'erase' || e.buttons === 2 ? null : color;
+    const c = tool === 'erase' || (e.buttons & 34) ? null : color;   // 34 = 오른쪽 버튼(2) + 펜 지우개(32)
     lineCells(down[0], down[1], x, y, (a, b) => setPx(a, b, c));   // 빨리 움직여도 끊기지 않게 사이를 이음
     down = [x, y]; draw();
   });
-  view.addEventListener('mouseleave', () => { if (hov) { hov = null; draw(); } });
-  addEventListener('mouseup', () => { down = false; if (selDrag) {
+  view.addEventListener('pointerleave', () => { if (hov) { hov = null; draw(); } });
+  addEventListener('pointerup', () => { strokeFlush(); stroke = null; down = false; if (selDrag) {
     if (!selDrag.move) {
       if (selDrag.pts) sel = selDrag.pts.length > 2 ? combine(selDrag.base, lassoMask(selDrag.pts), selDrag.mode) : selDrag.base;
       else if (!selDrag.moved) sel = selDrag.mode === 'new' ? null : selDrag.base;
     }
     selDrag = null; if (wrap.isConnected) draw(); } });
   view.addEventListener('contextmenu', e => e.preventDefault());
+  // 태블릿 펜 · 터치: 브라우저가 "끌기 = 화면 스크롤"로 가져가지 않게 하고(touch-action), 펜이 그림 밖으로 나가도 계속 그려지게 함
+  view.style.touchAction = 'none';
+  view.addEventListener('pointerdown', e => { try { view.setPointerCapture(e.pointerId); } catch (_) { /* 잡을 수 없는 포인터 */ } });
+  addEventListener('pointercancel', () => dispatchEvent(new PointerEvent('pointerup')));
 
   // 최근 사용 색 8칸 (실제로 칠한 색 — 편집기를 다시 열어도 이어짐)
   const recent = PDM._pixRecent = PDM._pixRecent || [];
@@ -338,15 +390,129 @@ PDM.pixelEditor = function (o) {
   const zoomIn = h('input', { type: 'number', min: 1, max: 48, value: scale, style: { width: '56px' }, title: '표시 배율: 그림의 한 픽셀을 화면에서 몇 배로 볼지' });
   zoomIn.addEventListener('change', () => { scale = Math.max(1, Math.min(48, Math.round(+zoomIn.value || 1))); draw(); });
   const fitFrame = () => { const pane = view.parentNode; if (!pane || !gridStep) return; const r = pane.getBoundingClientRect(); scale = Math.max(1, Math.min(48, Math.floor(Math.min(r.width / gridStep, r.height / (o.rowStep || gridStep)) * 0.9))); draw(); };
+  // ---------------- 영역 효과 (발광 · 안쪽 발광 · 외곽선 · 그림자 · 밝기) ----------------
+  //  고른 영역(선택이 없으면 그림 전체) 안의 "그려진 칸"이 효과의 근원. 영역 안에 그려진 칸이 없으면 영역 자체가 근원.
+  //  미리보기는 fx.base(효과 전 그림)에서 매번 다시 계산 — "적용"하면 되돌리기 한 단계로 남음.
+  const fx = { base: null, type: 'glow', radius: 3, power: 70, emptyOnly: false, color: null, dx: 1, dy: 1 };
+  function fxCommit() { if (!fx.base) return; hist.push({ img: fx.base, w: W, h: H, layer: fx.layer || layer }); if (hist.length > 60) hist.shift(); fut.length = 0; fx.base = null; if (typeof fxState === 'function') fxState(); }
+  function fxCancel() { if (!fx.base) return; if (fx.layer && fx.layer !== layer) swapTo(fx.layer); dg.putImageData(fx.base, 0, 0); fx.base = null; fxState(); draw(); }
+  function fxRun() {
+    if (floating) commitFloating();
+    const toLight = hasLight && fxL.checked;   // 효과를 빛 레이어에 그림 (근원은 그림 레이어에서 찾음)
+    if (fx.base && fx.lit !== toLight) { dg.putImageData(fx.base, 0, 0); fx.base = null; }
+    let detData = null;
+    if (toLight) { if (layer !== 'light') { fx.base = null; swapTo('light'); } detData = og.getImageData(0, 0, W, H).data; }
+    fx.lit = toLight;
+    if (!fx.base) { fx.base = dg.getImageData(0, 0, W, H); fx.layer = layer; }
+    const src = fx.base, out = new ImageData(new Uint8ClampedArray(src.data), W, H), d = out.data, sd = src.data, det = detData || sd;
+    const m = sel ? selMask(sel) : null, N = W * H;
+    let source = new Uint8Array(N), any = false;
+    for (let i = 0; i < N; i++) if ((!m || m[i]) && det[i * 4 + 3] > 0) { source[i] = 1; any = true; }
+    if (!any) { if (!m) { fx.base = null; PDM.toast && PDM.toast('그려진 칸이 없습니다 — 먼저 그리거나 영역을 고르세요', 'bad'); fxState(); return; } source = Uint8Array.from(m); }
+    const hx = (fx.color || color).replace('#', ''), cr = parseInt(hx.slice(0, 2), 16), cg2 = parseInt(hx.slice(2, 4), 16), cb = parseInt(hx.slice(4, 6), 16);
+    const pw = Math.max(0, Math.min(100, fx.power)) / 100, R = Math.max(1, fx.radius | 0);
+    /** 색 (cr,cg2,cb) 을 불투명도 a 로 칸 i 위에 덧칠 */
+    const over = (i, a) => { const k = i * 4, da = sd[k + 3] / 255, oa = a + da * (1 - a); if (oa <= 0) return;
+      d[k] = Math.round((cr * a + sd[k] * da * (1 - a)) / oa); d[k + 1] = Math.round((cg2 * a + sd[k + 1] * da * (1 - a)) / oa); d[k + 2] = Math.round((cb * a + sd[k + 2] * da * (1 - a)) / oa); d[k + 3] = Math.round(oa * 255); };
+    /** 근원(또는 근원이 아닌 칸)까지의 거리 — 3-4 chamfer 두 번 훑기 */
+    const dist = inside => { const D = new Float32Array(N).fill(1e9);
+      for (let i = 0; i < N; i++) if (inside ? !source[i] : source[i]) D[i] = 0;
+      if (inside) { for (let x = 0; x < W; x++) { D[x] = Math.min(D[x], source[x] ? 1 : 0); const b = (H - 1) * W + x; D[b] = Math.min(D[b], source[b] ? 1 : 0); } for (let y = 0; y < H; y++) { D[y * W] = Math.min(D[y * W], source[y * W] ? 1 : 0); const r = y * W + W - 1; D[r] = Math.min(D[r], source[r] ? 1 : 0); } }
+      const rl = (i, j, w) => { if (D[j] + w < D[i]) D[i] = D[j] + w; };
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (x > 0) rl(i, i - 1, 1); if (y > 0) { rl(i, i - W, 1); if (x > 0) rl(i, i - W - 1, 1.4142); if (x < W - 1) rl(i, i - W + 1, 1.4142); } }
+      for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (x < W - 1) rl(i, i + 1, 1); if (y < H - 1) { rl(i, i + W, 1); if (x < W - 1) rl(i, i + W + 1, 1.4142); if (x > 0) rl(i, i + W - 1, 1.4142); } }
+      return D; };
+    if (fx.type === 'glow' || fx.type === 'outline') {
+      const D = dist(false), rr = fx.type === 'outline' ? R : R + 1;
+      if (toLight && fx.type === 'glow') for (let i = 0; i < N; i++) if (source[i]) over(i, Math.min(1, pw * 0.6));   // 빛나는 물체 자체도 밝게
+      for (let i = 0; i < N; i++) { if (source[i] || D[i] > rr - (fx.type === 'outline' ? 0 : 1e-6) + (fx.type === 'outline' ? 0.45 : 0)) continue; if (fx.emptyOnly && det[i * 4 + 3] > 0) continue;
+        const a = fx.type === 'outline' ? pw : pw * Math.pow(Math.max(0, 1 - D[i] / (R + 1)), 1.6);
+        if (a > 0.01) over(i, Math.min(1, a)); }
+    } else if (fx.type === 'inner') {   // 안쪽 발광: 가장자리에서 안으로 번짐
+      const D = dist(true);
+      for (let i = 0; i < N; i++) { if (!source[i] || D[i] > R) continue; const a = pw * Math.pow(Math.max(0, 1 - (D[i] - 1) / R), 1.4); if (a > 0.01) over(i, Math.min(1, a)); }
+    } else if (fx.type === 'light' || (toLight && fx.type === 'bright')) {   // 영역 전체를 그 색 쪽으로 밝힘 (가운데가 가장 밝게)
+      const D = dist(true); let mx = 1; for (let i = 0; i < N; i++) if (source[i] && D[i] < 1e8 && D[i] > mx) mx = D[i];
+      for (let i = 0; i < N; i++) { if (!source[i]) continue; const a = pw * (0.45 + 0.55 * Math.min(1, D[i] / mx)); if (toLight) over(i, Math.min(1, a)); else { over(i, Math.min(1, a) * (sd[i * 4 + 3] / 255 || 1)); if (sd[i * 4 + 3] > 0) d[i * 4 + 3] = sd[i * 4 + 3]; } }
+    } else if (fx.type === 'shadow') {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!source[i]) continue; const tx = x + (fx.dx | 0), ty = y + (fx.dy | 0); if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const j = ty * W + tx; if (source[j] || (fx.emptyOnly && det[j * 4 + 3] > 0)) continue; over(j, pw); }
+    } else if (fx.type === 'bright') {  // 밝기: 세기 50 = 그대로, 위로 밝게 · 아래로 어둡게
+      const f = (fx.power - 50) / 50;
+      for (let i = 0; i < N; i++) { if (!source[i] || !sd[i * 4 + 3]) continue; const k = i * 4; for (let c = 0; c < 3; c++) d[k + c] = Math.round(f >= 0 ? sd[k + c] + (255 - sd[k + c]) * f : sd[k + c] * (1 + f)); }
+    }
+    dg.putImageData(out, 0, 0); fxState(); draw();
+  }
+  const FX = { glow: '발광 (바깥으로 번지는 빛)', inner: '안쪽 발광 (가장자리에서 안으로)', light: '빛나는 영역 (영역을 그 색으로 밝힘)', outline: '외곽선', shadow: '그림자', bright: '밝기 조절' };
+  const fxSel = h('select', {}, ...Object.entries(FX).map(([k, v]) => h('option', { value: k }, v)));
+  const fxCol = h('input', { type: 'color', value: color, title: '효과 색' });
+  const fxR = h('input', { type: 'range', min: 1, max: 12, value: fx.radius, style: { flex: 1 } }), fxRn = h('span', { class: 'hint', style: { width: '32px' } }, fx.radius + 'px');
+  const fxP = h('input', { type: 'range', min: 0, max: 100, value: fx.power, style: { flex: 1 } }), fxPn = h('span', { class: 'hint', style: { width: '32px' } }, fx.power + '%');
+  const fxE = h('input', { type: 'checkbox' }), fxDx = h('input', { type: 'number', value: 1, min: -8, max: 8, style: { width: '52px' } }), fxDy = h('input', { type: 'number', value: 1, min: -8, max: 8, style: { width: '52px' } });
+  const fxApply = h('button', { class: 'btn xs pri', disabled: true, title: '지금 보이는 효과를 그림에 넣습니다 (Ctrl+Z 로 되돌릴 수 있음)', onclick: e => { e.preventDefault(); fxCommit(); draw(); } }, '적용'),
+    fxUndo = h('button', { class: 'btn xs', disabled: true, title: '효과를 넣기 전으로', onclick: e => { e.preventDefault(); fxCancel(); } }, '취소');
+  const fxRows = { radius: h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint', style: { width: '44px' } }, '번짐'), fxR, fxRn),
+    off: h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '옮김 →'), fxDx, h('span', { class: 'hint' }, '↓'), fxDy),
+    empty: h('label', { class: 'check' }, fxE, '빈 칸(투명)에만 — 이미 그려진 칸은 덮지 않음') };
+  const fxL = h('input', { type: 'checkbox', checked: hasLight });
+  fxL.addEventListener('change', () => { if (fx.base) fxGo(); });
+  const fxLrow = hasLight ? h('label', { class: 'check', title: '켜면 효과가 그림이 아니라 빛 레이어에 그려져서, 게임에서 그림 위에 덧셈 합성으로 실제로 빛납니다' }, fxL, h('b', {}, '✨ 효과 레이어에 넣기'), ' — 게임에서 합성 방식대로 겹침') : null;
+  const fxNote = h('small', { class: 'hint' });
+  function fxState() { fxApply.disabled = fxUndo.disabled = !fx.base;
+    fxRows.radius.style.display = ['glow', 'inner', 'outline'].includes(fx.type) ? 'flex' : 'none'; fxRows.off.style.display = fx.type === 'shadow' ? 'flex' : 'none';
+    fxRows.empty.style.display = ['glow', 'outline', 'shadow'].includes(fx.type) ? '' : 'none'; fxCol.style.display = fx.type === 'bright' ? 'none' : '';
+    fxNote.textContent = fx.base ? '미리보기 중 — "적용"을 눌러야 그림에 들어갑니다 (다른 도구를 쓰거나 저장하면 자동으로 적용).' : (sel ? '고른 영역 안의 그려진 칸에서 효과가 나옵니다.' : '영역을 고르지 않으면 그림 전체가 대상입니다. 사각 선택 · 올가미 · 마법봉으로 빛낼 부분만 고르세요.'); }
+  const fxGo = () => { fx.type = fxSel.value; fx.color = fxCol.value; fx.radius = +fxR.value; fx.power = +fxP.value; fx.emptyOnly = fxE.checked; fx.dx = +fxDx.value | 0; fx.dy = +fxDy.value | 0; fxRn.textContent = fx.radius + 'px'; fxPn.textContent = fx.type === 'bright' ? (fx.power - 50 > 0 ? '+' : '') + (fx.power - 50) * 2 + '%' : fx.power + '%'; fxRun(); };
+  [fxCol, fxR, fxP, fxDx, fxDy].forEach(el => el.addEventListener('input', () => { if (fx.base) fxGo(); else { fxRn.textContent = fxR.value + 'px'; fxPn.textContent = fxP.value + '%'; } }));
+  fxE.addEventListener('change', () => { if (fx.base) fxGo(); });
+  fxSel.addEventListener('change', () => { const was = !!fx.base; fx.type = fxSel.value; if (fx.type === 'bright' && !was) fxP.value = 70; if (was) fxGo(); else fxState(); });
+  const fxPanel = h('details', { class: 'px-fx', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '4px 8px' } },
+    h('summary', { style: { cursor: 'pointer' } }, '✨ 영역 효과 — 발광 · 외곽선 · 그림자 · 밝기'),
+    h('div', { style: { display: 'grid', gap: '5px', marginTop: '5px' } },
+      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, fxSel, fxCol,
+        h('button', { class: 'btn xs', title: '지금 칠하는 색을 효과 색으로', onclick: e => { e.preventDefault(); fxCol.value = color; if (fx.base) fxGo(); } }, '칠하는 색')),
+      fxLrow, fxRows.radius, h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint', style: { width: '44px' } }, '세기'), fxP, fxPn), fxRows.off, fxRows.empty,
+      h('div', { style: { display: 'flex', gap: '6px' } }, h('button', { class: 'btn xs', title: '효과를 그림에 미리 보여 줍니다 — 값을 움직이면 바로 다시 그려집니다', onclick: e => { e.preventDefault(); fxGo(); } }, '미리보기'), fxApply, fxUndo),
+      fxNote));
+  fxState();
+  const lyB = h('button', { class: 'btn xs', title: '스프라이트 그림', onclick: e => { e.preventDefault(); setLayer('base'); } }, '🖼 그림'),
+    lyL = h('button', { class: 'btn xs', title: '빛 레이어 — 여기에 칠한 색은 게임에서 그림 위에 더해져(덧셈 합성) 빛나 보입니다. 어두운 색 = 약한 빛, 밝은 색 = 강한 빛', onclick: e => { e.preventDefault(); setLayer('light'); } }, '✨ 효과 레이어');
+  const lyBg = h('input', { type: 'checkbox', checked: true }), lyShow = h('input', { type: 'checkbox', checked: true });
+  lyBg.onchange = () => { darkBg = lyBg.checked; draw(); }; lyShow.onchange = () => { showLight = lyShow.checked; draw(); };
+  function layerState() { lyB.classList.toggle('pri', layer === 'base'); lyL.classList.toggle('pri', layer === 'light'); }
+  const layerBar = !hasLight ? null : h('div', { class: 'px-layers', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '4px 8px', display: 'grid', gap: '4px' } },
+    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '레이어'), lyB, lyL,
+      h('span', { class: 'fl' }, '합성'), (() => { const sl = h('select', { title: '효과 레이어를 그림 위에 겹치는 방식 (게임에서도 같은 방식으로 겹칩니다)' },
+        ...[['add', '발광 (더하기)'], ['screen', '스크린'], ['overlay', '오버레이'], ['dodge', '닷지 (색상 닷지)']].map(([k, v]) => h('option', { value: k, selected: k === lightMode }, v)));
+        sl.onchange = () => { lightMode = sl.value; if (o.light && o.light.onMode) o.light.onMode(lightMode); draw(); }; return sl; })(),
+      h('span', { class: 'fl', title: '효과 레이어를 흐리게 번지게 해서 은은하게 퍼지는 빛을 만듭니다 (칸 밖 · 이웃 타일 위로도 퍼짐). 0 = 번짐 없음' }, '번짐'),
+      (() => { const r = h('input', { type: 'range', min: 0, max: 32, step: 1, value: lightBloom, style: { width: '110px' } }), n = h('span', { class: 'hint', style: { width: '34px' } }, lightBloom + 'px');
+        r.oninput = () => { lightBloom = +r.value; n.textContent = lightBloom + 'px'; draw(); }; r.onchange = () => { if (o.light && o.light.onBloom) o.light.onBloom(lightBloom); }; return h('span', { style: { display: 'inline-flex', gap: '4px', alignItems: 'center' } }, r, n); })(),
+      h('label', { class: 'check' }, lyShow, '빛 보기'), h('label', { class: 'check' }, lyBg, '어두운 배경'),
+      h('button', { class: 'btn xs', title: '빛 레이어를 모두 지웁니다', onclick: e => { e.preventDefault(); if (layer !== 'light') setLayer('light'); snap(); dg.clearRect(0, 0, W, H); draw(); } }, '빛 지우기')),
+    h('small', { class: 'hint' }, '효과 레이어는 게임에서 그림 위에 고른 합성 방식으로 겹칩니다 — 발광 = 색을 더해 빛남 · 스크린 = 부드럽게 밝아짐 · 오버레이 = 밝은 색은 밝게 어두운 색은 어둡게(대비) · 닷지 = 밑그림이 밝을수록 강하게 타오름. 직접 칠하거나 아래 "영역 효과"의 "효과 레이어에 넣기"로 만듭니다 (_light.png 로 저장).'));
+  layerState();
+
   const toolBtn = (id, label, tip) => h('button', { class: 'tool' + (tool === id ? ' on' : ''), 'data-t': id, title: tip || '', onclick: e => { e.preventDefault(); if (!SEL_TOOLS.includes(id)) commitFloating(); setTool(id); draw(); } }, label);
   const brushIn = h('input', { type: 'number', min: 1, max: 64, value: 1, style: { width: '56px' }, title: '브러쉬 크기 — [ 작게 · ] 크게 (브러쉬와 지우개는 크기를 따로 기억)' });
   const brushLbl = h('span', { class: 'fl' }, '브러쉬 크기');
   brushIn.addEventListener('change', () => setBrush(+brushIn.value));
-  const side = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '190px' } },
+  const side = h('div', { class: 'px-side-col', style: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '260px', flex: '1 1 300px' } },
+    layerBar,
     h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, toolBtn('pen', '✎ 브러쉬', 'B'), toolBtn('erase', '⌫ 지우개', 'E'), toolBtn('fill', '▣ 채우기', 'G'), toolBtn('pick', '⊙ 스포이드', 'I'),
       toolBtn('select', '⬚ 사각 선택', 'M'), toolBtn('lasso', '➰ 올가미', 'L — 끌어서 그린 모양 안쪽을 선택'), toolBtn('wand', '✦ 마법봉', 'W — 누른 칸과 이어진 같은 색을 선택')),
     h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, brushLbl, brushIn,
       h('button', { class: 'btn xs', title: '[', onclick: e => { e.preventDefault(); setBrush(brush - 1); } }, '[ 작게'), h('button', { class: 'btn xs', title: ']', onclick: e => { e.preventDefault(); setBrush(brush + 1); } }, '크게 ]')),
+    (() => { const ms = h('select', { title: '칠하는 색을 밑그림과 섞는 방식' }, ...Object.entries(BRUSH_MODES).map(([k, v]) => h('option', { value: k }, v)));
+      const note = h('small', { class: 'hint' });
+      const NOTES = { normal: '', add: '칠할수록 색이 더해져 밝아집니다 — 빛 · 불꽃 · 반짝임. 불투명도를 낮추고 여러 번 덧그리면 자연스럽습니다.', dodge: '밑그림이 밝은 곳일수록 강하게 타오릅니다 — 금속 광택 · 강한 빛. 어두운 색으로 칠해야 과하지 않습니다.',
+        screen: '부드럽게 밝아집니다 (하얗게 타지 않음).', overlay: '밝은 색은 밝게, 어두운 색은 어둡게 — 색감 · 대비 입히기.', multiply: '칠할수록 어두워집니다 — 그림자.' };
+      ms.onchange = () => { brushMode = ms.value; note.textContent = NOTES[brushMode]; };
+      const sf = h('input', { type: 'checkbox' }), la = h('input', { type: 'checkbox' });
+      sf.onchange = () => { brushSoft = sf.checked; }; la.onchange = () => { lockAlpha = la.checked; };
+      return h('div', { class: 'px-brushmode', style: { display: 'grid', gap: '3px' } },
+        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '브러쉬 합성'), ms,
+          h('label', { class: 'check', title: '브러쉬 가장자리로 갈수록 옅어집니다 (브러쉬 크기 2 이상)' }, sf, '부드럽게'),
+          h('label', { class: 'check', title: '이미 그려진 칸에만 칠합니다 (투명한 칸과 윤곽은 그대로)' }, la, '그려진 칸에만')), note); })(),
     h('small', { class: 'hint' }, '선택 도구: Shift+조작 = 선택에 더하기 · Alt+조작 = 선택에서 빼기. Ctrl+Z 되돌리기 · Ctrl+Shift+Z 다시 실행 · Space+끌기 = 이동 · Z+끌기 = 확대(바깥으로)/축소(안쪽으로)'),
     h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' } },
       h('button', { class: 'btn xs', title: 'Ctrl+C — 선택한 영역 복사 (선택이 없으면 그림 전체)', onclick: e => { e.preventDefault(); copySel(false); } }, '복사'),
@@ -355,6 +521,7 @@ PDM.pixelEditor = function (o) {
       h('button', { class: 'btn xs', title: 'Delete — 선택한 영역을 투명하게', onclick: e => { e.preventDefault(); clearSel(); } }, '지우기'),
       h('button', { class: 'btn xs', title: 'Ctrl+D 또는 Esc — 선택 해제 (붙여넣던 그림은 그 자리에 놓임)', onclick: e => { e.preventDefault(); deselect(); } }, '선택 해제')),
     selInfo,
+    fxPanel,
     h('div', {}, h('span', { class: 'fl' }, '최근 사용 색'), recEl),
     pal, h('label', { class: 'field' }, h('span', { class: 'fl' }, '직접 색 고르기'), colorIn),
     h('div', { class: 'field' }, h('span', { class: 'fl' }, '불투명도 (%)'), h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, alphaIn, alphaNum)),
@@ -366,7 +533,8 @@ PDM.pixelEditor = function (o) {
       h('button', { class: 'btn sm', title: 'Ctrl+Shift+Z', onclick: e => { e.preventDefault(); redo(); } }, '↷'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); scale = Math.min(48, scale + 2); draw(); } }, '+'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); scale = Math.max(1, scale - 2); draw(); } }, '−'),
-      h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); grid = !grid; draw(); } }, '격자'),
+      (() => { const b = h('button', { class: 'btn sm pri', title: '픽셀 한 칸마다 그리는 옅은 격자 켜기/끄기', onclick: e => { e.preventDefault(); grid = !grid; b.classList.toggle('pri', grid); draw(); } }, '픽셀 격자'); return b; })(),
+      gridStep ? (() => { const b = h('button', { class: 'btn sm pri', title: `${gridStep}px 칸(타일 · 프레임)마다 그리는 보라색 격자 켜기/끄기`, onclick: e => { e.preventDefault(); tileGrid = !tileGrid; b.classList.toggle('pri', tileGrid); draw(); } }, '칸 격자'); return b; })() : null,
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); snap(); dg.clearRect(0, 0, W, H); draw(); } }, '비우기')),
     sizeInfo,
     (() => {
@@ -384,20 +552,21 @@ PDM.pixelEditor = function (o) {
           step ? h('button', { class: 'btn xs', title: '오른쪽에 프레임 한 칸 더', onclick: e => { e.preventDefault(); resizeCanvas(W + step, H, 'w'); } }, '+1 프레임') : null,
           step ? h('button', { class: 'btn xs', title: '아래에 한 줄 더 (갑옷 단계 등)', onclick: e => { e.preventDefault(); resizeCanvas(W, H + (o.rowStep || H), 'n'); } }, '+1 줄') : null));
     })(),
-    o.onSave ? h('button', { class: 'btn pri', onclick: e => { e.preventDefault(); commitFloating(); o.onSave(data.toDataURL('image/png')); } }, '저장') : null,
-    o.onSaveAs ? h('button', { class: 'btn', title: '원래 파일은 그대로 두고 새 파일로 저장합니다', onclick: e => { e.preventDefault(); commitFloating(); o.onSaveAs(data.toDataURL('image/png')); } }, '다른 이름으로 저장…') : null);
+    o.onSave ? h('button', { class: 'btn pri', onclick: e => { e.preventDefault(); commitFloating(); fxCommit(); o.onSave(baseCv().toDataURL('image/png')); } }, '저장') : null,
+    o.onSaveAs ? h('button', { class: 'btn', title: '원래 파일은 그대로 두고 새 파일로 저장합니다', onclick: e => { e.preventDefault(); commitFloating(); fxCommit(); o.onSaveAs(baseCv().toDataURL('image/png')); } }, '다른 이름으로 저장…') : null);
   // 보기 창: 오른쪽 아래 모서리(◢)를 끌면 창 크기와 배율이 함께 커지거나 작아짐 (두 번 누르면 처음 크기로)
   const pane = h('div', { class: 'px-pane', style: { overflow: 'auto', maxWidth: 'min(70vw, 900px)', maxHeight: '70vh' } }, view);
   const grip = h('div', { class: 'px-grip', title: '끌어서 표시 크기·배율 바꾸기 (두 번 누르면 처음 크기로)' });
   const paneBox = h('div', { class: 'px-panebox' }, pane, grip);
   const scale0 = scale;
-  grip.addEventListener('mousedown', e => {
+  grip.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     const r = pane.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, s0 = scale;
     const modal = wrap.closest('.modal'); if (modal) { modal.style.maxWidth = '98vw'; modal.style.maxHeight = '96vh'; }
-    const sideW = side.getBoundingClientRect().width;
-    const maxW = Math.max(200, innerWidth - sideW - 90), maxH = Math.max(160, innerHeight - 190);
+    // 옆의 도구 칸(최소 너비)과 실시간 미리보기 칸이 차지할 자리는 남겨 둠 — 그 위로 겹치지 않게
+    const pvEl = wrap.parentNode && wrap.parentNode.classList && wrap.parentNode.classList.contains('px-preview') ? wrap.parentNode.querySelector('.lp-panel') : null;
+    const maxW = Math.max(200, innerWidth - 270 - (pvEl ? pvEl.getBoundingClientRect().width + 12 : 0) - 90), maxH = Math.max(160, innerHeight - 190);
     const move = ev => {
       const nw = Math.max(160, Math.min(maxW, r.width + ev.clientX - sx)), nh = Math.max(120, Math.min(maxH, r.height + ev.clientY - sy));
       pane.style.maxWidth = 'none'; pane.style.maxHeight = 'none'; pane.style.width = nw + 'px'; pane.style.height = nh + 'px';
@@ -406,8 +575,8 @@ PDM.pixelEditor = function (o) {
       const ns = Math.max(1, Math.min(48, Math.round(s0 * f)));
       if (ns !== scale) { scale = ns; draw(); }
     };
-    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); document.body.style.cursor = ''; };
-    addEventListener('mousemove', move); addEventListener('mouseup', up); document.body.style.cursor = 'nwse-resize';
+    const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); document.body.style.cursor = ''; };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); document.body.style.cursor = 'nwse-resize';
   });
   grip.addEventListener('dblclick', e => { e.preventDefault(); pane.style.width = ''; pane.style.height = ''; pane.style.maxWidth = 'min(70vw, 900px)'; pane.style.maxHeight = '70vh'; scale = scale0; draw(); });
   const wrap = h('div', { class: 'px-wrap' }, paneBox, side);
@@ -416,8 +585,14 @@ PDM.pixelEditor = function (o) {
   // Ctrl + 휠 = 확대/축소
   view.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); scale = Math.max(1, Math.min(48, scale + (e.deltaY < 0 ? 1 : -1))); draw(); }, { passive: false });
   syncSize(); drawPal(); drawRecent(); draw();
-  wrap.toDataURL = () => { commitFloating(); return data.toDataURL('image/png'); };
-  wrap.dataCanvas = data;
+  wrap.toDataURL = () => { commitFloating(); fxCommit(); return baseCv().toDataURL('image/png'); };
+  /** 빛 레이어 그림 (아무것도 없으면 '') */
+  wrap.lightDataURL = () => { if (!hasLight) return ''; commitFloating(); fxCommit(); const c = lightCv(), d = c.getContext('2d').getImageData(0, 0, W, H).data; for (let i = 3; i < d.length; i += 4) if (d[i]) return c.toDataURL('image/png'); return ''; };
+  wrap.blankDataURL = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c.toDataURL('image/png'); };
+  Object.defineProperty(wrap, 'dataCanvas', { get: () => baseCv() });
+  Object.defineProperty(wrap, 'lightCanvas', { get: () => hasLight && showLight ? lightCv() : null });
+  wrap.lightState = () => ({ mode: lightMode, bloom: lightBloom });
+  if (hasLight && o.light.src) { const li = new Image(); li.onload = () => { const lg0 = layer === 'light' ? dg : og; lg0.imageSmoothingEnabled = false; lg0.drawImage(li, 0, 0, li.width, li.height, 0, 0, W, H); draw(); }; li.src = o.light.src; }
   return wrap;
 };
 
@@ -450,12 +625,17 @@ PDM.editPixelsModal = async function (title, relPath, w, h_, gridStep, saveAsPat
   // 타일셋 · 물 그림이면 옆에 "실시간 미리보기" (게임이 만든 층을 지금 그림으로)
   const tp = PDM.levelPreview && ((opts || {}).tilePreview ? { theme: opts.tilePreview, kind: 'tiles' } : PDM.levelPreview.themeOfPath(saveAsPath || relPath));
   let pv = null, other = null;
-  const ed = PDM.pixelEditor({ width: W, height: H, src, gridStep, rowStep: (opts || {}).rowStep, onSave: d => { result = d; PDM.$('.modal-foot .pri').click(); }, onSaveAs: saveAs, onDraw: () => { if (pv) pv.redraw(); } });
+  // 빛 레이어 (opts.light): 같은 이름의 _light.png 를 같이 열고 같이 저장
+  const lightOf = pth => String(pth).replace(/\.png$/i, '') + '_light.png';
+  let lightSrc = null, lightHad = false;
+  if ((opts || {}).light && relPath) { try { const la = PDM.assets.resolvePath(lightOf(relPath)); if (la && await pdm.exists(la)) { lightSrc = await pdm.readDataURL(la); lightHad = true; } } catch (_) { /* 빛 레이어 없음 */ } }
+  const ed = PDM.pixelEditor({ width: W, height: H, src, light: (opts || {}).light ? { src: lightSrc, mode: (opts.light || {}).mode, onMode: (opts.light || {}).onMode, bloom: (opts.light || {}).bloom, onBloom: (opts.light || {}).onBloom, unit: (opts.light || {}).unit } : null, gridStep, rowStep: (opts || {}).rowStep, onSave: d => { result = d; PDM.$('.modal-foot .pri').click(); }, onSaveAs: saveAs, onDraw: () => { if (pv) pv.redraw(); } });
   let body = ed;
   if (tp && (PDM.SPD_LEVEL_PREVIEWS || {})[tp.theme]) {
     const T = PDM.THEMES[tp.theme];
     PDM.assets.load('game:' + (tp.kind === 'tiles' ? T.water : T.tiles)).then(im => { other = im; if (pv) pv.redraw(); }).catch(() => {});
-    pv = PDM.levelPreview.panel({ theme: tp.theme, tiles: () => tp.kind === 'tiles' ? ed.dataCanvas : other, water: () => tp.kind === 'tiles' ? other : ed.dataCanvas });
+    pv = PDM.levelPreview.panel({ theme: tp.theme, tiles: () => tp.kind === 'tiles' ? ed.dataCanvas : other, water: () => tp.kind === 'tiles' ? other : ed.dataCanvas,
+      light: () => tp.kind === 'tiles' ? ed.lightCanvas : null, lightState: () => ed.lightState() });
     body = PDM.h('div', { class: 'px-preview', style: { display: 'flex', gap: '12px', alignItems: 'flex-start' } }, ed, pv.el);
   }
   // 노드 합성기(확장 기능)가 켜져 있으면: 이 그림을 노드 합성기로 보내기 (저장하면 이 파일이 바뀜)
@@ -469,6 +649,10 @@ PDM.editPixelsModal = async function (title, relPath, w, h_, gridStep, saveAsPat
     out = await PDM.ui.prompt('프로젝트 안에 저장할 경로', 'assets/sprites/new_sprite.png'); if (!out) return null;
   }
   await pdm.writeDataURL(PDM.store.abs(out), data);
+  if ((opts || {}).light) { try { const ld = ed.lightDataURL(), lp = lightOf(out);
+    if (ld) { await pdm.writeDataURL(PDM.store.abs(lp), ld); PDM.assets.invalidate(lp); PDM.log('빛 레이어 저장: ' + lp, 'ok'); }
+    else if (lightHad || await pdm.exists(PDM.store.abs(lp))) { await pdm.writeDataURL(PDM.store.abs(lp), ed.blankDataURL()); PDM.assets.invalidate(lp); }   // 빛을 모두 지움 → 빈 그림
+  } catch (err) { PDM.log('빛 레이어 저장 실패: ' + err.message, 'err'); } }
   PDM.assets.invalidate(out);
   PDM.log('그림 저장: ' + out, 'ok');
   return out;

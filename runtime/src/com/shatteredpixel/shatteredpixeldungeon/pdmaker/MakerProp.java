@@ -3,7 +3,7 @@
  *   · 그림(표시): sprite { sheet, frame:[w,h], scale(0 = 설치 칸에 맞춤 · 1 = 그림 크기 그대로: 16px 이 한 칸), ox, oy(px 옮김), over(윗부분이 캐릭터를 가림) }
  *       — 설치 칸의 아래 가운데에 맞춰 그림. 그림이 설치 칸보다 크면 위로(옆으로) 솟음 (예: 가로등 = 설치 1칸, 표시 1×2칸)
  *   · 설치 칸: foot [가로, 세로] (기본 1×1) — 놓은 칸이 왼쪽 아래. 막힌 상태면 이 칸들이 모두 막힘 (밀 수 있음이면 통째로 한 칸씩 밀림)
- *   · 상태 여러 개: states[i] { name, frame 또는 frames+fps, solid(막힘), switch(이 상태일 때 켜지는 스위치) }
+ *   · 상태 여러 개: states[i] { name, frame 또는 anim(sprite.anims { 이름: { frames, fps, loop } } 의 이름 — 예전 형식 frames+fps 도 읽음), solid(막힘), switch(이 상태일 때 켜지는 스위치) }
  *   · 밀기: pushable — 영웅이 옆에서 누르면 반대쪽으로 한 칸 밀림 (막혀 있으면 안 밀림)
  *       goal { terrain, switch, event } — 그 지형 위로 밀어 올리면 스위치 켜짐 · 이벤트
  *   · 상호작용: interact 'next'(다음 상태로) · 'event'(이벤트 실행) · 'none', event, loop, cond
@@ -51,21 +51,47 @@ public class MakerProp extends CustomTilemap {
 
 	/** 그림 하나를 그리는 타일맵 (게임이 CustomTilemap 에서 Tilemap 을 돌려받으므로 그 모양만 빌림) */
 	static class Vis extends Tilemap {
-		Image img; int[] frames = {0}; float delay = 0, timer = 0; int cur = 0; TextureFilm film;
+		Image img; int[] frames = {0}; float delay = 0, timer = 0; int cur = 0, step = 0, mode = 0; TextureFilm film;   // mode: 0 반복 · 1 한 번 · 2 왕복
+		String key = "";
+		Image light; JsonValue lightCfg;   // 빛 레이어 (<시트>_light.png): 그림 위에 덧셈 합성
 		Vis(Object tx, int fw, int fh) { super(tx, new TextureFilm(tx, fw, fh)); film = new TextureFilm(tx, fw, fh); img = new Image(tx); }
-		void show(int[] fr, int fps) { frames = fr == null || fr.length == 0 ? new int[]{0} : fr; delay = frames.length > 1 && fps > 0 ? 1f / fps : 0; cur = 0; timer = 0; frame(); }
+		MakerBloom bloom; int fw0 = 16, fh0 = 16;
+		void light(JsonValue sp) { try { Object lt = sp == null ? null : MakerRuntime.lightTexture(sp.getString("sheet", ""), sp.getString("lightMode", "add")); if (lt != null) { light = new Image(lt); lightCfg = sp;
+			JsonValue fr = sp.get("frame"); if (fr != null && fr.size >= 2) { fw0 = Math.max(1, fr.getInt(0)); fh0 = Math.max(1, fr.getInt(1)); }
+			bloom = MakerBloom.get(sp.getString("sheet", ""), fw0, fh0, MakerBloom.radius(sp)); } } catch (Throwable ignored) { } }
+		void show(int[] fr, int fps) { show(fr, fps, 0); }
+		/** 같은 애니메이션을 다시 걸면(밀기 · 새로 고침) 처음부터 다시 재생하지 않고 이어감 */
+		void show(int[] fr, int fps, int md) {
+			int[] f = fr == null || fr.length == 0 ? new int[]{0} : fr;
+			String k = java.util.Arrays.toString(f) + "@" + fps + "/" + md;
+			if (k.equals(key)) { frame(); return; }
+			boolean first = key.isEmpty();
+			key = k; frames = f; mode = md; delay = frames.length > 1 && fps > 0 ? 1f / fps : 0; cur = 0; step = 0; timer = 0;
+			if (first && mode == 1) { cur = frames.length - 1; delay = 0; }   // 층에 들어올 때(저장 불러오기 포함)는 '한 번만' 애니메이션을 다시 틀지 않고 끝 모습으로
+			frame();
+		}
 		/** part: 0 = 전체 · 1 = 아랫부분만 · 2 = 윗부분만.  cut = 위에서부터 잘리는 자리 (0~1) */
 		int part = 0; float cut = 0;
 		void frame() { try {
 			com.watabou.utils.RectF r = film.get(frames[cur]);
 			if (part != 0 && r != null) { float m = r.top + (r.bottom - r.top) * cut; r = part == 2 ? new com.watabou.utils.RectF(r.left, r.top, r.right, m) : new com.watabou.utils.RectF(r.left, m, r.right, r.bottom); }
 			img.frame(r);
+			if (light != null) light.frame(r);
 		} catch (Exception ignored) { } }
 		@Override public void update() {
 			super.update();
-			if (delay > 0 && (timer += Game.elapsed) >= delay) { timer -= delay; cur = (cur + 1) % frames.length; frame(); }
+			if (delay > 0 && (timer += Game.elapsed) >= delay) {
+				timer -= delay; if (timer > delay) timer = 0; step++;
+				int n = frames.length;
+				if (mode == 1) { cur = Math.min(n - 1, step); if (step >= n - 1) delay = 0; }
+				else if (mode == 2) { int c = step % (2 * n - 2); cur = c < n ? c : 2 * n - 2 - c; }
+				else cur = step % n;
+				frame();
+			}
 		}
-		@Override public void draw() { if (img != null && visible) { img.camera = camera(); img.draw(); } }
+		@Override public void draw() { if (img != null && visible) { img.camera = camera(); img.draw();
+			if (light != null && img.visible) { light.camera = img.camera; light.x = img.x; light.y = img.y; light.scale.set(img.scale.x, img.scale.y); MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
+				if (bloom != null && part != 2) { try { bloom.draw(frames[cur], img.x, part == 1 ? img.y - cut * fh0 * img.scale.y : img.y, img.scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg), img.camera); } finally { MakerBloom.done(); } } } } }
 	}
 
 	@Override
@@ -78,6 +104,7 @@ public class MakerProp extends CustomTilemap {
 		if (sp != null && sp.get("frame") != null && sp.get("frame").size >= 2) { fw = Math.max(1, sp.get("frame").getInt(0)); fh = Math.max(1, sp.get("frame").getInt(1)); }
 		if (tx == null) tx = com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES;   // 그림이 없으면 게임 지형 그림 첫 칸
 		vis = new Vis(tx, fw, fh);
+		((Vis) vis).light(sp);
 		refresh();
 		return vis;
 	}
@@ -92,13 +119,15 @@ public class MakerProp extends CustomTilemap {
 	/** part: 0 전체 · 1 설치 칸 높이까지의 아랫부분 · 2 그 위로 솟은 윗부분 */
 	void layout(Vis v, int part) {
 		JsonValue d = def(), s = st(), sp = d == null ? null : d.get("sprite");
-		int[] fr = null; int fps = 0;
+		int[] fr = null; int fps = 0, md = 0;
 		if (s != null) {
-			if (s.get("frames") != null && s.get("frames").size > 0) { fr = s.get("frames").asIntArray(); fps = s.getInt("fps", 6); }
+			JsonValue an = sp == null || sp.get("anims") == null ? null : sp.get("anims").get(s.getString("anim", ""));
+			if (an != null && an.get("frames") != null && an.get("frames").size > 0) { fr = an.get("frames").asIntArray(); fps = an.getInt("fps", 6); md = an.getBoolean("loop", true) ? 0 : 1; }   // sprite.anims 의 이름
+			else if (s.get("frames") != null && s.get("frames").size > 0) { fr = s.get("frames").asIntArray(); fps = s.getInt("fps", 6); String a = s.getString("anim", "loop"); md = "once".equals(a) ? 1 : "pingpong".equals(a) ? 2 : 0; }   // 예전 형식
 			else fr = new int[]{ s.getInt("frame", 0) };
 		}
 		int[] ft = foot();
-		v.part = 0; v.show(fr, fps);
+		v.part = 0; v.show(fr, fps, md);
 		float fw = v.img.width, fh = v.img.height;
 		float sc = sp == null ? 0 : sp.getFloat("scale", 0f);
 		if (sc <= 0) sc = Math.min(1f, Math.min(ft[0] * SIZE / fw, ft[1] * SIZE / fh));

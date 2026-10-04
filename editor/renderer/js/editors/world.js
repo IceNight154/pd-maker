@@ -372,7 +372,8 @@
       let drag = null;      // { type: pan|move|connect|marquee|gmove, ... }
       let marqEl = null;
       vp.addEventListener('contextmenu', e => e.preventDefault());
-      vp.addEventListener('mousedown', e => {
+      vp.style.touchAction = 'none';   // 태블릿 펜 · 터치로 끌 때 브라우저가 화면 스크롤로 가져가지 않게
+      vp.addEventListener('pointerdown', e => {
         vp.focus();
         const t = e.target;
         const nodeEl = t.closest('.wg-node'), port = t.closest('.wg-port.out'), title = t.closest('.wg-gtitle');
@@ -516,9 +517,9 @@
         }
       };
       const onKeyUp = e => { if (e.code === 'Space') { spaceDown = false; vp.classList.remove('grab'); } };
-      addEventListener('mousemove', onMove); addEventListener('mouseup', onUp);
+      addEventListener('pointermove', onMove); addEventListener('pointerup', onUp);
       addEventListener('keydown', onKey); addEventListener('keyup', onKeyUp);
-      ctx.onDispose(() => { removeEventListener('mousemove', onMove); removeEventListener('mouseup', onUp); removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); });
+      ctx.onDispose(() => { removeEventListener('pointermove', onMove); removeEventListener('pointerup', onUp); removeEventListener('keydown', onKey); removeEventListener('keyup', onKeyUp); });
 
       function markSel() {
         Object.entries(nodeEls).forEach(([id, e]) => e.classList.toggle('on', sel.nodes.has(id)));
@@ -696,6 +697,13 @@
                 row(F.text('world', [...p, 'id'], { label: 'id', transform: val => PDM.slugId(val) }), F.text('world', [...p, 'name'], { label: '이름' }),
                   F.select('world', [...p, 'base'], Object.fromEntries(Object.entries(PDM.THEMES).map(([kk, t]) => [kk, t.name])), { label: '바탕 테마' })),
                 F.sound('world', [...p, 'music'], { label: '음악 (그룹·노드 배경음이 없을 때)', kind: 'bgm' }),
+                row(F.select('world', [...p, 'lightMode'], { add: '발광 (더하기)', screen: '스크린', overlay: '오버레이', dodge: '닷지 (색상 닷지)' }, { label: '✨ 타일 효과 레이어 합성 방식', def: 'add' }),
+                  F.num('world', [...p, 'lightBloom'], { label: '번짐 반경 (px · 한 칸 = 16, 0 = 없음)', int: true, min: 0, max: 48, def: 0, hint: '은은하게 퍼지는 빛 — 이웃 타일 위로도 퍼짐' }),
+                  F.num('world', [...p, 'lightBloomPower'], { label: '번짐 세기 (%)', int: true, min: 0, max: 300, def: 100 }),
+                  F.num('world', [...p, 'lightPower'], { label: '효과 레이어 세기 (%)', int: true, min: 0, max: 300, def: 100 }),
+                  F.num('world', [...p, 'lightPulse'], { label: '깜빡임 주기 (초, 0 = 일정)', min: 0, step: 0.1, def: 0 }),
+                  F.num('world', [...p, 'lightPulseMin'], { label: '깜빡일 때 가장 어두운 세기 (%)', int: true, min: 0, max: 100, def: 40 })),
+                h('div', { class: 'hint' }, '타일 효과 레이어: "타일셋 편집"의 레이어 줄에서 "✨ 효과 레이어"로 바꿔 빛낼 타일(용암 · 수정 · 이끼 …) 위에 칠하면, 게임에서 그 타일 종류 전체가 빛납니다 (타일셋과 같은 이름의 _light.png).'),
                 row(F.image('world', [...p, 'tiles'], { label: '타일셋 PNG (256×256)', sub: 'tiles' }),
                   h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: async () => {
                     let rel = it.tiles;
@@ -704,7 +712,7 @@
                       try { await pdm.copy(PDM.assets.resolvePath('game:' + PDM.THEMES[it.base || 'SEWER'].tiles), store.abs(rel)); } catch (err) { toast('기본 타일셋 복사 실패: ' + err.message, 'bad'); return; }
                       store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], rel); });
                     }
-                    const out = await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16, null, { tilePreview: it.base || 'SEWER' });
+                    const out = await PDM.editPixelsModal('타일셋 편집 — ' + it.name, rel, 256, 256, 16, null, { tilePreview: it.base || 'SEWER', light: { bloom: it.lightBloom || 0, unit: 1, onBloom: v => store.edit('world', '타일 효과 레이어 번짐', w => { const x = (w.customThemes || []).find(t => t.id === it.id); if (x) x.lightBloom = v; }, { silent: true }), mode: it.lightMode || 'add', onMode: m => store.edit('world', '타일 효과 레이어 합성 방식', w => { const x = (w.customThemes || []).find(t => t.id === it.id); if (x) x.lightMode = m; }, { silent: true }) } });
                     if (out && out !== rel) store.edit('world', '타일셋 경로', r => { PDM.deepSet(r, [...p, 'tiles'], out); });   // 다른 이름으로 저장
                     if (out) { PDM.assets.clear(); PDM.tabs.refresh(); }
                   } }, '타일셋 편집…'))))

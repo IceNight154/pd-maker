@@ -58,6 +58,7 @@ public class StoryState {
 	public static String varType(String id) { String t = varTypes.get(id); return t == null ? "number" : t; }
 	public static String str(String id) { String v = strs.get(id); return v == null ? "" : v; }
 	public static void setStr(String id, String v) { strs.put(id, v == null ? "" : v); }
+	public static java.util.List<String> strKeys(String prefix) { java.util.List<String> out = new java.util.ArrayList<>(); for (String k : strs.keySet()) if (k.startsWith(prefix)) out.add(k); return out; }
 	/** 변수 값을 형식에 맞게: 숫자 → Integer · 문자열 → String · 참/거짓 → Boolean */
 	public static Object varValue(String id) {
 		String t = varType(id);
@@ -98,6 +99,9 @@ public class StoryState {
 	}
 	public static Object resolveGlobal(String name, String eventId) {
 		if (name.startsWith("global.")) return MakerDrops.global(name.substring(7));   // 전역 스위치 (새 게임에도 유지)
+		if (name.startsWith("quest.")) return MakerQuests.resolve(name.substring(6));   // 퀘스트 상태
+		if (name.startsWith("badge.")) return MakerBadges.has(name.substring(6));     // 내 배지를 얻었는지
+		if (name.startsWith("stat.")) return MakerBadges.stat(name.substring(5));     // 게임 통계 (Statistics 의 값 — 예: stat.enemiesSlain)
 		if (name.startsWith("switch.")) return sw(name.substring(7));
 		if (name.startsWith("var.")) return varValue(name.substring(4));
 		if (name.startsWith("self.")) return eventId != null && self(eventId, name.substring(5));
@@ -113,6 +117,7 @@ public class StoryState {
 		if (name.startsWith("visited.")) return flags.contains("enter_" + name.substring(8)) || name.substring(8).equals(WorldGraph.current());
 		switch (name) {
 			case "route": return route;
+			case "safe": return MakerSafe.in();   // 지금 안전구역 안인지
 			case "depth": return Dungeon.depth;
 			case "chapter": case "group": return WorldGraph.groupId(WorldGraph.current());
 			case "node": { String n = WorldGraph.current(); return n == null ? "" : n; }

@@ -466,6 +466,7 @@ public class Dungeon {
 	}
 	
 	public static void switchLevel( final Level level, int pos ) {
+		pos = com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.heroSpawn(level, pos); // >>> pdmaker
 
 		//Position of -2 specifically means trying to place the hero the exit
 		if (pos == -2){

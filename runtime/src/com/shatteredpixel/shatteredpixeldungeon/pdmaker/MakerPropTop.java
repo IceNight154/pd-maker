@@ -37,6 +37,7 @@ public class MakerPropTop extends CustomTilemap {
 		if (sp != null && sp.get("frame") != null && sp.get("frame").size >= 2) { fw = Math.max(1, sp.get("frame").getInt(0)); fh = Math.max(1, sp.get("frame").getInt(1)); }
 		if (tx == null) tx = com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES;
 		vis = new MakerProp.Vis(tx, fw, fh);
+		((MakerProp.Vis) vis).light(sp);
 		MakerProp b = base();
 		if (b != null) sync(b); else ((MakerProp.Vis) vis).img.visible = false;
 		return vis;

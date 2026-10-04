@@ -68,6 +68,10 @@ PDM.defaults = {
   /** 화면 필터 (editors/filter.js · 런타임 MakerFilter) */
   /** 예고편 컷신 (editors/trailer.js · 런타임 MakerTrailer) */
   trailers() { return { format: 'pdmaker-trailers', version: PDM.FORMAT_VERSION, list: [] }; },
+  /** 퀘스트 (editors/quests.js · 런타임 MakerQuests) */
+  quests() { return { format: 'pdmaker-quests', version: PDM.FORMAT_VERSION, list: [] }; },
+  /** 내 배지 (editors/badges.js · 런타임 MakerBadges) */
+  badges() { return { format: 'pdmaker-badges', version: PDM.FORMAT_VERSION, list: [], orig: {} }; },
   filters() { return { format: 'pdmaker-filters', version: PDM.FORMAT_VERSION, list: [] }; },
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },

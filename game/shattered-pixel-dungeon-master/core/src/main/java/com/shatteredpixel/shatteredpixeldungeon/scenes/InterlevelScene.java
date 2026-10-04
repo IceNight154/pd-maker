@@ -224,6 +224,7 @@ public class InterlevelScene extends PixelScene {
 		int w = (int)(Camera.main.width - insets.left - insets.right);
 		int h = (int)(Camera.main.height - insets.top - insets.bottom);
 
+		loadingAsset = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.splash(loadingAsset); // >>> pdmaker
 		background = new Image(loadingAsset);
 		background.scale.set(Camera.main.height/background.height);
 
@@ -277,6 +278,7 @@ public class InterlevelScene extends PixelScene {
 		align(loadingText);
 		add(loadingText);
 
+		{ int[] pdmS = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.storyGate(loadingDepth, lastRegion); loadingDepth = pdmS[0]; lastRegion = pdmS[1]; } // >>> pdmaker
 		if (mode == Mode.DESCEND && lastRegion <= 5 && !DeviceCompat.isDebug()){
 			if (Dungeon.hero == null || (loadingDepth > Statistics.deepestFloor && loadingDepth % 5 == 1)){
 					storyMessage = PixelScene.renderTextBlock(Document.INTROS.pageBody(region), 6);

@@ -236,6 +236,21 @@
   // =============================================================
   const floorUI = {};   // 층마다 도구 상태 유지 { tool, terrain, zoom, objType, objRef, sel }
 
+  /** 안전구역 설정 칸 (맵 노드 · 방 템플릿 공통) — 런타임 MakerSafe */
+  function safeFields(key, fl, where) {
+    const { F } = PDM.ui, sf = fl.safe || {};
+    const cb = (k, def, label, title) => { const c = h('input', { type: 'checkbox', checked: sf[k] === undefined ? def : !!sf[k] }); c.onchange = () => store.edit(key, '안전구역', r => { r.safe = r.safe || { on: true }; r.safe[k] = c.checked; }, { silent: true }); return h('label', { class: 'check', title: title || '' }, c, label); };
+    const on = h('input', { type: 'checkbox', checked: !!sf.on }); on.onchange = () => store.edit(key, '안전구역', r => { r.safe = Object.assign({ hunger: true, feed: false, cure: true, heal: 0, msg: true }, r.safe || {}, { on: on.checked }); });
+    return h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 8px', margin: '6px 0' } },
+      h('label', { class: 'check', title: `${where} 안전구역으로 씁니다` }, on, h('b', {}, '🛡 안전구역 사용'), h('span', { class: 'hint', style: { marginLeft: '6px' } }, `(${where})`)),
+      sf.on ? h('div', { style: { marginLeft: '18px' } },
+        cb('hunger', true, '허기가 쌓이지 않음 (머무는 동안 천천히 풀림)'),
+        cb('feed', false, '들어올 때 허기를 모두 풂'),
+        cb('cure', true, '해로운 상태이상 해제 (중독 · 화상 · 출혈 · 약화 · 실명 등 — 머무는 동안 계속)'),
+        cb('msg', true, '들어올 때 · 나갈 때 알림 글 표시'),
+        F.num(key, ['safe', 'heal'], { label: '턴마다 체력 회복 (0 = 없음)', int: true, min: 0, max: 99, def: 0 }),
+        h('div', { class: 'hint' }, '이벤트 조건식에서 safe 로 "지금 안전구역 안인지"를 확인할 수 있습니다. 몬스터를 막으려면 몬스터 스폰 설정도 함께 끄세요.')) : null);
+  }
   PDM.registerEditor({
     id: 'floor',
     icon: k => ({ node: '▦', room: '▣' })[kindOf(k)],
@@ -332,7 +347,7 @@
       if (!ui.eraseKind) ui.eraseKind = 'all'; if (ui.port === undefined) ui.port = -1;
       const pickTile = v => { ui.terrain = v; if (!tileTool() || ui.tool === 'pick') ui.tool = 'pen'; drawPalette(); drawTools(); };
       /** 확장 기능이 꺼진 종류는 팔레트에서 숨김 (이 맵에 이미 놓은 것이 있으면 보임) */
-      const typeOn = k => k !== 'prop' || (PDM.extensions && PDM.extensions.on('prop')) || (fl.objects || []).some(o => o.type === 'prop');
+      const typeOn = k => k === 'light' ? kind === 'node' && fl.mode !== 'procedural' : k !== 'prop' || (PDM.extensions && PDM.extensions.on('prop')) || (fl.objects || []).some(o => o.type === 'prop');
       function drawPalette() {
         palette.innerHTML = '';
         if (drawable) {
@@ -390,7 +405,7 @@
         const quick = h('div', { class: 'pal-grid', style: { marginTop: '6px' } });
         if (ui.objType === 'prop') store.all('prop').forEach(pr => {
           const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === pr.id ? ' on' : ''), title: pr.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = pr.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
-          if (pr.sprite && pr.sprite.sheet) PDM.assets.load(pr.sprite.sheet).then(img => { if (!img) return; const fw = pr.sprite.frame[0] || 16, fh = pr.sprite.frame[1] || 16, stt = (pr.states || [])[pr.start || 0] || {}, k = Math.min(1, 16 / fw, 16 / fh); const g = c.getContext('2d'); g.imageSmoothingEnabled = false; PDM.assets.drawFrame(g, img, fw, fh, (stt.frames && stt.frames.length ? stt.frames[0] : stt.frame) || 0, (16 - fw * k) / 2, 16 - fh * k, k); });
+          if (pr.sprite && pr.sprite.sheet) PDM.assets.load(pr.sprite.sheet).then(img => { if (!img) return; const fw = pr.sprite.frame[0] || 16, fh = pr.sprite.frame[1] || 16, stt = (pr.states || [])[pr.start || 0] || {}, k = Math.min(1, 16 / fw, 16 / fh); const g = c.getContext('2d'); g.imageSmoothingEnabled = false; PDM.assets.drawFrame(g, img, fw, fh, (((pr.sprite.anims || {})[stt.anim] || {}).frames || stt.frames || [])[0] ?? (stt.frame || 0), (16 - fw * k) / 2, 16 - fh * k, k); });
           quick.append(c);
         });
         palette.append(typeSel, refKind ? refSel : '', quick.children.length ? quick : '',
@@ -456,7 +471,7 @@
       async function editTileset() {
         const c = await ensureCustomTheme(); if (!c) return;
         const tim = await PDM.assets.load(c.tiles).catch(() => null), tcell = tim ? Math.max(1, Math.round(tim.width / 16)) : 16;
-        const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, c.tiles, 256, 256, tcell, null, { tilePreview: c.base || 'SEWER' });
+        const out = await PDM.editPixelsModal('타일셋 편집 — ' + c.name, c.tiles, 256, 256, tcell, null, { tilePreview: c.base || 'SEWER', light: { bloom: c.lightBloom || 0, unit: tcell / 16, onBloom: v => store.edit('world', '타일 효과 레이어 번짐', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.lightBloom = v; }, { silent: true }), mode: c.lightMode || 'add', onMode: m => store.edit('world', '타일 효과 레이어 합성 방식', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.lightMode = m; }, { silent: true }) } });
         if (out && out !== c.tiles) store.edit('world', '타일셋 경로', w => { const x = (w.customThemes || []).find(t => t.id === c.id); if (x) x.tiles = out; });   // 다른 이름으로 저장
         if (out) afterTiles(); else PDM.tabs.refresh();
       }
@@ -590,10 +605,11 @@
             const ft = pr.foot || [1, 1], fx = Math.max(1, ft[0] | 0), fy = Math.max(1, ft[1] | 0), u = s / 16;
             const k = (pr.sprite.scale > 0 ? pr.sprite.scale : Math.min(1, fx * 16 / fw, fy * 16 / fh)) * u;
             if (fx > 1 || fy > 1 || fh * k > s + 1) { g.fillStyle = 'rgba(201,163,106,.22)'; g.fillRect(x, y - (fy - 1) * s, fx * s, fy * s); g.strokeStyle = 'rgba(201,163,106,.8)'; g.lineWidth = 1; g.strokeRect(x + .5, y - (fy - 1) * s + .5, fx * s - 1, fy * s - 1); }   // 설치 칸 표시
-            PDM.assets.drawFrame(g, sp.img, fw, fh, (stt.frames && stt.frames.length ? stt.frames[0] : stt.frame) || 0, x + (fx * s - fw * k) / 2 + (+pr.sprite.ox || 0) * u, y + s - fh * k + (+pr.sprite.oy || 0) * u, k);
+            PDM.assets.drawFrame(g, sp.img, fw, fh, (((pr.sprite.anims || {})[stt.anim] || {}).frames || stt.frames || [])[0] ?? (stt.frame || 0), x + (fx * s - fw * k) / 2 + (+pr.sprite.ox || 0) * u, y + s - fh * k + (+pr.sprite.oy || 0) * u, k);
           } else if (sp && sp.img) { const fw = sp.c.sprite.frame[0], fh = sp.c.sprite.frame[1]; const sc = s / Math.max(fw, fh); PDM.assets.drawFrame(g, sp.img, fw, fh, 0, x + (s - fw * sc) / 2, y + (s - fh * sc), sc); }
           else if (sp && sp.canvas) g.drawImage(sp.canvas, x, y, s, s);
-          else { g.fillStyle = col + 'cc'; g.fillRect(x + s * .15, y + s * .15, s * .7, s * .7); g.fillStyle = '#000'; g.font = `bold ${s * .5}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText({ npc: 'N', mob: 'M', item: 'I', event: 'E', start: 'S', prop: 'P', entrance: '<', exit: '>', plate: 'T' }[o.type] || '?', x + s / 2, y + s / 2 + 1); }
+          else { g.fillStyle = col + 'cc'; g.fillRect(x + s * .15, y + s * .15, s * .7, s * .7); g.fillStyle = '#000'; g.font = `bold ${s * .5}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText({ light: '☀', npc: 'N', mob: 'M', item: 'I', event: 'E', start: 'S', prop: 'P', entrance: '<', exit: '>', plate: 'T' }[o.type] || '?', x + s / 2, y + s / 2 + 1); }
+          if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s);   // 광원: 게임과 같은 감쇠로 미리보기
           g.strokeStyle = i === ui.sel ? '#fff' : col; g.lineWidth = i === ui.sel ? 2 : 1; g.strokeRect(x + 1, y + 1, s - 2, s - 2);
           if (!drawable) { g.fillStyle = '#ccc'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(PDM.PLACE_RULES[(o.at && o.at.rule) || 'random'] || '', x + s / 2, y + s + 2); }
         });
@@ -779,7 +795,8 @@
       let down = null, lastCell = -1;
       cv.addEventListener('contextmenu', e => e.preventDefault());
       setTimeout(() => cv.parentElement && cv.parentElement.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomStep(e.deltaY < 0 ? 1 : -1); }, { passive: false }), 0);
-      cv.addEventListener('mousedown', e => {
+      cv.style.touchAction = 'none';   // 태블릿 펜 · 터치로 끌 때 브라우저가 화면 스크롤로 가져가지 않게
+      cv.addEventListener('pointerdown', e => {
         if (navKey && e.button === 0) { e.preventDefault(); const sc = cv.parentElement, r = sc.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
           let i0 = 0; ZOOMS.forEach((z, i) => { if (Math.abs(z - ui.zoom) < Math.abs(ZOOMS[i0] - ui.zoom)) i0 = i; });
           nav = navKey === 'pan' ? { type: 'pan', x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop } : { type: 'zoom', cx, cy, d0: Math.hypot(e.clientX - cx, e.clientY - cy), i0 };
@@ -820,7 +837,7 @@
           else if (ui.port >= 0) down = { port: ui.port };
         }
       });
-      cv.addEventListener('mousemove', e => {
+      cv.addEventListener('pointermove', e => {
         const [x, y] = cellAt(e);
         const t = inB(x, y) && drawable ? PDM.TERRAIN_BY_ID[terrain[y * W + x]] : null;
         const oi = objAt(x, y);
@@ -865,8 +882,8 @@
         down = null;
       };
       const onMove = e => { if (down && down.resize) { down.rect = resizeRect(e, down.resize); info.textContent = `맵 크기 ${down.rect[2]} × ${down.rect[3]}`; paint(); } };
-      addEventListener('mousemove', onMove);
-      addEventListener('mouseup', onUp);
+      addEventListener('pointermove', onMove);
+      addEventListener('pointerup', onUp);
       const onKey = e => {
         if (PDM.tabs.active !== key || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
         if (document.querySelector('.modal')) return;
@@ -895,9 +912,9 @@
         if (ZOOMS[i] !== ui.zoom) { ui.zoom = ZOOMS[i]; drawTools(); paint(); }
       };
       const onNavUp = () => { if (nav) { nav = null; cv.style.cursor = navKey === 'pan' ? 'grab' : navKey === 'zoom' ? 'zoom-in' : ''; } };
-      addEventListener('mousemove', onNavMove); addEventListener('mouseup', onNavUp);
-      ctx.onDispose(() => { removeEventListener('keyup', onKeyUp); removeEventListener('mousemove', onNavMove); removeEventListener('mouseup', onNavUp); });
-      ctx.onDispose(() => { removeEventListener('mouseup', onUp); removeEventListener('mousemove', onMove); removeEventListener('keydown', onKey); });
+      addEventListener('pointermove', onNavMove); addEventListener('pointerup', onNavUp);
+      ctx.onDispose(() => { removeEventListener('keyup', onKeyUp); removeEventListener('pointermove', onNavMove); removeEventListener('pointerup', onNavUp); });
+      ctx.onDispose(() => { removeEventListener('pointerup', onUp); removeEventListener('pointermove', onMove); removeEventListener('keydown', onKey); });
 
       // ---- 인스펙터: 층 속성 / 선택한 오브젝트 ----
       function showInspector() {
@@ -915,7 +932,14 @@
             o.type === 'mob' || o.type === 'item' ? F.num(key, [...p, 'count'], { label: '개수', min: 1, int: true }) : null,
             o.type === 'item' ? F.select(key, [...p, 'container'], PDM.ITEM_CONTAINERS, { label: '담는 방식' }) : null,
             o.type === 'npc' ? F.ref(key, [...p, 'event'], 'event', { label: '말 걸면 실행할 이벤트', empty: '(캐릭터의 인사 대사)' }) : null,
+            o.type === 'start' ? (() => { const W0 = store.get('world') || {}, linked = [...new Set((W0.edges || []).filter(e => e.from === fl.id || e.to === fl.id).map(e => e.from === fl.id ? e.to : e.from))];
+              return h('div', {},
+                F.select(key, [...p, 'when'], { start: '게임을 시작할 때 (시작 맵에서 한 번)', always: '이 맵에 들어올 때마다 (어느 입구로 오든)', from: '고른 맵에서 넘어올 때' }, { label: '영웅을 여기에 세우는 때', rerender: true }),
+                o.when === 'from' ? F.select(key, [...p, 'from'], Object.fromEntries(linked.map(id => [id, PDM.World.fullName(id)])), { label: '어느 맵에서 올 때 (이어진 맵)', empty: '(맵 고르기)' }) : null,
+                h('div', { class: 'hint', style: { margin: '4px 0' } }, '게임에서는 보이지 않습니다. 이 칸이 없으면 평소처럼 입구(계단)에 서고, 입구도 없으면 맵 가운데 근처의 빈 칸에 섭니다. 지나갈 수 없는 칸(벽 · 빈 칸) 위에 놓으면 쓰이지 않습니다. 여러 개가 맞으면 "고른 맵에서 올 때" → "게임을 시작할 때" → "들어올 때마다" 순으로 씁니다. 저장을 불러올 때는 저장된 자리 그대로입니다.' + ((W0.start || '') !== fl.id && (o.when || 'start') === 'start' ? ' ⚠ 이 맵은 시작 맵이 아니라서 "게임을 시작할 때"는 쓰이지 않습니다.' : ''))); })() : null,
             (o.type === 'exit' || o.type === 'entrance') && drawable && o.at && o.at.x != null ? h('div', {}, h('div', { class: 'hint', style: { margin: '6px 0' } }, `그림이 없는 ${o.type === 'exit' ? '출구' : '입구'} — 아래 타일(문·바닥·맵 가장자리 등)은 그대로 보이고, 영웅이 이 칸을 밟으면 바로 다른 맵으로 넘어갑니다.`), portPanel(o.at.y * W + o.at.x, o.type === 'exit', true)) : null,
+            o.type === 'light' ? h('div', {}, ...PDM.lightFields(key, p, o),
+              h('div', { class: 'hint', style: { margin: '4px 0' } }, '게임에서는 광원 자체는 보이지 않고 빛만 보입니다. 위쪽 "조건"에 스위치 등을 적으면 그 조건이 맞을 때만 켜집니다 (게임 중에 바뀌어도 반영).')) : null,
             o.type === 'plate' ? h('div', {}, F.bool(key, [...p, 'once'], { label: '한 번만 발동 (밟은 뒤 사라짐)' }), h('div', { class: 'hint', style: { margin: '4px 0' } }, '게임에서는 보이지 않습니다. 영웅이 이 칸을 밟으면 위 「대상」 이벤트가 바로 실행됩니다 (이벤트의 발동 방식·이미지 설정과 상관없이).')) : null,
             F.text(key, [...p, 'note'], { label: '메모' }),
             h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } },
@@ -946,6 +970,7 @@
             F.text(key, ['name'], { label: '방 이름', rerender: true }),
             F.select(key, ['kind'], { standard: '일반 방 (여러 방과 연결)', special: '특수 방 (입구 하나, 막다른 방)' }, { label: '종류' }),
             PDM.filters ? PDM.filters.field(key, ['filter'], '화면 필터 (영웅이 이 방 안에 있는 동안)', '(없음 — 맵 설정대로)') : null,
+            safeFields(key, fl, '영웅이 이 방 안에 있는 동안'),
             F.bool(key, ['keepClean'], { label: '자동 아이템·몬스터를 이 방에 놓지 않기', rerender: true }),
             (() => { const on = fl.noMobs === undefined ? !fl.keepClean : !fl.noMobs; const cb = h('input', { type: 'checkbox', checked: on, onchange: () => store.edit(key, '방의 몬스터 스폰', r => { r.noMobs = !cb.checked; }) });
               return h('label', { class: 'check', title: '켜면 게임이 이 방 안에도 몬스터를 놓고 다시 생기게 합니다. 끄면 이 방 안에는 몬스터가 생기지 않습니다 (방에 직접 놓은 몬스터는 그대로)' }, cb, '몬스터 스폰 (이 방 안에 몬스터가 생김)'); })(),
@@ -974,6 +999,7 @@
           row(F.text(key, ['label'], { label: '층 표시 (비우면 자동)', placeholder: W_.label(fl.id), rerender: true }),
             F.num(key, ['depth'], { label: '난이도 깊이 (0=자동)', int: true, min: 0, max: 30, rerender: true, hint: `지금 ${I.depth[fl.id]} · branch ${I.branch[fl.id]}` })),
           F.bool(key, ['boss'], { label: '보스 층 (자동 생성일 때 테마의 보스 방)' }),
+          safeFields(key, fl, '이 맵 전체'),
           F.ref(key, ['theme'], 'theme', { label: '테마', empty: `(그룹 테마: ${themeName((grp || {}).theme) || '깊이 기본'})`, rerender: true }),
           PDM.filters ? PDM.filters.field(key, ['filter'], '화면 필터 (이 맵에 있는 동안)', '(없음 — 그룹 설정대로)') : null,
           fl.mode !== 'handmade' ? section('구성 블럭 (자동 생성)',

@@ -119,6 +119,7 @@ public class DungeonTerrainTilemap extends DungeonTilemap {
 	public static Image tile(int pos, int tile ) {
 		Image img = new Image( instance.texture );
 		img.frame( instance.tileset.get( instance.getTileVisual( pos, tile, true ) ) );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.tileImg(img); // >>> pdmaker
 		return img;
 	}
 

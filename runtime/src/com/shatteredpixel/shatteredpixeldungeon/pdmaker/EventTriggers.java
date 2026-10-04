@@ -38,6 +38,9 @@ public class EventTriggers {
 		if (!MakerRuntime.isActive() || Dungeon.hero == null || !Dungeon.hero.isAlive()) return;
 		checkRoutes();
 		showHidden();
+		MakerSafe.tick();   // 안전구역: 허기 · 상태이상 · 회복
+		MakerQuests.tick();
+		MakerBadges.check("turn");
 		if (EventInterpreter.busy()) return;
 		fire("auto", null);
 		fire("heart", null);
@@ -49,6 +52,9 @@ public class EventTriggers {
 	public static void onFloorEnter(String nodeId) {
 		try {
 			Actor.add(new Ticker());
+			MakerHomes.onFloorEnter();   // 이주한 NPC 를 이 맵에 맞춤
+			MakerQuests.onFloorEnter(nodeId);
+			MakerBadges.check("floorEnter");
 			partyArrive();
 			// 스토리 비트: 이 맵에 묶인 이벤트를 한 번씩
 			JsonValue beats = MakerRuntime.story == null ? null : MakerRuntime.story.get("beats");
@@ -125,7 +131,9 @@ public class EventTriggers {
 		if (mob instanceof MakerMob) ref += "|" + ((MakerMob) mob).charId;
 		// 프로젝트 캐릭터 가운데 이 게임 클래스를 쓰는 것의 id 도
 		for (JsonValue c : MakerRuntime.chars.values()) { String g = c.getString("game", ""); if (!g.isEmpty() && (g.equals(mob.getClass().getSimpleName()) || g.endsWith("." + mob.getClass().getSimpleName()))) ref += "|" + c.getString("id", ""); }
+		MakerQuests.onMobDie(ref);
 		fire("mobKilled", ref);
+		MakerBadges.check("mobKilled");
 		if (mob.properties().contains(Char.Property.BOSS)) fire("bossDefeated", ref);
 	}
 	/** 아이템을 주웠을 때 (MakerAudio.onItemPickup) */
@@ -135,6 +143,7 @@ public class EventTriggers {
 		if (it instanceof MakerItem) ref += "|" + ((MakerItem) it).makerId;
 		if (it instanceof GenSupport.Coded) ref += "|" + ((GenSupport.Coded) it).makerId();
 		fire("itemPickup", ref);
+		MakerBadges.check("itemPickup");
 	}
 
 	// ------------------------------------------------------------ 맵에 놓은 이벤트 (페이지마다 이미지 · 자율 이동)

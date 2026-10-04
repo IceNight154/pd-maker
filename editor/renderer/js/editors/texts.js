@@ -43,7 +43,22 @@
     }
     return out;
   }
-  PDM.gameTexts = { LANGS, repoInfo, loadRows };
+  /** 게임 원래 글자 하나 (키로): { text(한국어가 있으면 한국어, 없으면 영어), en, lang } — 못 찾으면 null */
+  async function one(key) {
+    try {
+      const c = await repoInfo(), lang = (c.langs || []).includes('ko') ? 'ko' : 'en';
+      const head = String(key).split(/[.$]/)[0], guess = (c.bundles || []).includes(head) ? head : 'misc';
+      for (const b of [guess, ...(c.bundles || []).filter(x => x !== guess)]) { const r = (await loadRows(b, lang)).find(x => x.key === key); if (r) return { text: String(r.text).replace(/\\n/g, '\n'), en: String(r.en).replace(/\\n/g, '\n'), lang }; }
+    } catch (_) { /* 저장소 없음 */ }
+    return null;
+  }
+  /** "게임 원래 글" 을 실제 글로 보여 주는 상자 (비동기로 채움). fmt(글) 로 다듬을 수 있음 */
+  function origBox(key, label, fmt) {
+    const el = h('div', { class: 'hint', style: { whiteSpace: 'pre-wrap', borderLeft: '2px solid var(--line)', padding: '2px 0 2px 8px', margin: '2px 0 8px' } }, (label || '게임 원래 글') + ': 읽는 중…');
+    one(key).then(r => { el.textContent = (label || '게임 원래 글') + (r ? (r.lang === 'ko' ? '' : ' (영어 원문)') + ':\n' + (fmt ? fmt(r.text) : r.text) : ': (게임 저장소에서 찾지 못했습니다 — 키 ' + key + ')'); });
+    return el;
+  }
+  PDM.gameTexts = { LANGS, repoInfo, loadRows, one, origBox };
 
   PDM.registerEditor({
     id: K, icon: '🔤', title: () => '게임 텍스트',

@@ -394,7 +394,8 @@
       const delSel = () => { const id = st.sel, n = gr.nodes.find(x => x.id === id); if (!n || n.type === 'out') return; st.sel = null; edit('노드 삭제', g => { g.nodes = g.nodes.filter(x => x.id !== id); g.links = g.links.filter(l => l.from !== id && l.to !== id); }); };
       const onKey = e => { if (!area.isConnected || document.querySelector('.modal-bg')) return; if (/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); delSel(); } };
       addEventListener('keydown', onKey);
-      area.addEventListener('mousedown', e => {
+      area.style.touchAction = 'none';   // 태블릿 펜 · 터치로 끌 때 브라우저가 화면 스크롤로 가져가지 않게
+      area.addEventListener('pointerdown', e => {
         const ne = e.target.closest('[data-n]'); if (!ne || e.button !== 0) { if (!ne && st.sel) { st.sel = null; ctx.refresh(); } return; }
         const id = ne.dataset.n, n = gr.nodes.find(x => x.id === id), p = at(e); e.preventDefault();
         if (e.target.closest('[data-out]')) drag = { type: 'link', from: id, a: outPt(n) };
@@ -411,8 +412,8 @@
         const pe = t.closest('[data-in]'), used = p2 => gr.links.some(l => l.to === to && l.port === p2);
         const port = pe ? pe.dataset.in : (T.ins.find(p2 => !used(p2)) || T.ins[0]);   // 점이 아니라 노드에 놓으면 빈 입력 칸에
         edit('노드 연결', g => { g.links = g.links.filter(l => !(l.to === to && l.port === port)); g.links.push({ from: d.from, to, port }); }); };
-      addEventListener('mousemove', onMove); addEventListener('mouseup', onUp);
-      ctx.onDispose(() => { removeEventListener('mousemove', onMove); removeEventListener('mouseup', onUp); removeEventListener('keydown', onKey); if (playTimer) clearInterval(playTimer); });
+      addEventListener('pointermove', onMove); addEventListener('pointerup', onUp);
+      ctx.onDispose(() => { removeEventListener('pointermove', onMove); removeEventListener('pointerup', onUp); removeEventListener('keydown', onKey); if (playTimer) clearInterval(playTimer); });
       let playTimer = 0;
 
       // ---- 미리보기 (고른 노드 · 없으면 결과) + 계산

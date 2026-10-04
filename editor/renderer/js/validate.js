@@ -14,6 +14,8 @@ PDM.validate = function () {
     if (kind === 'prop') return s.has('prop:' + id);
     if (kind === 'effect') return ((s.get('effects') || {}).list || []).some(x => x.id === id);
     if (kind === 'trailer') return ((s.get('trailers') || {}).list || []).some(x => x.id === id);
+    if (kind === 'quest') return ((s.get('quests') || {}).list || []).some(x => x.id === id);
+    if (kind === 'badge') return ((s.get('badges') || {}).list || []).some(x => x.id === id);
     if (kind === 'filter') return ((s.get('filters') || {}).list || []).some(x => x.id === id);
     if (kind === 'switch') return (story.switches || []).some(x => x.id === id);
     if (kind === 'var') return (story.variables || []).some(x => x.id === id);
@@ -102,13 +104,13 @@ PDM.validate = function () {
         const tt = PDM.TERRAIN_BY_ID[(f.layers.terrain || [])[o.at.y * f.size.w + o.at.x]];
         if (tt && !tt.pass && o.type !== 'event') add('warn', w, `지나갈 수 없는 타일(${tt.name}) 위에 있습니다`, k);
       }
-      if (o.type === 'start') starts++;
+      if (o.type === 'start' && (o.when || 'start') === 'start') starts++;
       cond(o.cond, w, k);
     });
     blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
-  if (starts > 1) add('warn', '맵', `시작 위치가 ${starts}개 있습니다 (시작 맵의 첫 번째만 사용)`, 'world');
+  if (starts > 1) add('warn', '맵', `"게임을 시작할 때" 스폰 위치가 ${starts}개 있습니다 (시작 맵의 첫 번째만 사용)`, 'world');
   // 맵 오브젝트
   s.all('prop').forEach(p => {
     const k = 'prop:' + p.id, where = `맵 오브젝트 ${p.name}`;

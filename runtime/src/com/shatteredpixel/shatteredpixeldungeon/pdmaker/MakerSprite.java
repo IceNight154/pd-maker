@@ -29,15 +29,40 @@ public class MakerSprite extends MobSprite {
 		if (!setup(character)) fallback();
 	}
 
+	MakerBloom bloom; int bfw = 12, bfh = 15;
+	com.watabou.noosa.Image light; JsonValue lightCfg;   // 빛 레이어 (<시트>_light.png): 그림 위에 덧셈 합성
+	@Override public void draw() {
+		super.draw();
+		if (visible) try {   // 가까운 광원의 빛을 받음: 같은 그림을 빛 색으로 한 번 더 더해 그림
+			float[] lit = MakerLights.litAt(x + width() / 2f, y + height() * 0.6f);
+			if (lit[0] + lit[1] + lit[2] > 0.04f) {
+				float r0 = rm, g0 = gm, b0 = bm, a0 = am, ra0 = ra, ga0 = ga, ba0 = ba;
+				rm = lit[0] * 0.55f; gm = lit[1] * 0.55f; bm = lit[2] * 0.55f; ra = ga = ba = 0;
+				com.watabou.glwrap.Blending.setLightMode();
+				try { super.draw(); } finally { com.watabou.glwrap.Blending.setNormalMode(); rm = r0; gm = g0; bm = b0; am = a0; ra = ra0; ga = ga0; ba = ba0; }
+			}
+		} catch (Throwable ignored) { }
+		if (light == null || !visible) return;
+		try {
+			light.frame(frame()); light.camera = camera();
+			light.x = x; light.y = y; light.scale.set(scale.x, scale.y); light.origin.set(origin.x, origin.y); light.angle = angle; light.flipHorizontal = flipHorizontal;
+			MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg) * alpha(), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
+			if (bloom != null && frame() != null) { try { int col = Math.round(frame().left * texture.width / bfw), row = Math.round(frame().top * texture.height / bfh);
+				bloom.draw(row * bloom.cols + col, x, y, scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg) * alpha(), camera()); } finally { MakerBloom.done(); } }
+		} catch (Throwable t) { light = null; }
+	}
 	public boolean setup(JsonValue ch) {
 		if (ch == null || ch.get("sprite") == null) return false;
 		JsonValue sp = ch.get("sprite");
 		Object tx = MakerRuntime.texture(sp.getString("sheet", ""));
 		if (tx == null) return false;
 		texture(tx);
+		try { Object lt = MakerRuntime.lightTexture(sp.getString("sheet", ""), sp.getString("lightMode", "add")); light = lt == null ? null : new com.watabou.noosa.Image(lt); lightCfg = sp; } catch (Throwable ignored) { light = null; }
 		int fw = 12, fh = 15;
 		JsonValue fr = sp.get("frame");
 		if (fr != null && fr.size >= 2) { fw = fr.getInt(0); fh = fr.getInt(1); }
+		bfw = Math.max(1, fw); bfh = Math.max(1, fh);
+		try { bloom = light == null ? null : MakerBloom.get(sp.getString("sheet", ""), bfw, bfh, MakerBloom.radius(sp)); } catch (Throwable ignored) { bloom = null; }
 		TextureFilm film = new TextureFilm(texture, fw, fh);
 		JsonValue anims = sp.get("anims");
 		idle = anim(anims, "idle", film, null);

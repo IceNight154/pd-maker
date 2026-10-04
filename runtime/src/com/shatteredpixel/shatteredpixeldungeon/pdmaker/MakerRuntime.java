@@ -11,6 +11,7 @@ package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.utils.JsonReader;
 import com.badlogic.gdx.utils.JsonValue;
@@ -33,7 +34,7 @@ public class MakerRuntime {
 	private static boolean loaded = false;
 	private static FileHandle root = null;
 
-	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects, filters, trailers;
+	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects, filters, trailers, badges, quests;
 	/** 방 템플릿 (rooms/<id>.json) */
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
@@ -66,6 +67,8 @@ public class MakerRuntime {
 			title    = readOpt(r, "title.json");
 			dialogue = readOpt(r, "dialogue.json");
 			MakerTexts.load(readOpt(r, "texts.json"));   // 게임 글자 바꾸기
+			quests = readOpt(r, "quests.json");   // 퀘스트 (MakerQuests)
+			badges = readOpt(r, "badges.json");   // 내 배지 (MakerBadges)
 			trailers = readOpt(r, "trailers.json");   // 예고편 컷신 (MakerTrailer)
 			filters = readOpt(r, "filters.json");   // 화면 필터 (MakerFilter)
 			effects = readOpt(r, "effects.json");   // 이펙트 · 파티클 (MakerEffect)
@@ -196,6 +199,91 @@ public class MakerRuntime {
 		}
 	}
 
+	// ------------------------------------------------------------ 소개 화면 (스토리의 intro): 처음 켰을 때 글 · 구역에 처음 들어갈 때 로딩 화면의 이야기 글과 배경 그림
+	/** 로딩 화면이 지금 보여 줄 이야기 글 (없으면 null → 게임 원래 글) */
+	static volatile String pendingStory = null;
+	private static String introGroup = null; private static boolean introFirst = false;
+	private static JsonValue introCfg() {
+		JsonValue in = story == null ? null : story.get("intro");
+		JsonValue gs = in == null ? null : in.get("groups");
+		return gs == null || introGroup == null ? null : gs.get(introGroup);
+	}
+	/** InterlevelScene 연결 줄 ①: 로딩 배경 그림. 가는 맵의 그룹에 정한 그림이 있으면 그것 (TextureCache 열쇠), 없으면 원래 것 */
+	@SuppressWarnings("unchecked")
+	public static String splash(String asset) {
+		pendingStory = null; introGroup = null; introFirst = false;
+		try {
+			if (!isActive() || story == null) return asset;
+			com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition ct = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.curTransition;
+			boolean fresh = Dungeon.hero == null;
+			String node = fresh || ct == null ? (fresh ? WorldGraph.start : null) : WorldGraph.at(ct.destDepth, ct.destBranch);
+			JsonValue g = node == null ? null : WorldGraph.group(node);
+			if (g == null) return asset;
+			introGroup = g.getString("id", "");
+			introFirst = fresh || !StoryState.flag("grpstory_" + introGroup);
+			JsonValue c = introCfg();
+			String img = c == null ? "" : c.getString("image", "");
+			if (img.isEmpty() || !root().child(img).exists()) return asset;
+			String key = "pdmaker:splash:" + img;
+			java.lang.reflect.Field f = com.watabou.gltextures.TextureCache.class.getDeclaredField("all");
+			f.setAccessible(true);
+			Map<Object, SmartTexture> all = (Map<Object, SmartTexture>) f.get(null);
+			if (!all.containsKey(key)) { SmartTexture t = new SmartTexture(new com.badlogic.gdx.graphics.Pixmap(root().child(img))); t.filter(com.watabou.glwrap.Texture.LINEAR, com.watabou.glwrap.Texture.LINEAR); all.put(key, t); }
+			return key;
+		} catch (Throwable t) { log("로딩 배경 그림 오류: " + t); return asset; }
+	}
+	/** InterlevelScene 연결 줄 ②: 이야기 글을 보여 줄지. 돌려줌 [loadingDepth, lastRegion] — 게임은 "새로 온 5n+1 층"일 때만 글을 띄우므로 그 조건에 맞게(또는 안 맞게) 값을 바꿔 줌 */
+	public static int[] storyGate(int loadingDepth, int lastRegion) {
+		int[] same = { loadingDepth, lastRegion };
+		try {
+			if (!isActive() || story == null || introGroup == null) return same;
+			if (com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode != com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.DESCEND) return same;
+			JsonValue in = story.get("intro"), c = introCfg();
+			String text = c == null ? "" : c.getString("text", "");
+			boolean fresh = Dungeon.hero == null;
+			if (!text.isEmpty() && introFirst) {
+				int region = (int) Math.ceil(loadingDepth / 5f);
+				if (region < 1 || region > 5) { warnOnce("구역 소개 글: 26층보다 깊은 곳에서는 로딩 화면의 이야기 글을 띄울 수 없습니다 (입장 문구를 쓰세요)"); return same; }
+				pendingStory = StoryState.expand(text);
+				if (fresh) return same;   // 새 게임: 언제나 글이 뜸
+				int deep = com.shatteredpixel.shatteredpixeldungeon.Statistics.deepestFloor;
+				return new int[]{ (deep / 5 + 1) * 5 + 1, Math.min(lastRegion, 5) };
+			}
+			// 정한 글이 없음: 원작 구역 소개 글을 쓸지 (intro.vanilla — 기본 켬). 끄면 글 없이 바로 넘어감. 이미 본 그룹은 다시 띄우지 않음
+			boolean vanilla = in == null || in.getBoolean("vanilla", true);
+			if (vanilla && introFirst) return same;
+			return new int[]{ loadingDepth, 99 };
+		} catch (Throwable t) { log("구역 소개 글 오류: " + t); return same; }
+	}
+
+	/** 층에 들어올 때 기록에 나오는 글 (스토리의 messages) — 없으면 null (게임 원래 글).  String.format 에 넣을 글이라 % 는 %% 로, {depth} 는 %d 로 */
+	static String enterText(boolean firstVisit) {
+		if (!isActive() || story == null || Dungeon.hero == null) return null;
+		JsonValue m = story.get("messages");
+		if (m == null) return null;
+		String id = WorldGraph.current();
+		String text = null; boolean win = false;
+		JsonValue st = m.get("start");
+		if (st != null && !st.getString("text", "").isEmpty() && !StoryState.flag("__startmsg")) { StoryState.setFlag("__startmsg", true); text = st.getString("text", ""); win = st.getBoolean("window", false); }
+		if (text == null && id != null && m.get("nodes") != null) for (JsonValue n : m.get("nodes")) {
+			if (!id.equals(n.getString("node", "")) || n.getString("text", "").isEmpty() || StoryState.flag("nodemsg_" + id)) continue;
+			StoryState.setFlag("nodemsg_" + id, true); text = n.getString("text", ""); win = n.getBoolean("window", false); break;
+		}
+		JsonValue grp = id == null ? null : WorldGraph.group(id);
+		if (grp != null && m.get("groups") != null) {
+			String gid = grp.getString("id", ""); JsonValue g = m.get("groups").get(gid);
+			if (g != null && !g.getString("text", "").isEmpty() && !StoryState.flag("grpmsg_" + gid)) {
+				StoryState.setFlag("grpmsg_" + gid, true);   // 그룹에 처음 들어온 것으로 침 (다른 문구가 먼저 나왔더라도)
+				if (text == null) { text = g.getString("text", ""); win = g.getBoolean("window", false); }
+			}
+		}
+		if (text == null) text = m.getString(firstVisit ? "descend" : "back", "");
+		if (text.isEmpty()) return null;
+		final String shown = StoryState.expand(text.replace("{depth}", String.valueOf(Dungeon.depth)));
+		if (win) com.watabou.noosa.Game.runOnRenderThread(() -> { try { if (com.watabou.noosa.Game.scene() instanceof com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene) com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.windows.WndStory(shown)); } catch (Throwable ignored) { } });
+		return shown.replace("%", "%%");
+	}
+
 	/** GameScene 이 만들어진 뒤 (층 입장) */
 	public static void onFloorEnter() {
 		WorldGraph.arrived();
@@ -213,6 +301,8 @@ public class MakerRuntime {
 		JsonValue grp = WorldGraph.group(id);
 		WorldGraph.rememberArrival();
 		LevelHooks.refreshTargets(Dungeon.level);
+		pendingStory = null;
+		if (grp != null) StoryState.setFlag("grpstory_" + grp.getString("id", ""), true);   // 이 그룹의 소개 화면은 봤음
 		boolean safe = grp != null && grp.getBoolean("safe", false);
 		if (f != null && safe) GLog.h("— " + f.getString("name", grp.getString("name", "")) + " —");
 		// 3) 입장 이벤트 (노드마다 한 번)
@@ -283,6 +373,8 @@ public class MakerRuntime {
 		int out = com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTileSheet.EXIT;
 		dv.put(com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.ENTRANCE, up ? out : in);
 		dv.put(com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.EXIT, up ? in : out);
+		MakerTileLight.ensure(Dungeon.level);   // 타일 효과(빛) 레이어
+		MakerLights.ensure(Dungeon.level);      // 광원 (점광원)
 		// 맵 그룹/노드의 배경음 (게임 기본 음악을 튼 직후라 여기서 바꿔 끼움)
 		MakerAudio.floorBgm();
 	}
@@ -291,6 +383,68 @@ public class MakerRuntime {
 
 	private static final Map<String, SmartTexture> textures = new HashMap<>();
 	/** 'game:sprites/x.png' → 게임 내장 에셋,  'assets/..' → 프로젝트 폴더 */
+	/** 효과(빛) 레이어: 시트와 같은 이름의 _light.png 가 프로젝트에 있으면 그 텍스처 (없으면 null — 경고 없음).
+	 *  mode: add 발광(더하기) · screen 스크린 · overlay 오버레이 · dodge 닷지 — 더하기가 아닌 방식은 합성식에 맞게 색을 미리 손본 텍스처 */
+	public static Object lightTexture(String sheet) { return lightTexture(sheet, "add"); }
+	public static Object lightTexture(String sheet, String mode) {
+		try {
+			if (sheet == null || sheet.isEmpty() || sheet.startsWith("game:") || sheet.startsWith("builtin:")) return null;
+			String ref = sheet.replaceAll("(?i)\\.png$", "") + "_light.png";
+			if (root == null || !root.child(ref).exists()) return null;
+			if (mode == null || mode.equals("add") || mode.isEmpty()) return texture(ref);
+			String key = ref + "#" + (mode.equals("overlay") ? "ov" : "pm");
+			SmartTexture old = textures.get(key);
+			if (old != null) { boolean alive = true; try { alive = MakerAssets.cache().containsValue(old); } catch (Throwable ignored) { } if (alive) return old; textures.remove(key); }
+			Pixmap pm = new Pixmap(root.child(ref));
+			pm.setBlending(Pixmap.Blending.None);
+			boolean ov = mode.equals("overlay");
+			for (int y = 0; y < pm.getHeight(); y++) for (int x = 0; x < pm.getWidth(); x++) {
+				int c = pm.getPixel(x, y); float a = (c & 0xFF) / 255f;
+				int r = (c >>> 24) & 0xFF, g = (c >>> 16) & 0xFF, b = (c >>> 8) & 0xFF;
+				if (ov) { r = Math.round(127.5f + (r - 127.5f) * a); g = Math.round(127.5f + (g - 127.5f) * a); b = Math.round(127.5f + (b - 127.5f) * a); }   // 투명한 곳 = 회색(아무 변화 없음)
+				else { r = Math.round(r * a); g = Math.round(g * a); b = Math.round(b * a); }                                                                 // 투명한 곳 = 검정(아무 변화 없음)
+				pm.drawPixel(x, y, (r << 24) | (g << 16) | (b << 8) | 0xFF);
+			}
+			SmartTexture tx = TextureCache.get(pm);
+			textures.put(key, tx);
+			return tx;
+		} catch (Throwable t) { log("효과 레이어 불러오기 실패: " + t); return null; }
+	}
+	/** 빛 레이어를 지금 얼마나 세게 그릴지 (0~): sprite.lightPower % · lightPulse 초 주기 · lightPulseMin % */
+	public static float lightAmount(JsonValue sp) {
+		if (sp == null) return 1f;
+		float pw = sp.getFloat("lightPower", 100f) / 100f, per = sp.getFloat("lightPulse", 0f);
+		if (per <= 0) return pw;
+		float lo = Math.max(0f, Math.min(1f, sp.getFloat("lightPulseMin", 40f) / 100f));
+		float k = 0.5f + 0.5f * (float) Math.sin(com.watabou.noosa.Game.timeTotal * 2 * Math.PI / per);
+		return pw * (lo + (1 - lo) * k);
+	}
+	/** 합성 방식에 맞는 GL 블렌드와 색 곱 · 더하기 값을 맞춤 (그린 뒤 Blending.setNormalMode 로 되돌릴 것) */
+	public static void lightBlend(com.watabou.noosa.Visual light, float k, String mode) {
+		com.badlogic.gdx.graphics.GL20 gl = Gdx.gl;
+		switch (mode == null ? "add" : mode) {
+			case "screen": gl.glBlendFunc(GL20.GL_ONE_MINUS_DST_COLOR, GL20.GL_ONE); light.am = 1; light.rm = light.gm = light.bm = k; light.ra = light.ga = light.ba = 0; break;
+			case "dodge": gl.glBlendFunc(GL20.GL_DST_COLOR, GL20.GL_ONE); light.am = 1; light.rm = light.gm = light.bm = k; light.ra = light.ga = light.ba = 0; break;
+			case "overlay": gl.glBlendFunc(GL20.GL_DST_COLOR, GL20.GL_SRC_COLOR); light.am = 1; light.rm = light.gm = light.bm = k; light.ra = light.ga = light.ba = 0.5f * (1 - k); break;
+			default: com.watabou.glwrap.Blending.setLightMode(); light.am = k; light.rm = light.gm = light.bm = 1; light.ra = light.ga = light.ba = 0;
+		}
+	}
+	public static void drawLight(com.watabou.noosa.Image light, float amount) { drawLight(light, amount, "add"); }
+	/** 효과 레이어를 그림 위에 겹쳐 그림. 세기가 1 을 넘으면 여러 번 겹침.
+	 *  add: 화면 + 색 · screen: 화면 + 색×(1−화면) · dodge: 화면×(1+색) (밑이 밝을수록 강함) · overlay: 화면×색×2 (회색 = 그대로) */
+	public static void drawLight(com.watabou.noosa.Image light, float amount, String mode) {
+		if (light == null || amount <= 0.01f) return;
+		if (mode == null) mode = "add";
+		com.badlogic.gdx.graphics.GL20 gl = Gdx.gl;
+		try {
+			float left = amount; int n = 0;
+			while (left > 0.01f && n++ < 3) {
+				float k = Math.min(1f, left); left -= 1f;
+				lightBlend(light, k, mode);
+				light.draw();
+			}
+		} finally { com.watabou.glwrap.Blending.setNormalMode(); }
+	}
 	public static Object texture(String ref) {
 		if (ref == null || ref.isEmpty()) return null;
 		if (ref.startsWith("game:") || ref.startsWith("builtin:items")) {

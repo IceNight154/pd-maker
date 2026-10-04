@@ -418,6 +418,23 @@ public class EventInterpreter {
 				});
 				return !fwait;
 			}
+			case "quest": {   // 퀘스트: 수주 창 · 바로 수락 · 완료 처리 · 포기
+				final String qid = c.getString("id", ""); String op = c.getString("op", "offer");
+				if (op.equals("accept")) { MakerQuests.accept(qid); return true; }
+				if (op.equals("complete")) { MakerQuests.complete(qid); return true; }
+				if (op.equals("abandon")) { MakerQuests.abandon(qid); return true; }
+				if (op.equals("reset")) { MakerQuests.setState(qid, 0); return true; }
+				MakerQuests.offer(qid, this::resume);
+				return false;
+			}
+			case "questLog": MakerQuests.showLog(); return true;
+			case "shop": {   // 상인 창 열기 (닫을 때까지 기다림)
+				String sc = c.getString("char", ""); if (sc.isEmpty() || sc.equals("$this")) sc = ctxChar == null ? "" : ctxChar;
+				MakerShop.open(sc, this::resume);
+				return false;
+			}
+			case "badge": MakerBadges.give(c.getString("id", "")); return true;   // 배지 주기
+			case "badgeList": MakerBadges.showList(); return true;                 // 내 배지 목록 창
 			case "trailer": {   // 예고편 컷신 재생 (MakerTrailer)
 				final String tid = c.getString("id", ""); final boolean twait = !c.getBoolean("nowait", false);
 				final EventInterpreter self = this;
@@ -487,6 +504,11 @@ public class EventInterpreter {
 				final MakerNPC npc = MakerNPC.create(ch);
 				npc.pos = cell;
 				Game.runOnRenderThread(() -> GameScene.add(npc));
+				return true;
+			}
+			case "relocate": {   // NPC 이주: 지정한 맵의 지정한 칸에서 살게 함 (맵을 비우면 사라짐)
+				String rc = c.getString("char", ""); if (rc.isEmpty() || rc.equals("$this")) rc = ctxChar == null ? "" : ctxChar;
+				MakerHomes.move(rc, c.getString("node", ""), c.getInt("x", -1), c.getInt("y", -1));
 				return true;
 			}
 			case "despawn": {

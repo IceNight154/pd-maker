@@ -11,8 +11,8 @@ buildscript {
 allprojects {
 
     ext {
-        appName = 'My Pixel Dungeon'
-        appPackageName = 'com.pdmaker.mypixeldungeon'
+        appName = 'AFTERLIGHT'
+        appPackageName = 'com.pdmaker.afterlight'
 
         //Full releases gets +2 on version code, needed for an F-Droid quirk
         appVersionCode = 912

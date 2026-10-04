@@ -1169,6 +1169,7 @@ public class Badges {
 	}
 	
 	private static void displayBadge( Badge badge ) {
+		if (badge != null && com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerBadges.blocked(badge.name())) { local.remove(badge); return; } // >>> pdmaker
 
 		if (badge == null || (badge.type != BadgeType.JOURNAL && !Dungeon.customSeedText.isEmpty())) {
 			return;

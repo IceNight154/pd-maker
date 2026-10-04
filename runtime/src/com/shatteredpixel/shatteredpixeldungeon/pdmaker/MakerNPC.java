@@ -58,6 +58,7 @@ public class MakerNPC extends NPC {
 		GLog.i("%s: \"%s\"", name(), text);
 	}
 
+	boolean shopSkip;
 	@Override
 	public boolean interact(Char c) {
 		if (sprite != null) sprite.turnTo(pos, c.pos);
@@ -73,6 +74,21 @@ public class MakerNPC extends NPC {
 			c.move(mine);
 			Dungeon.hero.spend(1 / Dungeon.hero.speed());
 			Dungeon.hero.busy();
+			return true;
+		}
+		if (MakerQuests.onTalk(charId)) return true;   // 줄 · 보고받을 퀘스트가 있으면 그 창
+		if (MakerShop.has(charId) && !shopSkip) {   // 상인 기능: 사고파는 창 (다른 대화가 있으면 먼저 고르게 함)
+			JsonValue d0 = data();
+			JsonValue on0 = d0 == null || d0.get("behaviors") == null ? null : d0.get("behaviors").get("onInteract");
+			boolean other = !eventId.isEmpty() || (on0 != null && on0.size > 0) || HeartSystem.enabled(charId);
+			if (!other || MakerShop.direct(charId)) { MakerAudio.charSound(charId, "talk"); MakerShop.open(charId, null); return true; }
+			final MakerNPC self = this; final Char who = c;
+			com.watabou.noosa.Game.runOnRenderThread(() -> com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.windows.WndOptions(self.sprite(), self.name(), "", MakerRuntime.term("shop.browse", "물건 보기"), MakerRuntime.term("shop.talk", "대화하기")) {
+				@Override protected void onSelect(int index) {
+					if (index == 0) MakerShop.open(charId, null);
+					else { shopSkip = true; try { self.interact(who); } finally { shopSkip = false; } }
+				}
+			}));
 			return true;
 		}
 		MakerAudio.charSound(charId, "talk");
