@@ -188,7 +188,13 @@
       if (!store.isOpen || !world()) return [];
       const wd = world();
       const nodeItem = n => ({ id: 'n_' + n.id, label: W_.label(n.id) + ((store.get('node:' + n.id) || {}).name && !(W_.group(n.group) || {}).safe ? ' · ' + store.get('node:' + n.id).name : ''),
-        icon: n.id === wd.start ? '★' : ({ handmade: '▦', hybrid: '▨' })[(store.get('node:' + n.id) || {}).mode] || ((store.get('node:' + n.id) || {}).boss ? '☠' : '▢'), open: 'node:' + n.id });
+        icon: n.id === wd.start ? '★' : ({ handmade: '▦', hybrid: '▨' })[(store.get('node:' + n.id) || {}).mode] || ((store.get('node:' + n.id) || {}).boss ? '☠' : '▢'), open: 'node:' + n.id,
+        menu: () => [{ label: '맵 열기', run: () => PDM.tabs.open('node:' + n.id) },
+          { label: '이름 바꾸기…', run: async () => { const d = store.get('node:' + n.id) || {}; const v = await PDM.ui.prompt('맵 이름', d.name || ''); if (v != null) store.edit('node:' + n.id, '맵 이름', r => { r.name = v.trim(); }); } },
+          { label: '시작 노드로 지정', disabled: n.id === wd.start, run: () => store.edit('world', '시작 노드', r => { r.start = n.id; }) },
+          { label: '복제', run: () => duplicate([n.id]) },
+          { label: '그래프에서 보기', run: () => { sel = { nodes: new Set([n.id]), edge: null, group: null }; PDM.tabs.open('world'); PDM.tabs.refresh('world'); } },
+          '-', { label: '삭제', run: () => deleteNodes([n.id]) }] });
       const I = W_.info();
       const sortN = ns => ns.slice().sort((a, b) => I.depth[a.id] - I.depth[b.id] || a.y - b.y);
       const rooms = store.all('room');
@@ -232,11 +238,14 @@
         menu: [{ label: r.auto ? '자동 생성 끄기' : '자동 생성 켜기', run: () => store.edit('room:' + r.id, '자동 생성', o => { o.auto = !o.auto; if (o.autoChance == null) o.autoChance = 100; }) },
           ...roomCats.filter(c => c !== r.cat).map(c => ({ label: `분류로 옮기기: ${c}`, run: () => roomInto(r.id, c) })),
           r.cat ? { label: '분류에서 빼기', run: () => roomInto(r.id, '') } : null,
-          { label: '복제', run: () => { const c = PDM.clone(r); c.id = r.id + '_copy'; c.name += ' 사본'; if (!store.has('room:' + c.id)) store.add('room:' + c.id, c, '방 템플릿 복제'); } },
-          { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${r.name}」 방 템플릿을 삭제할까요?`)) store.remove('room:' + r.id, '방 템플릿 삭제'); } }].filter(Boolean) });
+          '-', ...PDM.resOps.menu('room', r.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('room', r.id) }])].filter(Boolean) });
       return [{ id: 'map', label: '맵', icon: '🗺', order: 10, open: 'world',
         children: [
           ...(wd.groups || []).map(g => ({ id: 'grp_' + g.id, label: g.name, icon: g.safe ? '⌂' : '▣', count: (wd.nodes || []).filter(n => n.group === g.id).length,
+            menu: () => [{ label: '노드 한꺼번에 설정…', run: () => PDM.nodeBulk((wd.nodes || []).filter(n => n.group === g.id).map(n => n.id), `그룹 「${g.name}」`) },
+              { label: '이름 바꾸기…', run: async () => { const v = await PDM.ui.prompt('그룹 이름', g.name); if (v && v.trim()) store.edit('world', '그룹 이름', r => { r.groups.find(x => x.id === g.id).name = v.trim(); }); } },
+              { label: '그래프에서 보기', run: () => { sel = { nodes: new Set(), edge: null, group: g.id }; PDM.tabs.open('world'); PDM.tabs.refresh('world'); } },
+              '-', { label: '그룹 삭제 (노드는 남김)', run: async () => { if (await PDM.ui.confirm(`「${g.name}」 그룹을 삭제할까요? 노드는 그룹 없이 남습니다.`)) store.edit('world', '그룹 삭제', r => { r.groups = r.groups.filter(x => x.id !== g.id); r.nodes.forEach(x => { if (x.group === g.id) x.group = ''; }); }); } }],
             children: sortN((wd.nodes || []).filter(n => n.group === g.id)).map(nodeItem) })),
           ...sortN((wd.nodes || []).filter(n => !n.group || !W_.group(n.group))).map(nodeItem),
           { id: 'rooms', label: '방 템플릿', icon: '▣', count: rooms.length + (PDM.SPD_ROOMS || []).length,

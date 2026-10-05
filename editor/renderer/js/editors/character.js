@@ -16,16 +16,9 @@
     store.add('char:' + clean, c, '캐릭터 추가');
     PDM.tabs.open('char:' + clean);
   }
-  async function renameChar(id) {
-    const n = await PDM.ui.prompt('새 id', id, '다른 곳의 참조(맵 오브젝트, 이벤트)는 자동으로 바뀌지 않습니다. 검사(F7)로 확인하세요.');
-    if (!n || n === id) return;
-    try { store.rename('char:' + id, 'char:' + PDM.slugId(n)); } catch (e) { toast(e.message, 'bad'); }
-  }
-  function dupChar(id) {
-    const c = PDM.clone(store.get('char:' + id)); let n = id + '_copy', k = 2;
-    while (store.has('char:' + n)) n = id + '_copy' + (k++);
-    c.id = n; c.name += ' 사본'; store.add('char:' + n, c, '캐릭터 복제'); PDM.tabs.open('char:' + n);
-  }
+  // id 바꾸기 · 복제는 공용 resOps (쓰는 곳도 함께 고침)
+  const renameChar = id => PDM.resOps.renameId('char', id);
+  const dupChar = id => PDM.resOps.dup('char', id);
 
   /** 게임 sprites 폴더의 PNG 목록 (한 번만 읽음) */
   let gameSpriteList = null;
@@ -271,7 +264,7 @@
           return { id: 'char_' + kind, label, icon: KIND_ICON[kind], count: list.length,
             menu: [{ label: `새 ${label}…`, run: () => newCharacter(kind) }],
             children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})` + (c.noSpawn ? ' — 등장 금지' : '') + (missing(c) ? ' — ⚠ 게임 저장소에 없음' : ''), icon: missing(c) ? '⚠' : c.noSpawn ? '⦸' : '', open: 'char:' + c.id,
-              menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, '-',
+              menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: '이름 바꾸기…', run: () => PDM.resOps.renameLabel('char', c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, { label: '쓰는 곳…', run: () => PDM.resOps.showUsage('char', c.id) }, '-',
                 c.game && ['mob', 'boss'].includes(c.kind) ? { label: c.noSpawn ? '다시 등장하게 (등장 금지 풀기)' : '등장하지 않게 (등장 금지)', run: () => store.edit('char:' + c.id, '등장 금지', o => { o.noSpawn = !o.noSpawn; }) } : null,
                 { label: '삭제', run: async () => {
                   if (!c.game || !['mob', 'boss'].includes(c.kind)) { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); return; }

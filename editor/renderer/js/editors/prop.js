@@ -89,8 +89,7 @@
       return [{ id: 'prop', label: '맵 오브젝트', icon: '📦', order: 12, count: all.length,
         menu: [{ label: '새 맵 오브젝트…', run: newProp }], actions: [{ label: '＋', title: '새 맵 오브젝트', run: newProp }],
         children: all.map(p => ({ id: 'prop_' + p.id, label: `${p.name} (${p.id})`, icon: p.pushable ? '⇄' : (p.states || []).length > 1 ? '◐' : '▪', open: 'prop:' + p.id,
-          menu: [{ label: '복제', run: () => { const c = PDM.clone(p); c.id = p.id + '_copy'; c.name += ' 사본'; if (!store.has('prop:' + c.id)) store.add('prop:' + c.id, c, '맵 오브젝트 복제'); } },
-            { label: '삭제', run: async () => { const u = usage(p.id); if (await PDM.ui.confirm(`「${p.name}」 맵 오브젝트를 삭제할까요?` + (u.length ? `\n(놓인 곳 ${u.length}군데 — 그 자리의 오브젝트는 "대상 없음"이 됩니다)` : ''))) store.remove('prop:' + p.id, '맵 오브젝트 삭제'); } }] })) }];
+          menu: PDM.resOps.menu('prop', p.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('prop', p.id) }]) })) }];
     },
     render(key, ctx) {
       const p = store.get(key);

@@ -79,6 +79,9 @@
     // 기준점: 방금 누른(포커스된) 칸 — 다시 그린 뒤 같은 자리의 칸이 화면의 같은 높이에 오게 맞춤 (위쪽 칸 높이가 바뀌어도 밀리지 않게)
     const anchor = active === t ? anchorOf(t.el) : null;
     if (oldH) t.el.style.minHeight = oldH + 'px';
+    // 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트)는 편집 화면 맨 위에 공용 도구 줄 (id 바꾸기 · 복제 · 쓰는 곳 · 삭제)
+    const rk = /^(char|item|event|prop):(.+)$/.exec(t.key);
+    if (rk && PDM.resOps && el && el.classList && store.has(t.key)) { try { el.prepend(PDM.resOps.bar(rk[1], rk[2])); } catch (e) { console.error(e); } }
     t.el.innerHTML = ''; t.el.append(el);
     if (active === t) { body.innerHTML = ''; body.append(t.el); body.scrollTop = keep; if (anchor) keepAnchor(t, anchor); }
     clearTimeout(t._mh);

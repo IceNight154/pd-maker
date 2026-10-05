@@ -398,9 +398,16 @@
           const sets = fl.randSets || [];
           palette.append(h('div', { class: 'fl' }, '🎲 무작위 칸 (방이 들어갈 때마다 달라짐)'),
             h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
-              ...sets.map((st, i) => h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === i + 1 ? ' pri' : ''), style: { borderColor: randColor(i + 1) }, title: (st.opts || []).map(o => (o.t === -2 ? '그대로' : (PDM.TERRAIN_BY_ID[o.t] || {}).name || o.t) + ' ' + (o.w ?? 1)).join(' · '), onclick: () => { ui.tool = 'rand'; ui.randVal = i + 1; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, `${i + 1}. ${st.name || '묶음'}`)),
+              ...sets.map((st, i) => h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === i + 1 ? ' pri' : ''), style: { borderColor: randColor(i + 1) }, title: (st.opts || []).map(o => (o.t === -2 ? '그대로' : (PDM.TERRAIN_BY_ID[o.t] || {}).name || o.t) + ' ' + (o.w ?? 1)).join(' · ') + ' — 오른쪽 클릭: 이름 바꾸기 · 복제 · 삭제', onclick: () => { ui.tool = 'rand'; ui.randVal = i + 1; ui.showRand = true; drawPalette(); drawTools(); paint(); },
+                oncontextmenu: e => { e.preventDefault(); PDM.ui.menu(e.clientX, e.clientY, randSetMenu(i)); } }, `${i + 1}. ${st.name || '묶음'}`)),
               sets.length ? h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === 0 ? ' pri' : ''), onclick: () => { ui.tool = 'rand'; ui.randVal = 0; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, '지우개') : null,
-              h('button', { class: 'btn xs', title: '새 무작위 칸 묶음 — 오른쪽 속성의 "변형"에서 선택지를 정합니다', onclick: () => addRandSet() }, '+ 묶음')),
+              h('button', { class: 'btn xs add', title: '새 무작위 칸 묶음 — 오른쪽 속성의 "변형"에서 선택지를 정합니다', onclick: () => addRandSet() }, '+ 묶음')),
+            ui.tool === 'rand' && ui.randVal > 0 && sets[ui.randVal - 1] ? h('div', { class: 'btnbar' },
+              h('span', { class: 'hint' }, `고른 묶음 ${ui.randVal}:`),
+              h('button', { class: 'btn xs', onclick: () => renameRandSet(ui.randVal - 1) }, '이름 바꾸기'),
+              h('button', { class: 'btn xs', onclick: () => dupRandSet(ui.randVal - 1) }, '복제'),
+              h('button', { class: 'btn xs', onclick: () => clearRandCells(ui.randVal - 1) }, '칠한 칸 지우기'),
+              h('button', { class: 'btn xs danger', onclick: () => removeRandSet(ui.randVal - 1) }, '삭제')) : '',
             sets.length ? h('div', { style: { display: 'flex', gap: '4px', margin: '4px 0', flexWrap: 'wrap' } }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.randShape === k ? ' pri' : ''), onclick: () => { ui.randShape = k; ui.tool = 'rand'; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, t))) : null,
             h('div', { class: 'hint', style: { marginBottom: '10px' } }, sets.length ? '칠한 칸은 게임에서 그 묶음의 선택지 중 하나가 됩니다 (예: 물 50 · 풀 50). 오른쪽 "변형"에서 선택지 · 무게 · 칸마다/묶음 전체를 정하고 「🎲 변형 미리보기」로 확인하세요.' : '"+ 묶음"을 눌러 무작위 칸 묶음을 만든 뒤 칸에 칠하세요.'));
         }
@@ -835,6 +842,32 @@
         ui.tool = 'rand'; ui.randVal = n; ui.showRand = true;
         store.edit(key, '무작위 칸 묶음 추가', r => { (r.randSets = r.randSets || []).push({ name: '묶음 ' + n, mode: 'cell', opts: [{ t: 29, w: 1 }, { t: 2, w: 1 }] }); });
       }
+      // 무작위 칸 묶음 편집 (팔레트 · 속성 "변형" 공용)
+      function randSetMenu(i) {
+        return [{ label: '이름 바꾸기…', run: () => renameRandSet(i) }, { label: '복제', run: () => dupRandSet(i) }, { label: '칠한 칸 지우기', run: () => clearRandCells(i) }, '-', { label: '삭제', run: () => removeRandSet(i) }];
+      }
+      async function renameRandSet(i) {
+        const st = (fl.randSets || [])[i]; if (!st) return;
+        const n = await PDM.ui.prompt('무작위 칸 묶음 이름', st.name || ''); if (n == null || !n.trim()) return;
+        store.edit(key, '무작위 칸 묶음 이름', r => { r.randSets[i].name = n.trim(); });
+      }
+      function dupRandSet(i) {
+        const st = (fl.randSets || [])[i]; if (!st) return;
+        const n = fl.randSets.length + 1;
+        ui.tool = 'rand'; ui.randVal = n;
+        store.edit(key, '무작위 칸 묶음 복제', r => { r.randSets.push(Object.assign(PDM.clone(st), { name: (st.name || '묶음') + ' 사본' })); });
+      }
+      function clearRandCells(i) {
+        store.edit(key, '무작위 칸 지우기', r => { if (r.layers.rand) r.layers.rand = r.layers.rand.map(v => v === i + 1 ? 0 : v); });
+        if (randL) randL = randL.map(v => v === i + 1 ? 0 : v);
+      }
+      async function removeRandSet(i) {
+        const st = (fl.randSets || [])[i]; if (!st) return;
+        const used = (randL || []).filter(v => v === i + 1).length;
+        if (used && !(await PDM.ui.confirm(`「${st.name || '묶음 ' + (i + 1)}」 묶음을 삭제할까요? 칠한 칸 ${used}개는 무작위가 아니게 됩니다.`))) return;
+        if (ui.randVal === i + 1) ui.randVal = 0; else if (ui.randVal > i + 1) ui.randVal--;
+        store.edit(key, '무작위 칸 묶음 삭제', r => { r.randSets.splice(i, 1); if (r.layers.rand) r.layers.rand = r.layers.rand.map(v => v === i + 1 ? 0 : v > i + 1 ? v - 1 : v); });
+      }
       function commitSpawn(label) { const copy = spawnL.slice(); store.edit(key, label, r => { r.layers.spawn = copy; if (!r.spawn) r.spawn = { enabled: true, mobs: [], initial: 3, max: 6, respawn: 50, minDist: 8 }; }, { silent: !!fl.spawn }); }
       function spawnFill(x0, y0, v) {
         // 같은 "지나갈 수 있음" 영역(벽으로 막힌 방)을 채움
@@ -1169,7 +1202,8 @@
           ...sets.map((st, i) => h('div', { class: 'card', style: { padding: '6px', margin: '4px 0', borderLeft: '4px solid ' + randColor(i + 1) } },
             row(F.text(key, ['randSets', i, 'name'], { label: `${i + 1}. 이름`, rerender: true }),
               F.select(key, ['randSets', i, 'mode'], { cell: '칸마다 따로 굴림', all: '묶음 전체가 같은 결과' }, { label: '굴리는 방식', hint: '"묶음 전체" = 예) 이 웅덩이가 통째로 물이거나 통째로 용암' }),
-              h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => { store.edit(key, '무작위 칸 묶음 삭제', r => { r.randSets.splice(i, 1); if (r.layers.rand) r.layers.rand = r.layers.rand.map(v => v === i + 1 ? 0 : v > i + 1 ? v - 1 : v); }); } }, '삭제')),
+              h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => dupRandSet(i) }, '복제'),
+              h('button', { class: 'btn xs danger', style: { alignSelf: 'end' }, onclick: () => removeRandSet(i) }, '삭제')),
             ...(st.opts || []).map((op, j) => row(F.select(key, ['randSets', i, 'opts', j, 't'], TER, { label: j ? '' : '선택지 (지형)', number: true }),
               F.num(key, ['randSets', i, 'opts', j, 'w'], { label: j ? '' : '무게', min: 0, step: 1, def: 1, hint: j ? '' : '숫자가 클수록 자주 (예: 3 · 1 → 75% · 25%)' }),
               h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => store.edit(key, '선택지 삭제', r => { r.randSets[i].opts.splice(j, 1); }) }, '×'))),

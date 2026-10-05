@@ -21,13 +21,13 @@
     chs.forEach((c, i) => {
       const x = 10 + i * (colW + gap), hh = heights[i];
       const theme = PDM.THEMES[c.theme] || {};
-      s.append(svg('rect', { x, y: top, width: colW, height: hh, rx: 8, fill: '#292535', stroke: theme.color || '#3b3550', 'stroke-width': 2 }));
+      s.append(svg('rect', { x, y: top, width: colW, height: hh, rx: 8, style: 'fill:var(--bg3)', stroke: theme.color || 'var(--line)', 'stroke-width': 2 }));
       s.append(svg('text', { x: x + 10, y: top + 20, 'font-weight': 'bold' }, c.name || c.id));
       const ns = ((store.get('world') || {}).nodes || []).filter(n => n.group === c.id);
-      s.append(svg('text', { x: x + 10, y: top + 38, fill: '#9a93ad', 'font-size': 11 }, `노드 ${ns.length}개 · 보스 ${ns.filter(n => (store.get('node:' + n.id) || {}).boss).length}`));
+      s.append(svg('text', { x: x + 10, y: top + 38, style: 'fill:var(--mute)', 'font-size': 11 }, `노드 ${ns.length}개 · 보스 ${ns.filter(n => (store.get('node:' + n.id) || {}).boss).length}`));
       let y = top + 58;
       beatsOf(c).forEach(b => {
-        s.append(svg('text', { x: x + 12, y, 'font-size': 11, fill: b.required ? '#e6b95c' : '#e6e1f0' }, `${b.required ? '★' : '·'} ${PDM.World.label(b.node)} ${PDM.refName('event', b.event)}`.slice(0, 28)));
+        s.append(svg('text', { x: x + 12, y, 'font-size': 11, style: b.required ? 'fill:var(--gold)' : 'fill:var(--fg)' }, `${b.required ? '★' : '·'} ${PDM.World.label(b.node)} ${PDM.refName('event', b.event)}`.slice(0, 28)));
         y += 22;
       });
       (c.routeThemes || []).forEach(r => { s.append(svg('text', { x: x + 12, y, 'font-size': 10, fill: '#5fd6b4' }, `⤷ ${r.when} → ${r.theme}`.slice(0, 32))); y += 20; });
@@ -36,13 +36,13 @@
     const ex = 10 + chs.length * (colW + gap);
     ends.forEach((e, i) => {
       const y = top + i * 64;
-      s.append(svg('rect', { x: ex, y, width: 200, height: 52, rx: 8, fill: '#3a2030', stroke: '#ff7a93' }));
+      s.append(svg('rect', { x: ex, y, width: 200, height: 52, rx: 8, style: 'fill:color-mix(in srgb, var(--bad) 14%, var(--bg3))', stroke: '#ff7a93' }));
       s.append(svg('text', { x: ex + 10, y: y + 20, 'font-weight': 'bold' }, `🏁 ${e.name || e.id}`));
       s.append(svg('text', { x: ex + 10, y: y + 38, 'font-size': 10, fill: '#9a93ad' }, `[${e.priority || 0}] ${e.when || '항상'}`.slice(0, 34)));
       const lastX = 10 + (chs.length - 1) * (colW + gap) + colW;
       s.append(svg('path', { d: `M${lastX},${top + 30} C${lastX + 20},${top + 30} ${ex - 20},${y + 26} ${ex - 2},${y + 26}`, fill: 'none', stroke: '#9a93ad', 'stroke-dasharray': '4 3', 'marker-end': 'url(#arr)' }));
     });
-    if (!ends.length) s.append(svg('text', { x: ex, y: top + 20, fill: '#6c6580' }, '엔딩이 없습니다'));
+    if (!ends.length) s.append(svg('text', { x: ex, y: top + 20, style: 'fill:var(--dim)' }, '엔딩이 없습니다'));
     return h('div', { class: 'flow' }, s);
   }
 

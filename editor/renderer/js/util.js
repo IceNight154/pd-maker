@@ -70,6 +70,14 @@ function Emitter() {
   };
 }
 
+// DOM append/prepend/replaceChildren 에 null · undefined · false 를 넘기면 "null" 글자가 찍혔음 → 건너뜀 (조건부로 붙이는 칸이 많아서)
+['append', 'prepend', 'replaceChildren'].forEach(m => {
+  [Element.prototype, DocumentFragment.prototype].forEach(P => {
+    const orig = P[m]; if (!orig || orig.__pdm) return;
+    const f = function (...a) { return orig.apply(this, a.filter(x => x !== null && x !== undefined && x !== false)); };
+    f.__pdm = true; P[m] = f;
+  });
+});
 Object.assign(PDM, { h, $, $$, uid, clone, escapeHtml, debounce, clamp, slugId, deepGet, deepSet, toast, Emitter });
 /** Java 패키지 이름 꼴인지 (com.myname.mygame) */
 PDM.validPackage = s => /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(String(s || '').trim());

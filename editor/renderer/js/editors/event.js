@@ -150,9 +150,7 @@
           const list = all.filter(e => (e.kind || 'common') === kind);
           return { id: 'ev_' + kind, label, icon: KIND_ICON[kind], count: list.length, menu: [{ label: `새 ${label}…`, run: () => newEvent(kind) }],
             children: list.map(e => ({ id: 'e_' + e.id, label: `${e.name} (${e.id})`, open: 'event:' + e.id,
-              menu: [{ label: '미리보기', run: () => preview(e) },
-                { label: '복제', run: () => { const c = PDM.clone(e); c.id = e.id + '_copy'; c.name += ' 사본'; if (!store.has('event:' + c.id)) store.add('event:' + c.id, c, '이벤트 복제'); } },
-                { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${e.name}」 이벤트를 삭제할까요?`)) store.remove('event:' + e.id, '이벤트 삭제'); } }] })) };
+              menu: PDM.resOps.menu('event', e.id, [{ label: '미리보기', run: () => preview(e) }, { label: '쓰는 곳…', run: () => PDM.resOps.showUsage('event', e.id) }]) })) };
         }) }];
     },
     render(key, ctx) {

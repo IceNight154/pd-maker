@@ -498,8 +498,7 @@
         actions: list ? arrows(idx, list.length, () => swapWith(list, idx, -1), () => swapWith(list, idx, 1)) : [],
         menu: [{ label: '위로 (순서)', run: () => swapWith(list, idx, -1), disabled: !list || idx === 0 }, { label: '아래로 (순서)', run: () => swapWith(list, idx, 1), disabled: !list || idx === list.length - 1 },
           { label: '다른 분류로 옮기기…', run: () => moveDialog(i) }, '-',
-          { label: '복제', run: () => { const c = PDM.clone(i); c.id = i.id + '_copy'; c.name += ' 사본'; if (!store.has('item:' + c.id)) store.add('item:' + c.id, c, '아이템 복제'); } },
-          { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${i.name}」 을(를) 삭제할까요?`)) store.remove('item:' + i.id, '아이템 삭제'); } }] });
+          ...PDM.resOps.menu('item', i.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('item', i.id) }])] });
       const gameNode = g => ({ id: 'g_' + g.p, label: `${g.n}${g.t ? ' · ' + g.t + '티어' : ''}${g.mod2 ? ' ◆' : ''}${g.added ? ' ＋' : ''}${gameBanned(g.p) ? ' — 등장 금지' : ''}`, icon: gameBanned(g.p) ? '⦸' : '▫', open: 'spditem:' + g.p,
         menu: [{ label: '프로젝트 아이템으로 복사해서 고치기', run: () => copyGameItem(g) },
           { label: gameBanned(g.p) ? '다시 나오게 (등장 금지 풀기)' : '게임에 나오지 않게 (삭제 · 등장 금지)', run: () => toggleBan(g.p) }, { label: 'id 복사 (spd:' + g.p + ')', run: () => { navigator.clipboard && navigator.clipboard.writeText('spd:' + g.p); toast('spd:' + g.p); } }] });

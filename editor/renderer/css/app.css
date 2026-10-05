@@ -471,3 +471,41 @@ table.tbl { border-collapse: collapse; font-size: 12px; } table.tbl td, table.tb
 .combo-v { color: var(--dim, #9a93ad); font-size: 11px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
 .px-size { border-top: 1px solid var(--line, #3a3548); padding-top: 6px; }
 .modal:has(.px-preview) { width: auto; max-width: 97vw; }
+
+/* ================================================================
+   정렬 다듬기 — 편집기마다 따로 붙인 칸 · 버튼이 줄을 맞추도록 공용 규칙
+   ================================================================ */
+/* 버튼 줄: 버튼 사이 간격 · 줄바꿈 · 세로 가운데 */
+.btnbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; }
+.btnbar > .hint { margin-right: 2px; }
+.res-bar { padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg2); margin: 0 0 12px; }
+/* 붙어 있는 버튼끼리 간격 — 블록 칸 안에서만 (flex 줄은 gap 을 쓰므로 여기에 margin 을 주면 줄바꿈한 첫 버튼이 들여써짐) */
+.sec-body > .btn + .btn, .page > .btn + .btn, .editor > .btn + .btn, p > .btn + .btn, .hint > .btn + .btn, td > .btn + .btn, .li-body > .btn + .btn { margin-left: 4px; }
+/* 버튼 · 체크 · 작은 칸의 높이를 입력 칸과 맞춤 */
+.btn { line-height: 1.35; vertical-align: middle; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.btn:disabled { opacity: .45; cursor: default; }
+input[type=text], input[type=number], select { height: 30px; }
+input[type=color] { height: 30px; padding: 1px 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg3); cursor: pointer; }
+/* 가로 칸 묶음(.row) 안의 체크 · 버튼은 옆 입력 칸 높이에 맞춰 아래쪽으로 */
+.row > .check { margin: 18px 0 8px; min-height: 30px; }
+.row > .btn, .row > button.btn { align-self: start; margin: 18px 0 8px; height: 30px; }
+.row > .btn.xs, .row > button.btn.xs { height: 24px; margin-top: 21px; }
+.row > .field > .hint:empty { display: none; }
+/* 체크: 글이 두 줄이 되어도 상자가 첫 줄에 붙게 */
+.check { align-items: flex-start; line-height: 1.4; }
+.check > input[type=checkbox], .check > input[type=radio] { margin: 2px 0 0; flex: none; }
+/* 섹션 · 목록 간격 통일 */
+.sec-body > .btn.add, .listed > .btn.add { align-self: flex-start; }
+.sec-body > .fl { display: block; margin: 8px 0 4px; }
+.sec-body > .hint { margin: 2px 0 6px; }
+.li { align-items: flex-start; }
+.li-tools { display: flex; gap: 2px; flex: none; }
+.li-body { flex: 1; min-width: 0; }
+/* 인스펙터 */
+#inspector .field { margin-bottom: 6px; }
+#inspector .row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+/* .page 대신 .editor 로 그리는 편집기(드랍 테이블 · 이펙트 · 필터 · 글자 연출 · 게임 텍스트 · 예고편 · 노드 합성기)도 같은 여백 */
+.editor { padding: 16px 20px 60px; max-width: 1200px; }
+.editor > h2:first-child { font-size: 18px; margin: 0 0 4px; }
+/* .editor 화면의 첫 설명 글을 .page 의 설명과 같은 크기로 */
+.editor > h2:first-child + p.hint, .editor > h2:first-child + .hint { font-size: 12.5px; color: var(--mute); line-height: 1.55; margin: 0 0 12px; }
