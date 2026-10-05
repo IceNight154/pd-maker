@@ -591,6 +591,11 @@
           if (P_.hand) { P_.exits.forEach(t => tag(t, true)); P_.entrances.forEach(t => tag(t, false)); }
           else if (fl.mode === 'hybrid') { W_.tiles(fl.id, true).forEach((c, i) => tag({ cell: c, i, what: 'x' }, true)); }
         }
+        // 지형 광원 미리보기: 그 지형 칸마다 (게임과 같은 감쇠)
+        if (drawable && (fl.terrainLights || []).length) (fl.terrainLights || []).forEach(tl => {
+          const o2 = Object.assign({ color: '#9a7cff', k: 1.5, z: 10, range: 2 }, tl);
+          for (let i = 0; i < W * H; i++) if (terrain[i] === +tl.terrain) PDM.drawLightPreview(g, (i % W) * s + s / 2, Math.floor(i / W) * s + s / 2, o2, s);
+        });
         // 광원 미리보기의 그림자: 빛을 가리는 칸 (벽 = 1 · 막힌 맵 오브젝트 = 2, 맵 밖 = 벽)
         let lightBlock = null;
         if (drawable && (fl.objects || []).some(o => o.type === 'light')) {
@@ -1011,6 +1016,13 @@
           safeFields(key, fl, '이 맵 전체'),
           F.ref(key, ['theme'], 'theme', { label: '테마', empty: `(그룹 테마: ${themeName((grp || {}).theme) || '깊이 기본'})`, rerender: true }),
           PDM.filters ? PDM.filters.field(key, ['filter'], '화면 필터 (이 맵에 있는 동안)', '(없음 — 그룹 설정대로)') : null,
+          section(`지형 광원 (${(fl.terrainLights || []).length})`,
+            h('div', { class: 'hint' }, '고른 지형의 칸마다 은은한 빛이 퍼집니다 — 예) 물 → 보라빛 발광 호수, 잿불 → 붉은 빛. 직접 그린 칸 · 자동 생성 칸 모두에 적용되고, 영웅이 못 보는 칸에서는 꺼집니다 (벽 그림자는 없음). 깜빡임을 주면 칸마다 박자가 어긋나 일렁입니다.'),
+            ...(fl.terrainLights || []).map((tl, i) => h('div', { class: 'card', style: { padding: '6px', margin: '6px 0' } },
+              row(F.select(key, ['terrainLights', i, 'terrain'], PDM.TERRAIN.map(t => [t.id, t.name]), { label: '지형', number: true }),
+                h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => store.edit(key, '지형 광원 삭제', o => { o.terrainLights.splice(i, 1); if (!o.terrainLights.length) delete o.terrainLights; }) }, '삭제')),
+              ...PDM.lightFields(key, ['terrainLights', i], tl, { area: true }))),
+            h('button', { class: 'btn sm add', onclick: () => store.edit(key, '지형 광원 추가', o => { (o.terrainLights = o.terrainLights || []).push({ terrain: 29, color: '#9a7cff', k: 1.5, z: 10, range: 2, pulse: 3, pulseMin: 55 }); }) }, '+ 지형 광원 추가')),
           fl.mode !== 'handmade' ? section('구성 블럭 (자동 생성)',
             h('div', { class: 'hint' }, '블럭을 쌓아 이 층의 구성을 정합니다. 방의 위치와 연결, 방 안의 내용은 게임이 들어갈 때마다 자동으로 만듭니다.'
               + (!((fl.procedural || {}).blocks || []).length && grp && (grp.blocks || []).length ? ` 지금은 그룹 「${grp.name}」 의 블럭 ${grp.blocks.length}개를 따릅니다.` : '')),

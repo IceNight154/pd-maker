@@ -74,20 +74,28 @@
 // ================================================================
 (function () {
   const { h } = PDM;
-  PDM.lightFields = function (key, p, o) {
+  /** opts.area = 지형 광원 (그림자 칸 없음 · 미리보기는 작은 호수) */
+  PDM.lightFields = function (key, p, o, opts = {}) {
     const { F, row } = PDM.ui;
+    const D = opts.area ? { color: '#9a7cff', k: 1.5, z: 10, range: 2 } : { color: '#ffe9a8', k: 3, z: 10, range: 4 };
     return [
-      row(F.color(key, [...p, 'color'], { label: '빛 색', def: '#ffe9a8' }),
-        F.num(key, [...p, 'k'], { label: '세기', min: 0, max: 60, step: 0.5, def: 3, rerender: true, hint: '가운데 밝은 부분의 크기' }),
-        F.num(key, [...p, 'z'], { label: '부드러움 (높이)', min: 1, max: 80, step: 1, def: 10, rerender: true, hint: '클수록 넓고 은은하게' }),
-        F.num(key, [...p, 'range'], { label: '범위 (칸)', min: 1, max: 16, step: 0.5, def: 4, rerender: true, hint: '여기서 빛이 0 이 됨' })),
-      row(F.bool(key, [...p, 'shadow'], { label: '벽 그림자 — 벽 · 닫힌 문 · 막힌 맵 오브젝트 뒤로는 빛이 가지 않음', def: true }),
+      row(F.color(key, [...p, 'color'], { label: '빛 색', def: D.color }),
+        F.num(key, [...p, 'k'], { label: '세기', min: 0, max: 60, step: 0.5, def: D.k, rerender: true, hint: opts.area ? '칸 하나의 세기 (칸이 모이면 더 밝아짐)' : '가운데 밝은 부분의 크기' }),
+        F.num(key, [...p, 'z'], { label: '부드러움 (높이)', min: 1, max: 80, step: 1, def: D.z, rerender: true, hint: '클수록 넓고 은은하게' }),
+        F.num(key, [...p, 'range'], { label: '범위 (칸)', min: opts.area ? 0.5 : 1, max: 16, step: 0.5, def: D.range, rerender: true, hint: '여기서 빛이 0 이 됨' })),
+      opts.area ? null : row(F.bool(key, [...p, 'shadow'], { label: '벽 그림자 — 벽 · 닫힌 문 · 막힌 맵 오브젝트 뒤로는 빛이 가지 않음', def: true }),
         F.bool(key, [...p, 'charShadow'], { label: '캐릭터 그림자 — 빛 가까이 있는 캐릭터 뒤로 그림자가 늘어짐', def: true })),
       row(F.num(key, [...p, 'pulse'], { label: '깜빡임 주기 (초, 0 = 일정)', min: 0, step: 0.1, def: 0 }),
         F.num(key, [...p, 'pulseMin'], { label: '깜빡일 때 가장 어두운 세기 (%)', int: true, min: 0, max: 100, def: 60 })),
       (() => { const cv = h('canvas', { width: 220, height: 110, style: { background: '#14121a', borderRadius: '6px', display: 'block' } }); const g = cv.getContext('2d');
         g.fillStyle = '#2a2833'; for (let x = 0; x < 220; x += 16) for (let y = 0; y < 110; y += 16) if (((x + y) / 16) % 2 === 0) g.fillRect(x, y, 16, 16);
-        PDM.drawLightPreview(g, 110, 55, o, 16); return h('div', {}, h('div', { class: 'hint' }, '미리보기 (네모 한 칸 = 타일 한 칸)'), cv); })()];
+        const oo = Object.assign({}, D, o);
+        if (opts.area) {   // 작은 호수 모양 칸마다
+          const lake = [[5, 2], [6, 2], [7, 2], [4, 3], [5, 3], [6, 3], [7, 3], [8, 3], [5, 4], [6, 4], [7, 4]];
+          g.fillStyle = '#2d5f86'; lake.forEach(([x, y]) => g.fillRect(x * 16, y * 16, 16, 16));
+          lake.forEach(([x, y]) => PDM.drawLightPreview(g, x * 16 + 8, y * 16 + 8, oo, 16));
+        } else PDM.drawLightPreview(g, 110, 55, oo, 16);
+        return h('div', {}, h('div', { class: 'hint' }, opts.area ? '미리보기 (파란 칸 = 그 지형, 네모 한 칸 = 타일 한 칸)' : '미리보기 (네모 한 칸 = 타일 한 칸)'), cv); })()].filter(Boolean);
   };
   /** 이 칸이 빛을 가리는지 — 게임의 solid && losBlocking (벽 · 장식 벽 · 책장 · 문 · 잠긴 문 · 숨겨진 문 · 바리케이드) */
   PDM.terrainBlocksLight = id => { const t = PDM.TERRAIN_BY_ID[id]; return !!(t && t.blockLight); };

@@ -3,6 +3,8 @@
  *   밝기 = k / (sqrt(d² + z²) − z)   (d = 광원에서의 거리 px, z = 높이 — 클수록 넓고 부드럽게, k = 세기)
  *   가운데는 밝고 멀어질수록 길고 부드럽게 줄어드는 빛. range(칸) 끝에서 0 이 되도록 끝 값을 빼고, 1 − e^−x 로 부드럽게 눌러 0~1 로 만듦.
  *   광원 오브젝트: { type: "light", at, cond, color, k, z, range, pulse, pulseMin, shadow, charShadow }   · 조건(cond)은 0.5초마다 다시 검사 (스위치로 켜고 끄기)
+ *   지형 광원: 맵(노드) · 그룹의 terrainLights[{ terrain, color, k, z, range, pulse, pulseMin }] — 그 지형 칸마다 은은한 빛 (발광 호수 · 용암)
+ *             벽 그림자는 없고(칸이 많아서), 못 보는 칸은 지움. 깜빡임은 칸마다 박자를 어긋나게 해서 일렁임.
  *   맵 오브젝트: props/<id>.json 의 light { on, color, k, z, range, ox, oy, pulse, pulseMin, shadow, charShadow } · castShadow(막힌 상태일 때 다른 빛을 가림, 기본 켬)
  *
  * 그리는 순서 (GameMaker 조명 코드와 같은 방식):
@@ -94,7 +96,8 @@ public class MakerLights extends CustomTilemap {
 			for (CustomTilemap t : l.customWalls.toArray(new CustomTilemap[0])) if (t instanceof MakerLights) l.customWalls.remove(t);
 			if (!MakerRuntime.isActive()) return;
 			int n = count(l);
-			pending = "[PDMaker] 광원 " + VERSION + ": " + (n > 0 ? "이 맵의 점광원 " + n + "개 (빛 · 그림자 · 못 보는 칸은 지움)"
+			JsonValue ta = terrainLights();
+			pending = "[PDMaker] 광원 " + VERSION + ": " + (n > 0 || ta != null ? "이 맵의 점광원 " + n + "개" + (ta != null ? " · 지형 광원 " + ta.size + "종" : "") + " (빛 · 그림자 · 못 보는 칸은 지움)"
 				: "이 맵에는 점광원이 없습니다 — 빛 · 그림자는 '광원' 오브젝트나 맵 오브젝트의 '광원 켜기'로 생깁니다 (효과 레이어 · 번짐은 그림만 빛남)");
 			if (!any(l)) return;
 			MakerLights t = new MakerLights();
@@ -115,6 +118,14 @@ public class MakerLights extends CustomTilemap {
 		if (s == null || System.getProperty("pdmaker.project") == null) return;
 		try { com.shatteredpixel.shatteredpixeldungeon.utils.GLog.i(s); } catch (Throwable ignored) { }
 	}
+	/** 이 맵의 지형 광원 설정 (노드에 없으면 그룹 것) */
+	static JsonValue terrainLights() {
+		try {
+			String id = WorldGraph.current(); JsonValue f = WorldGraph.node(id), a = f == null ? null : f.get("terrainLights");
+			if (a == null || a.size == 0) { JsonValue g = WorldGraph.group(id); a = g == null ? null : g.get("terrainLights"); }
+			return a != null && a.isArray() && a.size > 0 ? a : null;
+		} catch (Throwable ignored) { return null; }
+	}
 	static int count(Level l) {
 		int n = 0;
 		try {
@@ -125,6 +136,7 @@ public class MakerLights extends CustomTilemap {
 		return n;
 	}
 	static boolean any(Level l) {
+		if (terrainLights() != null) return true;
 		try {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) return true;
@@ -179,15 +191,15 @@ public class MakerLights extends CustomTilemap {
 
 	// ------------------------------------------------------------ 셰이더 (GameMaker 의 shdShadow + shdLight)
 
-	/** uMode 0 = 그림자 볼륨 (aXYZW.z > 0 인 점을 광원 반대쪽으로 멀리 늘임) · 1 = 그림 모양 그림자 (알파가 낮으면 버림) · 2 = 빛 */
+	/** uMode 0 = 그림자 볼륨 (aXYZW.z > 0 인 점을 광원 반대쪽으로 멀리 늘임) · 1 = 그림 모양 그림자 (알파가 낮으면 버림) · 2 = 빛 · 3 = 지형 광원 (aXYZW.zw = 칸 가운데, 칸마다 깜빡임 박자) */
 	public static class LightScript extends Script {
-		public Uniform uCamera, uPos, uZ, uMode, uLight, uColor, uTex;
+		public Uniform uCamera, uPos, uZ, uMode, uLight, uColor, uTex, uPulse;
 		public Attribute aXYZW;
 		public LightScript() {
 			super();
 			compile(SHADER);
 			uCamera = uniform("uCamera"); uPos = uniform("uPos"); uZ = uniform("uZ"); uMode = uniform("uMode");
-			uLight = uniform("uLight"); uColor = uniform("uColor"); uTex = uniform("uTex");
+			uLight = uniform("uLight"); uColor = uniform("uColor"); uTex = uniform("uTex"); uPulse = uniform("uPulse");
 			aXYZW = attribute("aXYZW");
 		}
 		@Override public void use() { super.use(); aXYZW.enable(); }
@@ -204,16 +216,21 @@ public class MakerLights extends CustomTilemap {
 			"uniform float uZ;\n" +
 			"uniform float uMode;\n" +
 			"uniform vec4 uLight;\n" +
+			"uniform vec3 uPulse;\n" +
 			"attribute vec4 aXYZW;\n" +
 			"varying vec2 vRel;\n" +
 			"varying vec2 vUV;\n" +
+			"varying float vAmt;\n" +
 			"void main() {\n" +
 			"  vec2 p = aXYZW.xy;\n" +
 			"  if (uMode < 0.5 && aXYZW.z > 0.5) {\n" +
 			"    vec2 d = p - uPos; float l = length(d);\n" +
 			"    if (l > 0.0001) p += d / l * 100000.0;\n" +
 			"  }\n" +
-			"  vRel = (p - uPos) / uLight.z;\n" +
+			"  vec2 c = uMode > 2.5 ? aXYZW.zw : uPos;\n" +
+			"  vRel = (p - c) / uLight.z;\n" +
+			"  vAmt = 1.0;\n" +
+			"  if (uMode > 2.5 && uPulse.x > 0.0) vAmt = uPulse.y + (1.0 - uPulse.y) * (0.5 + 0.5 * sin(uPulse.z * 6.2831853 / uPulse.x + c.x * 0.37 + c.y * 0.61));\n" +
 			"  vUV = aXYZW.zw;\n" +
 			"  gl_Position = uCamera * vec4(p, 0.0, 1.0);\n" +
 			"  gl_Position.z = uZ * gl_Position.w;\n" +
@@ -232,6 +249,7 @@ public class MakerLights extends CustomTilemap {
 			"uniform sampler2D uTex;\n" +
 			"varying vec2 vRel;\n" +
 			"varying vec2 vUV;\n" +
+			"varying float vAmt;\n" +
 			"void main() {\n" +
 			"  if (uMode < 0.5) { gl_FragColor = vec4(0.0); return; }\n" +
 			"  if (uMode < 1.5) { if (texture2D(uTex, vUV).a < 0.3) discard; gl_FragColor = vec4(0.0); return; }\n" +
@@ -240,7 +258,7 @@ public class MakerLights extends CustomTilemap {
 			"  float den = sqrt(t * t + a * a) - a;\n" +
 			"  float v = den <= 0.00001 ? 1.0 : 1.0 - exp(-max(uLight.x / den - uLight.w, 0.0));\n" +
 			"  if (t >= 1.0) v = 0.0;\n" +
-			"  gl_FragColor = vec4(uColor * v, 1.0);\n" +
+			"  gl_FragColor = vec4(uColor * (v * vAmt), 1.0);\n" +
 			"}\n";
 	}
 
@@ -333,6 +351,7 @@ public class MakerLights extends CustomTilemap {
 		final ArrayList<Spot> spots = new ArrayList<>(); Image shadow; float wait;
 		final Fan fan = new Fan(); final Map<Object, Reach> reach = new HashMap<>(); int mapVer; float verWait;
 		final ArrayList<Lit> active = new ArrayList<>();   // 이번 프레임에 그리는 광원
+		JsonValue areas;   // 지형 광원 설정 (없으면 null)
 		final Verts vs = new Verts();
 		Vis() {
 			super(com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES, new TextureFilm(com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES, 16, 16));
@@ -346,6 +365,7 @@ public class MakerLights extends CustomTilemap {
 					s.x = (off[0] + at.getInt("x") + 0.5f) * 16; s.y = (off[1] + at.getInt("y") + 0.5f) * 16;
 					spots.add(s);
 				}
+				areas = terrainLights();
 			} catch (Throwable t) { MakerRuntime.log("광원 오류: " + t); }
 		}
 		String note;
@@ -500,6 +520,34 @@ public class MakerLights extends CustomTilemap {
 					gl.glUniform3f(s.uColor.location(), e.cr, e.cg, e.cb);
 					s.draw(vs.buf, vs.n);
 				}
+				// ⑥ 지형 광원: 그 지형 칸마다 빛 사각형 하나 (가운데는 정점의 zw) — 그림자 없이 덧셈, 한 설정당 한 번에 그림
+				if (areas != null) {
+					gl.glDisable(GL20.GL_DEPTH_TEST); gl.glColorMask(true, true, true, true);
+					gl.glEnable(GL20.GL_BLEND); gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);
+					s.uMode.value1f(3);
+					for (JsonValue a : areas) {
+						int ter; try { ter = a.getInt("terrain", -1); } catch (Throwable t) { continue; }
+						float range = Math.max(0.5f, a.getFloat("range", 2f)) * 16, z = Math.max(0.5f, a.getFloat("z", 10f)), k = Math.max(0f, a.getFloat("k", 1.5f));
+						float m = range;
+						int cx0 = Math.max(0, (int) Math.floor((ox - m) / 16)), cx1 = Math.min(l.width() - 1, (int) Math.floor((ox + fw + m) / 16));
+						int cy0 = Math.max(0, (int) Math.floor((oy - m) / 16)), cy1 = Math.min(l.height() - 1, (int) Math.floor((oy + fh + m) / 16));
+						vs.clear();
+						for (int cy = cy0; cy <= cy1; cy++) for (int cx = cx0; cx <= cx1; cx++) {
+							if (l.map[cx + cy * l.width()] != ter) continue;
+							float px = cx * 16 + 8, py = cy * 16 + 8;
+							vs.v(px - range, py - range, px, py); vs.v(px + range, py - range, px, py); vs.v(px + range, py + range, px, py);
+							vs.v(px - range, py - range, px, py); vs.v(px + range, py + range, px, py); vs.v(px - range, py + range, px, py);
+						}
+						if (vs.n == 0) continue;
+						int col = 0x9a7cff; try { col = Integer.parseInt(a.getString("color", "#9a7cff").replace("#", ""), 16); } catch (Throwable ignored) { }
+						float per = a.getFloat("pulse", 0f), lo = Math.max(0f, Math.min(1f, a.getFloat("pulseMin", 60f) / 100f));
+						s.uLight.value4f(k / range, z / range, range, k / ((float) Math.sqrt(range * range + z * z) - z));
+						gl.glUniform3f(s.uPulse.location(), per, lo, per > 0 ? Game.timeTotal % (per * 1000f) : 0f);
+						gl.glUniform3f(s.uColor.location(), ((col >> 16) & 0xFF) / 255f, ((col >> 8) & 0xFF) / 255f, (col & 0xFF) / 255f);
+						s.draw(vs.buf, vs.n);
+					}
+					gl.glUniform3f(s.uPulse.location(), 0, 0, 0);
+				}
 				// ⑤ 영웅이 지금 못 보는 칸은 빛을 지움 (다른 방 · 벽 너머로 빛이 남아 보이지 않게)
 				boolean[] fov = l.heroFOV;
 				if (fov != null && fov.length == l.length()) {
@@ -584,13 +632,13 @@ public class MakerLights extends CustomTilemap {
 					JsonValue ft = d.get("foot"); float fw = ft != null && ft.size >= 2 ? Math.max(1, ft.getInt(0)) : 1;
 					collect(t, t, (t.tileX + fw / 2f) * 16 + lt.getFloat("ox", 0), (t.tileY + 0.5f) * 16 + lt.getFloat("oy", 0), lt, cam);
 				}
-				if (!active.isEmpty()) {
+				if (!active.isEmpty() || areas != null) {
 					boolean done = false;
 					if (gpuOk) try { done = gpu(cam, Dungeon.level); } catch (Throwable e) {
 						gpuOk = false;
 						MakerRuntime.warnOnce("광원 버퍼를 쓸 수 없어 예전 방식으로 그립니다: " + e + " @ " + (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : ""));
 					}
-					if (!done) fallback(cam);
+					if (!done && !active.isEmpty()) fallback(cam);   // 예전 방식은 지형 광원을 그리지 않음
 					if (!told && System.getProperty("pdmaker.project") != null) {   // 테스트 플레이: 어느 방식으로 그리는지 한 번 알림
 						told = true;
 						note = ("[PDMaker] 광원 " + VERSION + ": " + (done ? "빛 지도 + 그림자 볼륨" : "예전 방식 (광원 버퍼 없음)") + " · 광원 " + active.size() + "개");   // 그리는 중에 로그 창을 바꾸지 않게 update 에서 씀
