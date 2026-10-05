@@ -14,7 +14,8 @@
  * 그리는 순서 (GameMaker 조명 코드와 같은 방식):
  *   · 이 층은 customWalls 맨 끝에 들어가 벽 · 캐릭터 · 맵 오브젝트 위, 안개 아래에 그려짐 (빛이 캐릭터와 물건에도 더해짐).
  *   · 빛 지도(광원 버퍼, 깊이 버퍼 포함)에 광원마다
- *       ① 그림자 볼륨: 벽 칸 · 막힌 맵 오브젝트의 대각선 두 개를 광원 반대쪽으로 아주 길게 늘인 사각형을 깊이에만 씀 (z = 광원 z − 0.5)
+ *       ① 그림자 볼륨: 벽 칸(열린 칸과 맞닿은 변) · 막힌 맵 오브젝트에서 광원에서 등진 변만 광원 반대쪽으로 아주 길게 늘인 사각형을 깊이에만 씀 (z = 광원 z − 0.5)
+ *          — 벽 칸 자체는 다 밝고 그 뒤만 어두움 (예전엔 대각선 두 개를 써서 벽 칸 안쪽 절반이 그림자가 되어 마름모 무늬가 생겼음)
  *       ② 빛: 감쇠식을 셰이더에서 계산해 덧셈 (z = 광원 z, 깊이 검사 — 그림자 볼륨 뒤는 그려지지 않음)
  *       광원마다 z 를 조금씩 앞으로 당겨서 앞 광원의 그림자가 뒤 광원을 가리지 않음 (깊이 버퍼는 한 번만 지움).
  *     캐릭터 그림자도 같은 깊이 단계에 씀 (그 광원의 빛만 빠짐 — 캐릭터 몸에는 그림자가 덮이지 않게 몸 자리를 되돌림).
@@ -213,10 +214,9 @@ public class MakerLights extends CustomTilemap {
 		int c = cx + cy * l.width();
 		return l.solid[c] && l.losBlocking[c];   // 벽 · 닫힌 문 · 책장 · 바리케이드 (풀 · 조각상은 빛을 막지 않음)
 	}
-	/** 열린 칸과 맞닿은 벽 칸만 그림자를 만듦 (안쪽 벽은 어차피 그 뒤라서) */
-	static boolean edge(Level l, int cx, int cy) {
-		return (cx > 0 && !blocks(l, cx - 1, cy)) || (cx < l.width() - 1 && !blocks(l, cx + 1, cy))
-			|| (cy > 0 && !blocks(l, cx, cy - 1)) || (cy < l.height() - 1 && !blocks(l, cx, cy + 1));
+	/** 그림자 변을 만드는 이웃: 막히지 않은 칸이나 맵 바깥 (맵 가장자리 벽 너머로 빛이 새지 않게) */
+	static boolean open(Level l, int cx, int cy) {
+		return cx < 0 || cy < 0 || cx >= l.width() || cy >= l.height() || !blocks(l, cx, cy);
 	}
 
 	/** (예전 방식 · 캐릭터 그림자용) 광원 하나가 실제로 닿는 범위 (각도별 거리) — 벽 · 닫힌 문 뒤로는 빛이 가지 않음 */
@@ -332,8 +332,16 @@ public class MakerLights extends CustomTilemap {
 			v(x1, y1, 0, 0); v(x1, y1, 1, 0); v(x2, y2, 0, 0);
 			v(x1, y1, 1, 0); v(x2, y2, 0, 0); v(x2, y2, 1, 0);
 		}
-		/** 상자 하나 = 대각선 두 개 */
+		/** 상자 하나 = 대각선 두 개 (예전 방식 — 상자 안쪽 절반이 자기 그림자에 덮여 벽에 마름모 무늬가 생겨서 지금은 안 씀) */
 		void box(float x1, float y1, float x2, float y2) { quad(x1, y1, x2, y2); quad(x2, y1, x1, y2); }
+		/** 상자의 뒷면(광원에서 등진 변)만 늘임 — 상자 자체는 다 밝고 그 뒤만 그림자. open = 위 · 아래 · 왼쪽 · 오른쪽 변이 열린 칸과 맞닿았는지
+		 *  (막힌 칸끼리 맞닿은 변은 늘이지 않음 — 이웃 벽 칸에 비스듬한 그림자가 드리우지 않게) */
+		void faces(float x1, float y1, float x2, float y2, float lx, float ly, boolean top, boolean bottom, boolean left, boolean right) {
+			if (top && ly > y1) quad(x1, y1, x2, y1);
+			if (bottom && ly < y2) quad(x1, y2, x2, y2);
+			if (left && lx > x1) quad(x1, y1, x1, y2);
+			if (right && lx < x2) quad(x2, y1, x2, y2);
+		}
 		void rect(float x1, float y1, float x2, float y2) {
 			v(x1, y1, 0, 0); v(x2, y1, 0, 0); v(x2, y2, 0, 0);
 			v(x1, y1, 0, 0); v(x2, y2, 0, 0); v(x1, y2, 0, 0);
@@ -514,13 +522,14 @@ public class MakerLights extends CustomTilemap {
 		void casters(Lit e, Level l) {
 			Reach r = e.r;
 			int lcx = (int) Math.floor(r.x / 16), lcy = (int) Math.floor(r.y / 16);
-			boolean inside = blocks(l, lcx, lcy);   // 벽에 붙인 광원: 안쪽 벽도 모두 가림 (빛이 벽 너머로 새지 않게)
 			int x0 = Math.max(0, (int) Math.floor((r.x - r.range) / 16)), x1 = Math.min(l.width() - 1, (int) Math.floor((r.x + r.range) / 16));
 			int y0 = Math.max(0, (int) Math.floor((r.y - r.range) / 16)), y1 = Math.min(l.height() - 1, (int) Math.floor((r.y + r.range) / 16));
 			for (int cy = y0; cy <= y1; cy++) for (int cx = x0; cx <= x1; cx++) {
 				if (cx == lcx && cy == lcy) continue;
-				if (!blocks(l, cx, cy) || (!inside && !edge(l, cx, cy))) continue;
-				vs.box(cx * 16, cy * 16, cx * 16 + 16, cy * 16 + 16);
+				if (!blocks(l, cx, cy)) continue;
+				// 열린 칸(또는 맵 바깥)과 맞닿은 변 가운데 광원에서 등진 변만 → 벽 칸은 통째로 밝고 벽 너머만 어두움 (예전: 대각선 두 개 → 벽에 마름모 무늬)
+				boolean t = open(l, cx, cy - 1), b = open(l, cx, cy + 1), lf = open(l, cx - 1, cy), rt = open(l, cx + 1, cy);
+				if (t || b || lf || rt) vs.faces(cx * 16, cy * 16, cx * 16 + 16, cy * 16 + 16, r.x, r.y, t, b, lf, rt);
 			}
 			for (CustomTilemap t : l.customTiles) {   // 막힌 맵 오브젝트 (castShadow 를 끄지 않았으면)
 				if (!(t instanceof MakerProp) || t == e.owner) continue;
@@ -532,7 +541,7 @@ public class MakerLights extends CustomTilemap {
 				float bx1 = p.tileX * 16 + 2, by1 = (p.tileY - f[1] + 1) * 16 + 2, bx2 = (p.tileX + f[0]) * 16 - 2, by2 = (p.tileY + 1) * 16 - 2;
 				if (bx2 < r.x - r.range || bx1 > r.x + r.range || by2 < r.y - r.range || by1 > r.y + r.range) continue;
 				if (r.x >= bx1 && r.x <= bx2 && r.y >= by1 && r.y <= by2) continue;   // 광원이 그 안에 있음
-				vs.box(bx1, by1, bx2, by2);
+				vs.faces(bx1, by1, bx2, by2, r.x, r.y, true, true, true, true);
 			}
 		}
 		/** 광원 버퍼에 그림자 볼륨 + 빛을 그리고 화면에 덧셈 — 못 그리면 false */

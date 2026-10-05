@@ -367,6 +367,11 @@ public class Hooks {
 					if (p.length > 1) System.out.println("[TEST] themetest item " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]));
 					if (p.length > 2) System.out.println("[TEST] themetest char " + p[2] + " = " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.createMob(p[2]));
 					break; }
+				case "waterhere": { // waterhere,<반지름> — 영웅 둘레 바닥 칸을 물로 (지형 광원 · 벽 경계 확인)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; int w = l.width(), hp = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos, r = Integer.parseInt(p[1]);
+					for (int i = 0; i < l.length(); i++) if (l.distance(i, hp) <= r && (com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.flags[l.map[i]] & com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.SOLID) == 0 && l.map[i] != com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.DOOR && l.map[i] != com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.OPEN_DOOR) com.shatteredpixel.shatteredpixeldungeon.levels.Level.set(i, com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER, l);
+					com.watabou.noosa.Game.runOnRenderThread(() -> { com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.updateMap(); });
+					System.out.println("[TEST] waterhere"); break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

@@ -70,7 +70,7 @@
 // ================================================================
 //  광원 설정 칸 · 미리보기 (맵의 "광원" 오브젝트와 맵 오브젝트의 광원이 함께 씀 — 런타임 MakerLights)
 //    밝기 = k / (sqrt(d² + z²) − z), 범위 끝에서 0
-//    벽 그림자: 게임(MakerLights)과 같은 GameMaker 방식 — 빛을 가리는 칸마다 대각선 두 개를 광원 반대쪽으로 길게 늘인 모양을 빛에서 지움
+//    벽 그림자: 게임(MakerLights)과 같은 방식 — 빛을 가리는 칸에서 광원에서 등진 변(열린 칸과 맞닿은 변)만 광원 반대쪽으로 길게 늘인 모양을 빛에서 지움
 // ================================================================
 (function () {
   const { h } = PDM;
@@ -118,15 +118,20 @@
     c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#000';
     const far = S * 4, ext = (x, y) => { const dx = x - cx, dy = y - cy, l = Math.hypot(dx, dy) || 1; return [x + dx / l * far, y + dy / l * far]; };
     const quad = (x1, y1, x2, y2) => { const a = ext(x1, y1), b = ext(x2, y2); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.lineTo(b[0], b[1]); c.lineTo(a[0], a[1]); c.closePath(); c.fill(); };
-    const lx = Math.floor(cx / s), ly = Math.floor(cy / s), n = Math.ceil(R / s) + 1, inside = block(lx, ly) === 1;
-    const open = (x, y) => !block(x, y) || block(x, y) === 2;
+    const lx = Math.floor(cx / s), ly = Math.floor(cy / s), n = Math.ceil(R / s) + 1;
+    const open = (x, y) => block(x, y) !== 1;   // 벽이 아닌 칸 (맵 오브젝트 칸도 벽과는 따로)
     for (let y = ly - n; y <= ly + n; y++) for (let x = lx - n; x <= lx + n; x++) {
       if (x === lx && y === ly) continue;
-      const b = block(x, y); if (!b) continue;
-      if (b === 1 && !inside && !(open(x - 1, y) || open(x + 1, y) || open(x, y - 1) || open(x, y + 1))) continue;   // 안쪽 벽은 건너뜀
+      const b = block(x, y); if (!b || b === 3) continue;
+      // 벽: 열린 칸과 맞닿은 변만 · 맵 오브젝트: 네 변 — 그 가운데 광원에서 등진 변만 늘임 (벽 칸 자체는 밝게, 예전 대각선 방식의 마름모 무늬 없음)
+      const t = b === 2 || open(x, y - 1), bt = b === 2 || open(x, y + 1), lf = b === 2 || open(x - 1, y), rt = b === 2 || open(x + 1, y);
+      if (!(t || bt || lf || rt)) continue;
       const m = b === 2 ? s * 2 / 16 : 0, x1 = x * s + m, y1 = y * s + m, x2 = (x + 1) * s - m, y2 = (y + 1) * s - m;
       if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) continue;
-      quad(x1, y1, x2, y2); quad(x2, y1, x1, y2);
+      if (t && cy > y1) quad(x1, y1, x2, y1);
+      if (bt && cy < y2) quad(x1, y2, x2, y2);
+      if (lf && cx > x1) quad(x1, y1, x1, y2);
+      if (rt && cx < x2) quad(x2, y1, x2, y2);
     }
     put(() => g.drawImage(cv, ox, oy));
   };

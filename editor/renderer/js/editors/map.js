@@ -649,14 +649,14 @@
           const o2 = Object.assign({ color: '#9a7cff', k: 1.5, z: 10, range: 2 }, tl);
           for (let i = 0; i < W * H; i++) if (terrain[i] === +tl.terrain) PDM.drawLightPreview(g, (i % W) * s + s / 2, Math.floor(i / W) * s + s / 2, o2, s);
         });
-        // 광원 미리보기의 그림자: 빛을 가리는 칸 (벽 = 1 · 막힌 맵 오브젝트 = 2, 맵 밖 = 벽)
+        // 광원 미리보기의 그림자: 빛을 가리는 칸 (벽 = 1 · 막힌 맵 오브젝트 = 2, 맵 밖 = 3 — 가장자리 벽의 바깥 변도 그림자를 만듦, 게임과 같음)
         let lightBlock = null;
         if (drawable && (fl.objects || []).some(o => o.type === 'light')) {
           const pc = new Set();
           (fl.objects || []).forEach(o => { if (o.type !== 'prop' || !o.at || o.at.x == null) return; const sp = sprites['prop:' + o.ref], pr = sp && sp.prop; if (!pr || pr.castShadow === false) return;
             const st = (pr.states || [])[pr.start || 0]; if (st && st.solid === false) return;
             const ft = pr.foot || [1, 1]; for (let j = 0; j < Math.max(1, ft[1] | 0); j++) for (let k = 0; k < Math.max(1, ft[0] | 0); k++) pc.add((o.at.y - j) * W + o.at.x + k); });
-          lightBlock = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 1 : PDM.terrainBlocksLight(terrain[y * W + x]) ? 1 : pc.has(y * W + x) ? 2 : 0;
+          lightBlock = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 3 : PDM.terrainBlocksLight(terrain[y * W + x]) ? 1 : pc.has(y * W + x) ? 2 : 0;
         }
         // 오브젝트
         (fl.objects || []).forEach((o, i) => {
