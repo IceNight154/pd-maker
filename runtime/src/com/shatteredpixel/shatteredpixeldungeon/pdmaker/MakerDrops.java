@@ -16,9 +16,15 @@
  *     게임 아이템: gameitems.json 의 items["spd:…"].banned  → 게임의 무작위 생성(Generator)에서 뺌
  *     게임 몬스터: 캐릭터의 noSpawn + project.bannedMobs[]  → 층의 몬스터 목록(MobSpawner)에서 뺌
  *
+ *   금화 ("드랍 테이블" 화면 › 금화) — project.loot.gold
+ *     { mult: %(게임이 만드는 금화 양 — Gold.random 연결 줄, 바닥 · 몬스터 · 상자 모두), noGame: 몬스터의 게임 금화 드랍 끄기,
+ *       extra: { on, chance: %(30), min(5), max(15), perDepth(깊이마다 양 +, 3), boss: 보스 배율(5), cond } — 괄호 = 비웠을 때 (편집기 기본값과 같음) — 모든 적 몬스터가 죽을 때 금화를 더 떨어뜨림 }
+ *
  *   전역 스위치: 새 게임을 시작해도 남는 값 (영웅 해금 조건 등). 조건식 global.<이름>, 이벤트 명령 "전역 스위치"
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
+
+import com.shatteredpixel.shatteredpixeldungeon.items.Gold;
 
 import com.badlogic.gdx.utils.JsonValue;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
@@ -107,6 +113,7 @@ public class MakerDrops {
 		try {
 			if (!MakerRuntime.isActive() || Dungeon.level == null) return false;
 			if (byChar == null) load();
+			goldDrop(m);
 			String id = charOf(m);
 			if (id == null) return false;
 			List<Entry> l = byChar.get(id);
@@ -120,6 +127,38 @@ public class MakerDrops {
 			return c != null && c.getBoolean("noGameLoot", false);
 		} catch (Throwable t) { MakerRuntime.log("드랍 오류: " + t); return false; }
 	}
+	// ------------------------------------------------------------ 금화
+
+	static JsonValue goldCfg() { JsonValue l = MakerRuntime.project == null ? null : MakerRuntime.project.get("loot"); return l == null ? null : l.get("gold"); }
+	/** 게임이 만드는 금화 양 (Gold.random 연결 줄) × 배율 */
+	public static int goldAmount(int q) {
+		try {
+			JsonValue g = goldCfg(); if (g == null) return q;
+			float mult = g.getFloat("mult", 100f);
+			return mult == 100f ? q : Math.max(0, Math.round(q * mult / 100f));
+		} catch (Throwable t) { return q; }
+	}
+	/** 몬스터가 죽을 때: 게임 금화 드랍 끄기(loot 가 금화면 비움) · 모든 적 몬스터의 추가 금화 */
+	static void goldDrop(Mob m) {
+		JsonValue g = goldCfg(); if (g == null || m.alignment != com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) return;
+		if (g.getBoolean("noGame", false)) {
+			try {
+				java.lang.reflect.Field f = Mob.class.getDeclaredField("loot"); f.setAccessible(true);
+				Object l = f.get(m);
+				if (l == Generator.Category.GOLD || l == Gold.class) f.set(m, null);
+			} catch (Throwable ignored) { }
+		}
+		JsonValue x = g.get("extra");
+		if (x == null || !x.getBoolean("on", false)) return;
+		if (Random.Float() * 100f >= x.getFloat("chance", 30f)) return;
+		if (!Cond.eval(x.getString("cond", ""), StoryState.globalResolver())) return;
+		int min = Math.max(0, x.getInt("min", 5)), max = Math.max(min, x.getInt("max", Math.max(min, 15)));
+		float n = Random.IntRange(min, max) + x.getFloat("perDepth", 3f) * Math.max(0, Dungeon.depth - 1);
+		if (m.properties().contains(com.shatteredpixel.shatteredpixeldungeon.actors.Char.Property.BOSS)) n *= x.getFloat("boss", 5f);
+		int q = Math.round(n);
+		if (q > 0) Dungeon.level.drop(new Gold(q), m.pos).sprite.drop();
+	}
+
 	static Item make(Entry e) {
 		Item it = MakerItem.create(e.item);
 		if (it == null) return null;

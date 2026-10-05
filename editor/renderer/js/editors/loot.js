@@ -59,13 +59,20 @@
       const { F, section, row } = PDM.ui;
       const p = store.get('project') || {};
       const loot = p.loot || {};
-      const st = ctx.state = ctx.state || {};
+      const st = ctx.state = ctx.state || { page: 'chest' };
       const mobs = store.all('char').filter(c => ['mob', 'boss'].includes(c.kind));
       const ensure = k => store.edit('project', '상자 드랍 테이블', o => { o.loot = o.loot || {}; o.loot[k] = o.loot[k] || { mode: 'add', pick: 'each', rows: [] }; });
+      // 쪽: 상자류 · 몬스터 · 아이템 · 금화 (예전에는 한 화면에 상자류 · 몬스터만)
+      const PAGES = { chest: '▣ 상자류', mob: '☠ 몬스터', item: '🎁 아이템', gold: '🪙 금화' };
+      const tabs = h('div', { class: 'btnbar loot-tabs' }, Object.entries(PAGES).map(([k, t]) => h('button', { class: 'btn sm' + (st.page === k ? ' pri' : ''), onclick: () => { st.page = k; ctx.refresh(); } }, t)));
+      const page = st.page === 'mob' ? mobPage() : st.page === 'item' ? itemPage() : st.page === 'gold' ? goldPage() : chestPage();
       return h('div', { class: 'editor' },
         h('h2', {}, '드랍 테이블'),
-        h('p', { class: 'hint' }, '몬스터와 상자류에서 어떤 아이템이 얼마의 확률로 나오는지 정합니다. 아이템 쪽에서 정하려면 아이템 편집 화면의 "드랍 테이블"을 쓰세요 (둘 다 함께 적용됩니다).'),
-        section('상자류 (게임이 층을 만들 때 놓는 것)',
+        h('p', { class: 'hint' }, '어디서 무엇이 얼마의 확률로 나오는지 정합니다. 몬스터 쪽(그 몬스터가 떨어뜨리는 것)과 아이템 쪽(그 아이템이 나오는 곳)은 함께 적용됩니다.'),
+        tabs, page);
+
+      function chestPage() {
+        return section('상자류 (게임이 층을 만들 때 놓는 것)',
           h('p', { class: 'hint' }, '맵에 직접 놓은 상자(맵 오브젝트 "아이템"의 "담는 방식")는 여기 표의 영향을 받지 않고, 놓은 아이템이 그대로 들어갑니다. 열쇠·퀘스트 아이템은 "바꾸기"에서도 남깁니다.'),
           Object.entries(PDM.LOOT_CONTAINERS).map(([k, info]) => {
             const t = loot[k];
@@ -80,8 +87,11 @@
               h('p', { class: 'hint' }, one ? '가중치가 클수록 잘 나옵니다. 예: 30 · 10 · 10 → 60% · 20% · 20%.' : '줄마다 확률(%)을 따로 굴립니다. 하나도 뽑히지 않은 상자는 원래 내용물 그대로 둡니다.'),
               PDM.lootRows('project', ['loot', k, 'rows'], { depth: true, weight: one, emptyText: '아이템 없음 — 게임이 넣는 내용물 그대로 (아래 설명)' }),
               PDM.gameHeapBox(k));
-          })),
-        section('몬스터',
+          }));
+      }
+
+      function mobPage() {
+        return section('몬스터 (그 몬스터가 죽을 때 떨어뜨리는 것)',
           mobs.length ? h('table', { class: 'tbl', style: { width: '100%' } },
             h('tr', {}, h('th', { style: { textAlign: 'left' } }, '몬스터'), h('th', { style: { textAlign: 'left' } }, '드랍'), h('th', {}, '')),
             mobs.map(c => {
@@ -94,11 +104,80 @@
                   return td; })(),
                 h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } },
                   h('button', { class: 'btn sm' + (open ? ' pri' : ''), onclick: () => { st.mob = open ? null : c.id; ctx.refresh(); } }, open ? '접기' : '편집'),
-                  h('button', { class: 'btn sm', style: { marginLeft: '4px' }, onclick: () => PDM.tabs.open('char:' + c.id) }, '캐릭터 열기'))),
+                  h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('char:' + c.id) }, '캐릭터 열기'))),
               open ? h('tr', {}, h('td', { colspan: 3 },
                 F.bool('char:' + c.id, ['noGameLoot'], { label: '게임 코드의 전리품을 떨어뜨리지 않음', rerender: true }),
                 PDM.charLootEditor('char:' + c.id, c))) : null];
-            })) : h('p', { class: 'hint' }, '몬스터·보스 캐릭터가 없습니다. 캐릭터 목록에서 몬스터를 만들거나 게임 몬스터를 가져오면 여기에 나옵니다.')));
+            })) : h('p', { class: 'hint' }, '몬스터·보스 캐릭터가 없습니다. 캐릭터 목록에서 몬스터를 만들거나 게임 몬스터를 가져오면 여기에 나옵니다.'),
+          h('p', { class: 'hint' }, '모든 몬스터의 금화는 "🪙 금화" 쪽에서 조절합니다.'));
+      }
+
+      // ---- 아이템 쪽: 그 아이템이 어디서 나오는지 (아이템의 drops · 게임 아이템은 gameitems.json) ----
+      function itemPage() {
+        const gi = (store.get('gameitems') || {}).items || {};
+        const gname = ref => itemName(ref);
+        const dsum = ds => (ds || []).map(d => d.src === 'floor' ? `층 바닥 ${d.chance}%` : `${(store.get('char:' + d.char) || {}).name || d.char || '?'} ${d.chance}%`).join(', ');
+        const rowsAll = [
+          ...store.all('item').map(it => ({ ref: it.id, name: `${it.name} (${it.id})`, skey: 'item:' + it.id, path: ['drops'], drops: it.drops || [], game: false })),
+          ...Object.entries(gi).filter(([k, v]) => (v.drops || []).length || st.itemOpen === k).map(([k, v]) => ({ ref: k, name: `${gname(k)} — 게임 아이템`, skey: 'gameitems', path: ['items', k, 'drops'], drops: v.drops || [], game: true }))];
+        const q = (st.itemQ || '').trim().toLowerCase();
+        const shown = rowsAll.filter(r => (!q || r.name.toLowerCase().includes(q)) && (!st.itemOnly || r.drops.length));
+        // 게임 아이템의 드랍 테이블 새로 만들기
+        const addInp = h('input', { type: 'text', placeholder: '게임 아이템 — 눌러서 목록에서 고르기' });
+        const addBtn = h('button', { class: 'btn sm', onclick: () => { const v = addInp.value.trim(); if (!v) return toast('아이템을 고르세요');
+          if (!v.startsWith('spd:')) { if (store.has('item:' + v)) { st.itemOpen = v; ctx.refresh(); return; } return toast('목록에서 아이템을 고르세요', 'bad'); }
+          store.edit('gameitems', '게임 아이템 드랍 테이블', r => { r.items = r.items || {}; const e = r.items[v] = r.items[v] || {}; e.drops = e.drops || []; if (!e.drops.length) e.drops.push({ src: 'mob', char: (mobs[0] || {}).id || '', chance: 10, min: 1, max: 1, cond: '' }); });
+          st.itemOpen = v; } }, '드랍 테이블 만들기');
+        const search = h('input', { type: 'text', value: st.itemQ || '', placeholder: '아이템 이름으로 찾기', style: { maxWidth: '260px' } });
+        search.addEventListener('input', PDM.debounce(() => { st.itemQ = search.value; ctx.refresh(); }, 200));
+        return section('아이템 (그 아이템이 어디서 나오는지 — 몬스터가 죽을 때 · 층 바닥)',
+          h('p', { class: 'hint' }, '프로젝트 아이템은 모두 나오고, 게임 아이템은 드랍 테이블을 만든 것만 나옵니다. 몬스터 쪽에서 정한 드랍과 함께 적용됩니다.'),
+          h('div', { class: 'btnbar' }, search,
+            h('label', { class: 'check', style: { margin: 0 } }, h('input', { type: 'checkbox', checked: !!st.itemOnly, onchange: e => { st.itemOnly = e.target.checked; ctx.refresh(); } }), '드랍이 있는 것만')),
+          h('div', { class: 'btnbar' }, h('span', { class: 'hint' }, '게임 아이템 추가:'), h('div', { style: { flex: '1 1 260px', maxWidth: '360px' } }, PDM.ui.combo(addInp, PDM.ui.itemOptions)), addBtn),
+          shown.length ? h('table', { class: 'tbl', style: { width: '100%' } },
+            h('tr', {}, h('th', { style: { textAlign: 'left' } }, '아이템'), h('th', { style: { textAlign: 'left' } }, '나오는 곳'), h('th', {}, '')),
+            shown.map(r => {
+              const open = st.itemOpen === r.ref;
+              return [h('tr', {},
+                h('td', {}, r.name),
+                h('td', { class: 'hint' }, dsum(r.drops) || '없음'),
+                h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } },
+                  h('button', { class: 'btn sm' + (open ? ' pri' : ''), onclick: () => { st.itemOpen = open ? null : r.ref; ctx.refresh(); } }, open ? '접기' : '편집'),
+                  h('button', { class: 'btn sm', onclick: () => PDM.tabs.open(r.game ? 'spditem:' + r.ref.slice(4) : 'item:' + r.ref) }, '아이템 열기'))),
+              open ? h('tr', {}, h('td', { colspan: 3 }, PDM.itemDropsEditor(r.skey, r.path))) : null];
+            })) : h('p', { class: 'hint' }, '맞는 아이템이 없습니다.'));
+      }
+
+      // ---- 금화: 게임이 만드는 금화 양 · 몬스터의 게임 금화 · 모든 몬스터의 추가 금화 (런타임 MakerDrops.goldAmount · goldDrop) ----
+      function goldPage() {
+        const g = (loot.gold || {}), x = g.extra || {};
+        const P = ['loot', 'gold'];
+        const d = Math.max(1, st.goldDepth || 5), mult = (g.mult ?? 100) / 100;
+        const base = [30 + d * 10, 60 + d * 20].map(v => Math.round(v * mult));
+        const ex = [x.min ?? 5, x.max ?? 15].map(v => Math.round(v + (x.perDepth || 0) * (d - 1)));
+        const depthIn = h('input', { type: 'number', min: 1, max: 30, value: d, style: { width: '70px' } });
+        depthIn.addEventListener('change', () => { st.goldDepth = +depthIn.value || 1; ctx.refresh(); });
+        return h('div', {},
+          section('게임이 만드는 금화',
+            h('p', { class: 'hint' }, '게임은 금화 더미를 만들 때 깊이에 따라 30 + 깊이×10 ~ 60 + 깊이×20 개를 넣습니다 (층 바닥 · 몬스터 전리품 · 상자 모두). 여기서 그 양에 배율을 곱합니다.'),
+            row(F.num('project', [...P, 'mult'], { label: '금화 양 배율 (%) — 100 = 게임 그대로, 0 = 금화 더미가 비어 나옴', int: true, min: 0, max: 1000, def: 100, rerender: true }),
+              F.bool('project', [...P, 'noGame'], { label: '몬스터가 게임 코드대로 떨어뜨리는 금화 끄기 (놀 · 구울 · 브루트 등)' }))),
+          section('모든 몬스터의 추가 금화',
+            h('p', { class: 'hint' }, '적 몬스터가 죽을 때마다 확률로 금화를 더 떨어뜨립니다 (게임 금화와 따로). 양 = 최소~최대 + 깊이마다 늘어나는 양 × (깊이 − 1), 보스는 배율을 곱합니다.'),
+            F.bool('project', [...P, 'extra', 'on'], { label: '추가 금화 사용', rerender: true }),
+            x.on ? h('div', {},
+              row(F.num('project', [...P, 'extra', 'chance'], { label: '확률 (%)', min: 0, max: 100, step: 0.1, dec: 1, def: 30, rerender: true }),
+                F.num('project', [...P, 'extra', 'min'], { label: '양 최소', int: true, min: 0, def: 5, rerender: true }),
+                F.num('project', [...P, 'extra', 'max'], { label: '양 최대', int: true, min: 0, def: 15, rerender: true }),
+                F.num('project', [...P, 'extra', 'perDepth'], { label: '깊이마다 + (개)', min: 0, step: 0.5, def: 3, rerender: true }),
+                F.num('project', [...P, 'extra', 'boss'], { label: '보스 배율 (×)', min: 0, step: 0.5, def: 5, rerender: true })),
+              F.cond('project', [...P, 'extra', 'cond'], { label: '조건 (선택 — 예: switch.gold_rush)' })) : null),
+          section('미리 계산',
+            h('div', { class: 'btnbar' }, h('span', { class: 'hint' }, '깊이'), depthIn),
+            h('p', {}, `게임 금화 더미: ${base[0]} ~ ${base[1]}개` + (g.noGame ? ' (몬스터 전리품에서는 나오지 않음)' : '')),
+            x.on ? h('p', {}, `추가 금화: ${x.chance ?? 30}% 확률로 ${ex[0]} ~ ${Math.max(ex[0], ex[1])}개 · 보스 ${Math.round(ex[0] * (x.boss ?? 5))} ~ ${Math.round(Math.max(ex[0], ex[1]) * (x.boss ?? 5))}개`) : h('p', { class: 'hint' }, '추가 금화 꺼짐')));
+      }
     }
   });
 })();

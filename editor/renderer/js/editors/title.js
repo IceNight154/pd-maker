@@ -435,8 +435,10 @@
     const style = archStyleOf(bg);
     PDM.assets.load(MOD2_LAYERS[0]).then(m2 => {
       const list = [];
+      // 지금 게임 배경(game)이 실제로 쓰는 그림: mod-2 = title0~9 10겹 · SPD 4.0 이상 = splashes/title (TitleBackground) · 그 전 = 아치(arcs1/2)
       if (style === 'game' && m2) MOD2_LAYERS.forEach((r, i) => list.push([r.slice(5), `배경 ${i}층` + (i === 0 ? ' (가장 먼 하늘)' : i === 9 ? ' (가장 가까움)' : '')]));
-      if (style === 'classic' || (style === 'game' && !m2)) list.push(['interfaces/arcs1.png', '뒤 아치'], ['interfaces/arcs2.png', '앞 아치']);
+      else if (style === 'game' && PDM.gameTitle4) list.push([T4.archs.slice(5), '아치 벽 (archs)'], [T4.clusters.slice(5), '뒤쪽 폐허 덩어리 (back_clusters)'], [T4.mid.slice(5), '가운데 폐허 (mid_mixed)'], [T4.small.slice(5), '앞쪽 작은 조각 (front_small)']);
+      if (style === 'classic' || (style === 'game' && !m2 && !PDM.gameTitle4)) list.push(['interfaces/arcs1.png', '뒤 아치'], ['interfaces/arcs2.png', '앞 아치']);
       if ((t.logo || {}).mode === 'game' || !(t.logo || {}).mode) list.push(['interfaces/banners.png', '로고 (banners)']);
       list.push(['interfaces/chrome.png', '버튼·창 테두리 (chrome)'], ['interfaces/icons.png', '버튼 아이콘 (icons)']);
       list.forEach(([gr, label]) => grid.append(PDM.sprites.gameCard(gr, label)));

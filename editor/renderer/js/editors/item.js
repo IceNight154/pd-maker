@@ -629,6 +629,7 @@
             h('input', { type: 'checkbox', checked: (it.groups || []).includes(g.id), onchange: e => store.edit(skey, '드랍 그룹', o => { const d = PDM.deepGet(o, p); const a = new Set(d.groups || []); e.target.checked ? a.add(g.id) : a.delete(g.id); d.groups = [...a]; }) }), ' ' + g.name))))) : null,
         F.cond(skey, [...p, 'cond'], { label: '조건 (선택)' })) });
   }
+  PDM.itemDropsEditor = dropsEditor;   // 드랍 테이블 화면의 "아이템" 쪽에서도 같은 편집 칸을 씀
   /** 이 캐릭터가 떨어뜨리는 아이템 [[탭 키, 이름 확률]] */
   PDM.dropsFrom = function (charId) {
     const out = [];

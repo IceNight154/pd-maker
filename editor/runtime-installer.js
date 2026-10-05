@@ -61,6 +61,8 @@ const PATCHES = [
     anchor: /public void rollToDropLoot\(\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.MakerDrops.mobDrop(this)) return;` },
   { file: 'actors/mobs/MobSpawner.java', name: '등장 금지한 몬스터 빼기',
     anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
+  { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
+    anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
     anchor: /public void link\(\s*Heap heap\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.heapScale(this, heap);` },
   // ---- 영웅 코드 (영웅 편집기의 "코드" 칸 · 세부 능력치) ----

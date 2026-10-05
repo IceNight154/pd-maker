@@ -25,7 +25,7 @@ Pixel Dungeon modding/
 | 폴더 | 내용 | 고칠 때 |
 |---|---|---|
 | `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`, 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css` |
-| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 28개 파일에 연결 줄 61개를 넣음 (목록: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
+| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 29개 파일에 연결 줄 62개를 넣음 (목록: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
 | `runtime/src/…/pdmaker/` | 게임 쪽 Java 패키지(53개 파일) | 게임 동작을 바꿀 때. 설치하면 게임 저장소로 복사됨 |
 | `tools/sample/` | mod-2 기준 샘플 프로젝트(`sample-project/`, 저장소에는 없음)를 만드는 스크립트 | `python tools/sample/make_sample.py && node tools/sample/make_heart.js && node tools/sample/make_sounds.js && python tools/sample/make_portraits.py` |
 | `tools/data/` | 게임 소스에서 에디터 데이터를 뽑는 스크립트 | `python tools/data/extract_spd_items.py [mod-2] [원작]` → `spd-items.js`, `node tools/data/gen_terms_java.js` → `DefaultTerms.java` |

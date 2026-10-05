@@ -70,7 +70,7 @@ PDM.registerEditor({
         }).catch(e => { st.textContent = e.message; });
         refresh();
         return h('div', {},
-          h('p', { class: 'hint' }, '게임 저장소에 pdmaker 패키지와 영웅·아이템 코드(pdmaker/gen)를 넣고, 원본 코드 28개 파일에 연결 줄 61개(서비스 모듈 5개는 파일이 있을 때만)를 "추가"합니다. 추가한 줄에는 // >>> pdmaker 표시가 붙고, 제거하면 원래대로 돌아갑니다. 에디터를 업데이트한 뒤에는 다시 설치하세요.'),
+          h('p', { class: 'hint' }, '게임 저장소에 pdmaker 패키지와 영웅·아이템 코드(pdmaker/gen)를 넣고, 원본 코드 29개 파일에 연결 줄 62개(서비스 모듈 5개는 파일이 있을 때만)를 "추가"합니다. 추가한 줄에는 // >>> pdmaker 표시가 붙고, 제거하면 원래대로 돌아갑니다. 에디터를 업데이트한 뒤에는 다시 설치하세요.'),
           st,
           h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } },
             h('button', { class: 'btn pri', onclick: async () => { try { await pdm.runtimeInstall(repo, PDM.store.root); toast('런타임 설치 완료'); refresh(); PDM.app.showBottom('log'); } catch (e) { toast(e.message, 'bad'); } } }, '설치 / 업데이트'),

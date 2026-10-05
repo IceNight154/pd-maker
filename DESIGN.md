@@ -452,6 +452,8 @@ MyProject/
 ### 7.3 드랍 테이블 · 등장 금지 (`editors/loot.js` · 런타임 `MakerDrops`)
 - 아이템 쪽 `drops [{ src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond }]`(게임 아이템은 `gameitems.json`) + 캐릭터 쪽 `drops`. 연결 줄 `Mob.rollToDropLoot` → `MakerDrops.mobDrop`, 층 드랍은 `LevelHooks.afterCreate`.
 - 상자류 `project.loot.<chest|locked|crystal|tomb|skeleton> { mode: add|replace, pick: each|one, rows }` — 게임이 만든 상자에만(직접 그린 맵 제외). replace 는 unique · 열쇠를 남기고, 아무것도 안 뽑히면 원래 내용. 맵 오브젝트 item 의 `container` 로 직접 상자에 담기.
+- **드랍 테이블 화면** (`editors/loot.js`): 쪽 ▣ 상자류 · ☠ 몬스터 · 🎁 아이템 · 🪙 금화. 아이템 쪽 = 프로젝트 아이템 전부 + 드랍 테이블을 만든 게임 아이템(게임 아이템 추가 칸), 줄마다 그 아이템의 `drops` 편집(`PDM.itemDropsEditor`, 아이템 편집 화면과 같은 칸).
+- **금화** `project.loot.gold { mult, noGame, extra { on, chance, min, max, perDepth, boss, cond } }`: `mult` = 게임이 만드는 금화 양 배율(%, 연결 줄 `Gold.random` → `MakerDrops.goldAmount` — 바닥 · 몬스터 · 상자 모두), `noGame` = 몬스터의 게임 금화 전리품 끔(loot 가 금화면 비움), `extra` = 모든 적 몬스터가 죽을 때 확률로 추가 금화(양 = min~max + perDepth×(깊이−1), 보스 ×boss). 화면에 깊이별 미리 계산. 4.0.0 헤드리스 `eval:goldtest` 로 확인.
 - 등장 금지: 캐릭터 `noSpawn` · `project.bannedMobs[]`(연결 줄 `MobSpawner.getMobRotation` → `filterMobs`, 전부 금지면 무시), 게임 원래 전리품 끔 `noGameLoot`, 게임 아이템 `banned`(Generator 확률 0).
 
 ### 7.4 상인 · 퀘스트
@@ -813,7 +815,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **61개** 연결점 · **28개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **62개** 연결점 · **29개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -841,6 +843,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `windows/WndGameInProgress.java` | 저장 슬롯 초상화·이름 (이어하기 창) |
 | `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악) |
 | `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때 |
+| `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |
 | `services/updates/…/GitHubUpdates.java` | 업데이트 확인: 끄기 (타이틀 하위 페이지) (선택)<br>업데이트 확인: 내 GitHub 저장소 (타이틀 하위 페이지) (선택)<br>업데이트 버튼: 다운로드 페이지 (타이틀 하위 페이지) (선택) |
 | `services/news/…/ShatteredNews.java` | 새 소식: 끄기 · 직접 쓴 소식 (타이틀 하위 페이지) (선택)<br>새 소식: 내 RSS 주소 (타이틀 하위 페이지) (선택) |

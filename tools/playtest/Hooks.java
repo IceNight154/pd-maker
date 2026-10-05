@@ -344,6 +344,17 @@ public class Hooks {
 					System.out.println("[TEST] gnoll drop: " + (hh == null ? "none" : hh.items.toString()));
 					for (com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category cat : com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category.values()) if (cat.classes != null) for (int i = 0; i < cat.classes.length; i++) if (cat.classes[i].getSimpleName().equals("Dagger")) System.out.println("[TEST] Dagger prob in " + cat + " = " + cat.probs[i] + " / default " + (cat.defaultProbs == null ? "-" : "" + cat.defaultProbs[i]));
 					break; }
+				case "goldtest": { // 드랍 테이블 › 금화 확인 — 게임 금화 양 배율 · 추가 금화 · 게임 금화 끄기
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					System.out.println("[TEST] gold random qty (depth " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth + "): " + new com.shatteredpixel.shatteredpixeldungeon.items.Gold().random().quantity());
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					for (int k = 0; k < 3; k++) {
+						com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob g = (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob) Class.forName(P + "actors.mobs.Gnoll").getDeclaredConstructor().newInstance();
+						g.pos = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + 1 + k * l.width(); g.rollToDropLoot();
+						com.shatteredpixel.shatteredpixeldungeon.items.Heap hh = l.heaps.get(g.pos);
+						System.out.println("[TEST] gnoll " + k + " drop: " + (hh == null ? "none" : hh.items.toString() + " qty " + hh.items.peek().quantity()));
+					}
+					break; }
 				case "textfx": System.out.println("[TEST] textfx " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTextFx.show(p[1], p.length > 2 ? p[2] : "center", 80f, p.length > 3 ? Integer.parseInt(p[3]) : 1, () -> System.out.println("[TEST] textfx done"))); break;
 				case "effect": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerEffect.playOn(p[1], com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] effect " + p[1]); break;
 				case "fxspot": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerEffect.place(com.shatteredpixel.shatteredpixeldungeon.Dungeon.level, p[1], com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + 2); com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.customTiles.get(com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.customTiles.size() - 1), false); System.out.println("[TEST] fxspot"); break;
