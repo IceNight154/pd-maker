@@ -23,13 +23,13 @@ PDM.pixelEditor = function (o) {
   const LIGHT_OPS = { add: 'lighter', screen: 'screen', overlay: 'overlay', dodge: 'color-dodge' };
   const baseCv = () => layer === 'base' ? data : other, lightCv = () => layer === 'light' ? data : other;
   function swapTo(l) { if (!hasLight || l === layer) return; const a = dg.getImageData(0, 0, W, H), b = og.getImageData(0, 0, W, H); dg.putImageData(b, 0, 0); og.putImageData(a, 0, 0); layer = l; if (typeof layerState === 'function') layerState(); }
-  function setLayer(l) { if (!hasLight || l === layer) return; commitFloating(); fxCommit(); swapTo(l); draw(); }
+  function setLayer(l) { if (!hasLight || l === layer) return; commitFloating(); swapTo(l); draw(); }
   const view = h('canvas', { class: 'px-canvas' });
   const hist = [], fut = [];
   const cap = () => ({ img: dg.getImageData(0, 0, W, H), w: W, h: H, layer });
   const put = st => { if (st.layer && st.layer !== layer) swapTo(st.layer);
     if (st.w !== W || st.h !== H) { const t = document.createElement('canvas'); t.width = other.width; t.height = other.height; t.getContext('2d').drawImage(other, 0, 0); W = st.w; H = st.h; data.width = W; data.height = H; other.width = W; other.height = H; og.drawImage(t, 0, 0); syncSize(); } dg.putImageData(st.img, 0, 0); };
-  const snap = () => { fxCommit(); hist.push(cap()); if (hist.length > 60) hist.shift(); fut.length = 0; };
+  const snap = () => { hist.push(cap()); if (hist.length > 60) hist.shift(); fut.length = 0; };
   /** 작업 영역 크기 바꾸기 — anchor: 기존 그림을 어디에 둘지 (nw·n·ne·w·c·e·sw·s·se) */
   function resizeCanvas(nw, nh, anchor) {
     nw = Math.max(1, Math.min(4096, nw | 0)); nh = Math.max(1, Math.min(4096, nh | 0));
@@ -165,7 +165,7 @@ PDM.pixelEditor = function (o) {
     for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) if (r.mask[(r.y + y) * W + r.x + x]) { const i = (y * r.w + x) * 4; d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0; }
     dg.putImageData(img, r.x, r.y);
   }
-  const undo = () => { if (fx.base) { fxCancel(); return; } if (hist.length) { fut.push(cap()); put(hist.pop()); floating = null; draw(); } };
+  const undo = () => { if (hist.length) { fut.push(cap()); put(hist.pop()); floating = null; draw(); } };
   const redo = () => { if (fut.length) { hist.push(cap()); put(fut.pop()); floating = null; draw(); } };
   function setBrush(n) { brush = sizes[sizeKey()] = Math.max(1, Math.min(64, Math.round(n) || 1)); brushIn.value = brush; draw(); }
   function syncBrush() { brush = sizes[sizeKey()]; try { brushIn.value = brush; brushLbl.textContent = tool === 'erase' ? '지우개 크기' : '브러쉬 크기'; } catch (_) { /* 아직 화면을 만들기 전 */ } }
@@ -390,90 +390,6 @@ PDM.pixelEditor = function (o) {
   const zoomIn = h('input', { type: 'number', min: 1, max: 48, value: scale, style: { width: '56px' }, title: '표시 배율: 그림의 한 픽셀을 화면에서 몇 배로 볼지' });
   zoomIn.addEventListener('change', () => { scale = Math.max(1, Math.min(48, Math.round(+zoomIn.value || 1))); draw(); });
   const fitFrame = () => { const pane = view.parentNode; if (!pane || !gridStep) return; const r = pane.getBoundingClientRect(); scale = Math.max(1, Math.min(48, Math.floor(Math.min(r.width / gridStep, r.height / (o.rowStep || gridStep)) * 0.9))); draw(); };
-  // ---------------- 영역 효과 (발광 · 안쪽 발광 · 외곽선 · 그림자 · 밝기) ----------------
-  //  고른 영역(선택이 없으면 그림 전체) 안의 "그려진 칸"이 효과의 근원. 영역 안에 그려진 칸이 없으면 영역 자체가 근원.
-  //  미리보기는 fx.base(효과 전 그림)에서 매번 다시 계산 — "적용"하면 되돌리기 한 단계로 남음.
-  const fx = { base: null, type: 'glow', radius: 3, power: 70, emptyOnly: false, color: null, dx: 1, dy: 1 };
-  function fxCommit() { if (!fx.base) return; hist.push({ img: fx.base, w: W, h: H, layer: fx.layer || layer }); if (hist.length > 60) hist.shift(); fut.length = 0; fx.base = null; if (typeof fxState === 'function') fxState(); }
-  function fxCancel() { if (!fx.base) return; if (fx.layer && fx.layer !== layer) swapTo(fx.layer); dg.putImageData(fx.base, 0, 0); fx.base = null; fxState(); draw(); }
-  function fxRun() {
-    if (floating) commitFloating();
-    const toLight = hasLight && fxL.checked;   // 효과를 빛 레이어에 그림 (근원은 그림 레이어에서 찾음)
-    if (fx.base && fx.lit !== toLight) { dg.putImageData(fx.base, 0, 0); fx.base = null; }
-    let detData = null;
-    if (toLight) { if (layer !== 'light') { fx.base = null; swapTo('light'); } detData = og.getImageData(0, 0, W, H).data; }
-    fx.lit = toLight;
-    if (!fx.base) { fx.base = dg.getImageData(0, 0, W, H); fx.layer = layer; }
-    const src = fx.base, out = new ImageData(new Uint8ClampedArray(src.data), W, H), d = out.data, sd = src.data, det = detData || sd;
-    const m = sel ? selMask(sel) : null, N = W * H;
-    let source = new Uint8Array(N), any = false;
-    for (let i = 0; i < N; i++) if ((!m || m[i]) && det[i * 4 + 3] > 0) { source[i] = 1; any = true; }
-    if (!any) { if (!m) { fx.base = null; PDM.toast && PDM.toast('그려진 칸이 없습니다 — 먼저 그리거나 영역을 고르세요', 'bad'); fxState(); return; } source = Uint8Array.from(m); }
-    const hx = (fx.color || color).replace('#', ''), cr = parseInt(hx.slice(0, 2), 16), cg2 = parseInt(hx.slice(2, 4), 16), cb = parseInt(hx.slice(4, 6), 16);
-    const pw = Math.max(0, Math.min(100, fx.power)) / 100, R = Math.max(1, fx.radius | 0);
-    /** 색 (cr,cg2,cb) 을 불투명도 a 로 칸 i 위에 덧칠 */
-    const over = (i, a) => { const k = i * 4, da = sd[k + 3] / 255, oa = a + da * (1 - a); if (oa <= 0) return;
-      d[k] = Math.round((cr * a + sd[k] * da * (1 - a)) / oa); d[k + 1] = Math.round((cg2 * a + sd[k + 1] * da * (1 - a)) / oa); d[k + 2] = Math.round((cb * a + sd[k + 2] * da * (1 - a)) / oa); d[k + 3] = Math.round(oa * 255); };
-    /** 근원(또는 근원이 아닌 칸)까지의 거리 — 3-4 chamfer 두 번 훑기 */
-    const dist = inside => { const D = new Float32Array(N).fill(1e9);
-      for (let i = 0; i < N; i++) if (inside ? !source[i] : source[i]) D[i] = 0;
-      if (inside) { for (let x = 0; x < W; x++) { D[x] = Math.min(D[x], source[x] ? 1 : 0); const b = (H - 1) * W + x; D[b] = Math.min(D[b], source[b] ? 1 : 0); } for (let y = 0; y < H; y++) { D[y * W] = Math.min(D[y * W], source[y * W] ? 1 : 0); const r = y * W + W - 1; D[r] = Math.min(D[r], source[r] ? 1 : 0); } }
-      const rl = (i, j, w) => { if (D[j] + w < D[i]) D[i] = D[j] + w; };
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (x > 0) rl(i, i - 1, 1); if (y > 0) { rl(i, i - W, 1); if (x > 0) rl(i, i - W - 1, 1.4142); if (x < W - 1) rl(i, i - W + 1, 1.4142); } }
-      for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) { const i = y * W + x; if (x < W - 1) rl(i, i + 1, 1); if (y < H - 1) { rl(i, i + W, 1); if (x < W - 1) rl(i, i + W + 1, 1.4142); if (x > 0) rl(i, i + W - 1, 1.4142); } }
-      return D; };
-    if (fx.type === 'glow' || fx.type === 'outline') {
-      const D = dist(false), rr = fx.type === 'outline' ? R : R + 1;
-      if (toLight && fx.type === 'glow') for (let i = 0; i < N; i++) if (source[i]) over(i, Math.min(1, pw * 0.6));   // 빛나는 물체 자체도 밝게
-      for (let i = 0; i < N; i++) { if (source[i] || D[i] > rr - (fx.type === 'outline' ? 0 : 1e-6) + (fx.type === 'outline' ? 0.45 : 0)) continue; if (fx.emptyOnly && det[i * 4 + 3] > 0) continue;
-        const a = fx.type === 'outline' ? pw : pw * Math.pow(Math.max(0, 1 - D[i] / (R + 1)), 1.6);
-        if (a > 0.01) over(i, Math.min(1, a)); }
-    } else if (fx.type === 'inner') {   // 안쪽 발광: 가장자리에서 안으로 번짐
-      const D = dist(true);
-      for (let i = 0; i < N; i++) { if (!source[i] || D[i] > R) continue; const a = pw * Math.pow(Math.max(0, 1 - (D[i] - 1) / R), 1.4); if (a > 0.01) over(i, Math.min(1, a)); }
-    } else if (fx.type === 'light' || (toLight && fx.type === 'bright')) {   // 영역 전체를 그 색 쪽으로 밝힘 (가운데가 가장 밝게)
-      const D = dist(true); let mx = 1; for (let i = 0; i < N; i++) if (source[i] && D[i] < 1e8 && D[i] > mx) mx = D[i];
-      for (let i = 0; i < N; i++) { if (!source[i]) continue; const a = pw * (0.45 + 0.55 * Math.min(1, D[i] / mx)); if (toLight) over(i, Math.min(1, a)); else { over(i, Math.min(1, a) * (sd[i * 4 + 3] / 255 || 1)); if (sd[i * 4 + 3] > 0) d[i * 4 + 3] = sd[i * 4 + 3]; } }
-    } else if (fx.type === 'shadow') {
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (!source[i]) continue; const tx = x + (fx.dx | 0), ty = y + (fx.dy | 0); if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const j = ty * W + tx; if (source[j] || (fx.emptyOnly && det[j * 4 + 3] > 0)) continue; over(j, pw); }
-    } else if (fx.type === 'bright') {  // 밝기: 세기 50 = 그대로, 위로 밝게 · 아래로 어둡게
-      const f = (fx.power - 50) / 50;
-      for (let i = 0; i < N; i++) { if (!source[i] || !sd[i * 4 + 3]) continue; const k = i * 4; for (let c = 0; c < 3; c++) d[k + c] = Math.round(f >= 0 ? sd[k + c] + (255 - sd[k + c]) * f : sd[k + c] * (1 + f)); }
-    }
-    dg.putImageData(out, 0, 0); fxState(); draw();
-  }
-  const FX = { glow: '발광 (바깥으로 번지는 빛)', inner: '안쪽 발광 (가장자리에서 안으로)', light: '빛나는 영역 (영역을 그 색으로 밝힘)', outline: '외곽선', shadow: '그림자', bright: '밝기 조절' };
-  const fxSel = h('select', {}, ...Object.entries(FX).map(([k, v]) => h('option', { value: k }, v)));
-  const fxCol = h('input', { type: 'color', value: color, title: '효과 색' });
-  const fxR = h('input', { type: 'range', min: 1, max: 12, value: fx.radius, style: { flex: 1 } }), fxRn = h('span', { class: 'hint', style: { width: '32px' } }, fx.radius + 'px');
-  const fxP = h('input', { type: 'range', min: 0, max: 100, value: fx.power, style: { flex: 1 } }), fxPn = h('span', { class: 'hint', style: { width: '32px' } }, fx.power + '%');
-  const fxE = h('input', { type: 'checkbox' }), fxDx = h('input', { type: 'number', value: 1, min: -8, max: 8, style: { width: '52px' } }), fxDy = h('input', { type: 'number', value: 1, min: -8, max: 8, style: { width: '52px' } });
-  const fxApply = h('button', { class: 'btn xs pri', disabled: true, title: '지금 보이는 효과를 그림에 넣습니다 (Ctrl+Z 로 되돌릴 수 있음)', onclick: e => { e.preventDefault(); fxCommit(); draw(); } }, '적용'),
-    fxUndo = h('button', { class: 'btn xs', disabled: true, title: '효과를 넣기 전으로', onclick: e => { e.preventDefault(); fxCancel(); } }, '취소');
-  const fxRows = { radius: h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint', style: { width: '44px' } }, '번짐'), fxR, fxRn),
-    off: h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '옮김 →'), fxDx, h('span', { class: 'hint' }, '↓'), fxDy),
-    empty: h('label', { class: 'check' }, fxE, '빈 칸(투명)에만 — 이미 그려진 칸은 덮지 않음') };
-  const fxL = h('input', { type: 'checkbox', checked: hasLight });
-  fxL.addEventListener('change', () => { if (fx.base) fxGo(); });
-  const fxLrow = hasLight ? h('label', { class: 'check', title: '켜면 효과가 그림이 아니라 빛 레이어에 그려져서, 게임에서 그림 위에 덧셈 합성으로 실제로 빛납니다' }, fxL, h('b', {}, '✨ 효과 레이어에 넣기'), ' — 게임에서 합성 방식대로 겹침') : null;
-  const fxNote = h('small', { class: 'hint' });
-  function fxState() { fxApply.disabled = fxUndo.disabled = !fx.base;
-    fxRows.radius.style.display = ['glow', 'inner', 'outline'].includes(fx.type) ? 'flex' : 'none'; fxRows.off.style.display = fx.type === 'shadow' ? 'flex' : 'none';
-    fxRows.empty.style.display = ['glow', 'outline', 'shadow'].includes(fx.type) ? '' : 'none'; fxCol.style.display = fx.type === 'bright' ? 'none' : '';
-    fxNote.textContent = fx.base ? '미리보기 중 — "적용"을 눌러야 그림에 들어갑니다 (다른 도구를 쓰거나 저장하면 자동으로 적용).' : (sel ? '고른 영역 안의 그려진 칸에서 효과가 나옵니다.' : '영역을 고르지 않으면 그림 전체가 대상입니다. 사각 선택 · 올가미 · 마법봉으로 빛낼 부분만 고르세요.'); }
-  const fxGo = () => { fx.type = fxSel.value; fx.color = fxCol.value; fx.radius = +fxR.value; fx.power = +fxP.value; fx.emptyOnly = fxE.checked; fx.dx = +fxDx.value | 0; fx.dy = +fxDy.value | 0; fxRn.textContent = fx.radius + 'px'; fxPn.textContent = fx.type === 'bright' ? (fx.power - 50 > 0 ? '+' : '') + (fx.power - 50) * 2 + '%' : fx.power + '%'; fxRun(); };
-  [fxCol, fxR, fxP, fxDx, fxDy].forEach(el => el.addEventListener('input', () => { if (fx.base) fxGo(); else { fxRn.textContent = fxR.value + 'px'; fxPn.textContent = fxP.value + '%'; } }));
-  fxE.addEventListener('change', () => { if (fx.base) fxGo(); });
-  fxSel.addEventListener('change', () => { const was = !!fx.base; fx.type = fxSel.value; if (fx.type === 'bright' && !was) fxP.value = 70; if (was) fxGo(); else fxState(); });
-  const fxPanel = h('details', { class: 'px-fx', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '4px 8px' } },
-    h('summary', { style: { cursor: 'pointer' } }, '✨ 영역 효과 — 발광 · 외곽선 · 그림자 · 밝기'),
-    h('div', { style: { display: 'grid', gap: '5px', marginTop: '5px' } },
-      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, fxSel, fxCol,
-        h('button', { class: 'btn xs', title: '지금 칠하는 색을 효과 색으로', onclick: e => { e.preventDefault(); fxCol.value = color; if (fx.base) fxGo(); } }, '칠하는 색')),
-      fxLrow, fxRows.radius, h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint', style: { width: '44px' } }, '세기'), fxP, fxPn), fxRows.off, fxRows.empty,
-      h('div', { style: { display: 'flex', gap: '6px' } }, h('button', { class: 'btn xs', title: '효과를 그림에 미리 보여 줍니다 — 값을 움직이면 바로 다시 그려집니다', onclick: e => { e.preventDefault(); fxGo(); } }, '미리보기'), fxApply, fxUndo),
-      fxNote));
-  fxState();
   const lyB = h('button', { class: 'btn xs', title: '스프라이트 그림', onclick: e => { e.preventDefault(); setLayer('base'); } }, '🖼 그림'),
     lyL = h('button', { class: 'btn xs', title: '빛 레이어 — 여기에 칠한 색은 게임에서 그림 위에 더해져(덧셈 합성) 빛나 보입니다. 어두운 색 = 약한 빛, 밝은 색 = 강한 빛', onclick: e => { e.preventDefault(); setLayer('light'); } }, '✨ 효과 레이어');
   const lyBg = h('input', { type: 'checkbox', checked: true }), lyShow = h('input', { type: 'checkbox', checked: true });
@@ -489,7 +405,7 @@ PDM.pixelEditor = function (o) {
         r.oninput = () => { lightBloom = +r.value; n.textContent = lightBloom + 'px'; draw(); }; r.onchange = () => { if (o.light && o.light.onBloom) o.light.onBloom(lightBloom); }; return h('span', { style: { display: 'inline-flex', gap: '4px', alignItems: 'center' } }, r, n); })(),
       h('label', { class: 'check' }, lyShow, '빛 보기'), h('label', { class: 'check' }, lyBg, '어두운 배경'),
       h('button', { class: 'btn xs', title: '빛 레이어를 모두 지웁니다', onclick: e => { e.preventDefault(); if (layer !== 'light') setLayer('light'); snap(); dg.clearRect(0, 0, W, H); draw(); } }, '빛 지우기')),
-    h('small', { class: 'hint' }, '효과 레이어는 게임에서 그림 위에 고른 합성 방식으로 겹칩니다 — 발광 = 색을 더해 빛남 · 스크린 = 부드럽게 밝아짐 · 오버레이 = 밝은 색은 밝게 어두운 색은 어둡게(대비) · 닷지 = 밑그림이 밝을수록 강하게 타오름. 직접 칠하거나 아래 "영역 효과"의 "효과 레이어에 넣기"로 만듭니다 (_light.png 로 저장).'));
+    h('small', { class: 'hint' }, '효과 레이어는 게임에서 그림 위에 고른 합성 방식으로 겹칩니다 — 발광 = 색을 더해 빛남 · 스크린 = 부드럽게 밝아짐 · 오버레이 = 밝은 색은 밝게 어두운 색은 어둡게(대비) · 닷지 = 밑그림이 밝을수록 강하게 타오름. 효과 레이어에 직접 칠해서 만듭니다 (_light.png 로 저장). 주변을 밝히는 빛과 그림자는 맵 오브젝트의 "광원"으로 만드세요.'));
   layerState();
 
   const toolBtn = (id, label, tip) => h('button', { class: 'tool' + (tool === id ? ' on' : ''), 'data-t': id, title: tip || '', onclick: e => { e.preventDefault(); if (!SEL_TOOLS.includes(id)) commitFloating(); setTool(id); draw(); } }, label);
@@ -521,7 +437,6 @@ PDM.pixelEditor = function (o) {
       h('button', { class: 'btn xs', title: 'Delete — 선택한 영역을 투명하게', onclick: e => { e.preventDefault(); clearSel(); } }, '지우기'),
       h('button', { class: 'btn xs', title: 'Ctrl+D 또는 Esc — 선택 해제 (붙여넣던 그림은 그 자리에 놓임)', onclick: e => { e.preventDefault(); deselect(); } }, '선택 해제')),
     selInfo,
-    fxPanel,
     h('div', {}, h('span', { class: 'fl' }, '최근 사용 색'), recEl),
     pal, h('label', { class: 'field' }, h('span', { class: 'fl' }, '직접 색 고르기'), colorIn),
     h('div', { class: 'field' }, h('span', { class: 'fl' }, '불투명도 (%)'), h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, alphaIn, alphaNum)),
@@ -552,8 +467,8 @@ PDM.pixelEditor = function (o) {
           step ? h('button', { class: 'btn xs', title: '오른쪽에 프레임 한 칸 더', onclick: e => { e.preventDefault(); resizeCanvas(W + step, H, 'w'); } }, '+1 프레임') : null,
           step ? h('button', { class: 'btn xs', title: '아래에 한 줄 더 (갑옷 단계 등)', onclick: e => { e.preventDefault(); resizeCanvas(W, H + (o.rowStep || H), 'n'); } }, '+1 줄') : null));
     })(),
-    o.onSave ? h('button', { class: 'btn pri', onclick: e => { e.preventDefault(); commitFloating(); fxCommit(); o.onSave(baseCv().toDataURL('image/png')); } }, '저장') : null,
-    o.onSaveAs ? h('button', { class: 'btn', title: '원래 파일은 그대로 두고 새 파일로 저장합니다', onclick: e => { e.preventDefault(); commitFloating(); fxCommit(); o.onSaveAs(baseCv().toDataURL('image/png')); } }, '다른 이름으로 저장…') : null);
+    o.onSave ? h('button', { class: 'btn pri', onclick: e => { e.preventDefault(); commitFloating(); o.onSave(baseCv().toDataURL('image/png')); } }, '저장') : null,
+    o.onSaveAs ? h('button', { class: 'btn', title: '원래 파일은 그대로 두고 새 파일로 저장합니다', onclick: e => { e.preventDefault(); commitFloating(); o.onSaveAs(baseCv().toDataURL('image/png')); } }, '다른 이름으로 저장…') : null);
   // 보기 창: 오른쪽 아래 모서리(◢)를 끌면 창 크기와 배율이 함께 커지거나 작아짐 (두 번 누르면 처음 크기로)
   const pane = h('div', { class: 'px-pane', style: { overflow: 'auto', maxWidth: 'min(70vw, 900px)', maxHeight: '70vh' } }, view);
   const grip = h('div', { class: 'px-grip', title: '끌어서 표시 크기·배율 바꾸기 (두 번 누르면 처음 크기로)' });
@@ -585,9 +500,9 @@ PDM.pixelEditor = function (o) {
   // Ctrl + 휠 = 확대/축소
   view.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); scale = Math.max(1, Math.min(48, scale + (e.deltaY < 0 ? 1 : -1))); draw(); }, { passive: false });
   syncSize(); drawPal(); drawRecent(); draw();
-  wrap.toDataURL = () => { commitFloating(); fxCommit(); return baseCv().toDataURL('image/png'); };
+  wrap.toDataURL = () => { commitFloating(); return baseCv().toDataURL('image/png'); };
   /** 빛 레이어 그림 (아무것도 없으면 '') */
-  wrap.lightDataURL = () => { if (!hasLight) return ''; commitFloating(); fxCommit(); const c = lightCv(), d = c.getContext('2d').getImageData(0, 0, W, H).data; for (let i = 3; i < d.length; i += 4) if (d[i]) return c.toDataURL('image/png'); return ''; };
+  wrap.lightDataURL = () => { if (!hasLight) return ''; commitFloating(); const c = lightCv(), d = c.getContext('2d').getImageData(0, 0, W, H).data; for (let i = 3; i < d.length; i += 4) if (d[i]) return c.toDataURL('image/png'); return ''; };
   wrap.blankDataURL = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c.toDataURL('image/png'); };
   Object.defineProperty(wrap, 'dataCanvas', { get: () => baseCv() });
   Object.defineProperty(wrap, 'lightCanvas', { get: () => hasLight && showLight ? lightCv() : null });
