@@ -1279,8 +1279,7 @@
         const { F, section, row } = PDM.ui;
         const sp = fl.spawn || {};
         const nz = spawnL.filter(v => v === 1).length, nf = spawnL.filter(v => v === 2).length;
-        const mobOpts = [...store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, c.name]),
-          ...['rat', 'albino', 'gnoll', 'crab', 'slime', 'snake', 'swarm', 'skeleton', 'thief', 'bat', 'brute', 'spinner', 'monk', 'warlock', 'golem', 'succubus', 'eye', 'scorpio'].map(m => ['spd:' + m.charAt(0).toUpperCase() + m.slice(1), `(게임) ${m}`])];
+        const mobOpts = PDM.mobRefOptions();
         return section('몬스터 스폰',
           F.bool(key, ['spawn', 'enabled'], { label: '이 맵에서 몬스터가 생기고 다시 생김', rerender: true }),
           sp.enabled ? h('div', {},

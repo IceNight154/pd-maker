@@ -58,6 +58,7 @@ public class MakerHomes {
 		if (cell >= 0 && Actor.findChar(cell) != null) cell = LevelHooks.freeNeighbour(l, cell);
 		if (cell < 0) { int base = l.entrance(); cell = base > 0 ? LevelHooks.freeNeighbour(l, base) : -1; MakerRuntime.warnOnce("이주: " + charId + " 을(를) 세울 칸이 맞지 않아 입구 근처에 세웠습니다 (" + here + " " + p[1] + "," + p[2] + ")"); }
 		if (cell < 0) return;
+		if (MakerRuntime.charOff(charId)) return;
 		final MakerNPC n = MakerNPC.create(charId); n.pos = cell;
 		Game.runOnRenderThread(() -> { try { if (Game.scene() instanceof GameScene) GameScene.add(n); else l.mobs.add(n); } catch (Throwable t) { MakerRuntime.log("이주 오류: " + t); } });
 	}

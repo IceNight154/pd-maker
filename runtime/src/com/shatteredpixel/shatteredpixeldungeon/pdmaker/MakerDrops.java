@@ -14,7 +14,12 @@
  *
  *   등장 금지
  *     게임 아이템: gameitems.json 의 items["spd:…"].banned  → 게임의 무작위 생성(Generator)에서 뺌
- *     게임 몬스터: 캐릭터의 noSpawn + project.bannedMobs[]  → 층의 몬스터 목록(MobSpawner)에서 뺌
+ *     게임 몬스터: 캐릭터의 noSpawn (또는 "사용" 끔) + project.bannedMobs[]  → 층의 몬스터 목록(MobSpawner)에서 뺌
+ *
+ *   테마별 몬스터 ("드랍 테이블" 화면 › 테마별 몬스터) — project.themeMobs.<테마 id>
+ *     { on, chance: %(100 = 이 목록만, 50 = 반은 게임 기본), mobs: [{ ref: 캐릭터 id | "spd:<게임 몬스터>", weight }], depthMin, depthMax }
+ *     Level.createMob 연결 줄 — 지금 맵의 테마(노드 → 그룹 → 깊이 기본)로 고름. 사용자 테마에 목록이 없으면 바탕 테마의 목록.
+ *     직접 그리기 맵의 "몬스터 스폰" 목록이 있으면 그것이 먼저.
  *
  *   금화 ("드랍 테이블" 화면 › 금화) — project.loot.gold
  *     { mult: %(게임이 만드는 금화 양 — Gold.random 연결 줄, 바닥 · 몬스터 · 상자 모두), noGame: 몬스터의 게임 금화 드랍 끄기,
@@ -68,7 +73,7 @@ public class MakerDrops {
 				JsonValue cd = ce.getValue().get("drops");
 				if (cd != null) for (JsonValue d : cd) { String it = d.getString("item", ""); if (it.isEmpty()) continue; Entry e = new Entry(); e.item = it; e.d = d; byChar.computeIfAbsent(ce.getKey(), k -> new ArrayList<>()).add(e); }
 			}
-			for (JsonValue c : MakerRuntime.chars.values()) if (c.getBoolean("noSpawn", false) && !c.getString("game", "").isEmpty()) bannedMobs.add(c.getString("game", ""));
+			for (JsonValue c : MakerRuntime.chars.values()) if ((c.getBoolean("noSpawn", false) || MakerRuntime.off(c)) && !c.getString("game", "").isEmpty()) bannedMobs.add(c.getString("game", ""));
 			JsonValue bm = MakerRuntime.project == null ? null : MakerRuntime.project.get("bannedMobs");
 			if (bm != null) for (JsonValue v : bm) bannedMobs.add(v.asString());
 		} catch (Throwable t) { MakerRuntime.log("드랍 테이블 읽기 오류: " + t); }
@@ -251,6 +256,54 @@ public class MakerDrops {
 				for (Item it : got) hp.items.add(it);   // 상자 안에는 겹치지 않고 그대로 담음 (맨 위 = 원래 내용물)
 			}
 		} catch (Throwable t) { MakerRuntime.log("상자 드랍 오류: " + t); }
+	}
+
+	// ------------------------------------------------------------ 테마별 몬스터 (Level.createMob 연결 줄)
+
+	/** 지금 맵의 테마에 정한 몬스터 목록에서 하나 (없거나 확률에서 빠지면 null → 게임 기본) */
+	public static com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob themeMob(com.shatteredpixel.shatteredpixeldungeon.levels.Level level) {
+		try {
+			if (!MakerRuntime.isActive() || MakerRuntime.project == null) return null;
+			JsonValue all = MakerRuntime.project.get("themeMobs");
+			if (all == null || all.size == 0) return null;
+			String node = WorldGraph.current();
+			String th = node != null ? WorldGraph.theme(node) : MakerRuntime.defaultTheme(Dungeon.depth);
+			JsonValue t = themeEntry(all, th);
+			if (t == null) return null;
+			if (Dungeon.depth < t.getInt("depthMin", 0) || (t.getInt("depthMax", 0) > 0 && Dungeon.depth > t.getInt("depthMax", 0))) return null;
+			if (Random.Float() * 100f >= t.getFloat("chance", 100f)) return null;
+			JsonValue list = t.get("mobs");
+			int total = 0;
+			for (JsonValue m : list) total += themeWeight(m);
+			if (total <= 0) return null;
+			int r = Random.Int(total);
+			for (JsonValue m : list) {
+				r -= themeWeight(m);
+				if (r < 0) {
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob mob = LevelHooks.createMob(m.getString("ref", ""));
+					if (mob != null) com.shatteredpixel.shatteredpixeldungeon.actors.buffs.ChampionEnemy.rollForChampion(mob);
+					return mob;
+				}
+			}
+		} catch (Throwable t) { MakerRuntime.log("테마별 몬스터 오류: " + t); }
+		return null;
+	}
+	/** 무게 ("사용" 을 끈 캐릭터는 0 — 뽑지 않음) */
+	static int themeWeight(JsonValue m) { String ref = m.getString("ref", ""); return !ref.startsWith("spd:") && MakerRuntime.off(MakerRuntime.character(ref)) ? 0 : Math.max(0, m.getInt("weight", 1)); }
+	/** 테마 id 의 목록 (켜져 있고 몬스터가 있을 때). 사용자 테마는 없으면 바탕 테마 */
+	static JsonValue themeEntry(JsonValue all, String th) {
+		for (int i = 0; i < 3 && th != null && !th.isEmpty(); i++) {
+			JsonValue t = all.get(th);
+			if (t != null && t.getBoolean("on", true) && t.get("mobs") != null && t.get("mobs").size > 0) return t;
+			th = customBase(th);
+		}
+		return null;
+	}
+	static String customBase(String th) {
+		if (th.startsWith("custom:")) th = th.substring(7);
+		JsonValue cts = WorldGraph.world == null ? null : WorldGraph.world.get("customThemes");
+		if (cts != null) for (JsonValue c : cts) if (th.equals(c.getString("id", ""))) return c.getString("base", "");
+		return null;
 	}
 
 	// ------------------------------------------------------------ 몬스터 등장 금지 (MobSpawner.getMobRotation 연결 줄)

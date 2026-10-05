@@ -497,7 +497,7 @@ public class EventInterpreter {
 			// ---------------- 캐릭터
 			case "spawn": {
 				String ch = c.getString("char", "");
-				if (MakerRuntime.character(ch) == null || Dungeon.level == null) return true;
+				if (MakerRuntime.character(ch) == null || Dungeon.level == null || MakerRuntime.charOff(ch)) return true;
 				int cell = c.getInt("x", 0) + c.getInt("y", 0) * Dungeon.level.width();
 				final Mob gm = LevelHooks.gameChar(ch);
 				if (gm != null) { gm.pos = cell; Game.runOnRenderThread(() -> GameScene.add(gm)); return true; }

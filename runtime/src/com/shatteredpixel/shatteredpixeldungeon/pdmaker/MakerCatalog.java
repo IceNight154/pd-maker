@@ -58,7 +58,7 @@ public class MakerCatalog {
 			Field fs = Catalog.class.getDeclaredField("seen"), fu = Catalog.class.getDeclaredField("useCount");
 			fs.setAccessible(true); fu.setAccessible(true);
 			for (JsonValue it : MakerRuntime.items.values()) {
-				if (!it.getBoolean("catalog", true)) continue;
+				if (!it.getBoolean("catalog", true) || MakerRuntime.off(it)) continue;
 				Class<?> c = GenSupport.cls("I_" + GenSupport.safe(it.getString("id", "")));
 				if (c == null) continue;   // 아직 생성 코드가 없음 (테스트 플레이 때 만들어짐)
 				Catalog cat = catalogOf(it);

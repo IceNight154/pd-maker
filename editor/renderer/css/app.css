@@ -92,6 +92,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tn .tc { margin-left: auto; color: var(--dim); font-size: 11px; }
 .tn.group > .tl { font-weight: 600; }
 .tn.dirty .tl::after { content: ' ●'; color: var(--gold); font-size: 9px; }
+.tn.off .tl { opacity: .5; text-decoration: line-through; text-decoration-color: var(--muted, #888); }
 
 /* ---- 탭 ---- */
 #center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }

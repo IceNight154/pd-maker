@@ -99,6 +99,14 @@
     return { depth, fallback, total, list: Object.entries(count).map(([c, n]) => ({ cls: c, name: nm(c), n, pct: Math.round(n / total * 100) })),
       rare: rm ? { cls: rm[2], name: nm(rm[2]), chance: Math.round(num(rm[1]) * 1000) / 10 } : null, alts, altChance: ac ? ac[1].trim() : '', code: raw ? raw.code : '', line: raw ? raw.line : 0 };
   });
+  /** 몬스터 고르기 목록 [[ref, 표시]] — 프로젝트 몬스터 · 보스 캐릭터 + 게임 몬스터 (spd:<클래스>). 맵 "몬스터 스폰" · 드랍 테이블 "테마별 몬스터" */
+  const GAME_MOBS = [['Rat', '쥐'], ['Albino', '알비노 쥐'], ['Gnoll', '놀 정찰병'], ['Crab', '하수도 게'], ['Slime', '하수도 슬라임'], ['Snake', '뱀'], ['Swarm', '파리 떼'],
+    ['Skeleton', '해골'], ['Thief', '도둑'], ['Bandit', '강도'], ['DM100', 'DM-100'], ['Guard', '교도관'], ['Necromancer', '강령술사'],
+    ['Bat', '흡혈 박쥐'], ['Brute', '놀 야만전사'], ['Shaman$RedShaman', '놀 주술사 (빨강)'], ['Spinner', '동굴 거미'], ['DM200', 'DM-200'],
+    ['Ghoul', '드워프 구울'], ['Elemental$FireElemental', '불의 정령'], ['Warlock', '드워프 흑마법사'], ['Monk', '드워프 수도사'], ['Golem', '골렘'],
+    ['Succubus', '서큐버스'], ['Eye', '악마의 눈'], ['Scorpio', '전갈'], ['RipperDemon', '찢는 악마']];
+  PDM.mobRefOptions = () => [...PDM.store.all('char').filter(c => ['mob', 'boss'].includes(c.kind) && c.enabled !== false).map(c => [c.id, c.name]),
+    ...GAME_MOBS.map(([c, n]) => ['spd:' + c, `(게임) ${n}`])];
   PDM.gameSpawnBox = function (depth) {
     const body = h('span', {}, '읽는 중…');
     const box = h('div', { class: 'hint', style: { margin: '2px 0 6px', padding: '6px 10px', border: '1px solid var(--line)', borderRadius: '6px' } }, h('b', {}, `목록을 비우면 — 깊이 ${depth} 의 게임 몬스터: `), body);

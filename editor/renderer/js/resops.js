@@ -88,6 +88,11 @@
     store.remove(kind + ':' + id, `${NAMES[kind]} 삭제`);
     return true;
   }
+  /** 리소스 목록 오른쪽 클릭 메뉴: "사용" 켜기/끄기 (enabled — 영웅 · 캐릭터 · 아이템) */
+  function useToggle(kind, o) {
+    const off = o.enabled === false;
+    return { label: off ? '사용하기 (켜기)' : '사용 안 함 (끄기)', run: () => store.edit(kind + ':' + o.id, off ? '사용 켜기' : '사용 끄기', r => { if (off) delete r.enabled; else r.enabled = false; }) };
+  }
   /** 복사 (Ctrl+C) — 리소스 통째로 */
   function copy(kind, id) { const o = store.get(kind + ':' + id); if (o) PDM.clip.set('res:' + kind, o, `${NAMES[kind] || kind} ${o.name || id}`); }
   /** 붙여넣기 — 같은 id 가 없으면 그 id 로 (다른 프로젝트에서 복사한 경우), 있으면 _copy 를 붙임 */
@@ -125,5 +130,5 @@
       u.length ? u.map(x => h('div', {}, h('a', { href: '#', onclick: e => { e.preventDefault(); PDM.tabs.open(x.key); } }, x.key), h('span', { class: 'hint' }, ` · ${x.n}군데`)))
         : h('p', { class: 'hint' }, '쓰는 곳이 없습니다 (조건식 안의 이름은 찾지 않음).')), [['닫기', null, 'pri']]);
   }
-  PDM.resOps = { NAMES, open, renameLabel, renameId, dup, remove, menu, bar, usage, fixRefs, showUsage, copy, paste };
+  PDM.resOps = { useToggle, NAMES, open, renameLabel, renameId, dup, remove, menu, bar, usage, fixRefs, showUsage, copy, paste };
 })();

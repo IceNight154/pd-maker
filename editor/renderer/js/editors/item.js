@@ -491,13 +491,13 @@
       });
       const arrows = (i, n, up, down) => [i > 0 ? { label: '▲', title: '위로', run: up } : null, i < n - 1 ? { label: '▼', title: '아래로', run: down } : null].filter(Boolean);
 
-      const projNode = (i, idx, list) => ({ id: 'i_' + i.id, label: `${i.name}${tierOf(i) ? ' · ' + tierOf(i) + '티어' : ''} (${i.id})`, icon: CAT_ICON[i.category] || '•', open: 'item:' + i.id,
+      const projNode = (i, idx, list) => ({ id: 'i_' + i.id, label: `${i.name}${tierOf(i) ? ' · ' + tierOf(i) + '티어' : ''} (${i.id})${i.enabled === false ? ' (꺼짐)' : ''}`, icon: CAT_ICON[i.category] || '•', open: 'item:' + i.id, off: i.enabled === false,
         drag: { kind: 'item', id: i.id },
         canDrop: d => d.kind === 'item' && d.id !== i.id ? ['before', 'after'] : null,
         drop: (d, pos) => placeItem(d.id, i.id, pos),
         actions: list ? arrows(idx, list.length, () => swapWith(list, idx, -1), () => swapWith(list, idx, 1)) : [],
         menu: [{ label: '위로 (순서)', run: () => swapWith(list, idx, -1), disabled: !list || idx === 0 }, { label: '아래로 (순서)', run: () => swapWith(list, idx, 1), disabled: !list || idx === list.length - 1 },
-          { label: '다른 분류로 옮기기…', run: () => moveDialog(i) }, '-',
+          { label: '다른 분류로 옮기기…', run: () => moveDialog(i) }, PDM.resOps.useToggle('item', i), '-',
           ...PDM.resOps.menu('item', i.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('item', i.id) }])] });
       const gameNode = g => ({ id: 'g_' + g.p, label: `${g.n}${g.t ? ' · ' + g.t + '티어' : ''}${g.mod2 ? ' ◆' : ''}${g.added ? ' ＋' : ''}${gameBanned(g.p) ? ' — 등장 금지' : ''}`, icon: gameBanned(g.p) ? '⦸' : '▫', open: 'spditem:' + g.p,
         menu: [{ label: '프로젝트 아이템으로 복사해서 고치기', run: () => copyGameItem(g) },
@@ -565,7 +565,8 @@
               h('button', { class: 'btn sm', title: '이 아이템으로 만들어지는 게임 클래스 (pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java)', onclick: () => showCodeFile('pdmaker/gen/' + PDM.codegen.itemPath(it), PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemSource(store.get(key))) }, '코드 파일 보기'),
               it.kind === 'game' && it.base ? h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + it.base.replace(/\./g, '/') + '.java', '게임 코드 — items.' + it.base) }, '바탕 게임 코드 보기') : null))),
         section('기본',
-          row(F.text(key, ['name'], { label: '이름', rerender: true })),
+          row(F.text(key, ['name'], { label: '이름', rerender: true }), F.bool(key, ['enabled'], { label: '사용 (게임에 나옴)', def: true, rerender: true })),
+          it.enabled === false ? h('p', { class: 'hint', style: { color: 'var(--warn)' } }, '꺼져 있음 — 드랍 · 상자 · 상점 · 시작 아이템 · 맵 · 이벤트 · 코드(MakerItem.create) 어디서도 만들어지지 않고 도감에도 나오지 않습니다. 코드에서 이 아이템 클래스를 직접 쓰는 곳은 그대로 컴파일됩니다.') : null,
           categoryBlock(key, it),
           F.textarea(key, ['desc'], { label: '설명', rows: 3 }),
           row((it.kind || 'misc') === 'misc' ? F.bool(key, ['stackable'], { label: '겹쳐 쌓임' }) : null, F.bool(key, ['unique'], { label: '유일 아이템' }), F.bool(key, ['cursed'], { label: '저주받음' }), F.num(key, ['level'], { label: '생성 시 강화', int: true, min: 0 })),

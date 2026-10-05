@@ -275,7 +275,7 @@
     const walk = (nodes, d) => nodes.forEach(n => {
       const hasKids = n.children && n.children.length;
       const open = forced ? forced.has(n.id) : expanded.has(n.id);
-      const el = h('div', { class: 'tn' + (n.children ? ' group' : '') + (n.open && active && active.key === n.open ? ' sel' : '') + (n.open && dirty.has(n.open) ? ' dirty' : ''),
+      const el = h('div', { class: 'tn' + (n.children ? ' group' : '') + (n.open && active && active.key === n.open ? ' sel' : '') + (n.open && dirty.has(n.open) ? ' dirty' : '') + (n.off ? ' off' : ''),
         style: { '--d': d }, 'data-open': n.open || '',
         onclick: () => { if (n.open) { PDM.tabs.open(n.open); if (n.expandOnOpen && hasKids && !open) { expanded.add(n.id); drawTree(); } } else if (n.run) n.run(); else if (n.children) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         ondblclick: () => { if (n.children && n.open) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },

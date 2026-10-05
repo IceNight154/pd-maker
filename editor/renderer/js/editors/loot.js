@@ -53,7 +53,7 @@
   PDM.registerEditor({
     id: 'loot', icon: '🎲', title: () => '드랍 테이블',
     match: k => k === 'loot',
-    watch: ck => ck === 'project' || ck === 'gameitems' || ck.startsWith('char:') || ck.startsWith('item:'),
+    watch: ck => ck === 'project' || ck === 'gameitems' || ck === 'world' || ck.startsWith('char:') || ck.startsWith('item:'),
     tree: () => store.isOpen ? [{ id: 'loot', label: '드랍 테이블', icon: '🎲', open: 'loot', order: 31 }] : [],
     render(key, ctx) {
       const { F, section, row } = PDM.ui;
@@ -63,9 +63,9 @@
       const mobs = store.all('char').filter(c => ['mob', 'boss'].includes(c.kind));
       const ensure = k => store.edit('project', '상자 드랍 테이블', o => { o.loot = o.loot || {}; o.loot[k] = o.loot[k] || { mode: 'add', pick: 'each', rows: [] }; });
       // 쪽: 상자류 · 몬스터 · 아이템 · 금화 (예전에는 한 화면에 상자류 · 몬스터만)
-      const PAGES = { chest: '▣ 상자류', mob: '☠ 몬스터', item: '🎁 아이템', gold: '🪙 금화' };
+      const PAGES = { chest: '▣ 상자류', mob: '☠ 몬스터', item: '🎁 아이템', gold: '🪙 금화', theme: '🗺 테마별 몬스터' };
       const tabs = h('div', { class: 'btnbar loot-tabs' }, Object.entries(PAGES).map(([k, t]) => h('button', { class: 'btn sm' + (st.page === k ? ' pri' : ''), onclick: () => { st.page = k; ctx.refresh(); } }, t)));
-      const page = st.page === 'mob' ? mobPage() : st.page === 'item' ? itemPage() : st.page === 'gold' ? goldPage() : chestPage();
+      const page = st.page === 'mob' ? mobPage() : st.page === 'item' ? itemPage() : st.page === 'gold' ? goldPage() : st.page === 'theme' ? themePage() : chestPage();
       return h('div', { class: 'editor' },
         h('h2', {}, '드랍 테이블'),
         h('p', { class: 'hint' }, '어디서 무엇이 얼마의 확률로 나오는지 정합니다. 몬스터 쪽(그 몬스터가 떨어뜨리는 것)과 아이템 쪽(그 아이템이 나오는 곳)은 함께 적용됩니다.'),
@@ -147,6 +147,45 @@
                   h('button', { class: 'btn sm', onclick: () => PDM.tabs.open(r.game ? 'spditem:' + r.ref.slice(4) : 'item:' + r.ref) }, '아이템 열기'))),
               open ? h('tr', {}, h('td', { colspan: 3 }, PDM.itemDropsEditor(r.skey, r.path))) : null];
             })) : h('p', { class: 'hint' }, '맞는 아이템이 없습니다.'));
+      }
+
+      // ---- 테마별 몬스터: 그 테마의 맵에서 생기는 몬스터 (런타임 MakerDrops.themeMob — Level.createMob 연결 줄) ----
+      function themePage() {
+        const all = p.themeMobs || {}, opts = PDM.mobRefOptions();
+        const nameOf = r => (opts.find(o => o[0] === r) || [r, r])[1];
+        const ensureT = th => store.edit('project', '테마별 몬스터', o => { o.themeMobs = o.themeMobs || {}; o.themeMobs[th] = o.themeMobs[th] || { on: true, chance: 100, mobs: [] }; });
+        const floorsOf = th => (PDM.THEMES[th] || {}).floors;
+        // 게임 목록 가져오기: 그 테마 깊이들의 MobSpawner 목록을 합쳐 무게로
+        const fromGame = async th => {
+          const f = floorsOf(th); if (!f) return;
+          const cnt = {};
+          for (let d = f[0]; d < f[1]; d++) { const r = await PDM.gameRotation(d); (r && r.list || []).forEach(x => { cnt[x.cls] = (cnt[x.cls] || 0) + x.n; }); }
+          if (!Object.keys(cnt).length) { toast('게임 저장소의 MobSpawner.java 를 읽지 못했습니다', 'bad'); return; }
+          store.edit('project', '테마별 몬스터: 게임 목록 가져오기', o => { o.themeMobs = o.themeMobs || {}; const t = o.themeMobs[th] = o.themeMobs[th] || { on: true, chance: 100 }; t.mobs = Object.entries(cnt).map(([c, n]) => ({ ref: 'spd:' + c, weight: n })); });
+        };
+        return section('테마별 몬스터 (그 테마의 맵에서 저절로 생기는 몬스터)',
+          h('p', { class: 'hint' }, '맵 그래프에서 노드 · 그룹의 "테마"가 이 테마인 맵(테마를 비우면 깊이 기본: 1~5 하수도 · 6~10 감옥 …)에서 게임이 몬스터를 만들 때 이 목록에서 무게대로 뽑습니다. 확률 100% = 이 목록만, 50% = 반은 게임 기본 몬스터. 사용자 테마에 목록이 없으면 바탕 테마의 목록을 씁니다. 직접 그리기 맵의 "몬스터 스폰" 목록이 있으면 그것이 먼저입니다. 맵에 직접 놓은 몬스터 · 보스 층은 그대로.'),
+          PDM.ui.refOptions('theme').map(([th, label]) => {
+            const t = all[th], open = st.theme === th, n = t && (t.mobs || []).length;
+            const sum = !n ? '게임 기본' : (t.on === false ? '꺼짐 · ' : '') + `${t.chance ?? 100}% · ` + t.mobs.slice(0, 5).map(m => `${nameOf(m.ref)}×${m.weight ?? 1}`).join(', ') + (t.mobs.length > 5 ? ' …' : '');
+            const head = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer', padding: '6px 0' }, onclick: () => { st.theme = open ? null : th; if (!t) ensureT(th); else ctx.refresh(); } },
+              h('b', {}, `${open ? '▾' : '▸'} ${label}`), h('span', { class: 'hint' }, sum));
+            if (!open || !t) return h('div', { style: { borderTop: '1px solid var(--line)' } }, head);
+            const P = ['themeMobs', th], f = floorsOf(th);
+            return h('div', { style: { borderTop: '1px solid var(--line)', paddingBottom: '8px' } }, head,
+              row(F.bool('project', [...P, 'on'], { label: '사용', def: true, rerender: true }),
+                F.num('project', [...P, 'chance'], { label: '이 목록에서 뽑을 확률 (%)', min: 0, max: 100, step: 5, def: 100, rerender: true }),
+                F.num('project', [...P, 'depthMin'], { label: '깊이 최소 (0 = 제한 없음)', int: true, min: 0, def: 0 }),
+                F.num('project', [...P, 'depthMax'], { label: '깊이 최대 (0 = 제한 없음)', int: true, min: 0, def: 0 })),
+              PDM.ui.listEditor('project', [...P, 'mobs'], { addLabel: '몬스터 추가', compact: true, emptyText: '몬스터 없음 — 게임 기본 그대로',
+                make: () => ({ ref: (opts[0] || [''])[0], weight: 1 }),
+                render: (it, i, ip) => row(F.select('project', [...ip, 'ref'], opts.some(o => o[0] === it.ref) ? opts : [[it.ref, it.ref + ' (목록에 없음)'], ...opts], { label: '몬스터', rerender: true }),
+                  F.num('project', [...ip, 'weight'], { label: '무게', int: true, min: 0, def: 1, rerender: true })) }),
+              h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' } },
+                f ? h('button', { class: 'btn sm', title: `깊이 ${f[0]}~${f[1] - 1} 의 게임 몬스터 목록(MobSpawner)을 합쳐 채웁니다`, onclick: async () => { if (n && !(await PDM.ui.confirm('지금 목록을 게임 목록으로 바꿀까요?'))) return; fromGame(th); } }, '게임 목록 가져오기') : null,
+                h('button', { class: 'btn sm danger', onclick: () => store.edit('project', '테마별 몬스터 지우기', o => { delete o.themeMobs[th]; st.theme = null; }) }, '이 테마 설정 지우기 (게임 기본으로)')),
+              f ? PDM.gameSpawnBox(f[0]) : h('p', { class: 'hint' }, '사용자 테마 — 비워 두면 바탕 테마의 목록 (바탕 테마에도 없으면 게임 기본).'));
+          }));
       }
 
       // ---- 금화: 게임이 만드는 금화 양 · 몬스터의 게임 금화 · 모든 몬스터의 추가 금화 (런타임 MakerDrops.goldAmount · goldDrop) ----

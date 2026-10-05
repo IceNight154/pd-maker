@@ -263,8 +263,8 @@
           const list = all.filter(c => c.kind === kind);
           return { id: 'char_' + kind, label, icon: KIND_ICON[kind], count: list.length,
             menu: [{ label: `새 ${label}…`, run: () => newCharacter(kind) }],
-            children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})` + (c.noSpawn ? ' — 등장 금지' : '') + (missing(c) ? ' — ⚠ 게임 저장소에 없음' : ''), icon: missing(c) ? '⚠' : c.noSpawn ? '⦸' : '', open: 'char:' + c.id,
-              menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: '이름 바꾸기…', run: () => PDM.resOps.renameLabel('char', c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, { label: '쓰는 곳…', run: () => PDM.resOps.showUsage('char', c.id) }, '-',
+            children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})` + (c.enabled === false ? ' (꺼짐)' : '') + (c.noSpawn ? ' — 등장 금지' : '') + (missing(c) ? ' — ⚠ 게임 저장소에 없음' : ''), icon: missing(c) ? '⚠' : c.noSpawn ? '⦸' : '', open: 'char:' + c.id, off: c.enabled === false,
+              menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: '이름 바꾸기…', run: () => PDM.resOps.renameLabel('char', c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, { label: '쓰는 곳…', run: () => PDM.resOps.showUsage('char', c.id) }, PDM.resOps.useToggle('char', c), '-',
                 c.game && ['mob', 'boss'].includes(c.kind) ? { label: c.noSpawn ? '다시 등장하게 (등장 금지 풀기)' : '등장하지 않게 (등장 금지)', run: () => store.edit('char:' + c.id, '등장 금지', o => { o.noSpawn = !o.noSpawn; }) } : null,
                 { label: '삭제', run: async () => {
                   if (!c.game || !['mob', 'boss'].includes(c.kind)) { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); return; }
@@ -322,7 +322,8 @@
             : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.'),
           PDM.gameMobBox(c, st)) : null,
         section('기본',
-          row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' })),
+          row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용 (게임에 나옴)', def: true, rerender: true })),
+          c.enabled === false ? h('p', { class: 'hint', style: { color: 'var(--warn)' } }, '꺼져 있음 — 맵에 놓은 것 · 몬스터 스폰 목록 · 이벤트 소환 · 동료 합류 · 이주 어디서도 나오지 않습니다 (원작 몬스터면 층의 몬스터 목록에서도 빠짐). 대사의 화자 이름 · 초상화는 그대로 씁니다.') : null,
           F.textarea(key, ['desc'], { label: '설명(도감)', rows: 2 })),
         section('스프라이트 · 애니메이션', ...spriteEditor(key, c, ctx, st)),
         !PDM.extensions.on('charPortrait') ? null : section('초상화 · 표정 · 대사창 일러스트',

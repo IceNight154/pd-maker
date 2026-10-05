@@ -199,7 +199,7 @@ public class EventTriggers {
 		return null;
 	}
 	public static void setParty(String charId, boolean join) {
-		if (charId == null || charId.isEmpty() || MakerRuntime.character(charId) == null) return;
+		if (charId == null || charId.isEmpty() || MakerRuntime.character(charId) == null || (join && MakerRuntime.charOff(charId))) return;
 		StoryState.setFlag(PARTY + charId, join);
 		if (join && npcOnLevel(charId) == null) spawnNear(charId);
 	}

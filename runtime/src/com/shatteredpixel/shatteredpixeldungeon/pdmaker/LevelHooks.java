@@ -299,6 +299,7 @@ public class LevelHooks {
 		String type = o.getString("type", ""), ref = o.getString("ref", "");
 		switch (type) {
 			case "npc": {
+				if (MakerRuntime.charOff(ref)) break;
 				Mob g = gameChar(ref);
 				if (g != null) { g.pos = cell; level.mobs.add(g); break; }
 				MakerNPC n = MakerNPC.create(ref); n.eventId = o.getString("event", ""); n.pos = cell; level.mobs.add(n); break;
@@ -373,6 +374,7 @@ public class LevelHooks {
 			return m;
 		}
 		if (MakerRuntime.character(ref) == null) { MakerRuntime.log("없는 캐릭터: " + ref); return null; }
+		if (MakerRuntime.charOff(ref)) return null;
 		Mob g = gameChar(ref);
 		if (g != null) return g;
 		return MakerMob.create(ref);

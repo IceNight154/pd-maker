@@ -56,6 +56,7 @@ public class MakerItem extends Item {
 		if (id.startsWith("spd:")) return spdItem(id.substring(4));
 		JsonValue d = MakerRuntime.item(id);
 		if (d == null && id.startsWith("I_") && MakerRuntime.item(id.substring(2)) != null) { id = id.substring(2); d = MakerRuntime.item(id); }   // 생성 클래스 이름으로 불러도
+		if (d != null && MakerRuntime.itemOff(id)) return null;   // "사용" 을 끈 아이템 — 드랍 · 상점 · 시작 아이템 · 맵 · 이벤트 어디서도 만들지 않음
 		if (d == null) {
 			// 프로젝트 아이템이 아니면 게임 아이템으로 — "Cudgel" · "cudgel" · "potion_of_healing" · "weapon.melee.Cudgel" 모두 (spd: 를 붙이지 않아도)
 			Item g = gameItem(id);

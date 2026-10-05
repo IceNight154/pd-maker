@@ -424,6 +424,7 @@ MyProject/
 
 ```jsonc
 { "id": "mireille", "kind": "npc",            // npc | companion | mob | boss
+  "enabled": true,                            // false = 게임에 나오지 않음 (아이템도 같은 칸)
   "name": "미레유", "title": "약초와 독의 연금술사",
   "game": "", "useGame": false,               // 원작 캐릭터: 게임 클래스(예 Rat · npcs.Ghost · Shaman$RedShaman) + 게임 동작 그대로
   "sprite": { "sheet": "assets/sprites/characters/npc/mireille.png", "frame": [12, 15], "scale": 0,
@@ -450,11 +451,13 @@ MyProject/
 - **동료** (`party:<id>` 플래그 — 이벤트 명령 party, 조건식 `party.<id>`): 영웅을 따라다니고 층을 옮기면 옆에 다시 나옴. 좁은 칸(지나갈 수 있는 이웃 3칸 이하)에 있거나 영웅이 걸어오던 중이면 **자리를 바꿈**, 넓은 곳에서 누르면 말 걸기.
 - **NPC 이주**: 이벤트 명령 `relocate { char, node, x, y }` · 퀘스트 `move`. `MakerHomes` 가 StoryState 문자열 `home.<char>` = `노드|x|y` 로 기억 — 맵에 들어올 때마다 사는 맵이면 그 칸에 세우고 다른 맵의 그 캐릭터는 치움.
 
-### 7.3 드랍 테이블 · 등장 금지 (`editors/loot.js` · 런타임 `MakerDrops`)
+### 7.3 드랍 테이블 · 등장 금지 · 테마별 몬스터 (`editors/loot.js` · 런타임 `MakerDrops`)
 - 아이템 쪽 `drops [{ src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond }]`(게임 아이템은 `gameitems.json`) + 캐릭터 쪽 `drops`. 연결 줄 `Mob.rollToDropLoot` → `MakerDrops.mobDrop`, 층 드랍은 `LevelHooks.afterCreate`.
 - 상자류 `project.loot.<chest|locked|crystal|tomb|skeleton> { mode: add|replace, pick: each|one, rows }` — 게임이 만든 상자에만(직접 그린 맵 제외). replace 는 unique · 열쇠를 남기고, 아무것도 안 뽑히면 원래 내용. 맵 오브젝트 item 의 `container` 로 직접 상자에 담기.
-- **드랍 테이블 화면** (`editors/loot.js`): 쪽 ▣ 상자류 · ☠ 몬스터 · 🎁 아이템 · 🪙 금화. 아이템 쪽 = 프로젝트 아이템 전부 + 드랍 테이블을 만든 게임 아이템(게임 아이템 추가 칸), 줄마다 그 아이템의 `drops` 편집(`PDM.itemDropsEditor`, 아이템 편집 화면과 같은 칸).
+- **드랍 테이블 화면** (`editors/loot.js`): 쪽 ▣ 상자류 · ☠ 몬스터 · 🎁 아이템 · 🪙 금화 · 🗺 테마별 몬스터. 아이템 쪽 = 프로젝트 아이템 전부 + 드랍 테이블을 만든 게임 아이템(게임 아이템 추가 칸), 줄마다 그 아이템의 `drops` 편집(`PDM.itemDropsEditor`, 아이템 편집 화면과 같은 칸).
 - **금화** `project.loot.gold { mult, noGame, extra { on, chance, min, max, perDepth, boss, cond } }`: `mult` = 게임이 만드는 금화 양 배율(%, 연결 줄 `Gold.random` → `MakerDrops.goldAmount` — 바닥 · 몬스터 · 상자 모두), `noGame` = 몬스터의 게임 금화 전리품 끔(loot 가 금화면 비움), `extra` = 모든 적 몬스터가 죽을 때 확률로 추가 금화(양 = min~max + perDepth×(깊이−1), 보스 ×boss). 화면에 깊이별 미리 계산. 4.0.0 헤드리스 `eval:goldtest` 로 확인.
+- **테마별 몬스터** `project.themeMobs.<테마 id> { on, chance(%, 100 = 이 목록만), depthMin, depthMax, mobs [{ ref: 캐릭터 id | spd:<게임 클래스>, weight }] }`: 연결 줄 `Level.createMob` 맨 앞 → `MakerDrops.themeMob(level)` — 지금 맵의 테마(`WorldGraph.theme` = 노드 → 그룹 → 깊이 기본, 그래프가 없으면 깊이 기본)로 목록을 찾고(사용자 테마 `custom:<id>` 는 없으면 `base` 의 목록), 확률을 넘기면 무게대로 뽑아 `LevelHooks.createMob` + 챔피언 굴림. 목록이 없거나 확률에서 빠지면 null → 게임 원래 `MobSpawner` 순서. 직접 그리기 맵은 `MakerLevel.createMob` 의 스폰 목록이 먼저(비면 super → 이 연결 줄). "사용" 끈 캐릭터는 무게 0. 화면의 "게임 목록 가져오기" = 그 테마 깊이(보스 층 제외)의 `MobSpawner` 목록을 합친 무게. 몬스터 고르기 목록은 `PDM.mobRefOptions()`(gameinfo.js — 맵 "몬스터 스폰" · 노드 일괄 설정도 같이 씀). 헤드리스 `eval:themetest` 로 확인.
+- **사용 여부** `enabled: false` (영웅 · 캐릭터 · 아이템 편집기 "기본"의 "사용" 체크, 리소스 목록 오른쪽 클릭 `PDM.resOps.useToggle`, 목록에서 흐리게 + "(꺼짐)"): 데이터는 그대로 읽고(대사 화자 · 생성 클래스가 깨지지 않게) 나오는 곳만 막음 — 아이템은 `MakerItem.create` 가 null(드랍 · 상자 · 상점 · 시작 아이템 · 맵 · 이벤트 · 코드) + 도감 제외, 캐릭터는 `LevelHooks.createMob` null · 맵 오브젝트 npc · 이벤트 소환 · 동료 합류 · 이주를 건너뜀, 원작 몬스터 캐릭터면 `bannedMobs` 처럼 `MobSpawner` 목록에서도 뺌. 아이템 생성 클래스는 그대로 만들어 코드가 계속 컴파일됨.
 - 등장 금지: 캐릭터 `noSpawn` · `project.bannedMobs[]`(연결 줄 `MobSpawner.getMobRotation` → `filterMobs`, 전부 금지면 무시), 게임 원래 전리품 끔 `noGameLoot`, 게임 아이템 `banned`(Generator 확률 0).
 
 ### 7.4 상인 · 퀘스트
@@ -821,7 +824,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **62개** 연결점 · **29개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **63개** 연결점 · **29개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -831,7 +834,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `levels/RegularLevel.java` | 자동 생성 층에 직접 만든 방 추가<br>구성 블럭: 층 구조·분위기 |
 | `scenes/InterlevelScene.java` | 소개 화면: 로딩 배경 그림<br>소개 화면: 구역 이야기 글<br>층을 떠날 때 (감정 결정화·일기) |
 | `Badges.java` | 게임 원래 배지의 얻는 조건 끄기 · 바꾸기 |
-| `levels/Level.java` | 잠긴 맵 (조건이 맞아야 들어감)<br>칸을 밟았을 때 이벤트<br>통로 연결: 도착 층에서 짝 계단 고르기 |
+| `levels/Level.java` | 잠긴 맵 (조건이 맞아야 들어감)<br>칸을 밟았을 때 이벤트<br>통로 연결: 도착 층에서 짝 계단 고르기<br>테마별 몬스터 (드랍 테이블 › 테마별 몬스터) |
 | `tiles/DungeonTilemap.java` | 큰 타일셋 (한 칸이 16px 이 아닌 타일셋)<br>큰 타일셋: 발견 연출 타일 크기 |
 | `tiles/DungeonTerrainTilemap.java` | 큰 타일셋: 정보 창 타일 크기 |
 | `actors/hero/Hero.java` | 맵 오브젝트: 옆에서 누르면 밀기·상호작용<br>영웅 코드: 명중<br>영웅 코드: 회피<br>영웅 코드: 피해<br>영웅 코드: 방어<br>영웅 코드: 속도<br>영웅 코드: 공격 적중<br>영웅 코드: 공격 받음<br>특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)<br>전직 이름 (영웅 정보 창) |
@@ -885,7 +888,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ## 19. 개발 도구 · 확인
 
-- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
+- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
 - **게임 데이터 뽑기** (`tools/data`): `extract_spd_items.py` → `spd-items.js` · `extract_spd_chars.py` → `spd-chars.js`(+ 영웅) · `extract_spd_rooms.py` → `spd-rooms.js` · `gen_terms_java.js` → `DefaultTerms.java`.
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.

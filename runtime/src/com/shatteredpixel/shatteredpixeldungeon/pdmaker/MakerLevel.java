@@ -103,6 +103,7 @@ public class MakerLevel extends Level {
 			int cell = at.getInt("x") + at.getInt("y") * width();
 			String type = o.getString("type", ""), ref = o.getString("ref", "");
 			if (type.equals("npc")) {
+				if (MakerRuntime.charOff(ref)) continue;
 				Mob g = LevelHooks.gameChar(ref);
 				if (g != null) { g.pos = cell; mobs.add(g); continue; }
 				MakerNPC n = MakerNPC.create(ref);

@@ -651,11 +651,11 @@ return damage + Special.get("combo");`,
       const start = (store.get('project') || {}).startHero;
       return [{ id: 'hero', label: '영웅 (플레이어블)', icon: '★', order: 15, count: all.length,
         menu: [{ label: '새 영웅…', run: newHero }],
-        children: all.map((c, i) => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: (i + 1) + '.', open: 'hero:' + c.id,
+        children: all.map((c, i) => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: (i + 1) + '.', open: 'hero:' + c.id, off: c.enabled === false,
           // 게임 영웅 선택 화면의 순서 — ▲▼ 를 누르면 한 칸씩 옮김
           actions: [i > 0 ? { label: '▲', title: '위로 (게임 영웅 선택 화면에서 앞으로)', run: () => moveHero(c.id, -1) } : null, i < all.length - 1 ? { label: '▼', title: '아래로', run: () => moveHero(c.id, 1) } : null].filter(Boolean),
           menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, '-',
-            ...PDM.resOps.menu('hero', c.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('hero', c.id) }], { rename: renameHero, dup: dupHero })] })) }];
+            ...PDM.resOps.menu('hero', c.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('hero', c.id) }, PDM.resOps.useToggle('hero', c)], { rename: renameHero, dup: dupHero })] })) }];
     },
     render(key, ctx) {
       const c = store.get(key);

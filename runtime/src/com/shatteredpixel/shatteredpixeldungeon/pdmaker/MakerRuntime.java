@@ -186,6 +186,10 @@ public class MakerRuntime {
 
 	public static JsonValue character(String id) { return id == null ? null : chars.get(id); }
 	public static JsonValue item(String id) { return id == null ? null : items.get(id); }
+	/** 캐릭터 · 아이템 편집기의 "사용" 체크를 끈 것 (enabled: false) — 데이터는 남기고(대사 화자 이름 · 생성 클래스) 게임에 나오지만 않게 함 */
+	public static boolean off(JsonValue d) { return d != null && !d.getBoolean("enabled", true); }
+	public static boolean charOff(String id) { if (off(character(id))) { warnOnce("사용 안 함 캐릭터라 나오지 않음: " + id); return true; } return false; }
+	public static boolean itemOff(String id) { if (off(item(id))) { warnOnce("사용 안 함 아이템이라 만들지 않음: " + id); return true; } return false; }
 	public static JsonValue event(String id) { return id == null ? null : events.get(id); }
 
 	/** 용어 사전 (terms.json 에 없으면 기본값) */

@@ -9,7 +9,6 @@
   const { h } = PDM;
   const store = PDM.store;
   const MODE_NAME = m => ((PDM.FLOOR_MODES || {})[m] || {}).name || m;
-  const GAME_MOBS = ['rat', 'albino', 'gnoll', 'crab', 'slime', 'snake', 'swarm', 'skeleton', 'thief', 'bat', 'brute', 'spinner', 'monk', 'warlock', 'golem', 'succubus', 'eye', 'scorpio'];
 
   const sel = (opts, val) => { const s = h('select', { style: { width: 'auto', maxWidth: '260px', flex: '0 1 auto' } }, opts.map(([v, t]) => h('option', { value: v }, t))); s.value = val; return s; };
   const num = (val, o = {}) => h('input', { type: 'number', value: val, min: o.min, max: o.max, step: o.step || 1, style: { width: '80px', flex: 'none' } });
@@ -156,8 +155,7 @@
     const tLights = lightList(true), aLights = lightList(false);
     const rooms = PDM.ui.refOptions('room');
     const rmSel = sel(rooms.length ? rooms : [['', '(방 템플릿 없음)']], (rooms[0] || [''])[0]), rmCount = num(1, { min: 1, max: 20 }), rmChance = num(100, { min: 0, max: 100 });
-    const mobOpts = [...store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, c.name]),
-      ...GAME_MOBS.map(m => ['spd:' + m.charAt(0).toUpperCase() + m.slice(1), `(게임) ${m}`])];
+    const mobOpts = PDM.mobRefOptions();
     const mbSel = sel(mobOpts, mobOpts[0][0]), mbW = num(1, { min: 0 });
     const push = (r, path, item, wipe) => {
       let o = r; path.slice(0, -1).forEach(k => { o = o[k] = o[k] || {}; });
