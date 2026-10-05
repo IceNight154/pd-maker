@@ -234,11 +234,21 @@ public class MakerAudio {
 	public static void onItemAction(com.shatteredpixel.shatteredpixeldungeon.items.Item it, String action) {
 		if (!MakerRuntime.isActive() || it == null || action == null) return;
 		try {
-			String key = action.equals("THROW") ? "throw" : action.equals("EQUIP") || action.equals("UNEQUIP") ? "equip" : action.equals("DROP") ? null : "use";
+			// 던지기는 버튼을 누를 때가 아니라 목표를 고르고 실제로 던질 때 (onItemCast)
+			String key = action.equals("THROW") || action.equals("DROP") ? null : action.equals("EQUIP") || action.equals("UNEQUIP") ? "equip" : "use";
 			if (key == null) return;
 			MakerEffect.itemAction(it, key);   // 아이템 이펙트 (fxUse · fxThrow · fxEquip)
 			if (key.equals("use") && it instanceof MakerItem) return;   // 프로젝트 아이템(기타·코덱스 등)은 사용할 때 스스로 냄
 			String r = itemSound(it, key);
+			if (!r.isEmpty() && !r.equals("none")) playSe(r);
+		} catch (Throwable t) { MakerRuntime.log("아이템 소리 실패: " + t); }
+	}
+	/** Item.cast 맨 앞 — 목표를 고르고 실제로 던지는 순간 (던지기 이펙트 fxThrow · "던지는 순간" 소리) */
+	public static void onItemCast(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {
+		if (!MakerRuntime.isActive() || it == null) return;
+		try {
+			MakerEffect.itemAction(it, "throw");
+			String r = itemSound(it, "throw");
 			if (!r.isEmpty() && !r.equals("none")) playSe(r);
 		} catch (Throwable t) { MakerRuntime.log("아이템 소리 실패: " + t); }
 	}

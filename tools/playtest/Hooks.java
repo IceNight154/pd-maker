@@ -183,6 +183,18 @@ public class Hooks {
 				}
 				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
 				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
+				case "throwtest": { // throwtest — 다트에 "던지는 순간" 소리를 정하고: 던지기 버튼(execute) 때는 조용, 실제로 던질 때(cast) 남
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item d = new com.shatteredpixel.shatteredpixeldungeon.items.weapon.missiles.darts.Dart();
+					d.collect(h.belongings.backpack);
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe = "";
+					d.execute(h, "THROW");
+					System.out.println("[TEST] after THROW button: '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(-1);
+					d.cast(h, h.pos + 2);
+					System.out.println("[TEST] after cast: '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
+					break;
+				}
 				case "tplvar": { // tplvar,<n> — 지금 깊이의 하수도 층을 n번 만들어 방 템플릿(TemplateRoom)의 변형 번호와 실제 지형을 출력
 					int n = Integer.parseInt(p[1]);
 					for (int k = 0; k < n; k++) {
