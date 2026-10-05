@@ -5,7 +5,7 @@
 //    · 화면 이동: Space + 끌기 / 가운데 버튼 끌기 / 오른쪽 버튼 끌기     · 확대/축소: 휠
 //    · 노드: 끌어서 이동 (Alt = 격자 무시), Shift+클릭 = 여러 개 선택, 빈 곳 끌기 = 사각형 선택
 //    · 연결: 노드 가장자리 점(●, 네 면)을 다른 노드로 끌기.  Alt 를 누른 채 놓으면 샛길 계단으로
-//    · 더블클릭: 노드 = 맵 열기, 빈 곳 = 새 노드
+//    · 더블클릭: 노드 = 맵 열기, 그룹 제목 = 그룹 노드 한꺼번에 설정, 빈 곳 = 새 노드
 //    · 오른쪽 클릭(끌지 않고): 메뉴 (새 노드 / 새 그룹 / 연결 / 삭제 …)
 //    · 키: Delete 삭제 · Ctrl+D 복제 · Ctrl+A 전체 선택 · G 선택한 노드로 그룹 · F 전체 보기 · 방향키 조금 이동 · Esc 선택 해제
 //   그룹 사각형은 속한 노드를 감싸도록 자동으로 커지고 줄어듭니다. 노드를 다른 그룹 안에 놓으면 그 그룹으로 옮겨집니다.
@@ -488,7 +488,7 @@
       vp.addEventListener('dblclick', e => {
         const nodeEl = e.target.closest('.wg-node');
         if (nodeEl) { PDM.tabs.open('node:' + nodeEl.dataset.node); return; }
-        if (e.target.closest('.wg-gtitle')) { renameGroup(e.target.closest('.wg-gtitle').dataset.group); return; }
+        if (e.target.closest('.wg-gtitle')) { bulkGroup(e.target.closest('.wg-gtitle').dataset.group); return; }
         const p = toWorld(e.clientX, e.clientY);
         const g = groupAt(p.x, p.y);
         addNodeAsk('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id);
@@ -527,6 +527,11 @@
       }
 
       // ---- 메뉴 ----
+      /** 그룹의 노드 설정을 한꺼번에 바꾸기 · 추가 (editors/nodebulk.js) */
+      function bulkGroup(gid) {
+        const g = W_.group(gid); if (!g) return;
+        PDM.nodeBulk(wd.nodes.filter(n => n.group === gid).map(n => n.id), `그룹 「${g.name}」`);
+      }
       async function renameGroup(gid) {
         const g = W_.group(gid); const n = await PDM.ui.prompt('그룹 이름', g.name); if (!n) return;
         store.edit('world', '그룹 이름', r => { r.groups.find(x => x.id === gid).name = n; });
@@ -542,19 +547,21 @@
             { label: '맵 열기', hint: '더블클릭', run: () => PDM.tabs.open('node:' + id) },
             { label: '시작 노드로 지정', run: () => store.edit('world', '시작 노드', r => { r.start = id; }) },
             { label: '복제', hint: 'Ctrl+D', run: () => duplicate(ids) },
+            ids.length > 1 ? { label: `노드 ${ids.length}개 한꺼번에 설정…`, run: () => PDM.nodeBulk(ids, `선택한 노드 ${ids.length}개`) } : null,
             '-',
             ...wd.groups.map(g => ({ label: `그룹으로 옮기기: ${g.name}`, run: () => store.edit('world', '그룹 바꾸기', r => ids.forEach(x => { r.nodes.find(q => q.id === x).group = g.id; })) })),
             { label: '선택한 노드로 새 그룹', hint: 'G', run: () => addGroup(wnode(id).x, wnode(id).y, ids) },
             { label: '그룹에서 빼기', run: () => store.edit('world', '그룹에서 빼기', r => ids.forEach(x => { r.nodes.find(q => q.id === x).group = ''; })) },
             '-',
             { label: '나가는 연결 모두 끊기', run: () => store.edit('world', '연결 끊기', r => { r.edges = r.edges.filter(x => !ids.includes(x.from)); }) },
-            { label: '삭제', hint: 'Delete', run: () => deleteNodes(ids) }]);
+            { label: '삭제', hint: 'Delete', run: () => deleteNodes(ids) }].filter(Boolean));
           return;
         }
         if (title) {
           const gid = title.dataset.group, g = W_.group(gid);
           PDM.ui.menu(e.clientX, e.clientY, [
-            { label: '이름 바꾸기…', hint: '더블클릭', run: () => renameGroup(gid) },
+            { label: '노드 한꺼번에 설정…', hint: '더블클릭', run: () => bulkGroup(gid) },
+            { label: '이름 바꾸기…', run: () => renameGroup(gid) },
             { label: g.safe ? '던전 맵으로 표시' : '던전 밖(마을 등)으로 표시', run: () => store.edit('world', '그룹 종류', r => { const x = r.groups.find(q => q.id === gid); x.safe = !x.safe; }) },
             { label: '이 그룹에 노드 추가', run: () => { const r = groupRect(g); addNodeAsk('procedural', r.x + r.w + 20, r.y + HEAD, gid); } },
             '-',
@@ -638,6 +645,7 @@
         if (sel.group && ids.length !== 1) {
           const gi = wd.groups.findIndex(x => x.id === sel.group); const g = wd.groups[gi]; const p = ['groups', gi];
           PDM.inspector.show('그룹: ' + g.name, h('div', {},
+            h('button', { class: 'btn sm pri', style: { marginBottom: '8px' }, title: '그룹 제목 더블클릭', onclick: () => bulkGroup(g.id) }, `노드 ${wd.nodes.filter(n => n.group === g.id).length}개 한꺼번에 설정…`),
             F.text('world', [...p, 'name'], { label: '이름' }),
             PDM.filters ? PDM.filters.field('world', [...p, 'filter'], '화면 필터 (이 그룹의 모든 맵)', '(없음)') : null,
             row(F.ref('world', [...p, 'theme'], 'theme', { label: '테마', empty: '(깊이 기본)' }),
@@ -674,6 +682,7 @@
           PDM.inspector.show(`노드 ${ids.length}개`, h('div', {},
             h('button', { class: 'btn sm', onclick: () => addGroup(Math.min(...ids.map(id => wnode(id).x)), Math.min(...ids.map(id => wnode(id).y)), ids) }, '이 노드들로 새 그룹 (G)'), ' ',
             h('button', { class: 'btn sm', onclick: () => duplicate(ids) }, '복제 (Ctrl+D)'), ' ',
+            h('button', { class: 'btn sm pri', onclick: () => PDM.nodeBulk(ids, `선택한 노드 ${ids.length}개`) }, '한꺼번에 설정…'), ' ',
             h('button', { class: 'btn sm danger', onclick: () => deleteNodes(ids) }, '삭제'),
             PDM.ui.field('그룹 한꺼번에 바꾸기', (() => { const s2 = h('select', { onchange: () => store.edit('world', '그룹 바꾸기', r => ids.forEach(x => { r.nodes.find(q => q.id === x).group = s2.value; })) },
               h('option', { value: '' }, '(없음)'), wd.groups.map(g => h('option', { value: g.id }, g.name))); s2.value = ''; return s2; })())));
