@@ -13,7 +13,7 @@
   const TRIGGERS = { manual: '이벤트 명령 "배지 주기"로만', floorEnter: '층(맵)에 들어올 때 조건 검사', mobKilled: '몬스터를 처치했을 때 조건 검사', itemPickup: '아이템을 주웠을 때 조건 검사', turn: '매 턴 조건 검사' };
   const TYPES = { LOCAL: '한 판 안에서 얻음', GLOBAL: '여러 판에 걸쳐', JOURNAL: '도감 · 기록', HIDDEN: '숨김 (기록용)' };
   function make(id) { return { id, name: '새 배지', desc: '', icon: 0, image: '', trigger: 'manual', cond: '', event: '', hidden: false }; }
-  const ops = PDM.listOps({ K, label: '배지', title: '업적 (배지)', icon: '🏅', prefix: 'badge', make });
+  const ops = PDM.listOps({ K, label: '배지', title: '업적 (배지)', icon: '🏅', prefix: 'badge', make, cmdType: 'badge', cmdKey: 'id' });
 
   // ---------------- 게임 원래 배지 읽기
   let cache = { repo: '', rows: null };

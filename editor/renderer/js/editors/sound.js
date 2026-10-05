@@ -75,6 +75,21 @@
     return 'sound:' + id;
   }
 
+  /** id 바꾸기 — 프로젝트 전체의 "sound:<옛 id>" 값을 새 id 로 (다른 목록 리소스의 id 바꾸기와 같은 동작) */
+  async function renameSound(old) {
+    const raw = await PDM.ui.prompt('소리 새 id (영문 · 숫자 · _)', old); if (!raw) return;
+    const nu = PDM.slugId(raw.trim()); if (!nu || nu === old) return;
+    if (list().some(x => x.id === nu)) { toast('이미 있는 id 입니다: ' + nu, 'bad'); return; }
+    const from = 'sound:' + old, to = 'sound:' + nu;
+    const fix = v => { let n = 0; if (!v || typeof v !== 'object') return 0; for (const k of Object.keys(v)) { if (v[k] === from) { v[k] = to; n++; } else n += fix(v[k]); } return n; };
+    let refs = 0;
+    store.transaction('소리 id 바꾸기', () => {
+      store.edit(K, 'id 바꾸기', r => { const it = r.sounds.find(x => x.id === old); if (it) it.id = nu; });
+      store.keys().forEach(k => { if (k === K) return; if (fix(PDM.clone(store.get(k)))) store.edit(k, '소리 id 바꾸기 (참조)', r => { refs += fix(r); }); });
+    });
+    st.sel = nu; PDM.tabs.refresh(K);
+    PDM.log(`소리 id: ${old} → ${nu}` + (refs ? ` (쓰는 곳 ${refs}군데도 고침)` : ''), 'ok');
+  }
   /** 이 소리를 쓰는 곳 — 프로젝트 전체에서 "sound:<id>" 값을 찾음 */
   const TYPE_NAMES = { event: '이벤트', item: '아이템', char: '캐릭터', hero: '영웅', node: '맵', room: '방', spell: '주문', ability: '능력' };
   const SINGLE_NAMES = { world: '맵 그래프', project: '프로젝트', dialogue: '대사창', heart: '마음 시스템', title: '타이틀', story: '스토리' };
@@ -338,6 +353,7 @@
           h('div', { class: 'fl', style: { marginTop: '6px' } }, `쓰는 곳 (${used.length})`),
           used.length ? h('div', {}, used.map(([t, k]) => h('button', { class: 'chip', onclick: () => PDM.tabs.open(k) }, t))) : h('p', { class: 'hint' }, '아직 쓰는 곳이 없습니다. 맵 그래프의 배경음, 이벤트 명령 "효과음/음악", 아이템·캐릭터·게임 아이템의 "소리", 대사창·마음 시스템의 소리에서 고르세요.'),
           h('div', { style: { display: 'flex', gap: '6px', marginTop: '10px' } },
+            h('button', { class: 'btn sm', title: 'id 를 바꾸고 쓰는 곳의 "sound:<id>" 도 함께 고칩니다', onclick: () => renameSound(e.id) }, 'id 바꾸기…'),
             h('button', { class: 'btn sm', onclick: () => { const c = PDM.clone(e); c.id = uniqueId(e.id + '_copy'); c.name = (e.name || e.id) + ' 사본'; addEntry(c, '소리 복제'); st.sel = c.id; } }, '복제 (같은 파일)'),
             h('button', { class: 'btn sm danger', onclick: async () => {
               if (!(await PDM.ui.confirm(`「${e.name || e.id}」 을(를) 목록에서 지울까요?${used.length ? ` (${used.length}곳에서 쓰는 중)` : ''} 파일은 남겨 둡니다.`))) return;

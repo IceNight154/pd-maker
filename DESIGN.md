@@ -81,9 +81,10 @@
 | `cellpick.js` | 맵에서 칸 고르기 `PDM.pickCell` · 광원 칸 `PDM.lightFields` · 광원 미리보기 `PDM.drawLightPreview` |
 | `layout.js` | 대사창 · 타이틀 레이아웃 직접 편집 `PDM.layoutEditor` |
 | `levelpreview.js` | 타일셋 실시간 미리보기 |
-| `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임) |
+| `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿 · 영웅 — 영웅은 id 바꾸기 · 복제를 자기 방식으로 `o.rename/dup`) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임) |
+| `clip.js` | 공용 클립보드 `PDM.clip` — Ctrl+C/V. 메모리 + 시스템 클립보드 JSON(다른 프로젝트 · 창에도). kind: `res:<종류>` · `list:<저장 키>` · `nodes` · `mapobj` · `cmds`. 붙여넣기는 지금 탭의 `ctx.copy/paste` → 리소스 · 목록 항목 기본 처리 |
 | `keys.js` | 단축키 `PDM.keys` — 동작 표(id · 기본 키 · scope global/draw) + 사용자 키(`localStorage pdm.keys`), `e.code` 기준 키 이름, 편집 › 단축키 설정 창 |
-| `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 삭제 · id 바꾸기(쓰는 곳도 고침) · 순서 `PDM.listOps` |
+| `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 복사/붙여넣기 · 삭제 · id 바꾸기 · 쓰는 곳(이벤트 명령 `cmdType`+`cmdKey` · 맵 오브젝트 `objType` · 참조 칸 `fields`) · 순서 `PDM.listOps` — 도구 줄은 resOps 와 같은 모양 |
 | `gamescan.js` · `gamehero.js` · `gameinfo.js` | 게임 저장소 소스를 읽어 목록 맞추기 · 원래 값 보여 주기 (§2.5) |
 | `spd-items.js` · `spd-chars.js` · `spd-rooms.js` · `spd-room-previews.js` · `spd-level-previews.js` | 게임 데이터 (`tools/data` · `tools/playtest` 로 뽑음) |
 | `validate.js` | 검사(F7) |
@@ -97,6 +98,8 @@
 - **테마** (`theme.js`): system / light / dark → `html[data-theme]`, 색은 모두 CSS 변수. system 은 `prefers-color-scheme` + Electron `nativeTheme.themeSource`(제목 표시줄 · 대화상자). 강조색 = OS 강조색(`systemPreferences.getAccentColor`) · 기본 보라 · 직접, 배경과 구분되도록 밝기 보정. 게임 그림 미리보기 바탕은 테마와 상관없이 어두움(`--stage`).
 - **다시 그릴 때 위치 유지**: 편집할 때마다 탭을 다시 그리므로 — 섹션 접힘을 기억(탭 + 제목, `ui.js closedSecs`), 인스펙터는 같은 제목이면 스크롤 유지, 탭 본문은 누르거나 입력 중인 칸(자식 순서 경로)을 기준으로 위치를 맞춤(0 · 30 · 120 · 400ms, 휠을 굴리면 멈춤), 안쪽 스크롤 칸(.sheet-view 등)도 되돌림.
 - **리소스 목록** (`app.js drawTree`): 처음엔 모두 접힘(펼친 분류는 `localStorage pdmaker_tree_expanded`). 검색 = 항목 · 분류 이름(분류가 맞으면 그 아래 전부), ☰ 세부 검색(분류 · 세부 종류), "전체"(접힌 분류까지). 끌어 놓기: 노드의 `drag` · `canDrop(끈 것) → ['before','after','into']` · `drop`. 줄의 ▲▼(마우스를 올리면) · 오른쪽 클릭 메뉴.
+- **창 닫기 · 복사 · 붙여넣기**: Ctrl+W = 떠 있는 창 · 메뉴 먼저, 없으면 지금 탭(프로그램은 닫지 않음) · Esc = 맨 위 창 · 메뉴. Ctrl+C/V = 고른 것(맵 그래프 노드 · 맵 오브젝트 · 이벤트 명령 · 스프라이트 선택 영역) → 없으면 지금 탭의 리소스 통째로 / 목록 항목(이펙트 등). 입력 칸 안 · 글을 고른 상태면 원래 복사.
+- **묶음 버튼** (`PDM.ui.dropBtn` · 도구 모음 `tbDrop`): 자주 안 쓰는 버튼과 보기 켜고 끄기를 ▾ 메뉴로 — 도구 모음 "내보내기 ▾"(게임 파일 · 프로젝트 내보내기 · 가져오기), 테스트 플레이 옆 "▾"(빌드 방식 · 컴파일 확인 · 빌드 정리), "⚙ ▾"(프로젝트 설정 · build.gradle · 확장 기능 · 단축키), 맵 편집기 "👁 보기 ▾"(격자 · 구역 색 · 계단 번호 · 스폰 구역 · 무작위 칸 · 세부 그림), 영웅 "{ } 코드 보기 ▾".
 - **단축키** (`keys.js`): 편집 › "단축키 설정…" 에서 동작마다 키를 여러 개 지정 · 빼기 · 기본값으로(충돌하면 다른 동작에서 옮길지 물음). global = 파일 · 편집 · 탭(닫기 · 다음/이전) · 리소스 검색 · 테스트 플레이 · 중지 · 검사, draw = 맵 편집기 · 스프라이트 편집기 공용 도구(펜 · 지우개 · 채우기 · 스포이드 · 선택 · 올가미 · 마법봉 · 브러쉬 크기 · 선택 해제). 메뉴 · 도구 모음 힌트도 바뀐 키를 보여 줌. 맵 그래프 · 화면 이동 키 등은 고정(창에 참고로 표시).
 - **편집 도우미**: 숫자 칸 휠(Shift ×10, `dec` 로 소수 단위), 아이템 칸 = 검색 · 분류 · 그림 목록(`ui.combo`), 소리 칸 = 목록 · ▶ · 📂 파일(프로젝트 밖이면 `assets/audio/` 로 복사) · ✎ 경로 직접 입력 · 🎚 사운드 편집기로.
 

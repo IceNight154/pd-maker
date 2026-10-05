@@ -25,7 +25,7 @@
     else if (preset === 'opening') t.scenes = [Object.assign(S.title(), { title: proj.name || '제목' }), Object.assign(S.copy(), { text: '이야기가 시작된다.' })];
     return t;
   }
-  const ops = PDM.listOps({ K, label: '예고편 컷신', title: '예고편 컷신', icon: '🎬', prefix: 'trailer', make, presets: PRESETS });
+  const ops = PDM.listOps({ K, label: '예고편 컷신', title: '예고편 컷신', icon: '🎬', prefix: 'trailer', make, presets: PRESETS, cmdType: 'trailer', cmdKey: 'id' });
 
   // ---------------- 미리보기 (런타임 MakerTrailer 와 같은 배치)
   const imgs = {};

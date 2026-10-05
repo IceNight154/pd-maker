@@ -652,8 +652,8 @@ return damage + Special.get("combo");`,
         children: all.map((c, i) => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: (i + 1) + '.', open: 'hero:' + c.id,
           // 게임 영웅 선택 화면의 순서 — ▲▼ 를 누르면 한 칸씩 옮김
           actions: [i > 0 ? { label: '▲', title: '위로 (게임 영웅 선택 화면에서 앞으로)', run: () => moveHero(c.id, -1) } : null, i < all.length - 1 ? { label: '▼', title: '아래로', run: () => moveHero(c.id, 1) } : null].filter(Boolean),
-          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, { label: 'id 바꾸기…', run: () => renameHero(c.id) }, { label: '복제', run: () => dupHero(c.id) }, '-',
-            { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${c.name}」 영웅을 삭제할까요?`)) store.remove('hero:' + c.id, '영웅 삭제'); } }] })) }];
+          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, '-',
+            ...PDM.resOps.menu('hero', c.id, [{ label: '쓰는 곳…', run: () => PDM.resOps.showUsage('hero', c.id) }], { rename: renameHero, dup: dupHero })] })) }];
     },
     render(key, ctx) {
       const c = store.get(key);
@@ -673,11 +673,13 @@ return damage + Special.get("combo");`,
 
       return h('div', { class: 'page' },
         h('h1', {}, '★ ', c.name, h('span', { class: 'hint', style: { marginLeft: '8px' } }, c.id), isStart ? h('span', { class: 'badge good', style: { marginLeft: '8px' } }, '시작 영웅') : null),
-        h('div', { style: { display: 'flex', gap: '6px', margin: '-4px 0 8px', flexWrap: 'wrap' } },
-          h('button', { class: 'btn sm', title: '영웅 id (파일 이름 · 코드 클래스 이름)를 바꿉니다', onclick: () => renameHero(c.id) }, 'id 바꾸기…'),
-          h('button', { class: 'btn sm', title: '이 영웅의 데이터 파일(heroes/' + c.id + '.json)을 그대로 봅니다', onclick: () => PDM.ui.codeView(`heroes/${c.id}.json`, JSON.stringify(store.get(key), null, 2)) }, '{ } 데이터 파일 보기'),
-          h('button', { class: 'btn sm', title: '테스트 플레이 때 만들어지는 이 영웅의 Java 코드 파일 (pdmaker/gen/' + PDM.codegen.heroClass(c.id) + '.java) — 외부 편집기로도 열 수 있음', onclick: () => { const cg = PDM.codegen; PDM.showCodeFile('pdmaker/gen/' + cg.heroClass(c.id) + '.java', cg.heroClass(c.id) + '.java' + (cg.heroNeedsClass(store.get(key)) ? '' : ' (코드 칸이 비어 있어 실제로는 만들지 않음)'), cg.heroSource(store.get(key))); } }, '☕ 코드 파일 보기'),
-          c.baseClass ? h('button', { class: 'btn sm', title: '바탕 직업이 정의된 게임 코드 (actors/hero/HeroClass.java — 시작 아이템 · 전직 · 직업 능력 등)', onclick: () => PDM.showCodeFile('actors/hero/HeroClass.java', '게임 코드 — HeroClass (' + c.baseClass + ')') }, '게임 코드 보기 (HeroClass)') : null),
+        // 다른 리소스와 같은 공용 도구 줄 (id 바꾸기 · 복제 · 복사 · 쓰는 곳 · 삭제) + 코드 보기 묶음 버튼
+        PDM.resOps.bar('hero', c.id, [
+          PDM.ui.dropBtn('{ } 코드 보기', () => [
+            { label: '데이터 파일 (heroes/' + c.id + '.json)', run: () => PDM.ui.codeView(`heroes/${c.id}.json`, JSON.stringify(store.get(key), null, 2)) },
+            { label: '만들어지는 Java 코드 (pdmaker/gen/' + PDM.codegen.heroClass(c.id) + '.java)', run: () => { const cg = PDM.codegen; PDM.showCodeFile('pdmaker/gen/' + cg.heroClass(c.id) + '.java', cg.heroClass(c.id) + '.java' + (cg.heroNeedsClass(store.get(key)) ? '' : ' (코드 칸이 비어 있어 실제로는 만들지 않음)'), cg.heroSource(store.get(key))); } },
+            c.baseClass ? { label: '게임 코드 — HeroClass (' + c.baseClass + ')', run: () => PDM.showCodeFile('actors/hero/HeroClass.java', '게임 코드 — HeroClass (' + c.baseClass + ')') } : null])],
+          { rename: renameHero, dup: dupHero }),
         h('p', { class: 'lead' }, '게임의 영웅 선택 화면에 이 영웅이 나옵니다 (시작 영웅을 정하면 그 영웅 하나만). ' + (zero
           ? '바탕 직업이 없는 완전히 새 영웅입니다 — 시작 아이템·감정된 아이템·특성·전직·직업 능력 모두 이 편집기에서 정한 것만 씁니다.'
           : '바탕 직업 「' + (PDM.HERO_CLASSES[String(c.baseClass).toUpperCase()] || c.baseClass) + '」의 게임 기능(시작 아이템·특성·전직·직업 능력 등)을 물려받고, 여기서 정한 것을 더하거나 바꿉니다.')),

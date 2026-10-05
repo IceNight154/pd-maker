@@ -594,7 +594,9 @@ PDM.ui = (function () {
   function menu(x, y, items) {
     $$('.ctx').forEach(m => m.remove());
     const m = h('div', { class: 'ctx', style: { left: x + 'px', top: y + 'px' } },
-      items.map(it => it === '-' ? h('hr') : h('div', { class: 'ctx-i' + (it.disabled ? ' dis' : ''), onclick: () => { m.remove(); !it.disabled && it.run(); } }, it.label, it.hint ? h('small', {}, it.hint) : null)));
+      items.filter(Boolean).map(it => it === '-' ? h('hr') : it.head ? h('div', { class: 'ctx-h' }, it.head)
+        : h('div', { class: 'ctx-i' + (it.disabled ? ' dis' : '') + (it.checked !== undefined ? ' chk' : ''), onclick: () => { m.remove(); !it.disabled && it.run(); } },
+          it.checked !== undefined ? h('span', { class: 'ctx-ck' }, it.checked ? '✓' : '') : null, it.label, it.hint ? h('small', {}, it.hint) : null)));
     document.body.append(m);
     const r = m.getBoundingClientRect();
     if (r.right > innerWidth) m.style.left = (innerWidth - r.width - 4) + 'px';
@@ -609,5 +611,13 @@ PDM.ui = (function () {
     return modal(title || '몬스터 스폰', h('div', { style: { minWidth: '340px' } }, opt(true, '몬스터가 생김', '층을 만들 때 몬스터가 놓이고, 시간이 지나면 다시 생깁니다'), opt(false, '몬스터가 생기지 않음', '안전한 곳 — 직접 놓은 몬스터·NPC 만 나옵니다. 나중에 속성에서 바꿀 수 있습니다')),
       [['취소', null], ['만들기', () => v, 'pri']]);
   };
-  return { F, field, row, section, listEditor, combo, itemOptions, modal, prompt, confirm, menu, closeTop, get modalOpen() { return openModals.length > 0; }, pickImage, refOptions, commit, codeView, SNIPPETS, soundPicker };
+  /** 묶음 버튼: 누르면 아래로 메뉴 (자주 안 쓰는 버튼 · 보기 켜고 끄기를 한데 모아 화면을 단순하게).
+   *  items() = 메뉴 항목 배열(누를 때 계산) — { label, run, hint, disabled, checked(켜고 끄기면 true/false) } · '-' · { head } */
+  function dropBtn(label, items, o = {}) {
+    const b = h('button', { class: (o.cls || 'btn sm') + ' drop', title: o.title || '', disabled: !!o.disabled, onclick: e => {
+      e.preventDefault(); e.stopPropagation(); const r = b.getBoundingClientRect(); menu(r.left, r.bottom + 2, typeof items === 'function' ? items() : items);
+    } }, label, h('span', { class: 'drop-caret' }, '▾'));
+    return b;
+  }
+  return { F, field, row, section, listEditor, dropBtn, combo, itemOptions, modal, prompt, confirm, menu, closeTop, get modalOpen() { return openModals.length > 0; }, pickImage, refOptions, commit, codeView, SNIPPETS, soundPicker };
 })();

@@ -158,7 +158,7 @@ for (let i = 0; i < 6; i++) {
     layers.forEach(l => { if (l.type === 'image' && l.png) { const k = Object.keys(TEX).find(t => texPath(t) === l.png); if (k) makeTex(k).catch(() => { }); } });
     return { id, name: preset && preset !== 'blank' ? p.name.replace(/^[^:]+:\s*/, '').replace(/\s*\(.*$/, '') : id, overUI: !!p.overUI, inType: p.inType || 'fade', inSec: p.inSec ?? 0.5, outType: p.outType || 'fade', outSec: p.outSec ?? 0.5, layers };
   }
-  const ops = PDM.listOps({ K, label: '화면 필터', title: '화면 필터', icon: '🌧', prefix: 'filter', make, presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.name])), fields: ['filter'],
+  const ops = PDM.listOps({ K, label: '화면 필터', title: '화면 필터', icon: '🌧', prefix: 'filter', make, presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.name])), fields: ['filter'], cmdType: 'filter', cmdKey: 'id',
     clean: c => (c.layers || []).forEach(l => { if (l.type === 'code') l.png = ''; }) });   // 복제본의 코드 층은 제 그림 파일을 새로 구움
 
   // ---------------- 미리보기 (런타임과 같은 계산)

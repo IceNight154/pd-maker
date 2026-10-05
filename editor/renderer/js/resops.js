@@ -16,9 +16,10 @@
     item: ['item'],
     event: ['event', 'onEnter', 'acceptEvent', 'doneEvent'],
     prop: [],
-    room: ['room']
+    room: ['room'],
+    hero: ['hero', 'heroId', 'startHero']
   };
-  const LISTS = { item: ['likes', 'dislikes', 'knownItems'] };   // id 를 원소로 담는 배열 칸
+  const LISTS = { item: ['likes', 'dislikes', 'knownItems'], hero: ['heroOrder'] };   // id 를 원소로 담는 배열 칸
 
   /** 객체 v 안의 old → nu 참조를 고침 (nu 가 null 이면 세기만). 돌려줌: 고친(찾은) 수 */
   function fixRefs(kind, old, nu, v) {
@@ -102,16 +103,18 @@
     return nu;
   }
   /** 리소스 목록 오른쪽 클릭 메뉴의 공용 부분 (편집기가 extra 항목을 앞에 붙임) */
-  function menu(kind, id, extra) {
-    return [{ label: '열기', run: () => open(kind, id) }, { label: '이름 바꾸기…', run: () => renameLabel(kind, id) }, { label: 'id 바꾸기…', run: () => renameId(kind, id) },
-      { label: '복제', run: () => dup(kind, id) }, { label: '복사', hint: PDM.keys.label('copy'), run: () => copy(kind, id) },
+  /** o = { rename(id), dup(id) } — 그 리소스만의 방식이 있으면 (영웅: 시작 영웅 · 순서도 고침) */
+  function menu(kind, id, extra, o = {}) {
+    return [{ label: '열기', run: () => open(kind, id) }, { label: '이름 바꾸기…', run: () => renameLabel(kind, id) }, { label: 'id 바꾸기…', run: () => (o.rename || (x => renameId(kind, x)))(id) },
+      { label: '복제', run: () => (o.dup || (x => dup(kind, x)))(id) }, { label: '복사', hint: PDM.keys.label('copy'), run: () => copy(kind, id) },
       { label: '붙여넣기 (새로 만들기)', hint: PDM.keys.label('paste'), run: async () => { const c = await PDM.clip.get(); if (c && c.kind === 'res:' + kind) paste(kind, c.payload); else toast(`복사한 ${NAMES[kind]}이(가) 없습니다`); } }, ...(extra && extra.length ? ['-', ...extra] : []), '-', { label: '삭제', run: () => remove(kind, id) }];
   }
   /** 편집 화면 머리말 버튼 줄 */
-  function bar(kind, id, extra) {
+  function bar(kind, id, extra, o = {}) {
     return h('div', { class: 'btnbar res-bar' },
-      h('button', { class: 'btn sm', onclick: () => renameId(kind, id) }, 'id 바꾸기…'),
-      h('button', { class: 'btn sm', onclick: () => dup(kind, id) }, '복제'),
+      h('button', { class: 'btn sm', onclick: () => (o.rename || (x => renameId(kind, x)))(id) }, 'id 바꾸기…'),
+      h('button', { class: 'btn sm', onclick: () => (o.dup || (x => dup(kind, x)))(id) }, '복제'),
+      h('button', { class: 'btn sm', title: '복사 — 다른 프로젝트에도 붙여 넣을 수 있음 (' + PDM.keys.label('copy') + ')', onclick: () => copy(kind, id) }, '복사'),
       h('button', { class: 'btn sm', title: '이 리소스를 쓰는 곳', onclick: () => showUsage(kind, id) }, '쓰는 곳'),
       ...(extra || []),
       h('button', { class: 'btn sm danger', style: { marginLeft: 'auto' }, onclick: () => remove(kind, id) }, '삭제'));

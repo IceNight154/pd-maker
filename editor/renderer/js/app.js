@@ -356,6 +356,8 @@
     ],
     '프로젝트': () => [
       { label: '프로젝트 설정', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
+      { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
+      { label: '확장 기능…', run: showExtensions, disabled: !store.isOpen },
       { label: '검사 (끊어진 참조 찾기)', hint: PDM.keys.label('check'), run: runCheck, disabled: !store.isOpen },
       '-',
       { label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen },
@@ -423,6 +425,13 @@
   /** 도구 모음 버튼: 아이콘 + (짧은) 글자, 마우스를 올리면 설명과 단축키 */
   const tbBtn = (icon, label, run, o = {}) => h('button', { class: 'tb' + (o.cls ? ' ' + o.cls : '') + (o.iconOnly ? ' icon' : ''), onclick: run, disabled: !!o.disabled,
     title: (o.tip || label) + (o.key ? `  (${o.key})` : '') }, svgIcon(icon), o.iconOnly ? null : h('span', {}, label));
+  /** 도구 모음 묶음 버튼: 아이콘 + 글자 + ▾ — 누르면 아래로 메뉴 */
+  const tbDrop = (icon, label, items, o = {}) => {
+    const b = h('button', { class: 'tb drop' + (o.iconOnly ? ' icon' : ''), disabled: !!o.disabled, title: o.tip || label,
+      onclick: () => { const r = b.getBoundingClientRect(); PDM.ui.menu(o.right ? r.right - 240 : r.left, r.bottom + 2, items()); } },
+      svgIcon(icon), o.iconOnly ? null : h('span', {}, label), h('span', { class: 'drop-caret' }, '▾'));
+    return b;
+  };
   const drawToolbarSoon = PDM.debounce(() => drawToolbar(), 60);
   function drawToolbar() {
     const tb = $('#toolbar'); tb.innerHTML = '';
@@ -434,20 +443,34 @@
         tbBtn('open', '열기', openProject, { iconOnly: true, tip: '프로젝트 열기', key: PDM.keys.label('openProject') }),
         tbBtn('save', '저장', saveAll, { disabled: !open, tip: '프로젝트 저장', key: PDM.keys.label('save'), cls: store.isDirty() ? 'dirty' : '' }),
         tbBtn('saveAs', '다른 이름으로', saveAs, { iconOnly: true, disabled: !open || !el, tip: '다른 이름으로 저장 (다른 폴더에 복사해서 계속 작업)' + webTip, key: PDM.keys.label('saveAs') })),
-      grp(tbBtn('exportProj', '프로젝트 내보내기', exportProject, { disabled: !open || !el, tip: '프로젝트 내보내기 — 폴더 전체를 .pdmproj 파일 하나로 (다른 PC·백업·공유용)' + webTip, key: PDM.keys.label('exportProject') }),
-        tbBtn('importProj', '가져오기', importProject, { iconOnly: true, disabled: !el, tip: '프로젝트 가져오기 (.pdmproj / .zip)' + webTip }),
-        tbBtn('exportGame', '게임 파일 내보내기', exportGame, { disabled: !open || !el, tip: '게임 파일 내보내기 — 친구에게 줄 수 있는 실행 파일 폴더(JAR 또는 Java 포함 실행 파일) 만들기' + webTip, key: PDM.keys.label('exportGame') })),
+      // 내보내기 · 가져오기는 한 묶음으로 (예전: 버튼 3개)
+      grp(tbDrop('exportGame', '내보내기', () => [
+        { label: '게임 파일 내보내기… (JAR · exe · 설치 파일 · APK)', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !open || !el },
+        '-',
+        { label: '프로젝트 내보내기 (.pdmproj — 백업 · 다른 PC)…', hint: PDM.keys.label('exportProject'), run: exportProject, disabled: !open || !el },
+        { label: '프로젝트 가져오기 (.pdmproj / .zip)…', run: importProject, disabled: !el }], { tip: '게임 파일 · 프로젝트 내보내기 / 가져오기' + webTip })),
       grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: PDM.keys.label('undo') }),
         tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: PDM.keys.label('redo') })),
-      grp(tbBtn('gradle', 'build.gradle', editBuildGradle, { disabled: !open, tip: 'build.gradle — 게임 저장소의 빌드 설정(게임 이름 · 패키지 이름 · 버전)을 보고 고치기' }),
-        tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
+      grp(tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
       h('span', { class: 'grow' }),
-      grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: PDM.keys.label('check') }),
-        tbBtn('clean', '정리', cleanBuild, { iconOnly: true, disabled: !open || !el || running, tip: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때' + webTip })),
+      grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: PDM.keys.label('check') })),
+      // 테스트 플레이 + 빌드 묶음 (빌드 방식 고르기 · 컴파일 확인 · 빌드 정리 — 예전: 정리 버튼이 따로)
       grp(tbBtn('play', '테스트 플레이', playtest, { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장·검사 후 게임 실행', key: PDM.keys.label('playtest') }),
-        tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running && el, tip: '실행·빌드 중지' })),
+        tbDrop('clean', '빌드', () => [
+          { label: '▶ desktop:debug 로 실행 (INDEV 버전)', run: () => playtest('debug'), disabled: !open || running },
+          { label: '▶ PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !open || running },
+          '-',
+          { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !open || running },
+          { label: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때', run: cleanBuild, disabled: !open || !el || running }], { iconOnly: true, tip: '빌드 방식 · 컴파일 확인 · 빌드 정리' + webTip }),
+        tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running && el, tip: '실행·빌드 중지', key: PDM.keys.label('stopGame') })),
       grp(tbBtn('theme', '테마', e => { const r = e.currentTarget.getBoundingClientRect(); PDM.ui.menu(r.right - 220, r.bottom + 2, MENUS['보기']().slice(0, 7)); }, { iconOnly: true, tip: `테마: ${({ system: '시스템 따르기', light: '밝게', dark: '어둡게' })[T().mode]}` }),
-        tbBtn('settings', '설정', () => PDM.tabs.open('project'), { iconOnly: true, disabled: !open, tip: '프로젝트 설정 (게임 저장소 · 런타임)' })));
+        // 설정 묶음: 프로젝트 설정 · build.gradle · 단축키 (예전: build.gradle 버튼이 따로)
+        tbDrop('settings', '설정', () => [
+          { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !open },
+          { label: 'build.gradle — 게임 저장소의 빌드 설정 보고 고치기', run: editBuildGradle, disabled: !open },
+          { label: '확장 기능…', run: showExtensions, disabled: !open },
+          '-',
+          { label: '단축키 설정…', run: () => PDM.keys.dialog() }], { iconOnly: true, right: true, tip: '설정 — 프로젝트 · build.gradle · 단축키' })));
   }
   function updateStatus() {
     const d = store.isDirty();

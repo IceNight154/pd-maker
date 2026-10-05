@@ -446,21 +446,26 @@
         const T = (id, label, tip) => h('button', { class: 'tool' + (ui.tool === id ? ' on' : ''), title: tip || '', onclick: () => { ui.tool = id; drawTools(); drawPalette(); } }, label);
         if (drawable) tools.append(T('pen', '✎ 펜', '타일 그리기 (B)'), T('rect', '▭ 사각형', '끌어서 채운 사각형'), T('room', '▣ 방', '끌어서 벽 두른 방'), T('fill', '▧ 채우기', '(G)'), T('pick', '⊙ 스포이드', '(I)'), T('erase', '⌫ 지우개', '끌어서 지우기 (E) — 무엇을 지울지는 왼쪽 「지우개」에서'));
         tools.append(T('select', '⇱ 선택', '오브젝트 · 입구/출구 계단 선택/이동 (M)'), T('object', '✚ 오브젝트'));
-        if (canRand && (fl.randSets || []).length) tools.append(T('rand', '🎲 무작위 칸', '방이 들어갈 때마다 달라지는 칸 칠하기 (왼쪽에서 묶음 고르기)'),
-          h('button', { class: 'tool' + (ui.showRand !== false ? ' on' : ''), title: '무작위 칸 보이기', onclick: () => { ui.showRand = ui.showRand === false; drawTools(); paint(); } }, '무작위 표시'));
-        if (canSpawn) tools.append(T('spawn', '☗ 스폰 구역', '몬스터가 생기는 구역 / 안 생기는 구역 칠하기'),
-          h('button', { class: 'tool' + (ui.showSpawn ? ' on' : ''), title: '스폰 구역 보이기', onclick: () => { ui.showSpawn = !ui.showSpawn; drawTools(); paint(); } }, '구역 표시'));
+        if (canRand && (fl.randSets || []).length) tools.append(T('rand', '🎲 무작위 칸', '방이 들어갈 때마다 달라지는 칸 칠하기 (왼쪽에서 묶음 고르기)'));
+        if (canSpawn) tools.append(T('spawn', '☗ 스폰 구역', '몬스터가 생기는 구역 / 안 생기는 구역 칠하기'));
         if (kind === 'node' && fl.mode === 'handmade') tools.append(h('button', { class: 'tool', title: '맵 전체를 한 장의 그림으로 직접 그립니다 (게임에서는 타일 그림 대신 이 그림이 보임)', onclick: () => { ui.paintMode = true; PDM.tabs.refresh(key); } }, '🖌 맵 세부 그리기'));
-        if (paintImg) tools.append(h('button', { class: 'tool' + (ui.showPaint !== false ? ' on' : ''), title: '맵 세부 그림 보이기/숨기기 (숨기면 타일이 보임)', onclick: () => { ui.showPaint = ui.showPaint === false; drawTools(); paint(); } }, '세부 그림'));
-        if (drawable && kind === 'node') tools.append(h('button', { class: 'tool' + (ui.showPorts ? ' on' : ''), title: '출구·입구 번호와 연결 보이기', onclick: () => { ui.showPorts = !ui.showPorts; drawTools(); paint(); } }, '계단 번호'));
         tools.append(h('span', { class: 'tb-sep' }),
           h('button', { class: 'tool', title: '축소 (Ctrl+휠)', onclick: () => zoomStep(-1) }, '−'),
           h('span', { class: 'hint' }, `×${+ui.zoom.toFixed(2)}`),
           h('button', { class: 'tool', title: '확대 (Ctrl+휠)', onclick: () => zoomStep(1) }, '+'),
           h('button', { class: 'tool', title: '화면에 맞춤 (Enter)', onclick: () => zoomFit() }, '⛶ 맞춤'),
           drawable ? h('span', { class: 'hint', title: '펜·지우개 브러쉬 크기 — [ 작게 · ] 크게' }, `브러쉬 ${ui.brush || 1}`) : '',
-          h('button', { class: 'tool' + (ui.grid ? ' on' : ''), onclick: () => { ui.grid = !ui.grid; drawTools(); paint(); } }, '격자'),
-          drawable ? h('button', { class: 'tool' + (ui.zones ? ' on' : ''), title: '벽 = 빨강 · 바닥 = 파랑 · 문 = 초록 으로 덧칠해 보기', onclick: () => { ui.zones = !ui.zones; drawTools(); paint(); } }, '구역 색') : '',
+          // 보기 켜고 끄기는 한 묶음 버튼으로 (예전: 무작위 표시 · 구역 표시 · 세부 그림 · 계단 번호 · 격자 · 구역 색 버튼이 따로 있었음)
+          PDM.ui.dropBtn('👁 보기', () => {
+            const tg = (label, on, set, hint) => ({ label, checked: !!on, hint, run: () => { set(); drawTools(); paint(); } });
+            return [
+              tg('격자', ui.grid, () => { ui.grid = !ui.grid; }),
+              drawable ? tg('구역 색 (벽 빨강 · 바닥 파랑 · 문 초록)', ui.zones, () => { ui.zones = !ui.zones; }) : null,
+              drawable && kind === 'node' ? tg('계단 번호 · 연결', ui.showPorts, () => { ui.showPorts = !ui.showPorts; }) : null,
+              canSpawn ? tg('스폰 구역', ui.showSpawn, () => { ui.showSpawn = !ui.showSpawn; }) : null,
+              canRand && (fl.randSets || []).length ? tg('무작위 칸', ui.showRand !== false, () => { ui.showRand = ui.showRand === false; }) : null,
+              paintImg ? tg('맵 세부 그림 (끄면 타일)', ui.showPaint !== false, () => { ui.showPaint = ui.showPaint === false; }) : null];
+          }, { cls: 'tool', title: '맵에 겹쳐 보일 것 켜고 끄기' }),
           h('span', { class: 'grow' }),
           kind === 'node' ? h('select', { onchange: e => { const m = e.target.value; store.edit(key, '생성 방식', r => { r.mode = m; if (m === 'hybrid' && r.size.w > 16) { r.size = { w: 11, h: 11 }; r.layers.terrain = blankTerrain(11, 11, true); } }); } },
             Object.entries(PDM.FLOOR_MODES).map(([k, v]) => h('option', { value: k, selected: fl.mode === k }, v.name)))

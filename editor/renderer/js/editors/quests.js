@@ -12,7 +12,7 @@
   const list = () => (store.get(K) || {}).list || [];
   const OBJ = { kill: '몬스터 처치', collect: '아이템 모으기', reach: '맵에 도착', talk: '캐릭터와 대화', cond: '조건 달성 (조건식)' };
   function make(id) { return { id, name: '새 퀘스트', desc: '', giver: '', turnIn: '', cond: '', auto: false, repeat: false, remind: true, objectives: [{ type: 'kill', target: '', count: 3, text: '' }], rewards: { gold: 50, exp: 0, items: [] }, acceptEvent: '', doneEvent: '' }; }
-  const ops = PDM.listOps({ K, label: '퀘스트', title: '퀘스트', icon: '📜', prefix: 'quest', make });
+  const ops = PDM.listOps({ K, label: '퀘스트', title: '퀘스트', icon: '📜', prefix: 'quest', make, cmdType: 'quest', cmdKey: 'id' });
   PDM.quests = { K, make, ops, list };
 
   /** 아이템 고르는 칸 (프로젝트 아이템 + 게임 아이템 spd:…) */
