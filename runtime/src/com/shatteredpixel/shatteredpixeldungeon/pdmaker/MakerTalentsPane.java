@@ -83,6 +83,13 @@ public class MakerTalentsPane extends TalentsPane {
 		if (MakerTalents.any()) {
 			JsonValue ts = MakerTalents.tiers();
 			for (int i = 1; i <= ts.size; i++) {
+				// 원작처럼: 레벨이 모자란 단계는 보이지 않고 "레벨 N 이 되면 …" 한 줄만 (1단계는 레벨이 모자라도 빈 별로 보여 줌)
+				int ul = ts.get(i - 1).getInt("unlockLevel", 2);
+				if (i > 1 && hero.lvl < ul) {
+					more = PixelScene.renderTextBlock("레벨 " + ul + " 이 되면 특성이 더 열립니다.", 6);
+					content.add(more);
+					break;
+				}
 				TierPane p = new TierPane(hero, i, ts.get(i - 1));
 				if (p.total == 0 || (p.buttons.isEmpty() && p.open)) { p.destroy(); continue; }
 				tiers.add(p); content.add(p);
@@ -92,6 +99,7 @@ public class MakerTalentsPane extends TalentsPane {
 	}
 
 	boolean scrolled = false;
+	RenderedTextBlock more;   // 다음 단계가 열리는 레벨 (원작 "Reach level N to unlock more talents.")
 	/** WndHero 는 처음에 맨 아래로 스크롤함 → 우리 창은 맨 위(스킬)부터 */
 	@Override
 	public void scrollTo(float x, float y) {
@@ -136,6 +144,11 @@ public class MakerTalentsPane extends TalentsPane {
 			top = p.bottom();
 			ColorBlock s = seps.get(si++); s.x = 0; s.y = top + 2; s.size(width, 1);
 			top += 5;
+		}
+		if (more != null) {
+			more.maxWidth((int) width - 8);
+			more.setPos(x + (width - more.width()) / 2f, top + 10);
+			top = more.bottom() + 10;
 		}
 		content.setSize(width, Math.max(height, top));
 	}
@@ -199,10 +212,11 @@ public class MakerTalentsPane extends TalentsPane {
 			this.hero = hero; this.tier = tier; this.def = def;
 			String why = MakerTalents.tierLock(tier, hero);
 			open = why == null;
+			boolean early = !open && tier == 1 && hero.lvl < def.getInt("unlockLevel", 2);   // 1단계: 레벨이 모자라도 원작처럼 빈 별로 보여 줌
 			title = PixelScene.renderTextBlock(def.getString("name", tier + "단계"), 9);
-			title.hardlight(open ? Window.TITLE_COLOR : 0x888888);
+			title.hardlight(open || early ? Window.TITLE_COLOR : 0x888888);
 			add(title);
-			if (open) {
+			if (open || early) {
 				int tot = def.getInt("points", 5), avail = Math.max(0, MakerTalents.available(tier, hero)), used = MakerTalents.spent(tier);
 				for (int i = 0; i < tot; i++) {
 					Image im = new Speck().image(Speck.STAR);
@@ -216,7 +230,7 @@ public class MakerTalentsPane extends TalentsPane {
 			}
 			JsonValue h = HeroRuntime.data();
 			for (JsonValue t : h.get("talents")) if (t.getInt("tier", 1) == tier) total++;
-			for (JsonValue t : h.get("talents")) if (t.getInt("tier", 1) == tier && MakerTalents.visible(t)) { TalBtn b = new TalBtn(hero, t, open); buttons.add(b); add(b); }
+			for (JsonValue t : h.get("talents")) if (t.getInt("tier", 1) == tier && MakerTalents.visible(t)) { TalBtn b = new TalBtn(hero, t, open || early); buttons.add(b); add(b); }
 		}
 
 		@Override protected void layout() {
@@ -249,25 +263,43 @@ public class MakerTalentsPane extends TalentsPane {
 		}
 	}
 
+	/** 특성 아이콘: 숫자면 게임 talent_icons.png 의 칸, "assets/..png"(한 장) · { file, size, index }(시트의 칸)면 그 그림을 16×16 에 맞춰 */
+	static Image talentIcon(JsonValue t) {
+		JsonValue ic = t.get("icon");
+		if (ic != null && (ic.isString() || ic.isObject())) try {
+			String f = ic.isString() ? ic.asString() : ic.getString("file", "");
+			Object tx = f.isEmpty() ? null : MakerRuntime.texture(f);
+			if (tx != null) {
+				Image im = new Image(tx);
+				float w = im.texture.width, h = im.texture.height, sx = 0, sy = 0, sw = w, sh = h;
+				if (ic.isObject()) { int cs = Math.max(1, ic.getInt("size", 16)), cc = Math.max(1, (int) w / cs), i = Math.max(0, ic.getInt("index", 0)); sx = (i % cc) * cs; sy = (i / cc) * cs; sw = cs; sh = cs; }
+				im.frame(new com.watabou.utils.RectF(sx / w, sy / h, (sx + sw) / w, (sy + sh) / h));
+				im.scale.set(16f / Math.max(sw, sh));
+				return im;
+			}
+		} catch (Throwable e) { MakerRuntime.warnOnce("특성 아이콘을 읽지 못했습니다: " + e); }
+		return new TalentIcon(Math.max(0, t.getInt("icon", 0)));
+	}
+
 	/** 원작 TalentButton 과 같은 그림 (talent_button.png + talent_icons.png) */
 	static class TalBtn extends Button {
 		final Hero hero; final JsonValue t; final boolean open;
-		Image bg; TalentIcon icon; ColorBlock fill;
+		Image bg; Image icon; ColorBlock fill;
 		TalBtn(Hero hero, JsonValue t, boolean open) {
 			super();
 			this.hero = hero; this.t = t; this.open = open;
 			hotArea.blockLevel = PointerArea.NEVER_BLOCK;
-			int max = Math.max(1, Math.min(6, t.getInt("maxPoints", 2)));
+			int max = Math.max(1, Math.min(6, MakerTalents.maxPts(t)));
 			fill = new ColorBlock(0, 4, 0xFFFFFF44); add(fill);
 			bg = new Image(Assets.Interfaces.TALENT_BUTTON); add(bg);
 			bg.frame(20 * (max - 1), 0, TalentButton.WIDTH, TalentButton.HEIGHT);
-			icon = new TalentIcon(Math.max(0, t.getInt("icon", 0))); add(icon);
+			icon = talentIcon(t); add(icon);
 			if (!open) { icon.tint(0, 0, 0, 0.6f); bg.tint(0, 0, 0, 0.4f); }
 		}
 		@Override protected void layout() {
 			width = TalentButton.WIDTH; height = TalentButton.HEIGHT;
 			super.layout();
-			int max = Math.max(1, t.getInt("maxPoints", 2));
+			int max = MakerTalents.maxPts(t);
 			fill.x = x + 2; fill.y = y + TalentButton.WIDTH - 1;
 			fill.size(Math.min(1f, MakerTalents.get(t.getString("id", "")) / (float) max) * (TalentButton.WIDTH - 4), 5);
 			bg.x = x; bg.y = y;
@@ -283,9 +315,9 @@ public class MakerTalentsPane extends TalentsPane {
 	static class WndTalent extends Window {
 		WndTalent(final Hero hero, final JsonValue t) {
 			int w = 120;
-			TalentIcon ic = new TalentIcon(Math.max(0, t.getInt("icon", 0))); ic.x = 0; ic.y = 0; add(ic);
+			Image ic = talentIcon(t); ic.x = 0; ic.y = 0; add(ic);
 			String id = t.getString("id", "");
-			RenderedTextBlock title = PixelScene.renderTextBlock(t.getString("name", id) + "  " + MakerTalents.get(id) + "/" + t.getInt("maxPoints", 2), 9);
+			RenderedTextBlock title = PixelScene.renderTextBlock(t.getString("name", id) + "  " + MakerTalents.get(id) + "/" + MakerTalents.maxPts(t), 9);
 			title.hardlight(TITLE_COLOR); title.setPos(20, (16 - title.height()) / 2f); add(title);
 			RenderedTextBlock b = PixelScene.renderTextBlock(MakerTalents.desc(t), 6);
 			b.maxWidth(w); b.setPos(0, 20); add(b);

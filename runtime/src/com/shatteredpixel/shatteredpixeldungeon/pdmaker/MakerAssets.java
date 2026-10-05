@@ -190,6 +190,7 @@ public class MakerAssets {
 		if (v == null) return;
 		for (JsonValue c = v.child; c != null; c = c.next) {
 			if ("icon".equals(c.name)) { String k = iconKey(c); if (k != null) out.put(k, c); }
+			else if ("talents".equals(c.name)) continue;   // 특성 아이콘은 hero_icons 가 아니라 따로 그림 (MakerTalentsPane.talentIcon)
 			else if (c.isObject() || c.isArray()) collectIcons(c, out);
 		}
 	}

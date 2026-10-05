@@ -16,6 +16,23 @@
     store.add('hero:' + clean, hr, '영웅 추가');
     PDM.tabs.open('hero:' + clean);
   }
+  /** id 바꾸기 — 시작 영웅 · 영웅 순서 · hero/heroId 칸에 적힌 같은 id 도 함께 고침 (생성 코드 파일 이름 H_<id> 도 따라 바뀜) */
+  async function renameHero(id) {
+    const n0 = await PDM.ui.prompt('새 영웅 id (영문 — 파일 이름 · 코드 클래스 이름이 됩니다)', id, '이미 이 영웅으로 진행 중인 게임 저장은 새 id 를 모르니 새로 시작하세요.');
+    if (!n0) return;
+    const n = PDM.slugId(n0);
+    if (!n || n === id) return;
+    if (store.has('hero:' + n)) { toast('같은 id 가 있습니다', 'bad'); return; }
+    let refs = 0;
+    const fix = o => { if (!o || typeof o !== 'object') return; for (const k of Object.keys(o)) { const v = o[k]; if ((k === 'hero' || k === 'heroId') && v === id) { o[k] = n; refs++; } else if (v && typeof v === 'object') fix(v); } };
+    store.transaction('영웅 id 바꾸기', () => {
+      store.rename('hero:' + id, 'hero:' + n);
+      store.edit('project', '영웅 id 바꾸기', p => { if (p.startHero === id) p.startHero = n; if (Array.isArray(p.heroOrder)) p.heroOrder = p.heroOrder.map(x => x === id ? n : x); });
+      store.keys().forEach(k => { if (k === 'hero:' + n || k === 'project') return; const c = PDM.clone(store.get(k)); const before = refs; fix(c); if (refs > before) { refs = before; store.edit(k, '영웅 id 바꾸기', r => { fix(r); }); } });
+    });
+    PDM.tabs.close('hero:' + id); PDM.tabs.open('hero:' + n);
+    toast(`id 를 「${n}」 로 바꿨습니다` + (refs ? ` (다른 곳 ${refs}개도 고침)` : ''), 'ok');
+  }
   function dupHero(id) {
     const c = PDM.clone(store.get('hero:' + id)); let n = id + '_copy', k = 2;
     while (store.has('hero:' + n)) n = id + '_copy' + (k++);
@@ -428,6 +445,23 @@ return damage + Special.get("combo");`,
       { id: 'wind', name: '바람', color: '#14EA83', icon: 0, desc: '회피 +3', effects: [{ stat: 'evasion', value: 3 }], onSwitch: [] }],
     switchCool: 25, switchCooldown: 0, replaceNative: ['NewOverHeat'] });
   /** 캐릭터 선택 화면: 일러스트(그림 한 장 또는 시트 애니메이션) · 배치 · 버튼 아이콘 + 미리보기 */
+  /** 기본: 선택 화면 · 정보 창 글자 (게임에서 실제로 보이는 글) */
+  function selectTextFields(key, c) {
+    const { F } = PDM.ui;
+    return [
+      PDM.gameHeroText(F.textarea(key, ['select', 'desc'], { label: '짧은 설명 (이름 아래)', rows: 2, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc_short)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'short'),
+      PDM.gameHeroText(F.textarea(key, ['select', 'info'], { label: '정보 창 설명 (ⓘ 버튼 · 선택된 영웅을 한 번 더 누를 때)', rows: 3, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc + 시작 아이템 · 전직 탭)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'desc', '비우면 게임의 직업 정보 창 (정보 · 시작 아이템 · 전직 탭). 정보 글: '),
+      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+        h('button', { class: 'btn xs', title: '글 칸에서 글자를 끌어 고른 뒤 누르면 _밑줄_ 로 감싸 노란색 강조로 만듭니다', onmousedown: e => {
+          e.preventDefault();   // 글 칸의 선택이 풀리지 않게
+          const ta = document.activeElement; if (!ta || !/TEXTAREA|INPUT/.test(ta.tagName) || ta.selectionStart === ta.selectionEnd) { toast('먼저 글 칸에서 강조할 글자를 끌어서 고르세요', 'bad'); return; }
+          const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value, cur = v.slice(a, b);
+          ta.value = v.slice(0, a) + (/^_.*_$/.test(cur) ? cur.slice(1, -1) : '_' + cur + '_') + v.slice(b);
+          ta.dispatchEvent(new Event('change', { bubbles: true }));
+        } }, '🖍 고른 글자 강조 (노랑)'),
+        h('small', { class: 'hint' }, '_밑줄_ 로 감싼 글자는 게임에서 노란색으로 강조됩니다 (원작 영웅 설명과 같은 방식). 줄바꿈은 그대로 나옵니다.')),
+    ];
+  }
   function selectSection(key, c, ctx) {
     const { F, row } = PDM.ui;
     const s = c.select || {};
@@ -463,19 +497,6 @@ return damage + Special.get("combo");`,
     })();
     return [
       h('p', { class: 'hint' }, '게임의 영웅 선택 화면에서 이 영웅을 골랐을 때 오른쪽에 보이는 그림입니다. 비워 두면 ' + (String(c.baseClass || '').trim() && c.id.toUpperCase() === String(c.baseClass).toUpperCase() ? '게임 일러스트 (splashes/' + c.id.toLowerCase() + '.jpg)' : '영웅 그림(위 시트의 첫 프레임)을 크게') + ' 보여 줍니다. 그림 한 장이나, 프레임 크기를 정하면 시트로 움직이는 그림도 됩니다.'),
-      h('div', { class: 'fl', style: { margin: '4px 0 2px' } }, '선택 화면 글자 (비우면 기본)'),
-      F.text(key, ['select', 'title'], { label: '이름 (선택 화면 · 시작 버튼 · 저장 슬롯)', placeholder: c.name || c.id }),
-      PDM.gameHeroText(F.textarea(key, ['select', 'desc'], { label: '짧은 설명 (이름 아래)', rows: 2, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc_short)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'short'),
-      PDM.gameHeroText(F.textarea(key, ['select', 'info'], { label: '정보 창 설명 (ⓘ 버튼 · 선택된 영웅을 한 번 더 누를 때)', rows: 3, placeholder: vanillaHero(c) ? '(게임 글자 actors.hero.heroclass.' + c.id + '_desc + 시작 아이템 · 전직 탭)' : (c.desc || '(영웅 설명)') }), vanillaHero(c) ? c.baseClass : '', 'desc', '비우면 게임의 직업 정보 창 (정보 · 시작 아이템 · 전직 탭). 정보 글: '),
-      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
-        h('button', { class: 'btn xs', title: '글 칸에서 글자를 끌어 고른 뒤 누르면 _밑줄_ 로 감싸 노란색 강조로 만듭니다', onmousedown: e => {
-          e.preventDefault();   // 글 칸의 선택이 풀리지 않게
-          const ta = document.activeElement; if (!ta || !/TEXTAREA|INPUT/.test(ta.tagName) || ta.selectionStart === ta.selectionEnd) { toast('먼저 글 칸에서 강조할 글자를 끌어서 고르세요', 'bad'); return; }
-          const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value, cur = v.slice(a, b);
-          ta.value = v.slice(0, a) + (/^_.*_$/.test(cur) ? cur.slice(1, -1) : '_' + cur + '_') + v.slice(b);
-          ta.dispatchEvent(new Event('change', { bubbles: true }));
-        } }, '🖍 고른 글자 강조 (노랑)'),
-        h('small', { class: 'hint' }, '_밑줄_ 로 감싼 글자는 게임에서 노란색으로 강조됩니다 (원작 영웅 설명과 같은 방식). 줄바꿈은 그대로 나옵니다.')),
       h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '정보 창의 줄 (아이콘 + 글) — 원작 영웅 정보 창처럼'),
       h('p', { class: 'hint' }, '줄마다 왼쪽에 아이템 그림, 오른쪽에 글이 나옵니다. 예) 시작 무기 그림 + "낡은 소검과 투척용 돌을 가지고 시작합니다." 줄을 하나라도 넣으면 위의 "정보 창 설명" 대신 이 줄들이 나옵니다.'),
       PDM.ui.listEditor(key, ['select', 'infoRows'], { addLabel: '줄 추가', emptyText: '줄 없음 — 위의 "정보 창 설명"(비었으면 영웅 설명)이 글만 나옵니다',
@@ -543,6 +564,8 @@ return damage + Special.get("combo");`,
     const name = id => { const t = talents.find(x => x.id === id); return t ? t.name : id; };
     const addTalent = tier => store.edit(key, '특성 추가', o => { o.talents = o.talents || []; if (!o.talentTiers) o.talentTiers = PDM.clone(PDM.TALENT_TIERS_DEFAULT); o.talents.push(PDM.make.talent(tier)); st.tal = o.talents.length - 1; });
 
+    // 특성 하나의 최대 포인트 한도 — 원작은 4 (talentCapRaised 를 켜면 10 까지)
+    const capBox = F.bool(key, ['talentCapRaised'], { label: '특성 최대 포인트 한도 늘리기 — 원작은 특성 하나에 4 포인트까지. 켜면 10 까지 정할 수 있음 (끄면 4 를 넘는 특성도 게임에서 4 까지만)', rerender: true });
     // 단계 설정
     const tierBox = h('details', { open: !!st.tierOpen, ontoggle: e => { st.tierOpen = e.target.open; } },
       h('summary', { style: { cursor: 'pointer' } }, h('b', {}, '단계 설정'), h('span', { class: 'hint' }, '  ' + tiers.map(t => `${t.name} Lv${t.unlockLevel}·${t.points}p`).join('  '))),
@@ -580,15 +603,15 @@ return damage + Special.get("combo");`,
       const others = talents.filter(x => x.id !== t.id).map(x => [x.id, `${x.name} (${x.tier}단계)`]);
       const skills = (c.spells || []).map(x => [x.id, x.name + ' (주문)']);
       const modTargets = [...skills, ...(c.abilities || []).map(x => [x.id, x.name + ' (직업 능력)']), ...store.all('item').filter(x => x.kind === 'codex').map(x => [x.id, x.name + ' (코덱스)'])];
-      const mp = Math.max(1, t.maxPoints || 1);
+      const cap = c.talentCapRaised ? 10 : 4, mp = Math.max(1, Math.min(cap, t.maxPoints || 1));
       detail = h('div', { class: 'tal-detail' },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('b', {}, '선택한 특성: ', t.name),
           h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); store.edit(key, '특성 복제', o => { const x = PDM.clone(o.talents[sel]); x.id += '_2'; o.talents.splice(sel + 1, 0, x); st.tal = sel + 1; }); } }, '복제'),
           h('button', { class: 'btn xs danger', onclick: e => { e.preventDefault(); store.edit(key, '특성 삭제', o => { o.talents.splice(sel, 1); st.tal = Math.max(0, sel - 1); }); } }, '삭제')),
         row(F.text(key, [...p, 'name'], { label: '이름', rerender: true }), F.text(key, [...p, 'id'], { label: 'id (코드: HeroRuntime.talent("id"))', transform: v => PDM.slugId(v), rerender: true }),
           F.select(key, [...p, 'tier'], Object.fromEntries(tiers.map((x, i) => [i + 1, x.name])), { label: '단계', number: true, rerender: true }),
-          F.num(key, [...p, 'maxPoints'], { label: '최대 포인트', int: true, min: 1, max: 6, rerender: true, hint: '원작: 1~2단계 2p, 3단계 3p' }),
-          F.icon(key, [...p, 'icon'], 'talent', { label: '아이콘 (talent_icons.png)', def: 0 })),
+          F.num(key, [...p, 'maxPoints'], { label: `최대 포인트 (1~${cap})`, int: true, min: 1, max: cap, rerender: true, hint: (t.maxPoints || 0) > cap ? `⚠ ${t.maxPoints} 로 적혀 있지만 게임에서는 ${cap} 까지만 씀` : '원작: 1~2단계 2p, 3단계 3p, 4단계 4p — 원작 한도는 4' }),
+          F.icon(key, [...p, 'icon'], 'talent', { label: '아이콘 (게임 특성 아이콘 · 파일 지정 · 그리기)', def: 0 })),
         F.textarea(key, [...p, 'desc'], { label: '설명', rows: 2 }),
         h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '포인트마다 붙는 설명 (게임 창에 "+1 …", "+2 …" 로 나옴)'),
         ...Array.from({ length: mp }, (_, i) => F.text(key, [...p, 'pointText', i], { label: `+${i + 1}` })),
@@ -612,7 +635,7 @@ return damage + Special.get("combo");`,
       h('p', { class: 'hint' }, '원작처럼 레벨이 오르면 포인트를 얻고(초상화가 반짝임), 게임의 영웅 정보 창(왼쪽 위 초상화) → 특성 탭에서 별 포인트를 써서 올립니다. 전직·직업 능력·주문도 같은 탭 위쪽에 나옵니다. 더 복잡한 효과는 코드 훅 "특성 올림"이나 HeroRuntime.talent("id") 로 만드세요.'),
       PDM.gameHeroBox(c, 'talents', !!c.nativeTalents, st),
       F.bool(key, ['nativeTalents'], { label: '게임 원래 특성 창을 그대로 쓰기 (바탕 직업의 특성 — 아래 특성·주문은 창에 안 나옴)' }),
-      tierBox, tree, calc, detail];
+      capBox, tierBox, tree, calc, detail];
   }
 
   PDM.registerEditor({
@@ -629,7 +652,7 @@ return damage + Special.get("combo");`,
         children: all.map((c, i) => ({ id: 'h_' + c.id, label: c.name + (c.id === start ? ' ◀ 시작 영웅' : '') + (c.enabled === false ? ' (꺼짐)' : ''), icon: (i + 1) + '.', open: 'hero:' + c.id,
           // 게임 영웅 선택 화면의 순서 — ▲▼ 를 누르면 한 칸씩 옮김
           actions: [i > 0 ? { label: '▲', title: '위로 (게임 영웅 선택 화면에서 앞으로)', run: () => moveHero(c.id, -1) } : null, i < all.length - 1 ? { label: '▼', title: '아래로', run: () => moveHero(c.id, 1) } : null].filter(Boolean),
-          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, { label: '복제', run: () => dupHero(c.id) }, '-',
+          menu: [{ label: '열기', run: () => PDM.tabs.open('hero:' + c.id) }, { label: '위로 (순서)', run: () => moveHero(c.id, -1), disabled: i === 0 }, { label: '아래로 (순서)', run: () => moveHero(c.id, 1), disabled: i === all.length - 1 }, { label: '시작 영웅으로', run: () => store.edit('project', '시작 영웅', p => { p.startHero = c.id; }) }, { label: 'id 바꾸기…', run: () => renameHero(c.id) }, { label: '복제', run: () => dupHero(c.id) }, '-',
             { label: '삭제', run: async () => { if (await PDM.ui.confirm(`「${c.name}」 영웅을 삭제할까요?`)) store.remove('hero:' + c.id, '영웅 삭제'); } }] })) }];
     },
     render(key, ctx) {
@@ -650,12 +673,22 @@ return damage + Special.get("combo");`,
 
       return h('div', { class: 'page' },
         h('h1', {}, '★ ', c.name, h('span', { class: 'hint', style: { marginLeft: '8px' } }, c.id), isStart ? h('span', { class: 'badge good', style: { marginLeft: '8px' } }, '시작 영웅') : null),
+        h('div', { style: { display: 'flex', gap: '6px', margin: '-4px 0 8px', flexWrap: 'wrap' } },
+          h('button', { class: 'btn sm', title: '영웅 id (파일 이름 · 코드 클래스 이름)를 바꿉니다', onclick: () => renameHero(c.id) }, 'id 바꾸기…'),
+          h('button', { class: 'btn sm', title: '이 영웅의 데이터 파일(heroes/' + c.id + '.json)을 그대로 봅니다', onclick: () => PDM.ui.codeView(`heroes/${c.id}.json`, JSON.stringify(store.get(key), null, 2)) }, '{ } 데이터 파일 보기'),
+          h('button', { class: 'btn sm', title: '테스트 플레이 때 만들어지는 이 영웅의 Java 코드 파일 (pdmaker/gen/' + PDM.codegen.heroClass(c.id) + '.java) — 외부 편집기로도 열 수 있음', onclick: () => { const cg = PDM.codegen; PDM.showCodeFile('pdmaker/gen/' + cg.heroClass(c.id) + '.java', cg.heroClass(c.id) + '.java' + (cg.heroNeedsClass(store.get(key)) ? '' : ' (코드 칸이 비어 있어 실제로는 만들지 않음)'), cg.heroSource(store.get(key))); } }, '☕ 코드 파일 보기'),
+          c.baseClass ? h('button', { class: 'btn sm', title: '바탕 직업이 정의된 게임 코드 (actors/hero/HeroClass.java — 시작 아이템 · 전직 · 직업 능력 등)', onclick: () => PDM.showCodeFile('actors/hero/HeroClass.java', '게임 코드 — HeroClass (' + c.baseClass + ')') }, '게임 코드 보기 (HeroClass)') : null),
         h('p', { class: 'lead' }, '게임의 영웅 선택 화면에 이 영웅이 나옵니다 (시작 영웅을 정하면 그 영웅 하나만). ' + (zero
           ? '바탕 직업이 없는 완전히 새 영웅입니다 — 시작 아이템·감정된 아이템·특성·전직·직업 능력 모두 이 편집기에서 정한 것만 씁니다.'
           : '바탕 직업 「' + (PDM.HERO_CLASSES[String(c.baseClass).toUpperCase()] || c.baseClass) + '」의 게임 기능(시작 아이템·특성·전직·직업 능력 등)을 물려받고, 여기서 정한 것을 더하거나 바꿉니다.')),
         section('기본',
-          row(F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용' })),
-          F.textarea(key, ['desc'], { label: '설명', rows: 2 }),
+          row((() => {   // 이름 하나로: 게임(선택 화면 · 시작 버튼 · 저장 슬롯)에 나오는 이름 = 리소스 목록의 이름
+            const cur = String((c.select || {}).title || '').trim() || (vanillaHero(c) ? '' : c.name || '');
+            const i = h('input', { type: 'text', value: cur, placeholder: vanillaHero(c) ? `(게임 이름 그대로 — ${c.name || c.id})` : c.id });
+            i.addEventListener('change', () => { const v = i.value.trim(); store.edit(key, '영웅 이름', r => { r.select = r.select || {}; r.select.title = v; r.name = v || (vanillaHero(r) ? (PDM.HERO_CLASSES[String(r.baseClass).toUpperCase()] || r.name) : r.id); }); });
+            return field('이름 (게임의 선택 화면 · 시작 버튼 · 저장 슬롯 · 리소스 목록)', i, vanillaHero(c) ? '비우면 게임의 원래 직업 이름' : '');
+          })(), F.bool(key, ['enabled'], { label: '사용 (선택 화면에 나옴)' })),
+          ...selectTextFields(key, c),
           row(field('바탕 직업 (선택)', PDM.ui.combo(clsIn, () => [['', '없음 — 완전히 새 영웅'], ...Object.entries(PDM.heroClasses()).map(([k, v]) => [k, v + ' 물려받기'])], { minWidth: 220 }),
             '비워 두면 처음부터 새로 만드는 영웅입니다 (게임 직업에서 아무것도 물려받지 않음 — 그림이 비었을 때만 전사 그림). 원작 직업을 고치고 싶을 때만 고르세요. 모드 직업은 이름을 직접 입력'),
             F.ref(key, ['character'], 'char', { label: '연결된 캐릭터 (대사 화자·초상화)', empty: '(없음)' })),

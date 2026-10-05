@@ -35,6 +35,12 @@ public class MakerTalents {
 	static int notifiedLevel = 0;
 
 	static JsonValue data() { return HeroRuntime.data(); }
+	/** 특성 하나의 최대 포인트 — 원작처럼 4 까지 (영웅 편집기에서 talentCapRaised 를 켜면 그 값 그대로) */
+	public static int maxPts(JsonValue t) {
+		JsonValue h = data();
+		int m = Math.max(1, t.getInt("maxPoints", 2));
+		return h != null && h.getBoolean("talentCapRaised", false) ? m : Math.min(4, m);
+	}
 	public static boolean any() { JsonValue h = data(); return h != null && h.get("talents") != null && h.get("talents").size > 0; }
 	public static void reset() { points.clear(); notifiedLevel = 0; }
 	public static int get(String id) { Integer v = points.get(id); return v == null ? 0 : v; }
@@ -128,7 +134,7 @@ public class MakerTalents {
 	/** 올릴 수 있는지 (이유 문자열, 되면 null) */
 	static String blocked(JsonValue t, Hero hero) {
 		int tier = t.getInt("tier", 1), p = get(t.getString("id", ""));
-		if (p >= t.getInt("maxPoints", 2)) return "이미 최대";
+		if (p >= maxPts(t)) return "이미 최대";
 		if (!visible(t)) return "다른 전직·직업 능력의 특성";
 		String lock = tierLock(tier, hero); if (lock != null) return lock;
 		if (available(tier, hero) <= 0) return "이 단계의 포인트가 없음";
@@ -156,7 +162,7 @@ public class MakerTalents {
 			}
 		}
 		HeroRuntime.syncHP(hero, false);
-		GLog.p("특성 「" + t.getString("name", id) + "」 " + p + "/" + t.getInt("maxPoints", 2));
+		GLog.p("특성 「" + t.getString("name", id) + "」 " + p + "/" + maxPts(t));
 		MakerHeroCode code = HeroRuntime.code();
 		if (code != null && code.overrides(MakerHeroCode.TALENT_UP)) {
 			try { code.onTalentUp(hero, id, p); } catch (Throwable x) { GenSupport.error("영웅 " + HeroRuntime.heroId(), "onTalentUp", x); }
@@ -220,7 +226,7 @@ public class MakerTalents {
 				if (t.getInt("tier", 1) != i || !visible(t)) continue;
 				list.add(t);
 				String b = blocked(t, hero);
-				labels.add("[" + i + "] " + t.getString("name", "?") + "  " + get(t.getString("id", "")) + "/" + t.getInt("maxPoints", 2) + (b == null ? "  ▲" : ""));
+				labels.add("[" + i + "] " + t.getString("name", "?") + "  " + get(t.getString("id", "")) + "/" + maxPts(t) + (b == null ? "  ▲" : ""));
 			}
 		}
 		if (list.isEmpty()) { GameScene.show(new HeartUI.WndMakerSimple("특성", head.toString().trim())); return; }
