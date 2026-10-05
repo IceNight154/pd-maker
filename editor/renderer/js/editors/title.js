@@ -444,6 +444,41 @@
     return wrap;
   }
 
+
+  // ---- 하위 페이지 (게임 버튼이 여는 화면의 내용) — 런타임 MakerPages ----
+  function pagesSection(t) {
+    const { F, row, section, listEditor } = PDM.ui;
+    const pg = t.pages || {}, m = id => (pg[id] || {}).mode || 'game';
+    const blocks = id => h('div', {},
+      F.text(K, ['pages', id, 'title'], { label: '화면 제목' }),
+      listEditor(K, ['pages', id, 'blocks'], { addLabel: '블록 추가', emptyText: '블록이 없습니다 — "블록 추가"로 제목 · 글 · 링크 버튼을 넣으세요',
+        make: () => ({ title: '', text: '', link: '', linkLabel: '', color: '#ffff44' }),
+        render: (b, i, p) => h('div', {},
+          row(F.text(K, [...p, 'title'], { label: '제목 (노란 글자)' }), F.color(K, [...p, 'color'], { label: '제목 색', def: '#ffff44' })),
+          F.textarea(K, [...p, 'text'], { label: '글', rows: 3 }),
+          row(F.text(K, [...p, 'link'], { label: '링크 주소 (비우면 버튼 없음)', placeholder: 'https://…' }), F.text(K, [...p, 'linkLabel'], { label: '버튼 글자 (비우면 주소)' }))) }));
+    const PAGE = { game: '게임 원래 화면', custom: '내가 만든 화면 (아래 블록)' };
+    return section('하위 페이지 (게임 버튼이 여는 화면의 내용)',
+      h('p', { class: 'hint' }, '타이틀의 소개 · 지원 · 변경 · 새 소식 버튼이 여는 화면과, 업데이트 확인을 이 게임에 맞게 바꿉니다. 게임 저장소 코드를 고치지 않아도 됩니다 (업데이트 · 소식은 테스트 플레이 때 설치되는 연결 줄이 이 설정을 읽음).'),
+      h('h3', {}, '업데이트 확인'),
+      row(F.select(K, ['pages', 'updates', 'mode'], { game: '게임 원래 (Shattered PD 의 GitHub)', github: '내 GitHub 저장소', off: '끄기 (업데이트 알림 없음)' }, { label: '확인 방식', rerender: true }),
+        m('updates') === 'github' ? F.text(K, ['pages', 'updates', 'repo'], { label: 'GitHub 저장소 (owner/repo)', placeholder: 'myname/my-game' }) : null,
+        m('updates') !== 'off' ? F.text(K, ['pages', 'updates', 'page'], { label: '업데이트 버튼이 여는 주소 (비우면 그 릴리스 페이지)', placeholder: 'https://…' }) : null),
+      m('updates') === 'github' ? h('p', { class: 'hint' }, '그 저장소의 Releases 를 봅니다. 릴리스 본문에 "internal version number: <버전 코드>" 한 줄을 넣고, 그 숫자가 게임의 버전 코드(build.gradle 의 appVersionCode)보다 크면 업데이트로 알립니다. 본문 첫 부분(--- 줄 위)이 업데이트 설명으로 나옵니다 — 게임 GitHubUpdates 와 같은 규칙.') : null,
+      h('h3', {}, '새 소식'),
+      row(F.select(K, ['pages', 'news', 'mode'], { game: '게임 원래 (shatteredpixel.com)', feed: '내 RSS 주소', custom: '직접 쓴 소식 (인터넷 없이)', off: '끄기' }, { label: '소식', rerender: true }),
+        m('news') === 'feed' ? F.text(K, ['pages', 'news', 'url'], { label: 'RSS 주소', placeholder: 'https://…/feed.xml', hint: '게임 원래 피드와 같은 형식 (item 의 title · description · link · pubDate)' }) : null),
+      m('news') === 'custom' ? listEditor(K, ['pages', 'news', 'articles'], { addLabel: '소식 추가', emptyText: '소식이 없습니다',
+        make: () => ({ title: '새 소식', summary: '', date: new Date().toISOString().slice(0, 10), url: '', icon: 'ICON: NEWS' }),
+        render: (a, i, p) => h('div', {},
+          row(F.text(K, [...p, 'title'], { label: '제목' }), F.text(K, [...p, 'date'], { label: '날짜 (YYYY-MM-DD)' })),
+          F.textarea(K, [...p, 'summary'], { label: '요약', rows: 2 }),
+          row(F.text(K, [...p, 'url'], { label: '자세히 보기 주소 (선택)', placeholder: 'https://…' }), F.text(K, [...p, 'icon'], { label: '아이콘', hint: '"ICON: NEWS" · "ICON: CHANGES" · "ITEM: <번호>" (게임 형식)' }))) }) : null,
+      ...[['about', '소개 (About)'], ['support', '지원 (Supporter)'], ['changes', '변경 (Changes)']].map(([id, name]) => h('div', {},
+        h('h3', {}, name),
+        F.select(K, ['pages', id, 'mode'], PAGE, { label: name + ' 화면', rerender: true }),
+        m(id) === 'custom' ? blocks(id) : null)));
+  }
   PDM.registerEditor({
     id: 'title', icon: () => '🏰', title: () => '타이틀 화면',
     match: k => k === K,
@@ -508,6 +543,7 @@
             F.bool(K, ['menus', 'music'], { label: '타이틀과 같은 음악', def: true, rerender: true }),
             (t.menus || {}).background !== false ? F.bool(K, ['menus', 'layers'], { label: '그림 레이어도 (타이틀에서만 표시한 것 빼고)', def: true, rerender: true }) : null,
             (t.menus || {}).background !== false ? F.bool(K, ['menus', 'effect'], { label: '날씨·입자 효과도', rerender: true }) : null)),
+        pagesSection(t),
         section('로고',
           row(F.select(K, ['logo', 'mode'], { game: '게임 로고 (지금 게임의 banners.png)', image: '내 그림', text: '글자', none: '없음' }, { label: '로고', rerender: true }),
             F.num(K, ['logo', 'scale'], { label: '배율', step: 0.25, min: 0.25, def: 1, rerender: true }),

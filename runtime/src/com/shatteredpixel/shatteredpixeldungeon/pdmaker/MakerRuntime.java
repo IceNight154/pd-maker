@@ -84,6 +84,7 @@ public class MakerRuntime {
 			PluginHost.loadAll(root);
 			MakerDrops.load();          // 드랍 테이블 · 등장 금지
 			GenSupport.loadIndex();     // 아이템 클래스 위치 표 (분류/세부 종류 폴더) + 예전 세이브 별칭
+			MakerPages.applyServices(); // 타이틀 하위 페이지: 업데이트 확인 · 소식 주소 (서비스 모듈의 연결 줄이 읽음)
 			MakerCatalog.register();   // 아이템 도감에 프로젝트 아이템
 			log("PDMaker 프로젝트 불러옴: " + project.getString("name", "?") + " (" + root.path() + ")"
 					+ " · 맵 노드 " + WorldGraph.ids.size() + " · 영웅 " + heroes.size() + " · 캐릭터 " + chars.size() + " · 아이템 " + items.size() + " · 이벤트 " + events.size());

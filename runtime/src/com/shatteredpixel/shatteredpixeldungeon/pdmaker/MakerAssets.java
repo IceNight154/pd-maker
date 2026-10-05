@@ -298,6 +298,7 @@ public class MakerAssets {
 		try {
 			if (!MakerRuntime.isActive()) return;
 			if (MENU_SCENES.contains(scene.getClass().getSimpleName())) scene.add(new MenuStyler(scene));
+			MakerPages.onSceneCreate(scene);   // 타이틀 하위 페이지 (소식 · 소개 · 지원 · 변경)
 		} catch (Throwable t) { MakerRuntime.log("메뉴 화면 꾸미기 오류: " + t); }
 	}
 

@@ -144,6 +144,22 @@ const PATCHES = [
   { file: 'levels/Level.java', name: '통로 연결: 도착 층에서 짝 계단 고르기',
     anchor: /public LevelTransition getTransition\(\s*LevelTransition\.Type type\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `{ LevelTransition pdmT = ${PKG}.WorldGraph.pickArrival(this, type); if (pdmT != null) return pdmT; }` },
+  // 타이틀 하위 페이지: 업데이트 확인 · 소식 (서비스 모듈 — 저장소에 없으면 건너뜀 · optional). System 속성은 런타임 MakerPages.applyServices 가 넣음
+  { file: 'services/updates/githubUpdates/src/main/java/com/shatteredpixel/shatteredpixeldungeon/services/updates/GitHubUpdates.java', root: true, optional: true, name: '업데이트 확인: 끄기 (타이틀 하위 페이지)',
+    anchor: /public void checkForUpdate\([^)]*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (System.getProperty("pdmaker.updates.off") != null) { callback.onNoUpdateFound(); return; }` },
+  { file: 'services/updates/githubUpdates/src/main/java/com/shatteredpixel/shatteredpixeldungeon/services/updates/GitHubUpdates.java', root: true, optional: true, name: '업데이트 확인: 내 GitHub 저장소 (타이틀 하위 페이지)',
+    anchor: /\n([ \t]*)httpGet\.setHeader\(\s*"Accept"/, where: 'before',
+    line: `{ String pdmU = System.getProperty("pdmaker.updates.url"); if (pdmU != null) httpGet.setUrl(pdmU); }` },
+  { file: 'services/updates/githubUpdates/src/main/java/com/shatteredpixel/shatteredpixeldungeon/services/updates/GitHubUpdates.java', root: true, optional: true, name: '업데이트 버튼: 다운로드 페이지 (타이틀 하위 페이지)',
+    anchor: /public void initializeUpdate\([^)]*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ String pdmP = System.getProperty("pdmaker.updates.page"); if (pdmP != null) update.URL = pdmP; }` },
+  { file: 'services/news/shatteredNews/src/main/java/com/shatteredpixel/shatteredpixeldungeon/services/news/ShatteredNews.java', root: true, optional: true, name: '새 소식: 끄기 · 직접 쓴 소식 (타이틀 하위 페이지)',
+    anchor: /public void checkForArticles\([^)]*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (System.getProperty("pdmaker.news.off") != null) { callback.onConnectionFailed(); return; }` },
+  { file: 'services/news/shatteredNews/src/main/java/com/shatteredpixel/shatteredpixeldungeon/services/news/ShatteredNews.java', root: true, optional: true, name: '새 소식: 내 RSS 주소 (타이틀 하위 페이지)',
+    anchor: /\n([ \t]*)Gdx\.net\.sendHttpRequest\(\s*httpGet/, where: 'before',
+    line: `{ String pdmN = System.getProperty("pdmaker.news.url"); if (pdmN != null) httpGet.setUrl(pdmN); }` },
   // 저장소 최상위 파일 (root: true). 안드로이드 SDK 가 없는 PC 에서도 데스크톱 빌드가 되도록 :android 모듈은 SDK 가 있을 때만 포함
   { file: 'settings.gradle', root: true, name: '안드로이드 SDK 가 없으면 android 모듈 건너뛰기 (다른 PC 에서 테스트 플레이)',
     anchor: /\n([ \t]*)include ':android'/, where: 'before',
@@ -234,7 +250,7 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   for (const p of PATCHES) (byFile[p.file] = byFile[p.file] || []).push(p);
   for (const [f, list] of Object.entries(byFile)) {
     const fp = patchFile(repo, f);
-    if (!fs.existsSync(fp)) { list.forEach(p => results.push({ file: f, name: p.name, status: '파일 없음 — INTEGRATION.md 참고' })); continue; }
+    if (!fs.existsSync(fp)) { list.forEach(p => results.push({ file: f, name: p.name, status: p.optional ? '건너뜀 — 이 저장소에 없는 파일 (선택)' : '파일 없음 — INTEGRATION.md 참고' })); continue; }
     const before = fs.readFileSync(fp, 'utf8');
     // 예전에 넣은 연결 줄은 지우고 새 위치에 다시 넣음 (에디터 업데이트 시 위치가 바뀔 수 있음)
     let src = before.split('\n').filter(l => !l.includes(MARK)).join('\n');

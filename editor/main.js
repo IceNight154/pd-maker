@@ -631,7 +631,8 @@ function runtimeState(repo) {
   for (const f of [...new Set(installer.PATCHES.map(p => p.file))]) {
     const fp = installer.patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(installer.MARK).length - 1;
   }
-  if (hooks < installer.PATCHES.length) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${installer.PATCHES.length}` };
+  const need = installer.PATCHES.filter(p => !p.optional || fs.existsSync(installer.patchFile(repo, p.file))).length;   // 선택 연결 줄은 그 파일이 있을 때만
+  if (hooks < need) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${need}` };
   return { pkg: true, upToDate: true };
 }
 ipcMain.handle('runtime:status', wrap(repo => {
