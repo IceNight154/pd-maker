@@ -50,6 +50,7 @@ function createWindow() {
   });
   Menu.setApplicationMenu(null); // 메뉴는 화면(HTML) 안에서 그립니다
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.on('focus', () => { try { win.flashFrame(false); } catch (_) { /* 무시 */ } });
   win.on('close', e => {
     // 저장 안 된 변경이 있으면 화면 쪽에 물어봄
     if (win && !win.__forceClose) {
@@ -272,6 +273,13 @@ function writeInitScript(userData, projectDir) {
   return f;
 }
 function log(line) { if (win) win.webContents.send('game:log', line); }
+/** 빌드 실패 등 알릴 일: 창이 앞에 없으면 작업 표시줄 아이콘을 깜빡임 (macOS 는 Dock 아이콘이 튐) — 창을 누르면 멈춤 */
+function notifyFail(what) {
+  if (!win || win.isDestroyed() || win.isFocused()) return;
+  try { win.flashFrame(true); } catch (_) { /* 무시 */ }
+  if (process.platform === 'darwin' && app.dock) { try { app.dock.bounce('critical'); } catch (_) { /* 무시 */ } }
+  log(`> ${what} — 작업 표시줄 아이콘으로 알림`);
+}
 function stopGame() {
   if (!gameProc) return;
   try {
@@ -323,7 +331,7 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   if (javaHome) env.JAVA_HOME = javaHome;
   log(`> gradlew ${args.join(' ')}   (${repo})`);
   log(`> JAVA_HOME = ${javaHome || '(시스템 기본값)'}`);
-  gameProc = spawn(cmd, full, { cwd: repo, env });
+  const proc = gameProc = spawn(cmd, full, { cwd: repo, env });
   // 생성 코드(gen/*.java)의 컴파일 오류 → 어느 영웅/아이템의 어느 칸 몇째 줄인지 덧붙임
   const genDir = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker', 'gen');
   const explain = l => {
@@ -337,7 +345,12 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   const pipe = s => s.toString().split(/\r?\n/).forEach(l => { if (l) { log(l); explain(l); } });
   gameProc.stdout.on('data', pipe);
   gameProc.stderr.on('data', pipe);
-  gameProc.on('close', code => { log(`> 끝남 (종료 코드 ${code})`); gameProc = null; if (win) win.webContents.send('game:exit', code); });
+  gameProc.on('close', code => {
+    const stopped = gameProc !== proc;   // 중지 버튼으로 끝낸 것은 실패가 아님
+    log(`> 끝남 (종료 코드 ${code})`); if (!stopped) gameProc = null;
+    if (!stopped && code !== 0) notifyFail(task === 'compile' ? '컴파일 실패' : '빌드 · 실행 실패');
+    if (win) win.webContents.send('game:exit', code);
+  });
   return true;
 }));
 ipcMain.handle('game:stop', wrap(() => { stopGame(); return true; }));
@@ -429,7 +442,7 @@ ipcMain.handle('game:export', wrap(async ({ repo, project, outDir, kind, name, s
   const nm = safeName(name);
   const dest = path.join(outDir, nm);
   const task = kind === 'apk' ? 'android:assembleRelease' : kind === 'image' || kind === 'installer' ? 'desktop:jpackageImage' : 'desktop:release';
-  const fail = msg => { log('! ' + msg); if (win) win.webContents.send('export:done', { ok: false, error: msg }); };
+  const fail = msg => { log('! ' + msg); notifyFail('게임 파일 내보내기 실패'); if (win) win.webContents.send('export:done', { ok: false, error: msg }); };
   const done = () => { log(`> 게임 파일 내보내기 끝: ${dest}`); if (win) win.webContents.send('export:done', { ok: true, dest }); };
   const args = [task, '--console=plain'];
   if (apk) args.push('-I', apk.init);
@@ -602,7 +615,7 @@ async function prepareApk(repo, project, signing) {
 }
 ipcMain.handle('game:clean', wrap(async ({ repo }) => {
   if (!isRepoDir(repo) && bundledRepo()) repo = bundledRepo();
-  await runGradle(repo, ['clean', '--console=plain'], code => { log(`> 빌드 정리 끝 (코드 ${code})`); if (win) win.webContents.send('game:exit', code); });
+  await runGradle(repo, ['clean', '--console=plain'], code => { log(`> 빌드 정리 끝 (코드 ${code})`); if (code !== 0) notifyFail('빌드 정리 실패'); if (win) win.webContents.send('game:exit', code); });
   return true;
 }));
 
