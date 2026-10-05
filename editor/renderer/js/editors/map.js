@@ -591,6 +591,15 @@
           if (P_.hand) { P_.exits.forEach(t => tag(t, true)); P_.entrances.forEach(t => tag(t, false)); }
           else if (fl.mode === 'hybrid') { W_.tiles(fl.id, true).forEach((c, i) => tag({ cell: c, i, what: 'x' }, true)); }
         }
+        // 광원 미리보기의 그림자: 빛을 가리는 칸 (벽 = 1 · 막힌 맵 오브젝트 = 2, 맵 밖 = 벽)
+        let lightBlock = null;
+        if (drawable && (fl.objects || []).some(o => o.type === 'light')) {
+          const pc = new Set();
+          (fl.objects || []).forEach(o => { if (o.type !== 'prop' || !o.at || o.at.x == null) return; const sp = sprites['prop:' + o.ref], pr = sp && sp.prop; if (!pr || pr.castShadow === false) return;
+            const st = (pr.states || [])[pr.start || 0]; if (st && st.solid === false) return;
+            const ft = pr.foot || [1, 1]; for (let j = 0; j < Math.max(1, ft[1] | 0); j++) for (let k = 0; k < Math.max(1, ft[0] | 0); k++) pc.add((o.at.y - j) * W + o.at.x + k); });
+          lightBlock = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 1 : PDM.terrainBlocksLight(terrain[y * W + x]) ? 1 : pc.has(y * W + x) ? 2 : 0;
+        }
         // 오브젝트
         (fl.objects || []).forEach((o, i) => {
           let x, y;
@@ -609,7 +618,7 @@
           } else if (sp && sp.img) { const fw = sp.c.sprite.frame[0], fh = sp.c.sprite.frame[1]; const sc = s / Math.max(fw, fh); PDM.assets.drawFrame(g, sp.img, fw, fh, 0, x + (s - fw * sc) / 2, y + (s - fh * sc), sc); }
           else if (sp && sp.canvas) g.drawImage(sp.canvas, x, y, s, s);
           else { g.fillStyle = col + 'cc'; g.fillRect(x + s * .15, y + s * .15, s * .7, s * .7); g.fillStyle = '#000'; g.font = `bold ${s * .5}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText({ light: '☀', npc: 'N', mob: 'M', item: 'I', event: 'E', start: 'S', prop: 'P', entrance: '<', exit: '>', plate: 'T' }[o.type] || '?', x + s / 2, y + s / 2 + 1); }
-          if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s);   // 광원: 게임과 같은 감쇠로 미리보기
+          if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s, { block: lightBlock });   // 광원: 게임과 같은 감쇠 · 그림자로 미리보기
           g.strokeStyle = i === ui.sel ? '#fff' : col; g.lineWidth = i === ui.sel ? 2 : 1; g.strokeRect(x + 1, y + 1, s - 2, s - 2);
           if (!drawable) { g.fillStyle = '#ccc'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(PDM.PLACE_RULES[(o.at && o.at.rule) || 'random'] || '', x + s / 2, y + s + 2); }
         });

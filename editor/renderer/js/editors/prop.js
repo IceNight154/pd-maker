@@ -208,6 +208,7 @@
           sheetBox,
           h('h3', {}, '애니메이션'), animRows),
         section('광원 (이 오브젝트에서 퍼지는 빛)',
+          F.bool(key, ['castShadow'], { label: '🌑 그림자 드리움 — 막힌 상태일 때 다른 광원의 빛을 가립니다 (벽처럼 뒤쪽으로 그림자가 생김)', def: true }),
           F.bool(key, ['light', 'on'], { label: '💡 광원 켜기 — 오브젝트 자리에서 은은한 빛이 주변으로 퍼집니다 (밀면 빛도 따라감)', rerender: true }),
           (p.light || {}).on ? h('div', {}, ...PDM.lightFields(key, ['light'], p.light || {}),
             PDM.ui.row(F.num(key, ['light', 'ox'], { label: '빛 위치 옮김 → (px)', def: 0 }), F.num(key, ['light', 'oy'], { label: '빛 위치 옮김 ↓ (px · 가로등 머리는 음수)', def: 0 }))) : null),

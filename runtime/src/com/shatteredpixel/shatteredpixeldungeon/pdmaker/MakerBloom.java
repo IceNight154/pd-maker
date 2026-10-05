@@ -108,6 +108,12 @@ public class MakerBloom {
 		while (left > 0.01f && n++ < 3) { float k = Math.min(1f, left); left -= 1f; img.rm = img.gm = img.bm = k; img.draw(); }
 	}
 	public static void done() { com.watabou.glwrap.Blending.setNormalMode(); }
+	/** draw + done 을 맨 위 빛 층(MakerLights)에서 하도록 미룸 — 그 층이 없거나 카메라가 다르면(대화창 등) 바로 그림 */
+	public void drawTop(final int index, final float x, final float y, final float scale, final float amount, final com.watabou.noosa.Camera cam) {
+		if (!has(index) || amount <= 0.01f) return;
+		Runnable r = () -> { try { draw(index, x, y, scale, amount, cam); } finally { done(); } };
+		if (!MakerLights.defer(cam, r)) r.run();
+	}
 
 	/** 설정에서 번짐 반경(px) · 세기 */
 	public static float radius(com.badlogic.gdx.utils.JsonValue cfg) { return cfg == null ? 0 : cfg.getFloat("lightBloom", 0f); }

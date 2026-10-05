@@ -32,23 +32,14 @@ public class MakerSprite extends MobSprite {
 	MakerBloom bloom; int bfw = 12, bfh = 15;
 	com.watabou.noosa.Image light; JsonValue lightCfg;   // 빛 레이어 (<시트>_light.png): 그림 위에 덧셈 합성
 	@Override public void draw() {
-		super.draw();
-		if (visible) try {   // 가까운 광원의 빛을 받음: 같은 그림을 빛 색으로 한 번 더 더해 그림
-			float[] lit = MakerLights.litAt(x + width() / 2f, y + height() * 0.6f);
-			if (lit[0] + lit[1] + lit[2] > 0.04f) {
-				float r0 = rm, g0 = gm, b0 = bm, a0 = am, ra0 = ra, ga0 = ga, ba0 = ba;
-				rm = lit[0] * 0.55f; gm = lit[1] * 0.55f; bm = lit[2] * 0.55f; ra = ga = ba = 0;
-				com.watabou.glwrap.Blending.setLightMode();
-				try { super.draw(); } finally { com.watabou.glwrap.Blending.setNormalMode(); rm = r0; gm = g0; bm = b0; am = a0; ra = ra0; ga = ga0; ba = ba0; }
-			}
-		} catch (Throwable ignored) { }
+		super.draw();   // 광원(MakerLights)의 빛은 맨 위 빛 층이 캐릭터 위에 더해 줌
 		if (light == null || !visible) return;
 		try {
 			light.frame(frame()); light.camera = camera();
 			light.x = x; light.y = y; light.scale.set(scale.x, scale.y); light.origin.set(origin.x, origin.y); light.angle = angle; light.flipHorizontal = flipHorizontal;
 			MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg) * alpha(), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
-			if (bloom != null && frame() != null) { try { int col = Math.round(frame().left * texture.width / bfw), row = Math.round(frame().top * texture.height / bfh);
-				bloom.draw(row * bloom.cols + col, x, y, scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg) * alpha(), camera()); } finally { MakerBloom.done(); } }
+			if (bloom != null && frame() != null) { int col = Math.round(frame().left * texture.width / bfw), row = Math.round(frame().top * texture.height / bfh);
+				bloom.drawTop(row * bloom.cols + col, x, y, scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg) * alpha(), camera()); }   // 번짐은 맨 위 빛 층에서
 		} catch (Throwable t) { light = null; }
 	}
 	public boolean setup(JsonValue ch) {

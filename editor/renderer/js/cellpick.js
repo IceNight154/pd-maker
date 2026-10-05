@@ -70,6 +70,7 @@
 // ================================================================
 //  광원 설정 칸 · 미리보기 (맵의 "광원" 오브젝트와 맵 오브젝트의 광원이 함께 씀 — 런타임 MakerLights)
 //    밝기 = k / (sqrt(d² + z²) − z), 범위 끝에서 0
+//    벽 그림자: 게임(MakerLights)과 같은 GameMaker 방식 — 빛을 가리는 칸마다 대각선 두 개를 광원 반대쪽으로 길게 늘인 모양을 빛에서 지움
 // ================================================================
 (function () {
   const { h } = PDM;
@@ -80,7 +81,7 @@
         F.num(key, [...p, 'k'], { label: '세기', min: 0, max: 60, step: 0.5, def: 3, rerender: true, hint: '가운데 밝은 부분의 크기' }),
         F.num(key, [...p, 'z'], { label: '부드러움 (높이)', min: 1, max: 80, step: 1, def: 10, rerender: true, hint: '클수록 넓고 은은하게' }),
         F.num(key, [...p, 'range'], { label: '범위 (칸)', min: 1, max: 16, step: 0.5, def: 4, rerender: true, hint: '여기서 빛이 0 이 됨' })),
-      row(F.bool(key, [...p, 'shadow'], { label: '벽 그림자 — 벽 · 닫힌 문 뒤로는 빛이 가지 않음', def: true }),
+      row(F.bool(key, [...p, 'shadow'], { label: '벽 그림자 — 벽 · 닫힌 문 · 막힌 맵 오브젝트 뒤로는 빛이 가지 않음', def: true }),
         F.bool(key, [...p, 'charShadow'], { label: '캐릭터 그림자 — 빛 가까이 있는 캐릭터 뒤로 그림자가 늘어짐', def: true })),
       row(F.num(key, [...p, 'pulse'], { label: '깜빡임 주기 (초, 0 = 일정)', min: 0, step: 0.1, def: 0 }),
         F.num(key, [...p, 'pulseMin'], { label: '깜빡일 때 가장 어두운 세기 (%)', int: true, min: 0, max: 100, def: 60 })),
@@ -88,14 +89,35 @@
         g.fillStyle = '#2a2833'; for (let x = 0; x < 220; x += 16) for (let y = 0; y < 110; y += 16) if (((x + y) / 16) % 2 === 0) g.fillRect(x, y, 16, 16);
         PDM.drawLightPreview(g, 110, 55, o, 16); return h('div', {}, h('div', { class: 'hint' }, '미리보기 (네모 한 칸 = 타일 한 칸)'), cv); })()];
   };
-  /** (cx, cy) 에 광원 o 를 한 칸 = s px 로 그림 (덧셈 합성) */
-  PDM.drawLightPreview = function (g, cx, cy, o, s) {
+  /** 이 칸이 빛을 가리는지 — 게임의 solid && losBlocking (벽 · 장식 벽 · 책장 · 문 · 잠긴 문 · 숨겨진 문 · 바리케이드) */
+  PDM.terrainBlocksLight = id => { const t = PDM.TERRAIN_BY_ID[id]; return !!(t && t.blockLight); };
+  /** (cx, cy) 에 광원 o 를 한 칸 = s px 로 그림 (덧셈 합성).
+   *  opt.block(x, y) → 0 = 빛이 지나감 · 1 = 벽 칸 · 2 = 막힌 맵 오브젝트 (칸 좌표, 캔버스 (0,0) = 칸 (0,0)) — 주면 그림자를 그림 */
+  PDM.drawLightPreview = function (g, cx, cy, o, s, opt) {
     const range = Math.max(0.5, +o.range || 4) * 16, z = Math.max(0.5, +o.z || 10), k = Math.max(0, o.k == null ? 3 : +o.k), R = range * s / 16;
     const hx = String(o.color || '#ffe9a8').replace('#', ''), cr = parseInt(hx.slice(0, 2), 16) || 0, cg = parseInt(hx.slice(2, 4), 16) || 0, cb = parseInt(hx.slice(4, 6), 16) || 0;
     const edge = k / (Math.sqrt(range * range + z * z) - z), gr = g.createRadialGradient(cx, cy, 0, cx, cy, R);
     for (let i = 0; i <= 24; i++) { const t = Math.pow(i / 24, 1.6), d = t * range, den = Math.sqrt(d * d + z * z) - z, v = den <= 1e-5 ? 1 : Math.max(0, Math.min(1, k / den - edge));
       gr.addColorStop(t, `rgba(${cr},${cg},${cb},${v.toFixed(3)})`); }   // 빛이 없는 곳은 투명 (맵 밖을 검게 덮지 않게)
 
-    g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.restore();
+    const block = opt && opt.block && o.shadow !== false ? opt.block : null;
+    if (!block) { g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.restore(); return; }
+    // 그림자: 빛을 따로 그린 뒤 그림자 볼륨 모양을 지우고 덧셈으로 얹음
+    const S = Math.ceil(R) * 2 + 2, ox = cx - S / 2, oy = cy - S / 2, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+    const c = cv.getContext('2d'); c.translate(-ox, -oy); c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, R, 0, 7); c.fill();
+    c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#000';
+    const far = S * 4, ext = (x, y) => { const dx = x - cx, dy = y - cy, l = Math.hypot(dx, dy) || 1; return [x + dx / l * far, y + dy / l * far]; };
+    const quad = (x1, y1, x2, y2) => { const a = ext(x1, y1), b = ext(x2, y2); c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.lineTo(b[0], b[1]); c.lineTo(a[0], a[1]); c.closePath(); c.fill(); };
+    const lx = Math.floor(cx / s), ly = Math.floor(cy / s), n = Math.ceil(R / s) + 1, inside = block(lx, ly) === 1;
+    const open = (x, y) => !block(x, y) || block(x, y) === 2;
+    for (let y = ly - n; y <= ly + n; y++) for (let x = lx - n; x <= lx + n; x++) {
+      if (x === lx && y === ly) continue;
+      const b = block(x, y); if (!b) continue;
+      if (b === 1 && !inside && !(open(x - 1, y) || open(x + 1, y) || open(x, y - 1) || open(x, y + 1))) continue;   // 안쪽 벽은 건너뜀
+      const m = b === 2 ? s * 2 / 16 : 0, x1 = x * s + m, y1 = y * s + m, x2 = (x + 1) * s - m, y2 = (y + 1) * s - m;
+      if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) continue;
+      quad(x1, y1, x2, y2); quad(x2, y1, x1, y2);
+    }
+    g.save(); g.globalCompositeOperation = 'lighter'; g.drawImage(cv, ox, oy); g.restore();
   };
 })();
