@@ -25,22 +25,22 @@ Pixel Dungeon modding/
 | 폴더 | 내용 | 고칠 때 |
 |---|---|---|
 | `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`, 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css` |
-| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 15개 파일에 연결 줄 32개를 넣음 | 새 연결 줄을 추가할 때 |
-| `runtime/src/…/pdmaker/` | 게임 쪽 Java 패키지(33개 파일) | 게임 동작을 바꿀 때. 설치하면 게임 저장소로 복사됨 |
-| `sample-project/` | 샘플 프로젝트 | 보통은 `tools/sample/make_sample.py`로 다시 만듦 |
-| `tools/sample/` | 샘플을 만드는 스크립트 | `python tools/sample/make_sample.py && node tools/sample/make_heart.js && node tools/sample/make_sounds.js && python tools/sample/make_portraits.py` |
+| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 28개 파일에 연결 줄 61개를 넣음 (목록: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
+| `runtime/src/…/pdmaker/` | 게임 쪽 Java 패키지(53개 파일) | 게임 동작을 바꿀 때. 설치하면 게임 저장소로 복사됨 |
+| `tools/sample/` | mod-2 기준 샘플 프로젝트(`sample-project/`, 저장소에는 없음)를 만드는 스크립트 | `python tools/sample/make_sample.py && node tools/sample/make_heart.js && node tools/sample/make_sounds.js && python tools/sample/make_portraits.py` |
 | `tools/data/` | 게임 소스에서 에디터 데이터를 뽑는 스크립트 | `python tools/data/extract_spd_items.py [mod-2] [원작]` → `spd-items.js`, `node tools/data/gen_terms_java.js` → `DefaultTerms.java` |
 | `tools/playtest/` | 자동 플레이 테스트(Linux 개발용) | `tools/playtest/README.md` 참고 |
 | `references/` | 참고용 원본 코드(mod2-buffs: Brand·InkMark·Overheat) | 읽기만 함 |
 | `docs/` | 이 안내 | |
 
-## 3. 프로젝트 폴더 (예: `sample-project/`)
+## 3. 프로젝트 폴더
 
 ```
 project.json  title.json  dialogue.json  terms.json
 maps/world.json · maps/nodes/<노드>.json   rooms/<방>.json
 heroes/<영웅>.json  characters/<캐릭터>.json  items/<아이템>.json  events/<이벤트>.json
 story/story.json  heart/heart.json  audio/sounds.json
+props/<오브젝트>.json  gameitems.json  texts.json  badges.json  (확장 기능: effects · filters · textfx · trailers · compose · quests .json)
 assets/                                 ← 그림·소리 (아래 표준 폴더)
 ```
 
@@ -62,6 +62,6 @@ assets/                                 ← 그림·소리 (아래 표준 폴더
 
 - **🖼 그림 관리 → 🧹 자동 정리**를 누르면, 이미 쓰고 있는 그림이 위 폴더로 옮겨집니다. 쓰는 곳의 경로도 함께 고쳐지고 바로 저장됩니다.
 - **게임 그림 바꾸기**
-  - 게임(mod-2 런타임)은 시작할 때와 화면이 바뀔 때마다 `assets/game/` 아래 PNG를 같은 이름의 게임 그림 대신 씁니다(`MakerAssets`).
+  - 게임(pdmaker 런타임)은 시작할 때와 화면이 바뀔 때마다 `assets/game/` 아래 PNG를 같은 이름의 게임 그림 대신 씁니다(`MakerAssets`).
   - 에디터 미리보기도 같은 규칙을 따릅니다.
   - 지우면 원래 그림으로 돌아갑니다.
