@@ -642,6 +642,7 @@ public class Item implements Bundlable {
 	}
 	
 	public void cast( final Hero user, final int dst ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemCast(this); // >>> pdmaker
 		
 		final int cell = throwPos( user, dst );
 		user.sprite.zap( cell );

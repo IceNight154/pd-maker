@@ -89,6 +89,7 @@ public class Gold extends Item {
 	@Override
 	public Item random() {
 		quantity = Random.IntRange( 30 + Dungeon.depth * 10, 60 + Dungeon.depth * 20 );
+		quantity = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.goldAmount(quantity); // >>> pdmaker
 		return this;
 	}
 

@@ -53,6 +53,7 @@ public class GitHubUpdates extends UpdateService {
 
 	@Override
 	public void checkForUpdate(boolean useMetered, boolean includeBetas, UpdateResultCallback callback) {
+		if (System.getProperty("pdmaker.updates.off") != null) { callback.onNoUpdateFound(); return; } // >>> pdmaker
 
 		if (!useMetered && !Game.platform.connectedToUnmeteredNetwork()){
 			callback.onConnectionFailed();
@@ -61,6 +62,7 @@ public class GitHubUpdates extends UpdateService {
 
 		Net.HttpRequest httpGet = new Net.HttpRequest(Net.HttpMethods.GET);
 		httpGet.setUrl("https://api.github.com/repos/00-Evan/shattered-pixel-dungeon/releases");
+		{ String pdmU = System.getProperty("pdmaker.updates.url"); if (pdmU != null) httpGet.setUrl(pdmU); } // >>> pdmaker
 		httpGet.setHeader("Accept", "application/vnd.github.v3+json");
 
 		Gdx.net.sendHttpRequest(httpGet, new Net.HttpResponseListener() {
@@ -148,6 +150,7 @@ public class GitHubUpdates extends UpdateService {
 
 	@Override
 	public void initializeUpdate(AvailableUpdateData update) {
+		{ String pdmP = System.getProperty("pdmaker.updates.page"); if (pdmP != null) update.URL = pdmP; } // >>> pdmaker
 		Game.platform.openURI( update.URL );
 	}
 

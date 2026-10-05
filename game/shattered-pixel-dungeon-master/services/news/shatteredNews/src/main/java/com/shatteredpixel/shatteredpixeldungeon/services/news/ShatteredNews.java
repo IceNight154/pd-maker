@@ -38,6 +38,7 @@ public class ShatteredNews extends NewsService {
 
 	@Override
 	public void checkForArticles(boolean useMetered, boolean preferHTTPS, NewsResultCallback callback) {
+		if (System.getProperty("pdmaker.news.off") != null) { callback.onConnectionFailed(); return; } // >>> pdmaker
 
 		if (!useMetered && !Game.platform.connectedToUnmeteredNetwork()){
 			callback.onConnectionFailed();
@@ -51,6 +52,7 @@ public class ShatteredNews extends NewsService {
 			httpGet.setUrl("http://shatteredpixel.com/feed_by_tag/SHPD_INGAME.xml");
 		}
 
+		{ String pdmN = System.getProperty("pdmaker.news.url"); if (pdmN != null) httpGet.setUrl(pdmN); } // >>> pdmaker
 		Gdx.net.sendHttpRequest(httpGet, new Net.HttpResponseListener() {
 			@Override
 			public void handleHttpResponse(Net.HttpResponse httpResponse) {
