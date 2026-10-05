@@ -211,7 +211,11 @@
       PDM.store.edit(key, '명령 편집', r => { PDM.deepGet(r, row.arr)[row.i] = c; });
     }
     function removeAt(row) { PDM.store.edit(key, '명령 삭제', r => { PDM.deepGet(r, row.arr).splice(row.i, 1); }); sel = null; }
+    // 명령 복사는 공용 클립보드(PDM.clip, kind 'cmds')에도 — 다른 이벤트 · 캐릭터 행동에도 붙여 넣을 수 있음
+    const copyCmd = cmd => { clipboard = [PDM.clone(cmd)]; PDM.clip.set('cmds', clipboard, '명령 ' + ((PDM.COMMANDS[cmd.cmd] || {}).name || cmd.cmd)); };
+    const curClip = () => { const c = PDM.clip.peek(); return c && c.kind === 'cmds' ? PDM.clone(c.payload) : clipboard; };
     function paste(arrPath, i) {
+      const clipboard = curClip();
       if (!clipboard) return;
       PDM.store.edit(key, '명령 붙여넣기', r => { let a = PDM.deepGet(r, arrPath); if (!a) { PDM.deepSet(r, arrPath, []); a = PDM.deepGet(r, arrPath); } a.splice(i, 0, ...PDM.clone(clipboard)); });
     }
@@ -233,8 +237,8 @@
               { label: '편집…', run: () => editAt(r) },
               { label: '위에 새 명령…', run: () => insertAt(r.arr, r.i) },
               '-',
-              { label: '복사', hint: 'Ctrl+C', run: () => { clipboard = [PDM.clone(r.cmd)]; toast('복사했습니다'); } },
-              { label: '위에 붙여넣기', hint: 'Ctrl+V', run: () => paste(r.arr, r.i), disabled: !clipboard },
+              { label: '복사', hint: PDM.keys.label('copy'), run: () => copyCmd(r.cmd) },
+              { label: '위에 붙여넣기', hint: PDM.keys.label('paste'), run: () => paste(r.arr, r.i), disabled: !curClip() },
               { label: '위로', run: () => move(r, -1) }, { label: '아래로', run: () => move(r, 1) },
               '-',
               { label: '삭제', hint: 'Del', run: () => removeAt(r) }]); } },
@@ -254,8 +258,8 @@
       const row = rows().find(r => r.path && JSON.stringify(r.path) === JSON.stringify(sel)); if (!row) return;
       if (e.key === 'Delete') { e.preventDefault(); removeAt(row); }
       else if (e.key === 'Enter') { e.preventDefault(); editAt(row); }
-      else if (e.ctrlKey && e.key === 'c') { clipboard = [PDM.clone(row.cmd)]; toast('복사했습니다'); }
-      else if (e.ctrlKey && e.key === 'v') { e.preventDefault(); paste(row.arr, row.i + 1); }
+      else if (PDM.keys.is(e, 'copy')) { e.preventDefault(); e.stopPropagation(); copyCmd(row.cmd); }
+      else if (PDM.keys.is(e, 'paste')) { e.preventDefault(); e.stopPropagation(); paste(row.arr, row.i + 1); }
     });
     draw();
     wrap.redraw = draw;

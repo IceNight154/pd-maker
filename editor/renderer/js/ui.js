@@ -566,9 +566,17 @@ PDM.ui = (function () {
   }
 
   // ---------------- 대화상자 / 메뉴 ----------------
+  const openModals = [];   // 떠 있는 창 (Ctrl+W · Esc 로 맨 위 것을 닫음)
+  /** 맨 위의 메뉴 또는 창을 닫음. 닫은 것이 있으면 true */
+  function closeTop() {
+    const m = $$('.ctx'); if (m.length) { m.forEach(x => x.remove()); return true; }
+    const t = openModals[openModals.length - 1]; if (t) { t(null); return true; }
+    return false;
+  }
   function modal(title, body, buttons) {
     return new Promise(res => {
-      const close = v => { bg.remove(); res(v); };
+      const close = v => { const i = openModals.indexOf(close); if (i >= 0) openModals.splice(i, 1); bg.remove(); res(v); };
+      openModals.push(close);
       const foot = h('div', { class: 'modal-foot' }, (buttons || [['확인', true]]).map(([t, v, cls]) => h('button', { class: 'btn ' + (cls || ''), onclick: () => close(typeof v === 'function' ? v() : v) }, t)));
       const box = h('div', { class: 'modal' }, h('div', { class: 'modal-head' }, title, h('button', { class: 'ib', onclick: () => close(null) }, '✕')), h('div', { class: 'modal-body' }, body), foot);
       const bg = h('div', { class: 'modal-bg', onmousedown: e => { if (e.target === bg) close(null); } }, box);
@@ -601,5 +609,5 @@ PDM.ui = (function () {
     return modal(title || '몬스터 스폰', h('div', { style: { minWidth: '340px' } }, opt(true, '몬스터가 생김', '층을 만들 때 몬스터가 놓이고, 시간이 지나면 다시 생깁니다'), opt(false, '몬스터가 생기지 않음', '안전한 곳 — 직접 놓은 몬스터·NPC 만 나옵니다. 나중에 속성에서 바꿀 수 있습니다')),
       [['취소', null], ['만들기', () => v, 'pri']]);
   };
-  return { F, field, row, section, listEditor, combo, itemOptions, modal, prompt, confirm, menu, pickImage, refOptions, commit, codeView, SNIPPETS, soundPicker };
+  return { F, field, row, section, listEditor, combo, itemOptions, modal, prompt, confirm, menu, closeTop, get modalOpen() { return openModals.length > 0; }, pickImage, refOptions, commit, codeView, SNIPPETS, soundPicker };
 })();

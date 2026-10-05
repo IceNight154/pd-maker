@@ -1033,10 +1033,29 @@
     K.define('exportProject', exportProject); K.define('exportGame', exportGame); K.define('undo', undo); K.define('redo', redo);
     K.define('keySettings', () => K.dialog()); K.define('playtest', () => playtest()); K.define('stopGame', stopGame); K.define('check', runCheck);
     K.define('projectSettings', () => store.isOpen && PDM.tabs.open('project')); K.define('showLog', () => showBottom('log'));
-    K.define('closeTab', () => active && PDM.tabs.close(active.key)); K.define('nextTab', () => PDM.tabs.cycle(1)); K.define('prevTab', () => PDM.tabs.cycle(-1));
+    K.define('closeTab', () => { if (!PDM.ui.closeTop() && active) PDM.tabs.close(active.key); });   // 떠 있는 창 · 메뉴가 먼저, 없으면 지금 탭 (프로그램은 닫지 않음)
+    K.define('nextTab', () => PDM.tabs.cycle(1)); K.define('prevTab', () => PDM.tabs.cycle(-1));
+    // 복사 · 붙여넣기: 지금 탭 편집기의 ctx.copy/paste(고른 노드 · 오브젝트 · 명령) → 리소스 통째로 → 목록 항목(이펙트 등)
+    const resKey = k => /^(char|item|event|prop|room|hero):(.+)$/.exec(k || '');
+    K.define('copy', () => {
+      const txt = window.getSelection ? String(window.getSelection()) : ''; if (txt.trim()) return false;   // 글을 드래그해 골랐으면 브라우저 복사
+      if (!active) return false;
+      if (active.ctx && active.ctx.copy && active.ctx.copy() !== false) return;
+      const m = resKey(active.key); if (m && store.has(active.key)) { PDM.resOps.copy(m[1], m[2]); return; }
+      const lo = PDM.listOpsAll[active.key]; if (lo && lo.current) { lo.copy(); return; }
+      return false;
+    });
+    K.define('paste', async () => {
+      const c = await PDM.clip.get(); if (!c) { toast('복사한 것이 없습니다'); return; }
+      if (active && active.ctx && active.ctx.paste && active.ctx.paste(c) !== false) return;
+      if (c.kind.startsWith('res:')) PDM.resOps.paste(c.kind.slice(4), c.payload);
+      else if (c.kind.startsWith('list:') && PDM.listOpsAll[c.kind.slice(5)]) PDM.listOpsAll[c.kind.slice(5)].paste(c.payload);
+      else toast(`여기에는 붙여 넣을 수 없습니다 — ${c.label || c.kind}`, 'bad');
+    });
     K.define('treeSearch', () => { const i = $('#treeSearch input'); if (i) { i.focus(); i.select(); } });
     K.onChange(() => { drawMenubar(); drawToolbar(); });
     addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !K.capturing && PDM.ui.closeTop()) { e.preventDefault(); return; }   // Esc = 맨 위 창 · 메뉴 닫기
       K.handle(e, /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
     });
     pdm.on('game:log', l => PDM.log(l, /error|오류|exception|FAILED/i.test(l) ? 'err' : /warning|경고/i.test(l) ? 'warn' : ''));

@@ -11,16 +11,18 @@
     // 파일
     { id: 'newProject', group: '파일', label: '새 프로젝트', def: ['Ctrl+N'], scope: 'global', inInput: true },
     { id: 'openProject', group: '파일', label: '프로젝트 열기', def: ['Ctrl+O'], scope: 'global', inInput: true },
-    { id: 'save', group: '파일', label: '저장', def: ['Ctrl+S'], scope: 'global', inInput: true },
+    { id: 'save', group: '파일', label: '저장', def: ['Ctrl+S'], scope: 'global', inInput: true, inModal: true },
     { id: 'saveAs', group: '파일', label: '다른 이름으로 저장', def: ['Ctrl+Shift+S'], scope: 'global', inInput: true },
     { id: 'exportProject', group: '파일', label: '프로젝트 내보내기 (.pdmproj)', def: ['Ctrl+E'], scope: 'global', inInput: true },
     { id: 'exportGame', group: '파일', label: '게임 파일 내보내기', def: ['Ctrl+Shift+E'], scope: 'global', inInput: true },
     // 편집
     { id: 'undo', group: '편집', label: '실행 취소', def: ['Ctrl+Z'], scope: 'global' },
     { id: 'redo', group: '편집', label: '다시 실행', def: ['Ctrl+Y', 'Ctrl+Shift+Z'], scope: 'global' },
+    { id: 'copy', group: '편집', label: '복사 (고른 리소스 · 노드 · 오브젝트 · 명령 · 항목)', def: ['Ctrl+C'], scope: 'global' },
+    { id: 'paste', group: '편집', label: '붙여넣기', def: ['Ctrl+V'], scope: 'global' },
     { id: 'keySettings', group: '편집', label: '단축키 설정 열기', def: [], scope: 'global', inInput: true },
     // 보기 · 탭
-    { id: 'closeTab', group: '보기', label: '지금 탭 닫기', def: ['Ctrl+W'], scope: 'global', inInput: true },
+    { id: 'closeTab', group: '보기', label: '지금 창 닫기 (떠 있는 창 → 없으면 지금 탭, 프로그램은 닫지 않음)', def: ['Ctrl+W'], scope: 'global', inInput: true, inModal: true },
     { id: 'nextTab', group: '보기', label: '다음 탭', def: ['Ctrl+Tab'], scope: 'global', inInput: true },
     { id: 'prevTab', group: '보기', label: '이전 탭', def: ['Ctrl+Shift+Tab'], scope: 'global', inInput: true },
     { id: 'treeSearch', group: '보기', label: '리소스 검색 칸으로', def: ['Ctrl+Shift+F'], scope: 'global', inInput: true },
@@ -80,12 +82,14 @@
   function define(id, run) { runs[id] = run; }
   /** 전역 단축키 처리 (app.js keydown). typing = 입력 칸에 있음 */
   function handle(e, typing) {
-    if (capturing) return false;
+    if (capturing || e.defaultPrevented) return false;   // 편집기가 먼저 처리한 키 (스프라이트 편집기의 복사 등)
     const id = match(e, 'global'); if (!id) return false;
     const a = byId[id];
     if (typing && !a.inInput) return false;
+    if (PDM.ui.modalOpen && !a.inModal) return false;   // 창이 떠 있을 때는 창 닫기 · 저장만
     if (!runs[id]) return false;
-    e.preventDefault(); runs[id](); return true;
+    if (runs[id](e) === false) return false;   // false = 처리하지 않음 (예: 글을 드래그해 고른 채 Ctrl+C → 브라우저 복사)
+    e.preventDefault(); return true;
   }
 
   // ---------------- 설정 창 ----------------

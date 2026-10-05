@@ -502,6 +502,16 @@
         const g = groupAt(p.x, p.y);
         addNodeAsk('procedural', p.x - NW / 2, p.y - NH / 2, g && g.id);
       });
+      // Ctrl+C / Ctrl+V (공용 단축키 — app.js 가 지금 탭의 ctx.copy/paste 를 부름): 고른 노드 + 그 사이 연결
+      ctx.copy = () => {
+        const ids = [...sel.nodes]; if (!ids.length) return false;
+        clip = { nodes: ids.map(id => ({ pos: PDM.clone(wnode(id)), data: PDM.clone(store.get('node:' + id)) })), edges: wd.edges.filter(x => sel.nodes.has(x.from) && sel.nodes.has(x.to)).map(x => PDM.clone(x)) };
+        PDM.clip.set('nodes', clip, `노드 ${ids.length}개`);
+      };
+      ctx.paste = c => {
+        if (c.kind !== 'nodes' || !c.payload || !(c.payload.nodes || []).length) return false;
+        clip = c.payload; duplicate([], 60, 60, clip.nodes.map(x => ({ pos: PDM.clone(x.pos), data: PDM.clone(x.data) })));
+      };
       const onKey = e => {
         if (PDM.tabs.active !== key || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
         if (e.code === 'Space') { if (!spaceDown) { spaceDown = true; vp.classList.add('grab'); } e.preventDefault(); return; }
@@ -513,8 +523,6 @@
           else if (ids.length) deleteNodes(ids);
         } else if (e.ctrlKey && e.key.toLowerCase() === 'd') { e.preventDefault(); if (ids.length) duplicate(ids); }
         else if (e.ctrlKey && e.key.toLowerCase() === 'a') { e.preventDefault(); sel = { nodes: new Set(wd.nodes.map(n => n.id)), edge: null, group: null }; markSel(); inspect(); }
-        else if (e.ctrlKey && e.key.toLowerCase() === 'c') { if (ids.length) { clip = { nodes: ids.map(id => ({ pos: PDM.clone(wnode(id)), data: PDM.clone(store.get('node:' + id)) })), edges: wd.edges.filter(x => sel.nodes.has(x.from) && sel.nodes.has(x.to)).map(x => PDM.clone(x)) }; toast(`노드 ${ids.length}개 복사`); } }
-        else if (e.ctrlKey && e.key.toLowerCase() === 'v') { if (clip) duplicate([], 60, 60, clip.nodes.map(c => ({ pos: PDM.clone(c.pos), data: PDM.clone(c.data) }))); }
         else if (!e.ctrlKey && e.key.toLowerCase() === 'f') fit();
         else if (e.key === 'Enter' && !ids.length && !sel.edge && !sel.group) { e.preventDefault(); fit(); }   // 아무것도 고르지 않았을 때 Enter = 화면에 꽉 차게
         else if (!e.ctrlKey && e.key.toLowerCase() === 'g' && ids.length) { const r0 = Math.min(...ids.map(id => wnode(id).x)); addGroup(r0, Math.min(...ids.map(id => wnode(id).y)), ids); }

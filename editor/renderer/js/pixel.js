@@ -221,10 +221,10 @@ PDM.pixelEditor = function (o) {
     if (tk) { e.preventDefault(); if (!SEL_TOOLS.includes(tk)) commitFloating(); setTool(tk); draw(); return; }
     if (K.is(e, 'draw.brushDown')) { e.preventDefault(); setBrush(brush - 1); return; }
     if (K.is(e, 'draw.brushUp')) { e.preventDefault(); setBrush(brush + 1); return; }
-    if (c && k === 'c') { e.preventDefault(); copySel(false); }
-    else if (c && k === 'x') { e.preventDefault(); copySel(true); }
-    else if (c && k === 'v') { e.preventDefault(); pasteClip(); }
-    else if (c && k === 'a') { e.preventDefault(); commitFloating(); sel = { x: 0, y: 0, w: W, h: H }; if (!SEL_TOOLS.includes(tool)) setTool('select'); draw(); }
+    if (K.is(e, 'copy')) { e.preventDefault(); copySel(false); }
+    else if (c && code === 'KeyX') { e.preventDefault(); copySel(true); }
+    else if (K.is(e, 'paste')) { e.preventDefault(); pasteClip(); }
+    else if (c && code === 'KeyA') { e.preventDefault(); commitFloating(); sel = { x: 0, y: 0, w: W, h: H }; if (!SEL_TOOLS.includes(tool)) setTool('select'); draw(); }
     else if (k === 'escape' && (sel || floating)) { e.preventDefault(); e.stopPropagation(); if (floating) { floating = null; sel = null; draw(); } else deselect(); }
     else if (k === 'enter' && floating) { e.preventDefault(); e.stopPropagation(); commitFloating(); draw(); }
     else if ((k === 'delete' || k === 'backspace') && (sel || floating)) { e.preventDefault(); clearSel(); }

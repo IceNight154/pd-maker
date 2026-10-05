@@ -5,7 +5,7 @@
 // ================================================================
 (function () {
   const { h, store } = PDM;
-  const NAMES = { char: '캐릭터', item: '아이템', event: '이벤트', prop: '맵 오브젝트', room: '방 템플릿' };
+  const NAMES = { char: '캐릭터', item: '아이템', event: '이벤트', prop: '맵 오브젝트', room: '방 템플릿', hero: '영웅' };
   // 맵 오브젝트 type → 가리키는 리소스 종류
   const OBJ_KIND = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop' };
   // 이벤트 명령 매개변수 종류 → 리소스 종류
@@ -87,10 +87,25 @@
     store.remove(kind + ':' + id, `${NAMES[kind]} 삭제`);
     return true;
   }
+  /** 복사 (Ctrl+C) — 리소스 통째로 */
+  function copy(kind, id) { const o = store.get(kind + ':' + id); if (o) PDM.clip.set('res:' + kind, o, `${NAMES[kind] || kind} ${o.name || id}`); }
+  /** 붙여넣기 — 같은 id 가 없으면 그 id 로 (다른 프로젝트에서 복사한 경우), 있으면 _copy 를 붙임 */
+  function paste(kind, data) {
+    if (!data || !NAMES[kind]) return null;
+    const base = PDM.slugId(String(data.id || kind)), same = store.has(kind + ':' + base);
+    const nu = same ? freeId(kind, base + '_copy') : base;
+    const c = Object.assign(PDM.clone(data), { id: nu }); if (same) c.name = (data.name || base) + ' 사본';
+    store.add(kind + ':' + nu, c, `${NAMES[kind]} 붙여넣기`);
+    if (kind === 'hero') store.edit('project', '영웅 순서', r => { if (Array.isArray(r.heroOrder) && !r.heroOrder.includes(nu)) r.heroOrder.push(nu); }, { silent: true });
+    PDM.tabs.open(kind + ':' + nu);
+    toast(`붙여 넣었습니다: ${c.name || nu} (${nu})`);
+    return nu;
+  }
   /** 리소스 목록 오른쪽 클릭 메뉴의 공용 부분 (편집기가 extra 항목을 앞에 붙임) */
   function menu(kind, id, extra) {
     return [{ label: '열기', run: () => open(kind, id) }, { label: '이름 바꾸기…', run: () => renameLabel(kind, id) }, { label: 'id 바꾸기…', run: () => renameId(kind, id) },
-      { label: '복제', run: () => dup(kind, id) }, ...(extra && extra.length ? ['-', ...extra] : []), '-', { label: '삭제', run: () => remove(kind, id) }];
+      { label: '복제', run: () => dup(kind, id) }, { label: '복사', hint: PDM.keys.label('copy'), run: () => copy(kind, id) },
+      { label: '붙여넣기 (새로 만들기)', hint: PDM.keys.label('paste'), run: async () => { const c = await PDM.clip.get(); if (c && c.kind === 'res:' + kind) paste(kind, c.payload); else toast(`복사한 ${NAMES[kind]}이(가) 없습니다`); } }, ...(extra && extra.length ? ['-', ...extra] : []), '-', { label: '삭제', run: () => remove(kind, id) }];
   }
   /** 편집 화면 머리말 버튼 줄 */
   function bar(kind, id, extra) {
@@ -107,5 +122,5 @@
       u.length ? u.map(x => h('div', {}, h('a', { href: '#', onclick: e => { e.preventDefault(); PDM.tabs.open(x.key); } }, x.key), h('span', { class: 'hint' }, ` · ${x.n}군데`)))
         : h('p', { class: 'hint' }, '쓰는 곳이 없습니다 (조건식 안의 이름은 찾지 않음).')), [['닫기', null, 'pri']]);
   }
-  PDM.resOps = { NAMES, open, renameLabel, renameId, dup, remove, menu, bar, usage, fixRefs, showUsage };
+  PDM.resOps = { NAMES, open, renameLabel, renameId, dup, remove, menu, bar, usage, fixRefs, showUsage, copy, paste };
 })();

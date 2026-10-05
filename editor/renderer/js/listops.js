@@ -3,6 +3,7 @@
 //    리소스 목록(트리)의 항목·오른쪽 클릭 메뉴와 편집 화면의 도구 줄에서 같이 씀
 //    o = { K(저장 키), label, icon, prefix(새 id 앞머리), make(id, preset), clean(복제본 손질), presets{키: 이름}, cmdType(이벤트 명령 type), objType(맵 오브젝트 type), fields[아이템 등의 참조 칸] }
 // ================================================================
+PDM.listOpsAll = {};   // 저장 키 → listOps (Ctrl+C / Ctrl+V 가 지금 탭의 것을 찾음)
 PDM.listOps = function (o) {
   const { h, store } = PDM;
   const list = () => (store.get(o.K) || {}).list || [];
@@ -45,12 +46,23 @@ PDM.listOps = function (o) {
     want = id; PDM.tabs.refresh(o.K);
     PDM.log && PDM.log(`${o.label} id: ${old} → ${id}` + (refs ? ` (쓰는 곳 ${refs}군데도 고침)` : ''), 'ok');
   }
+  // 복사 · 붙여넣기 (Ctrl+C / Ctrl+V — 편집 화면에서 고른 항목, bar() 가 기억)
+  let current = null;
+  function copy(id) { const it = list().find(x => x.id === (id || current)); if (it) PDM.clip.set('list:' + o.K, it, `${o.label} ${it.name || it.id}`); }
+  function paste(data) {
+    if (!data) return;
+    const id = freeId(String(data.id || o.prefix || 'item').replace(/[^A-Za-z0-9_]/g, '_'));
+    const c = Object.assign(PDM.clone(data), { id }); if (id !== data.id) c.name = (data.name || data.id) + ' 사본'; if (o.clean && id !== data.id) o.clean(c);
+    want = id; store.edit(o.K, o.label + ' 붙여넣기', r => { r.list = r.list || []; r.list.push(c); }); PDM.tabs.open(o.K); PDM.tabs.refresh(o.K);
+    toast(`붙여 넣었습니다: ${c.name || id}`);
+  }
   const move = (id, d) => store.edit(o.K, o.label + ' 순서', r => { const i = r.list.findIndex(x => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= r.list.length) return; [r.list[i], r.list[j]] = [r.list[j], r.list[i]]; });
   const addMenu = () => o.presets ? Object.entries(o.presets).map(([k, name]) => ({ label: `새 ${o.label}: ${name}`, run: () => add(k) })) : [{ label: `새 ${o.label}…`, run: () => add() }];
-  const menuOf = x => [{ label: '열기', run: () => show(x.id) }, { label: '복제', run: () => dup(x.id) }, { label: 'id 바꾸기…', run: () => rename(x.id) }, '-',
+  const menuOf = x => [{ label: '열기', run: () => show(x.id) }, { label: '복제', run: () => dup(x.id) }, { label: 'id 바꾸기…', run: () => rename(x.id) },
+    { label: '복사', hint: PDM.keys.label('copy'), run: () => copy(x.id) }, { label: '붙여넣기', hint: PDM.keys.label('paste'), run: async () => { const c = await PDM.clip.get(); if (c && c.kind === 'list:' + o.K) paste(c.payload); else toast(`복사한 ${o.label}이(가) 없습니다`); } }, '-',
     { label: '위로', run: () => move(x.id, -1) }, { label: '아래로', run: () => move(x.id, 1) }, '-', { label: '삭제', run: () => remove(x.id) }];
-  return {
-    list, add, dup, remove, rename, move, show,
+  return PDM.listOpsAll[o.K] = {
+    list, add, dup, remove, rename, move, show, copy, paste, get current() { return current; },
     /** 편집 화면: 리소스 목록에서 고른 것이 있으면 st.id 로 (true = 바뀜) */
     take(st) { if (!want) return false; st.id = want; want = null; return true; },
     /** 리소스 목록 뿌리 항목 */
@@ -63,6 +75,7 @@ PDM.listOps = function (o) {
     },
     /** 편집 화면 도구 줄: 고른 것 fx 에 대한 추가 · 복제 · id 바꾸기 · 순서 · 삭제 */
     bar(fx) {
+      current = fx ? fx.id : null;
       const l = list(), i = fx ? l.findIndex(x => x.id === fx.id) : -1;
       return h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', margin: '0 0 8px', padding: '6px 8px', border: '1px solid var(--line)', borderRadius: '6px' } },
         h('button', { class: 'btn sm pri', onclick: e => o.presets ? PDM.ui.menu(e.clientX, e.clientY + 10, addMenu()) : add() }, '+ 새로 만들기'),

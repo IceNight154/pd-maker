@@ -827,6 +827,7 @@
           if (what === 'all') { if (r.layers.spawn) r.layers.spawn = new Array(W * H).fill(0); if (r.layers.rand) r.layers.rand = new Array(W * H).fill(0); r.objects = (r.objects || []).filter(o => !o.at || o.at.x == null); }
         }));
       }
+      let hoverCell = null;   // 마우스가 마지막으로 있던 칸 (붙여넣기 자리)
       function objAt(x, y) {
         return (fl.objects || []).findIndex((o, i) => drawable ? (o.at && o.at.x === x && o.at.y === y)
           : (Math.floor(((i % 12) * 2 * S() + S() / 2) / S()) === x && 2 + Math.floor(i / 12) * 2 === y));
@@ -943,6 +944,7 @@
         if (nav || navKey) return;
         if (ui.moveObj >= 0) { cv.style.cursor = 'move'; info.textContent = `옮길 칸을 누르세요 (오른쪽 클릭 · Esc = 취소)  (${x}, ${y})`; const nt = inB(x, y) ? [x, y] : null; if (String(nt) !== String(ui.moveTo)) { ui.moveTo = nt; paint(); } return; }
         if (!down) cv.style.cursor = drawable && cornerAt(e) ? (c => c[0] === c[1] ? 'nwse-resize' : 'nesw-resize')(cornerAt(e)) : '';
+        hoverCell = { x, y };
         info.textContent = `(${x}, ${y})  ${t ? PDM.terrainName(t, up) + ' [' + t.id + ']' : ''}${canSpawn && inB(x, y) && spawnL[y * W + x] ? ' · ' + SPAWN_VALS[spawnL[y * W + x]][0] : ''}${canRand && inB(x, y) && randL[y * W + x] ? ' · 🎲' + randL[y * W + x] + ' ' + ((fl.randSets || [])[randL[y * W + x] - 1] || {}).name : ''}  ${oi >= 0 ? '· ' + PDM.OBJECT_TYPES[fl.objects[oi].type].name + ' ' + (fl.objects[oi].ref || '') : ''}`;
         if (down === 'pen' && inB(x, y)) { let ch = false; brushCells(x, y).forEach(([bx, by]) => { if (terrain[by * W + bx] !== ui.terrain) { terrain[by * W + bx] = ui.terrain; ch = true; } }); if (ch) { lastCell = y * W + x; paint(); } }
         else if (down === 'spawn' && inB(x, y) && spawnL[y * W + x] !== ui.spawnVal) { spawnL[y * W + x] = ui.spawnVal; paint(); }
@@ -1012,21 +1014,32 @@
         ].filter(Boolean));
       }
       /** 오브젝트 복제: 가장 가까운 지나갈 수 있는 빈 칸에 (자동 생성 맵이면 목록 끝에) */
-      function dupObj(i) {
-        const o = JSON.parse(JSON.stringify(fl.objects[i])); o.id = PDM.uid('o');
+      /** 오브젝트 o 를 (cx, cy) 또는 가장 가까운 지나갈 수 있는 빈 칸에 놓음 (복제 · 붙여넣기 공용). r0 = 0 이면 그 칸부터 */
+      function placeObj(o, cx, cy, r0, label) {
+        o = JSON.parse(JSON.stringify(o)); o.id = PDM.uid('o');
         if (drawable && o.at && o.at.x != null) {
           let spot = null;
-          for (let r = 1; r <= 4 && !spot; r++) for (let dy = -r; dy <= r && !spot; dy++) for (let dx = -r; dx <= r && !spot; dx++) {
+          for (let r = r0; r <= 6 && !spot; r++) for (let dy = -r; dy <= r && !spot; dy++) for (let dx = -r; dx <= r && !spot; dx++) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-            const x = o.at.x + dx, y = o.at.y + dy, t = inB(x, y) ? PDM.TERRAIN_BY_ID[terrain[y * W + x]] : null;
+            const x = cx + dx, y = cy + dy, t = inB(x, y) ? PDM.TERRAIN_BY_ID[terrain[y * W + x]] : null;
             if (t && t.pass && objAt(x, y) < 0) spot = { x, y };
           }
           if (!spot) { toast('옆에 빈 칸이 없습니다', 'bad'); return; }
           o.at = spot;
         }
         ui.sel = (fl.objects || []).length;
-        store.edit(key, '오브젝트 복제', r => { r.objects = r.objects || []; r.objects.push(o); });
+        store.edit(key, label, r => { r.objects = r.objects || []; r.objects.push(o); });
       }
+      function dupObj(i) { const o = fl.objects[i]; placeObj(o, (o.at || {}).x, (o.at || {}).y, 1, '오브젝트 복제'); }
+      // Ctrl+C / Ctrl+V: 고른 오브젝트 → 마우스가 있던 칸(없으면 원래 자리 옆)에. 다른 맵 · 방 템플릿에도 붙여 넣을 수 있음
+      ctx.copy = () => { const o = ui.sel >= 0 && (fl.objects || [])[ui.sel]; if (!o) return false; PDM.clip.set('mapobj', o, (PDM.OBJECT_TYPES[o.type] || {}).name + (o.ref ? ' ' + o.ref : '')); };
+      ctx.paste = c => {
+        if (c.kind !== 'mapobj' || !c.payload) return false;
+        const o = c.payload, at = o.at || {};
+        if (PDM.OBJECT_TYPES[o.type] && PDM.OBJECT_TYPES[o.type].nodeOnly && kind !== 'node') { toast('이 오브젝트는 직접 그린 맵에만 놓을 수 있습니다', 'bad'); return; }
+        const p = hoverCell && inB(hoverCell.x, hoverCell.y) ? hoverCell : { x: at.x ?? 0, y: at.y ?? 0 };
+        placeObj(o, p.x, p.y, hoverCell ? 0 : 1, '오브젝트 붙여넣기');
+      };
       const onMove = e => { if (down && down.resize) { down.rect = resizeRect(e, down.resize); info.textContent = `맵 크기 ${down.rect[2]} × ${down.rect[3]}`; paint(); } };
       addEventListener('pointermove', onMove);
       addEventListener('pointerup', onUp);
