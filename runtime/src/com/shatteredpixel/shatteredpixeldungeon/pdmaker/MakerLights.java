@@ -84,7 +84,7 @@ public class MakerLights extends CustomTilemap {
 	/** 빛 지도를 화면에 얹는 방식: 화면 × (1 + 빛) (그림의 무늬를 살린 채 밝힘) + 빛 × GLOW (어두운 곳에 은은한 빛 기운) */
 	static final float GLOW = 0.3f;
 	/** 테스트 플레이 때 게임 로그에 한 번 보여 주는 판 (런타임이 새것으로 바뀌었는지 확인용) */
-	static final String VERSION = "v3"; static boolean told;
+	static final String VERSION = "v4"; static boolean told; static String pending;
 
 	/** 게임 화면을 만들기 직전: 이 맵에 광원이 있으면 맨 위 빛 층을 벽 층(customWalls) 맨 끝에 하나 넣음 */
 	public static void ensure(Level l) {
@@ -92,13 +92,38 @@ public class MakerLights extends CustomTilemap {
 			if (l == null || l.customTiles == null || l.customWalls == null) return;
 			for (CustomTilemap t : l.customTiles.toArray(new CustomTilemap[0])) if (t instanceof MakerLights) l.customTiles.remove(t);   // 예전 세이브 (지형 층에 있던 것)
 			for (CustomTilemap t : l.customWalls.toArray(new CustomTilemap[0])) if (t instanceof MakerLights) l.customWalls.remove(t);
-			if (!MakerRuntime.isActive() || !any(l)) return;
+			if (!MakerRuntime.isActive()) return;
+			int n = count(l);
+			pending = "[PDMaker] 광원 " + VERSION + ": " + (n > 0 ? "이 맵의 점광원 " + n + "개 (빛 · 그림자 · 못 보는 칸은 지움)"
+				: "이 맵에는 점광원이 없습니다 — 빛 · 그림자는 '광원' 오브젝트나 맵 오브젝트의 '광원 켜기'로 생깁니다 (효과 레이어 · 번짐은 그림만 빛남)");
+			if (!any(l)) return;
 			MakerLights t = new MakerLights();
 			t.tileX = 0; t.tileY = 0; t.tileW = l.width(); t.tileH = l.height();
 			l.customWalls.add(t);
 		} catch (Throwable e) { MakerRuntime.log("광원 오류: " + e); }
 	}
 
+	/** 영웅이 지금 보는 칸인지 (맵 밖 · 아직 모르면 true) */
+	public static boolean seenCell(int cx, int cy) {
+		Level l = Dungeon.level;
+		if (l == null || l.heroFOV == null || cx < 0 || cy < 0 || cx >= l.width() || cy >= l.height()) return true;
+		return l.heroFOV[cx + cy * l.width()];
+	}
+	/** 테스트 플레이에서 층에 들어올 때 한 번: 이 맵에 점광원이 몇 개인지 게임 로그에 알림 (빛 레이어만 있고 점광원이 없으면 그림자가 없다는 것도) */
+	public static void announce() {
+		String s = pending; pending = null;
+		if (s == null || System.getProperty("pdmaker.project") == null) return;
+		try { com.shatteredpixel.shatteredpixeldungeon.utils.GLog.i(s); } catch (Throwable ignored) { }
+	}
+	static int count(Level l) {
+		int n = 0;
+		try {
+			JsonValue f = WorldGraph.node(WorldGraph.current());
+			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) n++;
+			for (CustomTilemap t : l.customTiles) if (t instanceof MakerProp) { JsonValue d = MakerRuntime.props.get(((MakerProp) t).propId), lt = d == null ? null : d.get("light"); if (lt != null && lt.getBoolean("on", false)) n++; }
+		} catch (Throwable ignored) { }
+		return n;
+	}
 	static boolean any(Level l) {
 		try {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
@@ -494,6 +519,7 @@ public class MakerLights extends CustomTilemap {
 				gl.glScissor(sbox[0], sbox[1], sbox[2], sbox[3]);
 				if (scissor) gl.glEnable(GL20.GL_SCISSOR_TEST); else gl.glDisable(GL20.GL_SCISSOR_TEST);
 				com.watabou.glwrap.Texture.clear();
+				gl.glEnable(GL20.GL_BLEND);   // ⑤ 에서 껐던 것 (noosa 는 블렌딩이 늘 켜져 있다고 여김)
 				com.watabou.glwrap.Blending.setNormalMode();
 			}
 			// 빛 지도를 화면에 얹음

@@ -288,6 +288,7 @@ public class MakerRuntime {
 	public static void onFloorEnter() {
 		WorldGraph.arrived();
 		if (!isActive() || Dungeon.hero == null) return;
+		MakerLights.announce();
 		int depth = Dungeon.depth;
 		// 1) 게임 첫 시작 이벤트
 		if (story != null && !StoryState.flag("__started")) {

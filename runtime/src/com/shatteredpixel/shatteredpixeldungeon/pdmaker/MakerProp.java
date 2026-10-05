@@ -56,6 +56,7 @@ public class MakerProp extends CustomTilemap {
 		Image light; JsonValue lightCfg;   // 빛 레이어 (<시트>_light.png): 그림 위에 덧셈 합성
 		Vis(Object tx, int fw, int fh) { super(tx, new TextureFilm(tx, fw, fh)); film = new TextureFilm(tx, fw, fh); img = new Image(tx); }
 		MakerBloom bloom; int fw0 = 16, fh0 = 16;
+		CustomTilemap tile;   // 이 그림의 맵 오브젝트 (빛 레이어 · 번짐은 영웅이 지금 보는 칸일 때만 — 다른 방에서 빛이 남아 보이지 않게)
 		void light(JsonValue sp) { try { Object lt = sp == null ? null : MakerRuntime.lightTexture(sp.getString("sheet", ""), sp.getString("lightMode", "add")); if (lt != null) { light = new Image(lt); lightCfg = sp;
 			JsonValue fr = sp.get("frame"); if (fr != null && fr.size >= 2) { fw0 = Math.max(1, fr.getInt(0)); fh0 = Math.max(1, fr.getInt(1)); }
 			bloom = MakerBloom.get(sp.getString("sheet", ""), fw0, fh0, MakerBloom.radius(sp)); } } catch (Throwable ignored) { } }
@@ -90,7 +91,7 @@ public class MakerProp extends CustomTilemap {
 			}
 		}
 		@Override public void draw() { if (img != null && visible) { img.camera = camera(); img.draw();
-			if (light != null && img.visible) { light.camera = img.camera; light.x = img.x; light.y = img.y; light.scale.set(img.scale.x, img.scale.y); MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
+			if (light != null && img.visible && (tile == null || MakerLights.seenCell(tile.tileX, tile.tileY))) { light.camera = img.camera; light.x = img.x; light.y = img.y; light.scale.set(img.scale.x, img.scale.y); MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
 				if (bloom != null && part != 2) { try { bloom.draw(frames[cur], img.x, part == 1 ? img.y - cut * fh0 * img.scale.y : img.y, img.scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg), img.camera); } finally { MakerBloom.done(); } } } } }
 	}
 
@@ -104,6 +105,7 @@ public class MakerProp extends CustomTilemap {
 		if (sp != null && sp.get("frame") != null && sp.get("frame").size >= 2) { fw = Math.max(1, sp.get("frame").getInt(0)); fh = Math.max(1, sp.get("frame").getInt(1)); }
 		if (tx == null) tx = com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES;   // 그림이 없으면 게임 지형 그림 첫 칸
 		vis = new Vis(tx, fw, fh);
+		((Vis) vis).tile = this;
 		((Vis) vis).light(sp);
 		refresh();
 		return vis;
