@@ -784,33 +784,54 @@
     const outIn = h('input', { type: 'text', value: last.outDir || '', placeholder: '내보낼 폴더' });
     const pick = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const d = await pdm.openFolder('게임 파일을 만들 폴더'); if (d) outIn.value = d; } }, '찾기…');
     let kind = last.kind || 'jar';
-    const kindBox = h('div', { class: 'export-kinds' }, [
+    const isWin = /win/i.test(navigator.platform || '') || /Windows/.test(navigator.userAgent);
+    // 안드로이드 서명: 비우면 프로젝트의 signing/ 에 자동으로 만든 키 (경로 · 별칭만 기억하고 비밀번호는 저장하지 않음)
+    const own = h('input', { type: 'checkbox', checked: !!last.keystore });
+    const ksIn = h('input', { type: 'text', value: last.keystore || '', placeholder: '키스토어 파일 (.jks · .keystore)' });
+    const ksPick = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const f = await pdm.openFile('키스토어 파일', ['jks', 'keystore', 'p12']); if (f) ksIn.value = f; } }, '찾기…');
+    const alIn = h('input', { type: 'text', value: last.alias || '', placeholder: '별칭 (alias)' });
+    const spIn = h('input', { type: 'password', placeholder: '키스토어 비밀번호' }), kpIn = h('input', { type: 'password', placeholder: '키 비밀번호 (비우면 같음)' });
+    const ownBox = h('div', { style: { display: 'grid', gap: '4px', marginTop: '4px' } }, h('div', { class: 'imgpick' }, ksIn, ksPick), PDM.ui.row(alIn, spIn, kpIn));
+    const syncOwn = () => { ownBox.style.display = own.checked ? 'grid' : 'none'; };
+    own.onchange = syncOwn; syncOwn();
+    const apkBox = h('div', { class: 'export-apk', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 8px', marginTop: '6px' } },
+      h('b', {}, '안드로이드 서명'),
+      h('small', { class: 'hint', style: { display: 'block', margin: '2px 0 4px' } }, '기본: 처음 내보낼 때 프로젝트의 signing 폴더에 서명 키를 만들어 두고 계속 씁니다 (게임 파일에는 들어가지 않음). 같은 키로 서명해야 이미 설치한 게임 위에 업데이트되니 그 폴더를 잃어버리지 마세요. 구글 플레이에 올릴 거라면 내 키스토어를 쓰세요.'),
+      h('label', { class: 'check' }, own, '내 키스토어 쓰기'), ownBox);
+    const KINDS = [
       ['jar', 'JAR + 실행 파일(.bat)', '빠름. 받는 PC 에 Java 17 이상이 있어야 합니다. 폴더 크기 약 20~30 MB.'],
-      ['image', '실행 파일 폴더 (Java 포함)', 'Java 없이 바로 실행(.exe). 처음 한 번은 JDK 를 내려받아 몇 분 걸립니다. 폴더 크기 약 60~90 MB.']
-    ].map(([k, t, d]) => {
+      ['image', 'Windows 실행 파일 폴더 (.exe · Java 포함)', 'Java 없이 폴더 안의 .exe 로 바로 실행. 처음 한 번은 JDK 를 내려받아 몇 분 걸립니다. 폴더 크기 약 60~90 MB.'],
+      ['installer', 'Windows 설치 파일 (.exe 하나)', '받는 사람은 이 .exe 하나만 실행하면 설치되고 시작 메뉴 · 바탕 화면 바로 가기가 생깁니다 (게임 데이터 포함, 관리자 권한 필요 없음). 처음 한 번 WiX 도구(약 40MB)를 내려받습니다.' + (isWin ? '' : ' ⚠ Windows 에서만 만들 수 있습니다.')],
+      ['apk', '안드로이드 앱 (.apk)', '휴대폰에 복사해서 설치하는 파일 (게임 데이터 포함). Android Studio 를 설치해 SDK 가 있어야 합니다. 처음 빌드는 내려받을 것이 많아 오래 걸립니다.']
+    ];
+    const syncKind = () => { apkBox.style.display = kind === 'apk' ? '' : 'none'; };
+    const kindBox = h('div', { class: 'export-kinds' }, KINDS.map(([k, t, d]) => {
       const card = h('label', { class: 'export-kind' + (k === kind ? ' on' : '') },
-        h('input', { type: 'radio', name: 'exk', checked: k === kind, onchange: () => { kind = k; kindBox.querySelectorAll('.export-kind').forEach(x => x.classList.toggle('on', x === card)); } }),
+        h('input', { type: 'radio', name: 'exk', checked: k === kind, onchange: () => { kind = k; kindBox.querySelectorAll('.export-kind').forEach(x => x.classList.toggle('on', x === card)); syncKind(); } }),
         h('div', {}, h('b', {}, t), h('small', { class: 'hint' }, d)));
       return card;
     }));
+    syncKind();
     const body = h('div', { style: { minWidth: '520px' } },
       PDM.ui.field('게임 이름 (폴더·실행 파일 이름)', nameIn),
       PDM.ui.field('만들 곳', h('div', { class: 'imgpick' }, outIn, pick), '이 폴더 안에 "게임 이름" 폴더가 만들어집니다'),
-      PDM.ui.field('종류', kindBox),
+      PDM.ui.field('종류', kindBox), apkBox,
       h('p', { class: 'hint' }, '저장 → 검사 → 게임 런타임 설치·코드 생성 → gradle 빌드 → 결과 + 프로젝트(project 폴더)를 모아 둡니다. 진행 상황은 출력 창에 나옵니다. 게임 이름·아이콘·버전 같은 게임 자체 정보는 게임 저장소 설정을 따릅니다.'));
     const ok = await PDM.ui.modal('게임 파일 내보내기', body, [['취소', false], ['내보내기', true, 'pri']]);
     if (!ok) return;
     const name = nameIn.value.trim() || projName(), outDir = outIn.value.trim();
     if (!outDir) { toast('만들 곳을 고르세요', 'bad'); return; }
-    try { localStorage.setItem(EXPORT_KEY, JSON.stringify({ name, outDir, kind })); } catch (_) { /* 무시 */ }
+    const signing = kind === 'apk' && own.checked ? { store: ksIn.value.trim(), alias: alIn.value.trim(), storePass: spIn.value, keyPass: kpIn.value } : null;
+    if (signing && (!signing.store || !signing.alias || !signing.storePass)) { toast('키스토어 파일 · 별칭 · 비밀번호를 적어 주세요', 'bad'); return; }
+    try { localStorage.setItem(EXPORT_KEY, JSON.stringify({ name, outDir, kind, keystore: signing ? signing.store : '', alias: signing ? signing.alias : '' })); } catch (_) { /* 무시 */ }
     const errs = runCheck().filter(r => r.level === 'error');
     if (errs.length && !(await PDM.ui.confirm(`오류 ${errs.length}개가 있습니다. 그래도 내보낼까요?`))) return;
     await saveAll();
     const p = store.get('project');
     try {
       showBottom('log');
-      PDM.log(`게임 파일 내보내기 시작: ${name} (${kind === 'image' ? '실행 파일 폴더' : 'JAR'}) → ${outDir}`, 'ok');
-      const r = await pdm.exportGame({ repo: await resolveRepo(), project: store.root, outDir, kind, name });
+      PDM.log(`게임 파일 내보내기 시작: ${name} (${(KINDS.find(x => x[0] === kind) || [, kind])[1]}) → ${outDir}`, 'ok');
+      const r = await pdm.exportGame({ repo: await resolveRepo(), project: store.root, outDir, kind, name, signing });
       setRunning(true);
       PDM.log(`빌드 중… (${r.task}) 끝나면 ${r.dest} 에 만들어집니다`, 'dim');
     } catch (e) { PDM.log('게임 파일 내보내기 실패: ' + e.message, 'err'); toast('실패: ' + e.message, 'bad'); }

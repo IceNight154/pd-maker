@@ -337,7 +337,7 @@ ipcMain.handle('game:stop', wrap(() => { stopGame(); return true; }));
 // ---------------- 프로젝트 저장·내보내기·가져오기 (GameMaker 의 Save As · Export/Import Project) ----------------
 const zip = require('./zip');
 /** 프로젝트에 넣지 않는 것: 임시 파일·백업 */
-const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp)$/.test(rel) || (!isDir && /\.tmp$/.test(rel));
+const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp)$/.test(rel) || /^signing$/.test(rel) || (!isDir && /\.tmp$/.test(rel));   // signing = 안드로이드 서명 키 (게임 파일에 넣지 않음)
 ipcMain.handle('project:copyTo', wrap(({ from, to }) => {
   if (!fs.existsSync(path.join(from, 'project.json'))) throw new Error('프로젝트 폴더가 아닙니다: ' + from);
   if (fs.existsSync(to) && fs.readdirSync(to).length) throw new Error('빈 폴더를 골라 주세요: ' + to);
@@ -388,12 +388,12 @@ function prepareRuntime(repo, project) {
   if (project) installer.generate(repo, project, l => log('  ' + l));
   if (project) installer.applyGameId(repo, project, l => log('  ' + l));
 }
-async function runGradle(repo, args, onDone) {
+async function runGradle(repo, args, onDone, extraEnv) {
   if (gameProc) throw new Error('이미 실행 중입니다. 먼저 중지하세요.');
   const gradlew = path.join(repo, IS_WIN ? 'gradlew.bat' : 'gradlew');
   if (!fs.existsSync(gradlew)) throw new Error('게임 저장소(gradlew)를 찾지 못했습니다: ' + repo);
   const javaHome = await ensureJava();
-  const env = Object.assign({}, process.env); if (javaHome) env.JAVA_HOME = javaHome;
+  const env = Object.assign({}, process.env, extraEnv || {}); if (javaHome) env.JAVA_HOME = javaHome;
   log(`> gradlew ${args.join(' ')}   (${repo})`);
   gameProc = spawn(IS_WIN ? 'cmd.exe' : 'sh', IS_WIN ? ['/c', 'gradlew.bat', ...args] : ['gradlew', ...args], { cwd: repo, env });
   const pipe = b => b.toString().split(/\r?\n/).forEach(l => { if (l) log(l); });
@@ -406,37 +406,191 @@ function copyProjectInto(project, dest) {
   fs.rmSync(to, { recursive: true, force: true });
   fs.cpSync(project, to, { recursive: true, filter: src => !skipProj(path.relative(project, src).replace(/\\/g, '/'), fs.statSync(src).isDirectory()) });
 }
-ipcMain.handle('game:export', wrap(async ({ repo, project, outDir, kind, name }) => {
+// 게임 파일 내보내기 — kind:
+//   jar       : desktop:release → JAR + .bat (Java 필요)
+//   image     : desktop:jpackageImage → Java 가 들어 있는 실행 파일 폴더 (.exe)
+//   installer : 위 폴더의 app/project 에 프로젝트를 넣고 JDK 의 jpackage 로 Windows 설치 파일(.exe 하나) — WiX 3 이 없으면 내려받음
+//   apk       : android:assembleRelease (프로젝트를 assets/pdmaker-project 에 넣고, init 스크립트로 서명 · pdmaker 코드 보존)
+ipcMain.handle('game:export', wrap(async ({ repo, project, outDir, kind, name, signing }) => {
   if (!fs.existsSync(path.join(project, 'project.json'))) throw new Error('프로젝트 폴더가 아닙니다');
   if (!isRepoDir(repo) && bundledRepo()) repo = bundledRepo();
+  if (kind === 'installer' && !IS_WIN) throw new Error('Windows 설치 파일(.exe)은 Windows 에서만 만들 수 있습니다');
+  let apk = null;
+  if (kind === 'apk') apk = await prepareApk(repo, project, signing || {});   // SDK · 서명 키를 먼저 확인 (빌드 전에 실패를 알림)
   prepareRuntime(repo, project);
   const nm = safeName(name);
   const dest = path.join(outDir, nm);
-  const task = kind === 'image' ? 'desktop:jpackageImage' : 'desktop:release';
-  await runGradle(repo, [task, '--console=plain'], code => {
-    if (code !== 0) { if (win) win.webContents.send('export:done', { ok: false, error: `빌드 실패 (코드 ${code}) — 출력 창을 확인하세요` }); return; }
+  const task = kind === 'apk' ? 'android:assembleRelease' : kind === 'image' || kind === 'installer' ? 'desktop:jpackageImage' : 'desktop:release';
+  const fail = msg => { log('! ' + msg); if (win) win.webContents.send('export:done', { ok: false, error: msg }); };
+  const done = () => { log(`> 게임 파일 내보내기 끝: ${dest}`); if (win) win.webContents.send('export:done', { ok: true, dest }); };
+  const args = [task, '--console=plain'];
+  if (apk) args.push('-I', apk.init);
+  const run = runGradle(repo, args, code => {
+    if (apk) apk.cleanup();
+    if (code !== 0) return fail(`빌드 실패 (코드 ${code}) — 출력 창을 확인하세요`);
     fs.rmSync(dest, { recursive: true, force: true });
     fs.mkdirSync(dest, { recursive: true });
-    if (kind === 'image') {
+    if (kind === 'apk') {
+      const f = newestFile(path.join(repo, 'android', 'build', 'outputs', 'apk', 'release'), /\.apk$/);
+      if (!f) return fail('APK 를 찾지 못했습니다 (android/build/outputs/apk/release)');
+      if (/unsigned/.test(path.basename(f))) return fail('서명되지 않은 APK 가 나왔습니다 — 서명 설정을 확인하세요');
+      fs.copyFileSync(f, path.join(dest, nm + '.apk'));
+      fs.writeFileSync(path.join(dest, '읽어 주세요.txt'), '\ufeff' + `${nm}.apk\r\n\r\n안드로이드 기기에 복사해서 열면 설치됩니다 ("출처를 알 수 없는 앱" 허용 필요).\r\n게임 데이터(프로젝트)는 APK 안에 들어 있습니다.\r\n서명 키: ${apk.keyNote}\r\n같은 키로 서명해야 기존 설치 위에 업데이트됩니다.\r\n`);
+      return done();
+    }
+    if (kind === 'image' || kind === 'installer') {
       const base = path.join(repo, 'desktop', 'build', 'jpackage');
       const img = fs.existsSync(base) ? fs.readdirSync(base).map(f => path.join(base, f)).find(f => fs.statSync(f).isDirectory()) : null;
-      if (!img) throw new Error('jpackage 결과 폴더를 찾지 못했습니다: ' + base);
-      fs.cpSync(img, dest, { recursive: true });
-    } else {
-      const jar = newestFile(path.join(repo, 'desktop', 'build', 'libs'), /\.jar$/);
-      if (!jar) throw new Error('jar 를 찾지 못했습니다 (desktop/build/libs)');
-      fs.copyFileSync(jar, path.join(dest, nm + '.jar'));
-      // .bat 는 ANSI 로 읽히므로 한글 이름을 적지 않고 폴더의 jar 를 찾아 실행
-      fs.writeFileSync(path.join(dest, nm + '.bat'), `@echo off\r\ncd /d "%~dp0"\r\nfor %%f in (*.jar) do start "" javaw -jar "%%f"\r\n`);
-      fs.writeFileSync(path.join(dest, nm + '.sh'), `#!/bin/sh\ncd "$(dirname "$0")"\nexec java -jar "${nm}.jar"\n`, { mode: 0o755 });
-      fs.writeFileSync(path.join(dest, '읽어 주세요.txt'), '\ufeff' + `${nm}\r\n\r\n실행: ${nm}.bat 더블클릭 (Java 17 이상 필요)\r\nproject 폴더 = 게임 데이터 (PDMaker 로 만든 것). 지우거나 옮기지 마세요.\r\n`);
+      if (!img) return fail('jpackage 결과 폴더를 찾지 못했습니다: ' + base);
+      if (kind === 'image') { fs.cpSync(img, dest, { recursive: true }); copyProjectInto(project, dest); return done(); }
+      // 설치 파일: 실행 파일 폴더를 임시로 복사 → app/project 에 프로젝트 → jpackage --type exe
+      const tmp = path.join(repo, 'desktop', 'build', 'pdmaker-installer'), app = path.join(tmp, path.basename(img));
+      fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
+      fs.cpSync(img, app, { recursive: true });
+      copyProjectInto(project, path.join(app, 'app'));
+      makeInstaller(repo, project, app, dest, nm).then(file => { fs.rmSync(tmp, { recursive: true, force: true }); log('> 설치 파일: ' + file); done(); }, e => fail('설치 파일 만들기 실패: ' + e.message));
+      return;
     }
+    const jar = newestFile(path.join(repo, 'desktop', 'build', 'libs'), /\.jar$/);
+    if (!jar) return fail('jar 를 찾지 못했습니다 (desktop/build/libs)');
+    fs.copyFileSync(jar, path.join(dest, nm + '.jar'));
+    // .bat 는 ANSI 로 읽히므로 한글 이름을 적지 않고 폴더의 jar 를 찾아 실행
+    fs.writeFileSync(path.join(dest, nm + '.bat'), `@echo off\r\ncd /d "%~dp0"\r\nfor %%f in (*.jar) do start "" javaw -jar "%%f"\r\n`);
+    fs.writeFileSync(path.join(dest, nm + '.sh'), `#!/bin/sh\ncd "$(dirname "$0")"\nexec java -jar "${nm}.jar"\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(dest, '읽어 주세요.txt'), '\ufeff' + `${nm}\r\n\r\n실행: ${nm}.bat 더블클릭 (Java 17 이상 필요)\r\nproject 폴더 = 게임 데이터 (PDMaker 로 만든 것). 지우거나 옮기지 마세요.\r\n`);
     copyProjectInto(project, dest);
-    log(`> 게임 파일 내보내기 끝: ${dest}`);
-    if (win) win.webContents.send('export:done', { ok: true, dest });
-  });
+    done();
+  }, apk ? apk.env : null);
+  try { await run; } catch (e) { if (apk) apk.cleanup(); throw e; }
   return { dest, task };
 }));
+
+// ---------------- Windows 설치 파일 (jpackage --type exe) ----------------
+/** WiX 3 (jpackage 가 .exe 설치 파일을 만들 때 씀) — PATH 에 있으면 그것, 없으면 PDMaker 폴더에 내려받음 (처음 한 번, 약 40MB) */
+async function ensureWix() {
+  const has = d => d && fs.existsSync(path.join(d, 'candle.exe')) && fs.existsSync(path.join(d, 'light.exe'));
+  const fromPath = (process.env.PATH || '').split(path.delimiter).find(has);
+  if (fromPath) return fromPath;
+  const pf = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const inst = (() => { try { return fs.readdirSync(pf).filter(f => /^WiX Toolset v3/i.test(f)).map(f => path.join(pf, f, 'bin')).find(has); } catch (_) { return null; } })();
+  if (inst) return inst;
+  const dir = path.join(app.getPath('userData'), 'wix3');
+  if (has(dir)) return dir;
+  fs.mkdirSync(dir, { recursive: true });
+  const zip = path.join(dir, 'wix-download.zip');
+  log('> WiX Toolset 3 이 없어 내려받습니다 (설치 파일을 만들 때 필요 · 처음 한 번, 약 40MB) …');
+  await download('https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip', zip);
+  await new Promise((res, rej) => { const t = spawn('tar', ['-xf', zip, '-C', dir]); t.on('close', c => c === 0 ? res() : rej(new Error('WiX 압축 풀기 실패 (tar 종료 코드 ' + c + ')'))); t.on('error', rej); });
+  fs.rmSync(zip, { force: true });
+  if (!has(dir)) throw new Error('WiX 를 내려받았지만 candle.exe 를 찾지 못했습니다: ' + dir);
+  return dir;
+}
+/** 게임 저장소가 내려받은 JDK(데스크톱 빌드용) 또는 PDMaker 의 JDK 에서 jpackage */
+function findJpackage(repo, javaHome) {
+  const exe = IS_WIN ? 'jpackage.exe' : 'jpackage';
+  const jd = path.join(repo, 'desktop', 'build', 'jdks');
+  const scan = d => { try { return fs.readdirSync(d).map(f => path.join(d, f)); } catch (_) { return []; } };
+  for (const plat of scan(jd)) for (const j of scan(plat)) { const f = path.join(j, 'bin', exe); if (fs.existsSync(f)) return f; }
+  const f = javaHome && path.join(javaHome, 'bin', exe);
+  return f && fs.existsSync(f) ? f : null;
+}
+async function makeInstaller(repo, project, appImage, dest, nm) {
+  const wix = await ensureWix();
+  const javaHome = await ensureJava();
+  const jp = findJpackage(repo, javaHome);
+  if (!jp) throw new Error('jpackage 를 찾지 못했습니다 (JDK 17 이상 필요)');
+  const gradle = fs.readFileSync(path.join(repo, 'build.gradle'), 'utf8');
+  const ver = ((/appVersionName\s*=\s*'([^']*)'/.exec(gradle) || [])[1] || '1.0.0').match(/\d+(\.\d+){0,2}/);
+  const gid = installer.gameId(project) || {};
+  // 같은 게임이면 늘 같은 업그레이드 UUID (새 버전 설치 파일이 예전 것을 덮어씀)
+  const h = require('crypto').createHash('md5').update('pdmaker:' + (gid.appPackageName || nm)).digest('hex');
+  const uuid = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+  const args = ['--type', 'exe', '--app-image', appImage, '--name', path.basename(appImage), '--dest', dest,
+    '--app-version', ver ? ver[0] : '1.0.0', '--vendor', 'PDMaker', '--win-upgrade-uuid', uuid,
+    '--win-shortcut', '--win-menu', '--win-dir-chooser', '--win-per-user-install'];
+  log(`> jpackage ${args.join(' ')}`);
+  const env = Object.assign({}, process.env, { PATH: wix + path.delimiter + (process.env.PATH || '') });
+  await new Promise((res, rej) => {
+    const p = spawn(jp, args, { env });
+    const pipe = b => b.toString().split(/\r?\n/).forEach(l => { if (l) log(l); });
+    p.stdout.on('data', pipe); p.stderr.on('data', pipe);
+    p.on('close', c => c === 0 ? res() : rej(new Error('jpackage 종료 코드 ' + c + ' (게임 이름에 한글이 있으면 영어 이름으로 다시 해 보세요)'))); p.on('error', rej);
+  });
+  const exe = newestFile(dest, /\.exe$/i);
+  if (!exe) throw new Error('설치 파일(.exe)이 만들어지지 않았습니다');
+  const want = path.join(dest, nm + ' 설치.exe');
+  try { fs.renameSync(exe, want); return want; } catch (_) { return exe; }
+}
+
+// ---------------- 안드로이드 APK ----------------
+/** 안드로이드 SDK — 환경 변수 · 저장소 local.properties · 흔한 설치 위치 */
+function findAndroidSdk(repo) {
+  const c = [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT];
+  try { const lp = fs.readFileSync(path.join(repo, 'local.properties'), 'utf8'); const m = /^\s*sdk\.dir\s*=\s*(.+)$/m.exec(lp); if (m) c.push(m[1].trim().replace(/\\\\/g, '\\').replace(/\\:/g, ':')); } catch (_) { /* 없음 */ }
+  const home = require('os').homedir();
+  if (IS_WIN) c.push(path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Android', 'Sdk'));
+  c.push(path.join(home, 'Library', 'Android', 'sdk'), path.join(home, 'Android', 'Sdk'), '/opt/android-sdk');
+  return c.find(d => d && fs.existsSync(path.join(d, 'platforms')) || (d && fs.existsSync(path.join(d, 'cmdline-tools')))) || null;
+}
+/** 서명 키: 직접 고른 키스토어, 없으면 프로젝트의 signing/ 에 만들어 둔 키 (처음 한 번 keytool 로 만듦) */
+async function apkSigning(project, s, javaHome) {
+  if (s.store) {
+    if (!fs.existsSync(s.store)) throw new Error('키스토어 파일이 없습니다: ' + s.store);
+    if (!s.alias || !s.storePass) throw new Error('키스토어의 별칭(alias)과 비밀번호를 적어 주세요');
+    return { store: s.store, storePass: s.storePass, alias: s.alias, keyPass: s.keyPass || s.storePass, note: s.store };
+  }
+  const dir = path.join(project, 'signing'), jks = path.join(dir, 'release.jks'), info = path.join(dir, 'keystore.json');
+  if (fs.existsSync(jks) && fs.existsSync(info)) { const k = JSON.parse(fs.readFileSync(info, 'utf8')); return { store: jks, storePass: k.storePass, alias: k.alias, keyPass: k.keyPass || k.storePass, note: `프로젝트의 signing/release.jks (잃어버리지 마세요)` }; }
+  fs.mkdirSync(dir, { recursive: true });
+  const pass = require('crypto').randomBytes(18).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 20);
+  const keytool = path.join(javaHome || '', 'bin', IS_WIN ? 'keytool.exe' : 'keytool');
+  const kt = fs.existsSync(keytool) ? keytool : 'keytool';
+  log('> 안드로이드 서명 키를 만듭니다: ' + jks);
+  await new Promise((res, rej) => {
+    const p = spawn(kt, ['-genkeypair', '-keystore', jks, '-storetype', 'PKCS12', '-alias', 'pdmaker', '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10000',
+      '-storepass', pass, '-keypass', pass, '-dname', 'CN=PDMaker Game, O=PDMaker']);
+    p.stderr.on('data', b => log(b.toString().trim())); p.on('close', c => c === 0 ? res() : rej(new Error('keytool 종료 코드 ' + c))); p.on('error', rej);
+  });
+  fs.writeFileSync(info, JSON.stringify({ alias: 'pdmaker', storePass: pass, keyPass: pass, note: '이 키로 서명한 APK 만 서로 업데이트됩니다. 이 폴더를 지우거나 잃어버리지 마세요 (게임 파일에는 들어가지 않음).' }, null, 2));
+  fs.writeFileSync(path.join(dir, '읽어 주세요.txt'), '\ufeff안드로이드 APK 서명 키입니다.\r\n같은 키로 서명해야 이미 설치한 게임 위에 업데이트할 수 있습니다.\r\n지우거나 잃어버리지 말고, 다른 사람에게 주지 마세요.\r\n');
+  return { store: jks, storePass: pass, alias: 'pdmaker', keyPass: pass, note: `프로젝트의 signing/release.jks (잃어버리지 마세요)` };
+}
+/** APK 빌드 준비: SDK 확인 · 서명 키 · init 스크립트 · 프로젝트를 assets 에 → { init, env, cleanup, keyNote } */
+async function prepareApk(repo, project, signing) {
+  const sdk = findAndroidSdk(repo);
+  if (!sdk) throw new Error('안드로이드 SDK 를 찾지 못했습니다. Android Studio 를 설치하고 한 번 실행해 SDK 를 받은 뒤 다시 하세요 (또는 ANDROID_HOME 환경 변수에 SDK 폴더를 지정).');
+  const lpf = path.join(repo, 'local.properties');
+  let lp = ''; try { lp = fs.readFileSync(lpf, 'utf8'); } catch (_) { /* 없음 */ }
+  if (!/^\s*sdk\.dir\s*=/m.test(lp)) { fs.writeFileSync(lpf, lp + (lp && !lp.endsWith('\n') ? '\n' : '') + 'sdk.dir=' + sdk.replace(/\\/g, '\\\\').replace(/:/g, '\\:') + '\n'); log('> local.properties: sdk.dir = ' + sdk); }
+  const javaHome = await ensureJava();
+  const k = await apkSigning(project, signing, javaHome);
+  // init 스크립트: 릴리스 서명 + pdmaker 코드가 R8 에 지워지지 않게 (게임 저장소 build.gradle 은 건드리지 않음)
+  const init = path.join(require('os').tmpdir(), 'pdmaker-apk-init.gradle');
+  fs.writeFileSync(init, [
+    'allprojects {',
+    '  afterEvaluate { p ->',
+    "    if (p.plugins.hasPlugin('com.android.application') && p.hasProperty('pdmStore')) {",
+    "      def keep = new File(p.layout.buildDirectory.get().asFile, 'pdmaker-keep.pro'); keep.parentFile.mkdirs()",
+    "      keep.text = '-keep class com.shatteredpixel.shatteredpixeldungeon.pdmaker.** { *; }\\n'",
+    "      def sc = p.android.signingConfigs.create('pdm')",
+    "      sc.storeFile = p.file(p.property('pdmStore')); sc.storePassword = p.property('pdmStorePass'); sc.keyAlias = p.property('pdmAlias'); sc.keyPassword = p.property('pdmKeyPass')",
+    "      def rel = p.android.buildTypes.getByName('release')",
+    '      rel.signingConfig = sc',
+    '      rel.proguardFiles(keep)',
+    '    }',
+    '  }',
+    '}', ''].join('\n'));
+  // 프로젝트를 core 의 assets/pdmaker-project 에 (안드로이드는 이 assets 를 씀 — 런타임이 Gdx.files.internal 로 읽음). 빌드가 끝나면 지움
+  const assets = path.join(repo, 'core', 'src', 'main', 'assets', 'pdmaker-project');
+  fs.rmSync(assets, { recursive: true, force: true });
+  fs.cpSync(project, assets, { recursive: true, filter: src => !skipProj(path.relative(project, src).replace(/\\/g, '/'), fs.statSync(src).isDirectory()) });
+  log('> 프로젝트를 APK 에 넣습니다 (assets/pdmaker-project)');
+  return {
+    init, keyNote: k.note,
+    env: { ORG_GRADLE_PROJECT_pdmStore: k.store, ORG_GRADLE_PROJECT_pdmStorePass: k.storePass, ORG_GRADLE_PROJECT_pdmAlias: k.alias, ORG_GRADLE_PROJECT_pdmKeyPass: k.keyPass },   // 비밀번호는 명령줄 · 출력 창에 남지 않게 환경 변수로
+    cleanup: () => { try { fs.rmSync(assets, { recursive: true, force: true }); } catch (_) { /* 무시 */ } }
+  };
+}
 ipcMain.handle('game:clean', wrap(async ({ repo }) => {
   if (!isRepoDir(repo) && bundledRepo()) repo = bundledRepo();
   await runGradle(repo, ['clean', '--console=plain'], code => { log(`> 빌드 정리 끝 (코드 ${code})`); if (win) win.webContents.send('game:exit', code); });
