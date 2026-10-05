@@ -21,7 +21,11 @@
 
   // ---------------- 인스펙터 ----------------
   PDM.inspector = {
-    show(title, el) { $('#inspTitle').textContent = title || '인스펙터'; const b = $('#inspBody'); b.innerHTML = ''; if (el) b.append(el); },
+    show(title, el) {   // 같은 것을 다시 보여 줄 때(편집 뒤 다시 그림)는 스크롤 위치를 그대로
+      const t = title || '인스펙터', b = $('#inspBody'), same = $('#inspTitle').textContent === t, keep = same ? b.scrollTop : 0;
+      $('#inspTitle').textContent = t; b.innerHTML = ''; if (el) b.append(el);
+      if (same) { b.scrollTop = keep; requestAnimationFrame(() => { if (b.scrollTop !== keep) b.scrollTop = keep; }); }
+    },
     clear() { this.show('인스펙터', h('div', { class: 'empty' }, '선택한 것이 없습니다')); }
   };
 
@@ -72,9 +76,11 @@
     const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view';
     const inner = active === t ? [...t.el.querySelectorAll(INNER)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const oldH = active === t ? t.el.offsetHeight : 0;
+    // 기준점: 방금 누른(포커스된) 칸 — 다시 그린 뒤 같은 자리의 칸이 화면의 같은 높이에 오게 맞춤 (위쪽 칸 높이가 바뀌어도 밀리지 않게)
+    const anchor = active === t ? anchorOf(t.el) : null;
     if (oldH) t.el.style.minHeight = oldH + 'px';
     t.el.innerHTML = ''; t.el.append(el);
-    if (active === t) { body.innerHTML = ''; body.append(t.el); body.scrollTop = keep; }
+    if (active === t) { body.innerHTML = ''; body.append(t.el); body.scrollTop = keep; if (anchor) keepAnchor(t, anchor); }
     clearTimeout(t._mh);
     if (oldH) t._mh = setTimeout(() => { t.el.style.minHeight = ''; }, 1500);
     if (inner.some(s => s[0] || s[1])) {
@@ -83,6 +89,24 @@
       restore(); [20, 80, 200, 500].forEach(ms => setTimeout(restore, ms));
     }
     drawTabbar();
+  }
+  /** 포커스된 칸(또는 마지막으로 누른 칸)의 위치: t.el 에서의 자식 번호 경로 + 화면에서의 높이 */
+  let lastPointer = null;
+  addEventListener('pointerdown', e => { lastPointer = e.target; }, true);
+  function anchorOf(root) {
+    let n = document.activeElement && root.contains(document.activeElement) && document.activeElement !== root ? document.activeElement : lastPointer && root.contains(lastPointer) ? lastPointer : null;
+    if (!n) return null;
+    const top = n.getBoundingClientRect().top, path = [];
+    for (let x = n; x && x !== root; x = x.parentElement) path.unshift([...x.parentElement.children].indexOf(x));
+    return { path, top };
+  }
+  function keepAnchor(t, a) {
+    const body = $('#tabbody');
+    const find = () => { let x = t.el; for (const i of a.path) { x = x && x.children[i]; if (!x) return null; } return x; };
+    let moved = false; const off = () => { moved = true; };
+    body.addEventListener('wheel', off, { once: true, passive: true });
+    const fix = () => { if (moved) return; const n = find(); if (!n) return; const d = n.getBoundingClientRect().top - a.top; if (Math.abs(d) > 1) body.scrollTop += d; };
+    fix(); [30, 120, 400].forEach(ms => setTimeout(fix, ms));   // 그림 · 미리보기가 늦게 커져도 다시 맞춤 (그사이 휠로 움직였으면 그만)
   }
   function activate(t) {
     if (active && active !== t) active.scroll = $('#tabbody').scrollTop;

@@ -75,6 +75,7 @@
 - **Electron 메인 프로세스**: 파일 입출력, 프로젝트 폴더 감시, 게임 실행(`gradlew desktop:debug -Dpdmaker.project=…`), 플러그인 폴더 검색.
 - **렌더러**: 순수 JS(빌드 도구 없음 — 기존 메이커와 같은 방식이라 직접 고치기 쉬움). `window.pdm` 으로 메인 기능 호출.
 - **실행 취소/다시 실행**: 모든 편집은 `store.edit(설명, fn)` 을 거쳐 스냅샷 기록.
+- **다시 그릴 때 화면 위치 유지**: 편집할 때마다 탭을 다시 그리므로 — 섹션 접힘 상태를 기억(탭+제목), 인스펙터는 같은 제목이면 스크롤 유지, 탭 본문은 누르거나 입력 중인 칸(자식 순서 경로)을 기준으로 화면 위치를 맞춤(0·30·120·400ms, 휠을 굴리면 멈춤).
 - **웹 모드**: Electron 없이 브라우저로 열어도 동작(파일 대신 메모리/브라우저 저장). 개발·검증용.
 
 ---
@@ -258,6 +259,9 @@ MyProject/
                "requires": "ember_focus", "requiresPoints": 1, "subclass": "", "ability": "",
                "effects": [ { "type": "unlockSpell", "spell": "storm_lance" },
                             { "type": "spell", "spell": "storm_lance", "field": "cooldown", "perPoint": -2 } ] } ]
+// 특성 포인트는 원작처럼 최대 4 — 영웅의 "talentCapRaised": true 면 10 까지 (MakerTalents.maxPts). 아이콘 icon: 숫자(게임 특성 시트) · "파일" · { file, size, index } · 그리기
+// 특성 창: 아직 열리지 않은 단계는 "레벨 N 이 되면 특성이 더 열립니다." 한 줄 (원작처럼 1단계는 빈 별로 미리 보임)
+// 편집기: "id 바꾸기…"(시작 영웅·순서·참조도 같이), 데이터 파일 / 만들어진 코드 파일 / 게임 HeroClass 보기. 기본 칸의 이름 = 선택 화면 제목 = 리소스 목록 이름
 ```
 - 포인트: 단계마다 `min(points, 레벨 − unlockLevel + 1)` − 그 단계에 쓴 포인트 (원작과 같음). `requires`: 원작 `Hero.talentPointsAvailable` 처럼
   3단계는 전직 뒤, 4단계는 직업 능력 뒤 (기본값. 영웅에게 전직·능력이 없으면 그 조건은 무시). 특성의 `subclass`/`ability` = 그 전직·능력일 때만 보임(원작 3·4단계 전용 특성).
@@ -384,6 +388,9 @@ MyProject/
 - 게임 아이템(아이템 트리의 ▫ 페이지 → "소리"): `sounds.json` 의 `gameItems["spd:<경로>"] = { use, throw, pickup, equip }` (`Item.execute` · `Item.doPickUp` 연결 줄).
 - 캐릭터: `sounds = { attack, hurt, die }`(몬스터) · `{ talk }`(NPC) + `voice`(대사 글자).
 - 주문·직업 능력(쓸 때·맞을 때) · 대사창 · 마음 시스템(heart.json `sounds`: up·down·bond·crystal) · 게이지(`gauge.sounds`: overflow·switch).
+- 게임 아이템 던지기 소리는 **던지는 순간** (`Item.cast` 연결 줄 → `MakerAudio.onItemCast`) — 아이템 창에서 "던지기"를 누를 때(조준 시작)는 소리 없음.
+- 편집기의 소리 칸: 기본 칸에 그 아이템의 실제 기본 소리를 게임 코드에서 읽어 보여 줌(`PDM.gameItemSounds` — `extends` 사슬을 따라 hitSound(무기·메이스 = HIT_CRUSH 등)·물약 DRINK·주문서 READ·음식 EAT·완드 ZAP·doPickUp),
+  칸마다 🔇(소리 없음) · ↺(기본으로), "↺ 소리 모두 원래대로", 게임 아이템 그림 "↺ 원래 그림으로".
 - 값: "" = 기본 소리(아래 표) 또는 게임 원래 소리, "none" = 소리 없음. 사운드 편집기의 "쓰는 곳"은 프로젝트 전체에서 `sound:<id>` 를 찾음.
 
 **코덱스 연출** (mod-2 codices): `magicImage`(items.png 칸) — 원거리: 그 그림이 날아감(`visual: item`, MissileSprite, `spin`), 근접: MagicImageAnimator(`anim`: alternate·sweep·stab·charge·smash, mod-2 전용) · `hits`/`hitDelay` 연타 · 대상을 고르는 코덱스는 `usesTargeting`(퀵슬롯 자동 조준).
@@ -426,6 +433,11 @@ codex.melee · codex.meleeHit · codex.ranged · codex.cast · codex.hit · spel
 - 버튼 애니메이션: 나타날 때(서서히·슬라이드 4방향·떨어지며 튕김·가로로 튀어나옴, 시간·버튼 사이 간격·거리) + 나타난 뒤 계속(둥실·살랑·깜빡임).
 - "화면을 누르세요": 처음엔 로고+안내, 누르면 로고가 사라지거나 올라가고 버튼이 나옴, 가만히 두면 돌아감. 다른 화면(랭킹 등)에서 돌아오면 바로 메뉴.
 - 에디터: 움직이는 미리보기(누르면 탭 전 ↔ 메뉴, ▶ 애니메이션 다시 보기), 빠른 시작 "원작(SPD) 기본"·"mod-2(위츨링) 기본".
+
+- **하위 페이지** `pages` (`MakerPages`): `updates { mode: game|github|off, repo, page }` (GitHubUpdates 연결 줄 — 끄기·저장소 주소·다운로드 페이지),
+  `news { mode: game|feed|custom|off, url, articles[] }` (ShatteredNews 연결 줄 · custom = 직접 쓴 소식을 News 목록에 넣음),
+  `about · support · changes { mode: game|custom, title, blocks[{ title, text, link, linkLabel, color }] }` (custom = 화면 첫 프레임에 내용을 블록으로 바꿈).
+  서비스 모듈은 이 패키지를 모르므로 System 속성(`pdmaker.updates.*` · `pdmaker.news.*`)으로 넘김. 이 연결 줄들은 선택(`optional`) — 파일이 없는 저장소면 건너뜀.
 
 ### 3.8 그림 관리 · 게임 그림 바꾸기 — 에디터 "🖼 그림 관리"
 

@@ -15,10 +15,13 @@ PDM.ui = (function () {
     return h('label', { class: 'field' }, label ? h('span', { class: 'fl' }, label) : null, input, hint ? h('small', { class: 'hint' }, hint) : null);
   }
   function row(...kids) { return h('div', { class: 'row' }, ...kids); }
+  /** 접은 섹션 기억 (탭 + 제목) — 다시 그려도 접힌 채로 (펼쳐지며 아래가 밀리던 것) */
+  const closedSecs = new Set();
   function section(title, ...kids) {
+    const id = ((PDM.tabs && PDM.tabs.active) || '') + '|' + (typeof title === 'string' ? title : (title && title.textContent) || '');
     const body = h('div', { class: 'sec-body' }, ...kids);
-    const head = h('div', { class: 'sec-head', onclick: () => el.classList.toggle('closed') }, h('span', { class: 'caret' }, '▾'), title);
-    const el = h('section', { class: 'sec' }, head, body);
+    const head = h('div', { class: 'sec-head', onclick: () => { const c = el.classList.toggle('closed'); if (c) closedSecs.add(id); else closedSecs.delete(id); } }, h('span', { class: 'caret' }, '▾'), title);
+    const el = h('section', { class: 'sec' + (closedSecs.has(id) ? ' closed' : '') }, head, body);
     return el;
   }
 
