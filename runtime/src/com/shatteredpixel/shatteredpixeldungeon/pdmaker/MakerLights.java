@@ -5,6 +5,8 @@
  *   광원 오브젝트: { type: "light", at, cond, color, k, z, range, pulse, pulseMin, shadow, charShadow }   · 조건(cond)은 0.5초마다 다시 검사 (스위치로 켜고 끄기)
  *   지형 광원: 맵(노드) · 그룹의 terrainLights[{ terrain, color, k, z, range, pulse, pulseMin }] — 그 지형 칸마다 은은한 빛 (발광 호수 · 용암)
  *             벽 그림자는 없고(칸이 많아서), 못 보는 칸은 지움. 깜빡임은 칸마다 박자를 어긋나게 해서 일렁임.
+ *   자동 광원: 맵(노드) · 그룹의 autoLights[{ terrain, chance(%), max(0 = 제한 없음), spacing(칸), ox, oy, cond, + 광원 설정 }]
+ *             그 지형 칸에 겹치도록 점광원을 놓음 (그림자 있음) — 자동 생성 층에서도 층 씨앗으로 늘 같은 자리 (저장 필요 없음).
  *   맵 오브젝트: props/<id>.json 의 light { on, color, k, z, range, ox, oy, pulse, pulseMin, shadow, charShadow } · castShadow(막힌 상태일 때 다른 빛을 가림, 기본 켬)
  *
  * 그리는 순서 (GameMaker 조명 코드와 같은 방식):
@@ -119,12 +121,34 @@ public class MakerLights extends CustomTilemap {
 		try { com.shatteredpixel.shatteredpixeldungeon.utils.GLog.i(s); } catch (Throwable ignored) { }
 	}
 	/** 이 맵의 지형 광원 설정 (노드에 없으면 그룹 것) */
-	static JsonValue terrainLights() {
+	static JsonValue terrainLights() { return mapList("terrainLights"); }
+	/** 이 맵의 자동 광원 설정 (노드에 없으면 그룹 것) */
+	static JsonValue autoLights() { return mapList("autoLights"); }
+	static JsonValue mapList(String key) {
 		try {
-			String id = WorldGraph.current(); JsonValue f = WorldGraph.node(id), a = f == null ? null : f.get("terrainLights");
-			if (a == null || a.size == 0) { JsonValue g = WorldGraph.group(id); a = g == null ? null : g.get("terrainLights"); }
+			String id = WorldGraph.current(); JsonValue f = WorldGraph.node(id), a = f == null ? null : f.get(key);
+			if (a == null || a.size == 0) { JsonValue g = WorldGraph.group(id); a = g == null ? null : g.get(key); }
 			return a != null && a.isArray() && a.size > 0 ? a : null;
 		} catch (Throwable ignored) { return null; }
+	}
+	/** 자동 광원 자리 고르기: 그 지형 칸을 층 씨앗으로 섞은 뒤, 확률 · 간격 · 최대 개수에 맞게 → { 칸 x, 칸 y } 목록 */
+	static ArrayList<int[]> autoCells(Level l, JsonValue a, int idx) {
+		ArrayList<int[]> out = new ArrayList<>();
+		int ter; try { ter = a.getInt("terrain", -1); } catch (Throwable t) { return out; }
+		float chance = Math.max(0f, Math.min(1f, a.getFloat("chance", 100f) / 100f)), spacing = Math.max(0f, a.getFloat("spacing", 3f));
+		int max = a.getInt("max", 0);
+		ArrayList<Integer> cells = new ArrayList<>();
+		for (int c = 0; c < l.length(); c++) if (l.map[c] == ter) cells.add(c);
+		java.util.Random rnd = new java.util.Random(Dungeon.seedCurDepth() * 7919L + idx * 104729L);
+		java.util.Collections.shuffle(cells, rnd);
+		for (int c : cells) {
+			if (max > 0 && out.size() >= max) break;
+			if (rnd.nextFloat() >= chance) continue;
+			int cx = c % l.width(), cy = c / l.width(); boolean near = false;
+			for (int[] p : out) if (Math.hypot(p[0] - cx, p[1] - cy) < spacing) { near = true; break; }
+			if (!near) out.add(new int[]{ cx, cy });
+		}
+		return out;
 	}
 	static int count(Level l) {
 		int n = 0;
@@ -132,11 +156,12 @@ public class MakerLights extends CustomTilemap {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) n++;
 			for (CustomTilemap t : l.customTiles) if (t instanceof MakerProp) { JsonValue d = MakerRuntime.props.get(((MakerProp) t).propId), lt = d == null ? null : d.get("light"); if (lt != null && lt.getBoolean("on", false)) n++; }
+			JsonValue al = autoLights(); if (al != null) { int i = 0; for (JsonValue a : al) n += autoCells(l, a, i++).size(); }
 		} catch (Throwable ignored) { }
 		return n;
 	}
 	static boolean any(Level l) {
-		if (terrainLights() != null) return true;
+		if (terrainLights() != null || autoLights() != null) return true;
 		try {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) return true;
@@ -366,6 +391,15 @@ public class MakerLights extends CustomTilemap {
 					spots.add(s);
 				}
 				areas = terrainLights();
+				JsonValue al = autoLights();   // 자동 광원: 그 지형 칸에 겹치게 점광원
+				if (al != null && l != null) { int i = 0; for (JsonValue a : al) {
+					for (int[] c : autoCells(l, a, i)) {
+						Spot s = new Spot(); s.cfg = a; s.cond = a.getString("cond", "").trim();
+						s.x = (c[0] + 0.5f) * 16 + a.getFloat("ox", 0); s.y = (c[1] + 0.5f) * 16 + a.getFloat("oy", 0);
+						spots.add(s);
+					}
+					i++;
+				} }
 			} catch (Throwable t) { MakerRuntime.log("광원 오류: " + t); }
 		}
 		String note;
