@@ -7,6 +7,8 @@
  *             벽 그림자는 없고(칸이 많아서), 못 보는 칸은 지움. 깜빡임은 칸마다 박자를 어긋나게 해서 일렁임.
  *   자동 광원: 맵(노드) · 그룹의 autoLights[{ terrain, chance(%), max(0 = 제한 없음), spacing(칸), ox, oy, cond, + 광원 설정 }]
  *             그 지형 칸에 겹치도록 점광원을 놓음 (그림자 있음) — 자동 생성 층에서도 층 씨앗으로 늘 같은 자리 (저장 필요 없음).
+ *   아이템: items/<id>.json 의 light { on, carried(지니고 있어도 — 영웅에게서 빛남), + 광원 설정 } — 바닥에 놓인 더미에서 빛남
+ *   이펙트: effects.json 항목의 light { on, + 광원 설정 } — 재생 중인 이펙트를 따라다니고, 알갱이가 줄면 함께 어두워짐 (fxLights)
  *   맵 오브젝트: props/<id>.json 의 light { on, color, k, z, range, ox, oy, pulse, pulseMin, shadow, charShadow } · castShadow(막힌 상태일 때 다른 빛을 가림, 기본 켬)
  *
  * 그리는 순서 (GameMaker 조명 코드와 같은 방식):
@@ -100,6 +102,7 @@ public class MakerLights extends CustomTilemap {
 			int n = count(l);
 			JsonValue ta = terrainLights();
 			pending = "[PDMaker] 광원 " + VERSION + ": " + (n > 0 || ta != null ? "이 맵의 점광원 " + n + "개" + (ta != null ? " · 지형 광원 " + ta.size + "종" : "") + " (빛 · 그림자 · 못 보는 칸은 지움)"
+				: anyDynamic() ? "이 맵에 놓인 광원은 없고, 빛나는 아이템 · 이펙트만 빛을 냅니다"
 				: "이 맵에는 점광원이 없습니다 — 빛 · 그림자는 '광원' 오브젝트나 맵 오브젝트의 '광원 켜기'로 생깁니다 (효과 레이어 · 번짐은 그림만 빛남)");
 			if (!any(l)) return;
 			MakerLights t = new MakerLights();
@@ -108,6 +111,34 @@ public class MakerLights extends CustomTilemap {
 		} catch (Throwable e) { MakerRuntime.log("광원 오류: " + e); }
 	}
 
+	static String itemId(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {
+		return it instanceof GenSupport.Coded ? ((GenSupport.Coded) it).makerId() : it instanceof MakerItem ? ((MakerItem) it).makerId : null;
+	}
+	/** 프로젝트 아이템의 광원 설정 (켜져 있을 때만) */
+	static JsonValue itemLight(com.shatteredpixel.shatteredpixeldungeon.items.Item it) {
+		if (it == null) return null;
+		JsonValue d = MakerRuntime.item(itemId(it)), lt = d == null ? null : d.get("light");
+		return lt != null && lt.getBoolean("on", false) ? lt : null;
+	}
+	/** 재생 중인 이펙트의 빛 (MakerEffect.Sys 가 넣고 빼며 위치 · 세기를 고침) */
+	public static class FxLight { public float x, y, amt = 1; public JsonValue cfg; }
+	public static final ArrayList<FxLight> fxLights = new ArrayList<>();
+	public static FxLight addFx(JsonValue fx) {
+		JsonValue lt = fx == null ? null : fx.get("light");
+		if (lt == null || !lt.getBoolean("on", false)) return null;
+		FxLight f = new FxLight(); f.cfg = lt; synchronized (fxLights) { fxLights.add(f); }
+		return f;
+	}
+	public static void removeFx(FxLight f) { if (f != null) synchronized (fxLights) { fxLights.remove(f); } }
+	/** 이 프로젝트에 빛나는 아이템 · 이펙트가 있는지 (있으면 광원이 없는 맵에도 빛 층을 넣음) */
+	static boolean anyDynamic() {
+		try {
+			for (JsonValue d : MakerRuntime.items.values()) { JsonValue lt = d.get("light"); if (lt != null && lt.getBoolean("on", false)) return true; }
+			JsonValue l = MakerRuntime.effects == null ? null : MakerRuntime.effects.get("list");
+			if (l != null) for (JsonValue v : l) { JsonValue lt = v.get("light"); if (lt != null && lt.getBoolean("on", false)) return true; }
+		} catch (Throwable ignored) { }
+		return false;
+	}
 	/** 영웅이 지금 보는 칸인지 (맵 밖 · 아직 모르면 true) */
 	public static boolean seenCell(int cx, int cy) {
 		Level l = Dungeon.level;
@@ -161,7 +192,7 @@ public class MakerLights extends CustomTilemap {
 		return n;
 	}
 	static boolean any(Level l) {
-		if (terrainLights() != null || autoLights() != null) return true;
+		if (terrainLights() != null || autoLights() != null || anyDynamic()) return true;
 		try {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) return true;
@@ -416,13 +447,36 @@ public class MakerLights extends CustomTilemap {
 			wait = 0.5f;
 			for (Spot s : spots) { try { s.on = s.cond.isEmpty() || Cond.eval(s.cond, StoryState.globalResolver()); } catch (Throwable t) { s.on = true; } }
 		}
+		/** 아이템 광원: 바닥 더미(맨 위 아이템) · 영웅이 지닌 것(carried) */
+		void items(Camera cam) {
+			try {
+				for (com.shatteredpixel.shatteredpixeldungeon.items.Heap hp : Dungeon.level.heaps.valueList()) {
+					JsonValue lt = itemLight(hp.peek());
+					if (lt == null || hp.pos < 0) continue;
+					collect(hp, null, (hp.pos % Dungeon.level.width() + 0.5f) * 16 + lt.getFloat("ox", 0), (hp.pos / Dungeon.level.width() + 0.5f) * 16 + lt.getFloat("oy", 0), lt, cam);
+				}
+				com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = Dungeon.hero;
+				if (h != null && h.sprite != null && h.sprite.visible && h.belongings != null) {
+					java.util.HashSet<String> seen = new java.util.HashSet<>();
+					for (com.shatteredpixel.shatteredpixeldungeon.items.Item it : h.belongings) {
+						JsonValue lt = itemLight(it);
+						if (lt == null || !lt.getBoolean("carried", false) || !seen.add(itemId(it))) continue;
+						collect("carry:" + itemId(it), null, h.sprite.x + h.sprite.width() / 2f + lt.getFloat("ox", 0), h.sprite.y + h.sprite.height() / 2f + lt.getFloat("oy", 0), lt, cam);
+					}
+				}
+			} catch (Throwable ignored) { }
+		}
 		/** 화면에 보이는 광원이면 active 에 넣음 */
-		void collect(Object key, Object owner, float x, float y, JsonValue c, Camera cam) {
+		void collect(Object key, Object owner, float x, float y, JsonValue c, Camera cam) { collect(key, owner, x, y, c, cam, 1f); }
+		void collect(Object key, Object owner, float x, float y, JsonValue c, Camera cam, float mul) {
+			if (mul <= 0.01f) return;
 			float range = Math.max(0.5f, c.getFloat("range", 4f)) * 16, z = Math.max(0.5f, c.getFloat("z", 10f)), k = Math.max(0f, c.getFloat("k", 3f));
 			if (x + range < cam.scroll.x || y + range < cam.scroll.y || x - range > cam.scroll.x + cam.width || y - range > cam.scroll.y + cam.height) return;   // 화면 밖
 			float amt = 1f, per = c.getFloat("pulse", 0f);
 			if (per > 0) { float lo = Math.max(0f, Math.min(1f, c.getFloat("pulseMin", 60f) / 100f)); amt = lo + (1 - lo) * (0.5f + 0.5f * (float) Math.sin(Game.timeTotal * 2 * Math.PI / per + x * 0.37f)); }
+			amt *= mul;
 			int col = 0xFFE9A8; try { col = Integer.parseInt(c.getString("color", "#ffe9a8").replace("#", ""), 16); } catch (Throwable ignored) { }
+			if (reach.size() > 300) reach.clear();   // 사라진 더미 · 이펙트의 기록이 쌓이지 않게
 			Reach r = reach.get(key);
 			boolean wall = c.getBoolean("shadow", true);
 			if (r == null) { r = new Reach(); r.ver = Integer.MIN_VALUE; reach.put(key, r); }
@@ -659,6 +713,8 @@ public class MakerLights extends CustomTilemap {
 			try {
 				active.clear();
 				for (Spot s : spots) if (s.on) collect(s, null, s.x, s.y, s.cfg, cam);
+				items(cam);
+				synchronized (fxLights) { for (FxLight f : fxLights) if (f.cfg != null) collect(f, null, f.x, f.y, f.cfg, cam, f.amt); }
 				for (CustomTilemap t : Dungeon.level.customTiles) {   // 맵 오브젝트에 붙은 광원 (밀면 따라감)
 					if (!(t instanceof MakerProp)) continue;
 					JsonValue d = MakerRuntime.props.get(((MakerProp) t).propId), lt = d == null ? null : d.get("light");

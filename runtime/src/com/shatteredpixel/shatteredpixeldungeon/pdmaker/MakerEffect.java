@@ -8,6 +8,7 @@
  *         수명 속성 { v, pts }: lScale lAlpha lRot lStretchX lStretchY lAngVel,  lColor [[t,"#hex"]…]          (pts = 알갱이 수명 0~1 곡선)
  *         modifiers [M…] }
  *     M { type: accel|drag|radial|vortex, mag { v, sp, pts }, x, y, rot, maxDist }
+ *   light { on, color, k, z, range, … } = 재생하는 동안 이펙트 자리에서 점광원 (MakerLights.fxLights — 알갱이가 줄면 함께 어두워짐)
  *   쓰는 곳
  *     · 이벤트 명령 "이펙트 재생" (effect): { fx, target: $hero|캐릭터 id, at: "char"|"xy", x, y }
  *     · 아이템: fxUse · fxThrow · fxEquip (행동 버튼을 누를 때 영웅에 붙어서)
@@ -234,7 +235,10 @@ public class MakerEffect {
 			this.loopAll = loopAll;
 			JsonValue es = fx.get("emitters");
 			if (es != null) for (JsonValue d : es) { Em m = new Em(new EDef(d, fx.get("modifiers"))); ems.add(m); add(m); }
+			light = MakerLights.addFx(fx);
 		}
+		final MakerLights.FxLight light; int peak;
+		@Override public synchronized void destroy() { MakerLights.removeFx(light); super.destroy(); }
 		boolean finished() {
 			for (Em m : ems) if (m.t < m.e.delay + m.e.duration || m.living() > 0) return false;
 			return true;
@@ -250,7 +254,11 @@ public class MakerEffect {
 				m.apply(center.x, center.y);
 			}
 			super.update();
-			if (!loopAll && finished()) host.killAndErase();
+			if (light != null) {   // 빛: 이펙트 가운데를 따라감, 한 번 재생이면 살아 있는 알갱이 수에 맞춰 어두워짐
+				int n = 0; for (Em m : ems) n += m.living(); peak = Math.max(peak, n);
+				light.x = center.x; light.y = center.y; light.amt = !shown ? 0 : loopAll || peak == 0 ? 1 : n / (float) peak;
+			}
+			if (!loopAll && finished()) { MakerLights.removeFx(light); host.killAndErase(); }
 		}
 		/** 게임 화면의 이펙트 층은 Visual 만 받으므로, 이 그룹을 대신 돌려 주는 빈 Visual */
 		final Visual host = new Visual(0, 0, 0, 0) {
