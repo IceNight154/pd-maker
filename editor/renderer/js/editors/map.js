@@ -268,6 +268,7 @@
       if (!fl) return h('div', { class: 'page' }, '층 데이터가 없습니다');
       const kind = kindOf(key);
       const ui = floorUI[key] = floorUI[key] || { tool: 'pen', terrain: 1, zoom: 2, objType: 'npc', objRef: '', sel: -1, grid: true, spawnVal: 1, spawnShape: 'pen', showSpawn: true, showPorts: true };
+      ui.moveObj = -1; ui.moveTo = null;   // 우클릭 메뉴의 "이동": 다음에 누르는 칸으로 옮기는 중인 오브젝트
       if (ui.zones === undefined) ui.zones = kind === 'room';
       if (ui.spawnVal === undefined) Object.assign(ui, { spawnVal: 1, spawnShape: 'pen', showSpawn: true, showPorts: true });
       const W = fl.size.w, H = fl.size.h;
@@ -610,6 +611,7 @@
           let x, y;
           if (down && down.erase && o.at && o.at.x != null && down.objs.has(o.at.y * W + o.at.x)) return;
           if (down && down.move === i && down.to) { x = down.to[0] * s; y = down.to[1] * s; }
+          else if (ui.moveObj === i && ui.moveTo) { x = ui.moveTo[0] * s; y = ui.moveTo[1] * s; }
           else if (drawable && o.at && o.at.x != null) { x = o.at.x * s; y = o.at.y * s; }
           else { x = (i % 12) * s * 2 + s / 2; y = (2 + Math.floor(i / 12) * 2) * s; }
           const col = (PDM.OBJECT_TYPES[o.type] || {}).color || '#fff';
@@ -816,6 +818,15 @@
           nav = navKey === 'pan' ? { type: 'pan', x: e.clientX, y: e.clientY, l: sc.scrollLeft, t: sc.scrollTop } : { type: 'zoom', cx, cy, d0: Math.hypot(e.clientX - cx, e.clientY - cy), i0 };
           cv.style.cursor = navKey === 'pan' ? 'grabbing' : 'zoom-in'; return; }
         const [x, y] = cellAt(e);
+        if (ui.moveObj >= 0) {   // 우클릭 메뉴 "이동": 왼쪽 클릭한 칸으로 옮김 (오른쪽 클릭 = 취소)
+          const i = ui.moveObj; ui.moveObj = -1; ui.moveTo = null;
+          if (e.button === 0 && inB(x, y) && fl.objects[i]) moveObjTo(i, x, y); else { paint(); info.textContent = '이동 취소'; }
+          return;
+        }
+        if (e.button === 2) {   // 오브젝트 위에서 우클릭: 끌면 이동, 그냥 놓으면 메뉴
+          const oi = objAt(x, y);
+          if (oi >= 0) { ui.sel = oi; ui.port = -1; paint(); showInspector(); down = { right: oi, from: [x, y], move: drawable ? oi : undefined }; return; }
+        }
         const corner = drawable && e.button === 0 ? cornerAt(e) : null;
         if (corner) { e.preventDefault(); down = { resize: corner, rect: [0, 0, W, H] }; paint(); return; }
         if (drawable && e.button === 0 && !inB(x, y) && ['pen', 'rect', 'room'].includes(ui.tool) && ui.terrain >= 0) {   // 점선 바깥에 그리면 그 칸까지 넓힘
@@ -856,6 +867,7 @@
         const t = inB(x, y) && drawable ? PDM.TERRAIN_BY_ID[terrain[y * W + x]] : null;
         const oi = objAt(x, y);
         if (nav || navKey) return;
+        if (ui.moveObj >= 0) { cv.style.cursor = 'move'; info.textContent = `옮길 칸을 누르세요 (오른쪽 클릭 · Esc = 취소)  (${x}, ${y})`; const nt = inB(x, y) ? [x, y] : null; if (String(nt) !== String(ui.moveTo)) { ui.moveTo = nt; paint(); } return; }
         if (!down) cv.style.cursor = drawable && cornerAt(e) ? (c => c[0] === c[1] ? 'nwse-resize' : 'nesw-resize')(cornerAt(e)) : '';
         info.textContent = `(${x}, ${y})  ${t ? PDM.terrainName(t, up) + ' [' + t.id + ']' : ''}${canSpawn && inB(x, y) && spawnL[y * W + x] ? ' · ' + SPAWN_VALS[spawnL[y * W + x]][0] : ''}  ${oi >= 0 ? '· ' + PDM.OBJECT_TYPES[fl.objects[oi].type].name + ' ' + (fl.objects[oi].ref || '') : ''}`;
         if (down === 'pen' && inB(x, y)) { let ch = false; brushCells(x, y).forEach(([bx, by]) => { if (terrain[by * W + bx] !== ui.terrain) { terrain[by * W + bx] = ui.terrain; ch = true; } }); if (ch) { lastCell = y * W + x; paint(); } }
@@ -864,7 +876,10 @@
         else if (down && down.erase) { if (inB(x, y)) brushCells(x, y).forEach(([bx, by]) => eraseCell(bx, by)); }
         else if (down && (down.move !== undefined || down.port !== undefined)) { if (inB(x, y)) { down.to = [x, y]; paint(); } }
       });
-      const onUp = () => {
+      const onUp = e => {
+        if (down && down.right !== undefined && (!down.to || (down.to[0] === down.from[0] && down.to[1] === down.from[1]))) {   // 우클릭만 (끌지 않음) → 메뉴
+          const i = down.right; down = null; paint(); objMenu(e, i); return;
+        }
         if (down && down.resize) {
           const [rx, ry, rw, rh] = down.rect; down = null;
           if (rx !== 0 || ry !== 0 || rw !== W || rh !== H) reshape(rx, ry, rw, rh, '맵 크기 바꾸기'); else paint();
@@ -889,12 +904,48 @@
         } else if (down && down.move !== undefined && down.to) {
           const i = down.move, [x, y] = down.to;
           down = null;
-          const oa = fl.objects[i].at, oc = oa && oa.x != null ? oa.y * W + oa.x : -1;
-          withPorts('오브젝트 이동', () => store.edit(key, '오브젝트 이동', r => { r.objects[i].at = { x, y }; }, { silent: true }), { [oc]: y * W + x });
-          paint(); showInspector();
+          moveObjTo(i, x, y);
         }
         down = null;
       };
+      function moveObjTo(i, x, y) {
+        const oa = fl.objects[i].at, oc = oa && oa.x != null ? oa.y * W + oa.x : -1;
+        if (oc === y * W + x) { paint(); return; }
+        withPorts('오브젝트 이동', () => store.edit(key, '오브젝트 이동', r => { r.objects[i].at = { x, y }; }, { silent: true }), { [oc]: y * W + x });
+        paint(); showInspector();
+      }
+      /** 오브젝트 우클릭 메뉴 */
+      function objMenu(e, i) {
+        const o = fl.objects[i]; if (!o) return;
+        const T = PDM.OBJECT_TYPES[o.type] || {}, refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect' }[o.type];
+        const at = o.at && o.at.x != null ? o.at : null;
+        PDM.ui.menu(e.clientX, e.clientY, [
+          { label: `${T.name || o.type}${o.ref ? ' · ' + o.ref : ''}${at ? ` (${at.x}, ${at.y})` : ''}`, disabled: true, run: () => {} },
+          '-',
+          { label: '설정 열기', hint: '오른쪽 속성 창', run: () => { ui.sel = i; paint(); showInspector(); const ins = document.querySelector('#inspBody'); if (ins) ins.scrollTop = 0; } },
+          { label: '이동…', hint: '다음에 누르는 칸으로', disabled: !drawable, run: () => { ui.moveObj = i; ui.moveTo = null; cv.style.cursor = 'move'; info.textContent = '옮길 칸을 누르세요 (오른쪽 클릭 · Esc = 취소)'; } },
+          { label: '복제', hint: '옆 빈 칸에', run: () => dupObj(i) },
+          refKind ? { label: '대상 열기', disabled: !o.ref || o.ref.startsWith('spd:'), run: () => PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`) } : null,
+          '-',
+          { label: '삭제', hint: 'Delete', run: () => { ui.sel = -1; withPorts('오브젝트 삭제', () => store.edit(key, '오브젝트 삭제', r => { r.objects.splice(i, 1); })); } },
+        ].filter(Boolean));
+      }
+      /** 오브젝트 복제: 가장 가까운 지나갈 수 있는 빈 칸에 (자동 생성 맵이면 목록 끝에) */
+      function dupObj(i) {
+        const o = JSON.parse(JSON.stringify(fl.objects[i])); o.id = PDM.uid('o');
+        if (drawable && o.at && o.at.x != null) {
+          let spot = null;
+          for (let r = 1; r <= 4 && !spot; r++) for (let dy = -r; dy <= r && !spot; dy++) for (let dx = -r; dx <= r && !spot; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const x = o.at.x + dx, y = o.at.y + dy, t = inB(x, y) ? PDM.TERRAIN_BY_ID[terrain[y * W + x]] : null;
+            if (t && t.pass && objAt(x, y) < 0) spot = { x, y };
+          }
+          if (!spot) { toast('옆에 빈 칸이 없습니다', 'bad'); return; }
+          o.at = spot;
+        }
+        ui.sel = (fl.objects || []).length;
+        store.edit(key, '오브젝트 복제', r => { r.objects = r.objects || []; r.objects.push(o); });
+      }
       const onMove = e => { if (down && down.resize) { down.rect = resizeRect(e, down.resize); info.textContent = `맵 크기 ${down.rect[2]} × ${down.rect[3]}`; paint(); } };
       addEventListener('pointermove', onMove);
       addEventListener('pointerup', onUp);
@@ -902,6 +953,7 @@
         if (PDM.tabs.active !== key || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
         if (document.querySelector('.modal')) return;
         const c = e.ctrlKey || e.metaKey;
+        if (e.key === 'Escape' && ui.moveObj >= 0) { ui.moveObj = -1; ui.moveTo = null; cv.style.cursor = ''; info.textContent = '이동 취소'; paint(); return; }
         if (e.code === 'Space' && !c) { e.preventDefault(); if (!navKey) { navKey = 'pan'; cv.style.cursor = 'grab'; } return; }
         if (e.code === 'KeyZ' && !c && !e.altKey) { e.preventDefault(); if (!navKey) { navKey = 'zoom'; cv.style.cursor = 'zoom-in'; } return; }
         if (c && e.code === 'KeyD') { e.preventDefault(); ui.sel = -1; ui.port = -1; paint(); showInspector(); return; }
