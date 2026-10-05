@@ -97,11 +97,13 @@
     const range = Math.max(0.5, +o.range || 4) * 16, z = Math.max(0.5, +o.z || 10), k = Math.max(0, o.k == null ? 3 : +o.k), R = range * s / 16;
     const hx = String(o.color || '#ffe9a8').replace('#', ''), cr = parseInt(hx.slice(0, 2), 16) || 0, cg = parseInt(hx.slice(2, 4), 16) || 0, cb = parseInt(hx.slice(4, 6), 16) || 0;
     const edge = k / (Math.sqrt(range * range + z * z) - z), gr = g.createRadialGradient(cx, cy, 0, cx, cy, R);
-    for (let i = 0; i <= 24; i++) { const t = Math.pow(i / 24, 1.6), d = t * range, den = Math.sqrt(d * d + z * z) - z, v = den <= 1e-5 ? 1 : Math.max(0, Math.min(1, k / den - edge));
-      gr.addColorStop(t, `rgba(${cr},${cg},${cb},${v.toFixed(3)})`); }   // 빛이 없는 곳은 투명 (맵 밖을 검게 덮지 않게)
+    // 게임과 같은 1 − e^−x 로 부드럽게 · 게임과 같은 얹는 방식 (화면 × (1 + 빛) ≈ 반 세기 color-dodge, + 빛 × 0.3 덧셈)
+    for (let i = 0; i <= 24; i++) { const t = Math.pow(i / 24, 1.6), d = t * range, den = Math.sqrt(d * d + z * z) - z, x = k / den - edge, v = den <= 1e-5 ? 1 : x > 0 ? 1 - Math.exp(-x) : 0;
+      gr.addColorStop(t, `rgba(${cr >> 1},${cg >> 1},${cb >> 1},${v.toFixed(3)})`); }   // 빛이 없는 곳은 투명 (맵 밖을 검게 덮지 않게)
+    const put = (img, x, y) => { g.save(); g.globalCompositeOperation = 'color-dodge'; img(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.6; img(); g.restore(); };
 
     const block = opt && opt.block && o.shadow !== false ? opt.block : null;
-    if (!block) { g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); g.restore(); return; }
+    if (!block) { put(() => { g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill(); }); return; }
     // 그림자: 빛을 따로 그린 뒤 그림자 볼륨 모양을 지우고 덧셈으로 얹음
     const S = Math.ceil(R) * 2 + 2, ox = cx - S / 2, oy = cy - S / 2, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
     const c = cv.getContext('2d'); c.translate(-ox, -oy); c.fillStyle = gr; c.beginPath(); c.arc(cx, cy, R, 0, 7); c.fill();
@@ -118,6 +120,6 @@
       if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) continue;
       quad(x1, y1, x2, y2); quad(x2, y1, x1, y2);
     }
-    g.save(); g.globalCompositeOperation = 'lighter'; g.drawImage(cv, ox, oy); g.restore();
+    put(() => g.drawImage(cv, ox, oy));
   };
 })();

@@ -1,7 +1,7 @@
 /*
  * PDMaker — 광원 (점광원): 맵에 놓는 "광원" 오브젝트와, 맵 오브젝트(prop)의 light 설정.
  *   밝기 = k / (sqrt(d² + z²) − z)   (d = 광원에서의 거리 px, z = 높이 — 클수록 넓고 부드럽게, k = 세기)
- *   가운데는 밝고 멀어질수록 길고 부드럽게 줄어드는 빛. range(칸) 끝에서 0 이 되도록 끝 값을 뺌.
+ *   가운데는 밝고 멀어질수록 길고 부드럽게 줄어드는 빛. range(칸) 끝에서 0 이 되도록 끝 값을 빼고, 1 − e^−x 로 부드럽게 눌러 0~1 로 만듦.
  *   광원 오브젝트: { type: "light", at, cond, color, k, z, range, pulse, pulseMin, shadow, charShadow }   · 조건(cond)은 0.5초마다 다시 검사 (스위치로 켜고 끄기)
  *   맵 오브젝트: props/<id>.json 의 light { on, color, k, z, range, ox, oy, pulse, pulseMin, shadow, charShadow } · castShadow(막힌 상태일 때 다른 빛을 가림, 기본 켬)
  *
@@ -12,7 +12,7 @@
  *       ② 빛: 감쇠식을 셰이더에서 계산해 덧셈 (z = 광원 z, 깊이 검사 — 그림자 볼륨 뒤는 그려지지 않음)
  *       광원마다 z 를 조금씩 앞으로 당겨서 앞 광원의 그림자가 뒤 광원을 가리지 않음 (깊이 버퍼는 한 번만 지움).
  *     캐릭터 그림자도 같은 깊이 단계에 씀 (그 광원의 빛만 빠짐 — 캐릭터 몸에는 그림자가 덮이지 않게 몸 자리를 되돌림).
- *   · 빛 지도를 화면에 덧셈으로 그림. 그다음 다른 그림들이 미뤄 둔 번짐(블룸)도 여기서 그림 (defer).
+ *   · 빛 지도를 화면에 얹음: 화면 × (1 + 빛) + 빛 × GLOW — 그림 무늬를 살린 채 밝힘 (흰색으로 덮어 버리지 않음). 그다음 다른 그림들이 미뤄 둔 번짐(블룸)도 여기서 그림 (defer).
  *   광원 버퍼를 못 쓰는 기기에서는 예전 방식(각도별 광선 + 부채꼴)으로 그림.
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -67,7 +67,7 @@ public class MakerLights extends CustomTilemap {
 		for (int y = 0; y < TEX; y++) for (int x = 0; x < TEX; x++) {
 			float t = (float) Math.hypot(x - c, y - c) / c;   // 0 = 광원, 1 = 범위 끝
 			float den = (float) Math.sqrt(t * t + a * a) - a;
-			float v = t >= 1 ? 0 : den <= 1e-5f ? 1 : Math.max(0, Math.min(1, kk / den - edge));
+			float v = t >= 1 ? 0 : den <= 1e-5f ? 1 : soft(kk / den - edge);
 			int b = Math.round(v * 255);
 			pm.drawPixel(x, y, (b << 24) | (b << 16) | (b << 8) | 0xFF);
 		}
@@ -76,6 +76,11 @@ public class MakerLights extends CustomTilemap {
 		baked.put(key, tx);
 		return tx;
 	}
+
+	/** 감쇠식 값을 0~1 로 부드럽게 눌러 줌 (1 − e^−x) — 세기를 높여도 가운데가 평평한 흰 덩어리가 되지 않고 멀어질수록 서서히 줄어듦 */
+	static float soft(float x) { return x <= 0 ? 0 : 1 - (float) Math.exp(-x); }
+	/** 빛 지도를 화면에 얹는 방식: 화면 × (1 + 빛) (그림의 무늬를 살린 채 밝힘) + 빛 × GLOW (어두운 곳에 은은한 빛 기운) */
+	static final float GLOW = 0.3f;
 
 	/** 게임 화면을 만들기 직전: 맨 위 빛 층을 벽 층(customWalls) 맨 끝에 하나 넣음 — 광원이 없어도 번짐(블룸)을 맨 위에 그리려고 늘 넣음 */
 	public static void ensure(Level l) {
@@ -213,7 +218,7 @@ public class MakerLights extends CustomTilemap {
 			"  float t = length(vRel);\n" +
 			"  float a = uLight.y;\n" +
 			"  float den = sqrt(t * t + a * a) - a;\n" +
-			"  float v = den <= 0.00001 ? 1.0 : clamp(uLight.x / den - uLight.w, 0.0, 1.0);\n" +
+			"  float v = den <= 0.00001 ? 1.0 : 1.0 - exp(-max(uLight.x / den - uLight.w, 0.0));\n" +
 			"  if (t >= 1.0) v = 0.0;\n" +
 			"  gl_FragColor = vec4(uColor * v, 1.0);\n" +
 			"}\n";
@@ -293,7 +298,7 @@ public class MakerLights extends CustomTilemap {
 	static class Lit {
 		Reach r; JsonValue c; Object owner; float k, z, amt, cr, cg, cb;
 		float edge() { return k / ((float) Math.sqrt(r.range * r.range + z * z) - z); }
-		float at(float d) { float den = (float) Math.sqrt(d * d + z * z) - z; return den <= 1e-4f ? 1 : Math.max(0, Math.min(1, k / den - edge())) * amt; }
+		float at(float d) { float den = (float) Math.sqrt(d * d + z * z) - z; return (den <= 1e-4f ? 1 : soft(k / den - edge())) * amt; }
 	}
 
 	// 광원 버퍼 (GL 자원 — 화면 크기가 바뀌면 다시 만듦)
@@ -495,15 +500,23 @@ public class MakerLights extends CustomTilemap {
 			((Buffer) blit).position(0);
 			blit.put(new float[]{ ox, oy, 0, 0,   ox + fw, oy, 1, 0,   ox + fw, oy + fh, 1, 1,   ox, oy + fh, 0, 1 });
 			((Buffer) blit).position(0);
-			gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);
-			try { sc.drawQuad(blit); } finally { com.watabou.glwrap.Blending.setNormalMode(); }
+			try {
+				gl.glBlendFunc(GL20.GL_DST_COLOR, GL20.GL_ONE);   // 화면 + 화면 × 빛
+				sc.drawQuad(blit);
+				gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);         // + 빛 × GLOW
+				sc.lighting(GLOW, GLOW, GLOW, 1, 0, 0, 0, 0);
+				sc.drawQuad(blit);
+			} finally { com.watabou.glwrap.Blending.setNormalMode(); }
 			return true;
 		}
 		/** 예전 방식: 각도별 광선으로 만든 부채꼴 + 캐릭터 그림자 그림 (그림자는 빛 위에 어둡게) */
 		void fallback(Camera cam) {
 			try {
-				Gdx.gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);
-				for (Lit e : active) fan.draw(bake(e.z / e.r.range, e.k / e.r.range), e.r, cam, e.cr, e.cg, e.cb);
+				for (Lit e : active) {   // 빛 지도와 같은 얹는 방식: 화면 × (1 + 빛) + 빛 × GLOW
+					SmartTexture tx = bake(e.z / e.r.range, e.k / e.r.range);
+					Gdx.gl.glBlendFunc(GL20.GL_DST_COLOR, GL20.GL_ONE); fan.draw(tx, e.r, cam, e.cr, e.cg, e.cb);
+					Gdx.gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE); fan.draw(tx, e.r, cam, e.cr * GLOW, e.cg * GLOW, e.cb * GLOW);
+				}
 			} finally { com.watabou.glwrap.Blending.setNormalMode(); }
 			if (shadow == null) shadow = new Image(shadowTex()); else if (shadow.texture != shadowTex()) shadow.texture(shadowTex());
 			for (Lit e : active) for (float[] c : charShadows(e)) {
