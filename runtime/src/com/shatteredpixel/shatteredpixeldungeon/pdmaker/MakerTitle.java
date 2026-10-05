@@ -503,6 +503,8 @@ public class MakerTitle {
 		if (!col.isEmpty()) g.add(new ColorBlock(w, h, 0xFF000000 | color(col, 0)));
 		switch (archStyle(bg)) {
 			case "game": {
+				// 떠오르는 폐허를 직접 설정했으면(background.ruins.on) 그 설정대로 — 메뉴 화면도 같은 배경
+				if (Ruins.on(bg)) { g.add(new Ruins(bg.get("ruins"), w, h)); break; }
 				// 타이틀: 게임에 타이틀 전용 배경(4.0 의 ui.TitleBackground — 폐허가 떠오르는 시차 배경)이 있으면 그것, 없으면 아치
 				if (title) { Gizmo tb = gameTitleBackground(w, h); if (tb != null) { g.add(tb); break; } }
 				com.shatteredpixel.shatteredpixeldungeon.ui.Archs a = new com.shatteredpixel.shatteredpixeldungeon.ui.Archs();
@@ -552,6 +554,124 @@ public class MakerTitle {
 	}
 
 
+
+	/**
+	 * 떠오르는 폐허 (SPD 4.0 ui.TitleBackground 를 설정할 수 있게 다시 만든 것) — background.ruins
+	 *   { on, dir: up|down|left|right, speed(px/초, 게임 15), dark(아래쪽 어둡게), wall: { show, image, fw, fh, cols, frames },
+	 *     layers: [{ name, image, fw, fh, cols, frames, count(화면에 몇 개), speed(벽 대비 배율), size(배율), dark(0~1 어둡게), spin(기울기 ±도), show }] }
+	 *   크기 단위는 게임과 같이 화면 높이 450 기준 (세로 화면이면 1.5 배 작게 · 느리게). 레이어는 순서대로 위에 그려짐.
+	 */
+	static class Ruins extends Group {
+		static boolean on(JsonValue bg) { JsonValue r = bg == null ? null : bg.get("ruins"); return r != null && r.getBoolean("on", false); }
+		static final String[][] DEF = {   // 이름, 그림, fw, fh, cols, frames, count, speed, size, dark — 편집기 기본값(title.js RUINS_LAYERS)과 같음
+			{ "먼 덩어리", "game:splashes/title/back_clusters.png", "450", "250", "1", "2", "4", "1.33", "0.5", "0.5" },
+			{ "덩어리", "game:splashes/title/back_clusters.png", "450", "250", "1", "2", "3", "2", "1", "0.25" },
+			{ "먼 작은 조각", "game:splashes/title/front_small.png", "112", "116", "9", "36", "6", "2.66", "1", "0.2" },
+			{ "가운데 폐허 1", "game:splashes/title/mid_mixed.png", "273", "242", "7", "28", "3", "3.54", "1", "0.1" },
+			{ "가운데 폐허 2", "game:splashes/title/mid_mixed.png", "273", "242", "7", "28", "2", "4.7", "1.5", "0" },
+			{ "앞 작은 조각", "game:splashes/title/front_small.png", "112", "116", "9", "36", "3", "6.26", "2.25", "0" } };
+		final int w, h; final float vx, vy, k, speed;
+		float t = 0;
+		// 벽
+		TextureFilm wallFilm; int wallFrames, wallCols; float aw, ah; Image[][] cells;
+		// 떠다니는 조각
+		static class Bit { Image img; float p, q; int cycle; }
+		static class Lay { TextureFilm film; int frames; float spd, size, spin, bw, bh; List<Bit> bits = new ArrayList<>(); }
+		final List<Lay> lays = new ArrayList<>();
+
+		Ruins(JsonValue r, int w, int h) {
+			this.w = w; this.h = h;
+			boolean portrait = w <= h;
+			float k0 = h / 450f; k = portrait ? k0 / 1.5f : k0;
+			speed = r.getFloat("speed", 15f) * k0 * (portrait ? 1 / 1.5f : 1f);
+			switch (r.getString("dir", "up")) {
+				case "down": vx = 0; vy = 1; break;
+				case "left": vx = -1; vy = 0; break;
+				case "right": vx = 1; vy = 0; break;
+				default: vx = 0; vy = -1;
+			}
+			JsonValue wl = r.get("wall");
+			if (wl == null || wl.getBoolean("show", true)) {
+				Object tx = MakerRuntime.texture(wl == null || wl.getString("image", "").isEmpty() ? "game:splashes/title/archs.png" : wl.getString("image", ""));
+				if (tx != null) {
+					int fw = wl == null ? 333 : wl.getInt("fw", 333), fh = wl == null ? 100 : wl.getInt("fh", 100);
+					wallCols = Math.max(1, wl == null ? 3 : wl.getInt("cols", 3)); wallFrames = Math.max(1, wl == null ? 6 : wl.getInt("frames", 6));
+					wallFilm = new TextureFilm(tx, fw, fh);
+					aw = (fw - 9) * k0; ah = (fh - 5) * k0;   // 게임처럼 조금씩 겹침
+					if (aw > 1 && ah > 1) {
+						int nx = (int) Math.ceil(w / aw) + 2, ny = (int) Math.ceil(h / ah) + 2;
+						cells = new Image[ny][nx];
+						for (int y = 0; y < ny; y++) for (int x = 0; x < nx; x++) { Image im = new Image(tx); im.scale.set(k0); cells[y][x] = im; add(im); }
+					}
+				}
+			}
+			if (r.getBoolean("dark", true)) {
+				Image dk = new Image(TextureCache.createGradient(0x00000000, 0x11000000, 0x22000000, 0x33000000, 0x44000000, 0x88000000));
+				dk.angle = 90; dk.x = w; dk.scale.x = h / 6f; dk.scale.y = w; add(dk);
+			}
+			JsonValue ls = r.get("layers");
+			if (ls == null) for (String[] d : DEF) addLayer(d[1], i(d[2]), i(d[3]), i(d[4]), i(d[5]), i(d[6]), f(d[7]), f(d[8]), f(d[9]), 20f);
+			else for (JsonValue l : ls) if (l.getBoolean("show", true))
+				addLayer(l.getString("image", ""), l.getInt("fw", 0), l.getInt("fh", 0), l.getInt("cols", 1), l.getInt("frames", 1), l.getInt("count", 3), l.getFloat("speed", 2f), l.getFloat("size", 1f), l.getFloat("dark", 0f), l.getFloat("spin", 20f));
+		}
+		static int i(String v) { return Integer.parseInt(v); }
+		static float f(String v) { return Float.parseFloat(v); }
+		void addLayer(String img, int fw, int fh, int cols, int frames, int count, float spd, float size, float dark, float spin) {
+			Object tx = img == null || img.isEmpty() ? null : MakerRuntime.texture(img);
+			if (tx == null) return;
+			Lay L = new Lay();
+			Image probe = new Image(tx);
+			if (fw <= 0) fw = (int) probe.width; if (fh <= 0) fh = (int) probe.height;
+			L.film = new TextureFilm(tx, fw, fh); L.frames = Math.max(1, frames); L.spd = spd; L.size = size; L.spin = spin;
+			L.bw = fw * k * size; L.bh = fh * k * size;
+			float span = (vy != 0 ? h : w) + Math.max(L.bw, L.bh) * 2;
+			for (int n = 0; n < Math.max(0, count); n++) {
+				Bit b = new Bit(); b.img = new Image(tx); b.img.scale.set(k * size);
+				if (dark > 0) b.img.brightness(Math.max(0, 1 - dark));
+				b.p = Random.Float(span); reroll(L, b);
+				L.bits.add(b); add(b.img);
+			}
+			lays.add(L);
+		}
+		void reroll(Lay L, Bit b) {
+			b.img.frame(L.film.get(Random.Int(L.frames)));
+			b.img.origin.set(b.img.width / 2f, b.img.height / 2f);
+			b.img.angle = L.spin > 0 ? Random.Float(-L.spin, L.spin) : 0;
+			float cross = vy != 0 ? w : h, big = vy != 0 ? L.bw : L.bh;
+			b.q = Random.Float(-big / 3f, cross - big * 2 / 3f);
+		}
+		@Override public void update() {
+			super.update();
+			float e = Game.elapsed; t += e;
+			float off = t * speed;
+			if (cells != null) {   // 벽: 칸마다 프레임은 (전체 줄 · 칸 번호)로 정해져 흘러가도 바뀌지 않음
+				boolean vert = vy != 0;
+				float step = vert ? ah : aw, o = ((off % step) + step) % step;
+				long base = (long) Math.floor(off / step);
+				for (int y = 0; y < cells.length; y++) for (int x = 0; x < cells[y].length; x++) {
+					Image im = cells[y][x];
+					long gy = vert ? (vy < 0 ? base + y : -base + y) : y, gx = vert ? x : (vx < 0 ? base + x : -base + x);
+					int fr = (int) Math.floorMod(gy * 7919L + gx * 104729L + (gy * gx) % 13, (long) wallFrames);
+					im.frame(wallFilm.get(fr));
+					float px = x * aw - aw / 2f, py = y * ah - ah / 2f;
+					if (vert) py += vy < 0 ? -o : o - ah; else px += vx < 0 ? -o : o - aw;
+					im.x = px; im.y = py;
+				}
+			}
+			for (Lay L : lays) {
+				float big = Math.max(L.bw, L.bh), span = (vy != 0 ? h : w) + big * 2;
+				for (Bit b : L.bits) {
+					b.p += speed * L.spd * e;
+					if (b.p >= span) { b.p -= span; reroll(L, b); }
+					float along = b.p - big;   // 화면 밖(뒤쪽)에서 들어와 앞쪽 밖으로 나감
+					if (vy < 0) { b.img.x = b.q; b.img.y = h - along; }
+					else if (vy > 0) { b.img.x = b.q; b.img.y = along - b.img.height(); }
+					else if (vx < 0) { b.img.y = b.q; b.img.x = w - along; }
+					else { b.img.y = b.q; b.img.x = along - b.img.width(); }
+				}
+			}
+		}
+	}
 
 	/** 원작 Archs 와 같은 그림(arcs1 뒤 · arcs2 앞, 앞이 2배 빠름)을 원하는 방향으로 흘림 */
 	static class Arcs extends Group {

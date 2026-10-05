@@ -17,6 +17,59 @@
   const FITS = { none: '원래 크기 × 배율', cover: '화면 채우기 (잘림)', contain: '화면 안에 맞춤', width: '가로에 맞춤', height: '세로에 맞춤', stretch: '늘려서 채우기' };
   const STYLES = { '': '회색 (게임 기본)', RED_BUTTON: '빨강', GREY_BUTTON: '회색 (테두리)', TOAST_TR: '반투명' };
   const DIRS = { up: '↑ 위로', down: '↓ 아래로', left: '← 왼쪽으로', right: '→ 오른쪽으로' };
+  /** 떠오르는 폐허의 게임 기본 겹 (ui/TitleBackground 와 같은 크기 · 밝기 · 속도 — 런타임 MakerTitle.Ruins.DEF 와 같음) */
+  const RUINS_LAYERS = () => [
+    { name: '먼 덩어리', image: 'game:splashes/title/back_clusters.png', fw: 450, fh: 250, cols: 1, frames: 2, count: 4, speed: 1.33, size: 0.5, dark: 0.5, spin: 20 },
+    { name: '덩어리', image: 'game:splashes/title/back_clusters.png', fw: 450, fh: 250, cols: 1, frames: 2, count: 3, speed: 2, size: 1, dark: 0.25, spin: 20 },
+    { name: '먼 작은 조각', image: 'game:splashes/title/front_small.png', fw: 112, fh: 116, cols: 9, frames: 36, count: 6, speed: 2.66, size: 1, dark: 0.2, spin: 20 },
+    { name: '가운데 폐허 1', image: 'game:splashes/title/mid_mixed.png', fw: 273, fh: 242, cols: 7, frames: 28, count: 3, speed: 3.54, size: 1, dark: 0.1, spin: 20 },
+    { name: '가운데 폐허 2', image: 'game:splashes/title/mid_mixed.png', fw: 273, fh: 242, cols: 7, frames: 28, count: 2, speed: 4.7, size: 1.5, dark: 0, spin: 20 },
+    { name: '앞 작은 조각', image: 'game:splashes/title/front_small.png', fw: 112, fh: 116, cols: 9, frames: 36, count: 3, speed: 6.26, size: 2.25, dark: 0, spin: 20 }];
+  const RUINS_DEFAULT = () => ({ on: true, dir: 'up', speed: 15, dark: true, wall: { show: true, image: '', fw: 333, fh: 100, cols: 3, frames: 6 }, layers: RUINS_LAYERS() });
+  /** 배경 "게임 배경 그대로" (SPD 4.0 떠오르는 폐허) 직접 설정 — 방향 · 속도 · 벽 그림 · 조각 레이어 추가/삭제/수정 */
+  function ruinsUI(K, bg, st) {
+    const { F, row, listEditor } = PDM.ui;
+    const RU = bg.ruins || {}, on = !!RU.on, P = (...k) => ['background', 'ruins', ...k];
+    const toggle = h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: on, onchange: e => store.edit(K, '폐허 배경 직접 설정', o => {
+      o.background = o.background || {};
+      if (e.target.checked) o.background.ruins = Object.assign(RUINS_DEFAULT(), o.background.ruins && o.background.ruins.layers ? o.background.ruins : {}, { on: true });
+      else if (o.background.ruins) o.background.ruins.on = false;
+    }) }), h('span', {}, '폐허 배경 직접 설정 (방향 · 속도 · 벽 · 조각 레이어)'));
+    if (!on) return h('div', {}, toggle);
+    const wall = RU.wall || {};
+    return h('div', { class: 'ruins-ui' },
+      toggle,
+      row(F.select(K, P('dir'), DIRS, { label: '흐르는 방향', def: 'up', rerender: true }),
+        F.num(K, P('speed'), { label: '속도 (게임 15)', min: 0, step: 1, def: 15, rerender: true }),
+        F.bool(K, P('dark'), { label: '아래쪽 어둡게 (게임 기본)', def: true, rerender: true })),
+      h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '뒤 벽 (바둑판처럼 깔려 함께 흐름)'),
+      row(F.bool(K, P('wall', 'show'), { label: '벽 보이기', def: true, rerender: true }),
+        F.image(K, P('wall', 'image'), { label: '벽 그림 (비우면 게임 back_wall.png)', sub: 'title', rerender: true })),
+      wall.show !== false ? row(
+        F.num(K, P('wall', 'fw'), { label: '칸 너비', min: 1, step: 1, def: 333, rerender: true }),
+        F.num(K, P('wall', 'fh'), { label: '칸 높이', min: 1, step: 1, def: 100, rerender: true }),
+        F.num(K, P('wall', 'cols'), { label: '시트 가로 칸 수', min: 1, step: 1, def: 3, rerender: true }),
+        F.num(K, P('wall', 'frames'), { label: '칸 종류 수', min: 1, step: 1, def: 6, rerender: true })) : null,
+      h('div', { class: 'fl', style: { margin: '8px 0 2px', display: 'flex', gap: '8px', alignItems: 'center' } }, '떠오르는 조각 레이어 (아래 것이 위에 그려짐)',
+        h('button', { class: 'btn xs', style: { marginLeft: 'auto' }, onclick: async e => { e.preventDefault(); if (await PDM.ui.confirm('조각 레이어를 게임 기본 6개로 되돌릴까요?')) store.edit(K, '폐허 레이어 되돌리기', o => { o.background.ruins.layers = RUINS_LAYERS(); }); } }, '게임 기본 레이어로 되돌리기')),
+      listEditor(K, P('layers'), { addLabel: '폐허 레이어', emptyText: '레이어가 없습니다 (벽만 흐름).',
+        make: () => ({ name: '레이어', image: '', fw: 0, fh: 0, cols: 1, frames: 1, count: 3, speed: 2, size: 1, dark: 0, spin: 20, show: true }),
+        render: (l, i, p) => h('details', { open: !!st['ru' + i], ontoggle: e => { st['ru' + i] = e.target.open; } },
+          h('summary', { style: { cursor: 'pointer' } }, h('b', {}, l.name || '레이어 ' + (i + 1)),
+            h('span', { class: 'hint' }, `  ${(l.image || '(그림 없음)').replace(/^game:splashes\/title\//, '게임: ')} · ${l.count ?? 3}개 · 속도 ×${l.speed ?? 2}` + (l.show === false ? ' · 숨김' : ''))),
+          row(F.text(K, [...p, 'name'], { label: '이름', rerender: true }), F.bool(K, [...p, 'show'], { label: '보이기', def: true, rerender: true })),
+          row(F.image(K, [...p, 'image'], { label: '그림 (스프라이트 시트)', sub: 'title', rerender: true })),
+          row(F.num(K, [...p, 'fw'], { label: '프레임 너비 (0 = 그림 전체)', min: 0, step: 1, def: 0, rerender: true }),
+            F.num(K, [...p, 'fh'], { label: '프레임 높이 (0 = 그림 전체)', min: 0, step: 1, def: 0, rerender: true }),
+            F.num(K, [...p, 'cols'], { label: '시트 가로 칸 수', min: 1, step: 1, def: 1, rerender: true }),
+            F.num(K, [...p, 'frames'], { label: '프레임 수 (무작위로 고름)', min: 1, step: 1, def: 1, rerender: true })),
+          row(F.num(K, [...p, 'count'], { label: '개수', min: 0, step: 1, def: 3, rerender: true }),
+            F.num(K, [...p, 'speed'], { label: '속도 배율', min: 0, step: 0.1, def: 2, rerender: true }),
+            F.num(K, [...p, 'size'], { label: '크기 배율', min: 0.05, step: 0.05, def: 1, rerender: true }),
+            F.num(K, [...p, 'dark'], { label: '어둡게 (0~1)', min: 0, max: 1, step: 0.05, def: 0, rerender: true }),
+            F.num(K, [...p, 'spin'], { label: '기울기 ±도', min: 0, step: 1, def: 20, rerender: true }))) }),
+      h('p', { class: 'hint' }, '벽은 화면 높이에 맞춰 커지고, 조각은 화면 밖에서 들어와 반대편으로 나가면 다른 위치 · 프레임 · 기울기로 다시 나옵니다. 세로 화면에서는 게임처럼 조금 작고 느려집니다.'));
+  }
   const ENTERS = { none: '없음 (바로 보임)', fade: '서서히 나타남', slideUp: '아래에서 위로', slideDown: '위에서 아래로', slideLeft: '오른쪽에서 왼쪽으로', slideRight: '왼쪽에서 오른쪽으로', drop: '떨어지며 튕김', pop: '가로로 튀어나옴' };
   const IDLES = { none: '없음', bob: '둥실둥실 (위아래)', sway: '살랑살랑 (좌우)', pulse: '깜빡임' };
   const LOGO_ANIM = { none: '없음', float: '둥실둥실', sway: '살랑살랑', pulse: '깜빡임' };
@@ -201,31 +254,43 @@
       if (bg.color) { g.fillStyle = bg.color; g.fillRect(0, 0, W, H); }
       // 게임 배경: mod-2 = 10겹 가로 시차 배경 (ui/Archs 와 같은 속도), 원작 = 아치가 위로
       const mod2bg = archSt === 'game' && imgs[MOD2_LAYERS[0]];
-      const t4bg = archSt === 'game' && !mod2bg && imgs[T4.archs];
+      // SPD 4.0 떠오르는 폐허 (ui/TitleBackground 흉내) — 직접 설정(background.ruins.on)이면 그 설정대로 (런타임 MakerTitle.Ruins 와 같은 규칙)
+      const RU = bg.ruins && bg.ruins.on ? bg.ruins : null;
+      const wallImg = archSt === 'game' && !mod2bg && (RU ? ((RU.wall || {}).show === false ? null : want((RU.wall || {}).image || T4.archs)) : imgs[T4.archs]);
+      const t4bg = archSt === 'game' && !mod2bg && (RU || imgs[T4.archs]);
       if (t4bg) {
-        // SPD 4.0 타이틀 배경 (ui/TitleBackground 를 흉내): 아치 벽이 위로 흐르고, 그 앞에 폐허 조각들이 더 빠르게 떠오름
-        const k = H / 450, sp = 15 * k * (W <= H ? 1 / 1.5 : 1);
+        const k0 = H / 450, port = W <= H, sp = (RU ? (RU.speed ?? 15) : 15) * k0 * (port ? 1 / 1.5 : 1);
+        const dv = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[(RU && RU.dir) || 'up'], vert = dv[1] !== 0;
         t4T += e;
         const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
-        const aw = 333 * k, ah = 100 * k, off = (t4T * sp) % ah, row0 = Math.floor(t4T * sp / ah);
-        if (ah > 0.5 && aw > 0.5) for (let ry = -1; ry * ah - off < H; ry++) for (let cx = 0; cx * aw < W; cx++) {
-          const f = Math.floor(rnd((row0 + ry) * 31 + cx) * 6);
-          g.drawImage(t4bg, (f % 3) * 333, Math.floor(f / 3) * 100, 333, 100, cx * aw, ry * ah - off, aw + 0.5, ah + 0.5);
+        if (wallImg) {
+          const wl = (RU && RU.wall) || {}, fw = wl.fw || 333, fh = wl.fh || 100, cols = Math.max(1, wl.cols || 3), nf = Math.max(1, wl.frames || 6);
+          const aw = (fw - 9) * k0, ah = (fh - 5) * k0, step = vert ? ah : aw, off = t4T * sp, o = ((off % step) + step) % step, base = Math.floor(off / step);
+          if (aw > 0.5 && ah > 0.5) for (let y = 0; y * ah < H + ah * 2; y++) for (let x = 0; x * aw < W + aw * 2; x++) {
+            const gy = vert ? (dv[1] < 0 ? base + y : -base + y) : y, gx = vert ? x : (dv[0] < 0 ? base + x : -base + x);
+            const f = Math.floor(rnd(gy * 31 + gx * 7) * nf);
+            let px = x * aw - aw / 2, py = y * ah - ah / 2;
+            if (vert) py += dv[1] < 0 ? -o : o - ah; else px += dv[0] < 0 ? -o : o - aw;
+            g.drawImage(wallImg, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, px, py, fw * k0 + 0.5, fh * k0 + 0.5);
+          }
         }
-        const gd = g.createLinearGradient(0, 0, 0, H); gd.addColorStop(0, 'rgba(0,0,0,0)'); gd.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = gd; g.fillRect(0, 0, W, H);
-        const k2 = k * (W <= H ? 1 / 1.5 : 1);
-        // [그림, 프레임 가로, 세로, 열, 프레임 수, 개수, 속도 배율, 크기 배율, 어둡기]
-        // 크기·밝기·속도는 게임 ui/TitleBackground 의 겹과 같게 (먼 덩어리 0.5배·밝기 0.5 → 덩어리 1배·0.75 → 먼 조각 → 중간 1 → 중간 2(1.5배) → 앞 조각(2.25배))
-        [[T4.clusters, 450, 250, 1, 2, 4, 1.33, 0.5, 0.5], [T4.clusters, 450, 250, 1, 2, 3, 2, 1, 0.25], [T4.small, 112, 116, 9, 36, 6, 2.66, 1, 0.2],
-          [T4.mid, 273, 242, 7, 28, 3, 3.54, 1, 0.1], [T4.mid, 273, 242, 7, 28, 2, 4.7, 1.5, 0], [T4.small, 112, 116, 9, 36, 3, 6.26, 2.25, 0]].forEach(([r, fw, fh, cols, nf, cnt, spd, sz, dark], li) => {
-          const im = imgs[r]; if (!im) return;
-          const w2 = fw * k2 * sz, h2 = fh * k2 * sz, span = H + h2 * 2;
-          for (let i = 0; i < cnt; i++) {
-            const seed = li * 17 + i * 5.3, cyc = Math.floor((t4T * sp * spd + rnd(seed) * span) / span);
-            const y = H + h2 - ((t4T * sp * spd + rnd(seed) * span) % span), x = rnd(seed + cyc * 3.1 + 1) * (W + w2) - w2, f = Math.floor(rnd(seed + cyc * 7.7 + 2) * nf);
+        if (!RU || RU.dark !== false) { const gd = g.createLinearGradient(0, 0, 0, H); gd.addColorStop(0, 'rgba(0,0,0,0)'); gd.addColorStop(1, 'rgba(0,0,0,0.5)'); g.fillStyle = gd; g.fillRect(0, 0, W, H); }
+        const k2 = k0 * (port ? 1 / 1.5 : 1);
+        const layers = RU ? (RU.layers || RUINS_LAYERS()) : RUINS_LAYERS();
+        layers.forEach((L, li) => {
+          if (L.show === false || !L.image) return;
+          const im = want(L.image); if (!im || !(im.width > 0)) return;
+          const fw = L.fw || im.width, fh = L.fh || im.height, cols = Math.max(1, L.cols || 1), nf = Math.max(1, L.frames || 1), sz = L.size ?? 1, dark = L.dark || 0, spin = (L.spin ?? 20) * Math.PI / 180;
+          const w2 = fw * k2 * sz, h2 = fh * k2 * sz, big = Math.max(w2, h2), span = (vert ? H : W) + big * 2, cross = vert ? W : H;
+          for (let n = 0; n < (L.count ?? 3); n++) {
+            const seed = li * 17 + n * 5.3, pos = t4T * sp * (L.speed ?? 2) + rnd(seed) * span, cyc = Math.floor(pos / span), along = (pos % span) - big;
+            const q = rnd(seed + cyc * 3.1 + 1) * (cross + big / 3) - big / 3, f = Math.floor(rnd(seed + cyc * 7.7 + 2) * nf), ang = (rnd(seed + cyc * 1.9 + 3) * 2 - 1) * spin;
+            let x, y;
+            if (vert) { x = q; y = dv[1] < 0 ? H - along : along - h2; } else { y = q; x = dv[0] < 0 ? W - along : along - w2; }
+            g.save(); g.translate(x + w2 / 2, y + h2 / 2); g.rotate(ang);
             g.filter = dark > 0 ? `brightness(${1 - dark})` : 'none';   // 먼 것일수록 어둡게
-            g.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, x, y - h2, w2, h2);
-            g.filter = 'none';
+            g.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, -w2 / 2, -h2 / 2, w2, h2);
+            g.filter = 'none'; g.restore();
           }
         });
       } else if (mod2bg) {
@@ -498,6 +563,7 @@
       ctx._stop = pv.stop;
       ctx.onDispose(() => pv.stop());
       const bg = t.background || {}, bt = t.buttons || {}, gate = t.gate || {};
+      const ruinsOn = !!(bg.ruins && bg.ruins.on && PDM.gameTitle4 && !PDM.isMod2());
       const sizeTabs = h('div', { class: 'code-tabs' }, Object.entries(SIZES).map(([k, v]) => h('button', { class: 'btn xs' + (st.size === k ? ' on' : ''), onclick: e => { e.preventDefault(); st.size = k; ctx.refresh(); } }, v[2])),
         h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); pv.replay(); } }, '▶ 애니메이션 다시 보기'),
         gate.enabled ? h('span', { class: 'hint' }, '  (미리보기를 누르면 "화면을 누르세요" ↔ 메뉴)') : null);
@@ -516,14 +582,15 @@
               const s = h('select', {}, Object.entries(ARCH_STYLES).map(([k, v]) => h('option', { value: k, selected: archStyleOf(bg) === k }, k === 'game' && !PDM.isMod2() ? (PDM.gameTitle4 ? '게임 배경 그대로 (SPD 4.0: 떠오르는 폐허)' : '게임 배경 그대로 (원작 아치)') : v)));
               s.onchange = () => store.edit(K, '배경 방식', o => { o.background = o.background || {}; o.background.archs = s.value !== 'none'; if (s.value !== 'none') o.background.archStyle = s.value; });
               return s; })()),
-            archStyleOf(bg) === 'game' ? F.bool(K, ['background', 'archReverse'], { label: '반대 방향으로 흐름', rerender: true }) : null,
+            archStyleOf(bg) === 'game' && !ruinsOn ? F.bool(K, ['background', 'archReverse'], { label: '반대 방향으로 흐름', rerender: true }) : null,
             archStyleOf(bg) === 'classic' ? F.select(K, ['background', 'archDir'], DIRS, { label: '흐르는 방향 (가로·세로)', rerender: true }) : null,
             archStyleOf(bg) === 'classic' ? F.num(K, ['background', 'archSpeed'], { label: '속도 (px/초, 원작 20)', min: 0, step: 1, def: 20, rerender: true }) : null,
             F.text(K, ['background', 'color'], { label: '배경색 #rrggbb (비우면 없음)', rerender: true })),
           archStyleOf(bg) === 'classic' ? row(
             F.image(K, ['background', 'archImages', 'bg'], { label: '뒤 아치 그림 (비우면 게임 arcs1.png)', sub: 'title', rerender: true }),
             F.image(K, ['background', 'archImages', 'fg'], { label: '앞 아치 그림 (비우면 게임 arcs2.png, 2배 빠름)', sub: 'title', rerender: true })) : null,
-          archStyleOf(bg) === 'game' ? h('p', { class: 'hint' }, '게임 배경 그림 자체를 바꾸려면 아래 "타이틀 스프라이트"에서 고치기 — 메뉴 화면(랭킹·일지 등)도 같은 그림을 씁니다.') : null,
+          archStyleOf(bg) === 'game' && PDM.gameTitle4 && !PDM.isMod2() ? ruinsUI(K, bg, st) : null,
+          archStyleOf(bg) === 'game' && !ruinsOn ? h('p', { class: 'hint' }, '게임 배경 그림 자체를 바꾸려면 아래 "타이틀 스프라이트"에서 고치기 — 메뉴 화면(랭킹·일지 등)도 같은 그림을 씁니다.') : null,
           row(F.bool(K, ['background', 'gradient', 'enabled'], { label: '그라데이션 덮기', rerender: true }),
             (bg.gradient || {}).enabled ? F.text(K, ['background', 'gradient', 'color'], { label: '색 (예: #0b1b3a 밤하늘)', rerender: true }) : null,
             (bg.gradient || {}).enabled ? F.num(K, ['background', 'gradient', 'alpha'], { label: '진하기', step: 0.05, min: 0, max: 1, def: 0.55, rerender: true }) : null,

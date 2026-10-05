@@ -362,6 +362,7 @@ public class MakerAssets {
 		JsonValue bg = d.get("background");
 		if (bg == null) return false;
 		if (!MakerTitle.archStyle(bg).equals("game") || bg.getBoolean("archReverse", false)) return true;
+		if (MakerTitle.Ruins.on(bg)) return true;   // 떠오르는 폐허를 직접 설정함
 		if (!bg.getString("color", "").isEmpty() || bg.getBoolean("vignette", false)) return true;
 		JsonValue gr = bg.get("gradient");
 		if (gr != null && gr.isObject() && gr.getBoolean("enabled", false)) return true;

@@ -543,7 +543,11 @@ MyProject/
   "music": { "tracks": [] },                                   // 비우면 게임 곡, "none" = 끄기
   "background": { "archs": true, "archStyle": "game|classic", "archReverse": false, "archDir": "up|down|left|right", "archSpeed": 20, "archImages": { "bg": "", "fg": "" }, "color": "",
                   "gradient": { "enabled": true, "color": "#0b1b3a", "alpha": 0.55, "from": "top" }, "vignette": true,
-                  "effect": "none|snow|rain|embers|sparkle|petals|fireflies|mana", "effectDensity": 1, "effectArea": "screen|logo", "effectFront": false },
+                  "effect": "none|snow|rain|embers|sparkle|petals|fireflies|mana", "effectDensity": 1, "effectArea": "screen|logo", "effectFront": false },,
+                  "ruins": { "on": true, "dir": "up|down|left|right", "speed": 15, "dark": true,
+                             "wall": { "show": true, "image": "", "fw": 333, "fh": 100, "cols": 3, "frames": 6 },
+                             "layers": [ { "name": "먼 덩어리", "image": "game:splashes/title/back_clusters.png", "fw": 450, "fh": 250, "cols": 1, "frames": 2,
+                                           "count": 4, "speed": 1.33, "size": 0.5, "dark": 0.5, "spin": 20, "show": true } ] } },
   "layers": [ { "image": "game:effects/fireball-short.png", "frame": [47, 47], "frames": [], "fps": 24, "fit": "none", "x": 0.12, "y": 0.2, "tile": false,
                 "scrollX": 0, "scrollY": 0, "bob": 2, "pulse": 0, "spin": 0, "blend": "light", "front": false, "titleOnly": false } ],
   "menus": { "background": true, "music": true, "layers": true, "effect": false },
@@ -559,6 +563,7 @@ MyProject/
 
 - 게임: 연결 줄 `TitleScene.create()` 의 `fadeIn()` 앞 `MakerTitle.apply` — 게임의 원래 요소를 모두 숨기고 설정대로 새로 그림.
 - 배경 `archStyle`: `game` = 게임 배경 그대로(4.0 은 `ui.TitleBackground` — 리플렉션, 없으면 `Archs`, mod-2 는 title0~9 10겹 시차) · `classic` = 원작 아치를 네 방향 · 속도 · 그림 바꾸기. 레이어도 가로 · 세로 흐름.
+- `background.ruins.on` (SPD 4.0 + `game` 일 때만) → `MakerTitle.Ruins` 가 4.0 "떠오르는 폐허"를 직접 그림: 바둑판 벽(`wall`, 칸마다 행·열 해시로 프레임 고정) + 조각 레이어(`layers` — 스프라이트 시트 `fw×fh` · `cols` · `frames` 중 무작위, `count` 개가 `dir` 로 `speed×레이어 speed` 만큼 흐르고 화면 밖으로 나가면 다른 위치 · 프레임 · `±spin` 기울기로 다시 나옴, `dark` 만큼 어둡게). 화면 높이 450 기준 배율, 세로 화면은 ÷1.5 (게임과 같음). `layers` 가 없으면 게임 기본 6겹. 미리보기(title.js)도 같은 규칙. `MakerAssets.customBackground` 는 이때 메뉴 화면 배경도 같이 바꿈.
 - **메뉴 화면** `menus` (`MakerAssets.MenuStyler`, PixelScene 연결 줄): 랭킹 · 모험 일지 · 변경 · 소개 화면도 타이틀과 같은 배경 · 음악.
 - **기본값 = 지금 저장소의 타이틀**: `PDM.gameTitle4`(저장소에 `splashes/title/archs.png` = SPD 4.0+)에 따라 버튼 순서 · `hideButton` 이 다름. 손대지 않은 기본 타이틀은 `PDM.titleSyncDefaults` 가 맞춤. 빠른 시작: "지금 게임 기본" · "예전 아치 모양" · mod-2 프리셋.
 - **하위 페이지** `pages` (`MakerPages`):
