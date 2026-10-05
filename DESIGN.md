@@ -81,7 +81,7 @@
 | `cellpick.js` | 맵에서 칸 고르기 `PDM.pickCell` · 광원 칸 `PDM.lightFields` · 광원 미리보기 `PDM.drawLightPreview` |
 | `layout.js` | 대사창 · 타이틀 레이아웃 직접 편집 `PDM.layoutEditor` |
 | `levelpreview.js` | 타일셋 실시간 미리보기 |
-| `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿 · 영웅 — 영웅은 id 바꾸기 · 복제를 자기 방식으로 `o.rename/dup`) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임) |
+| `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿 · 영웅 — 영웅은 id 바꾸기 · 복제를 자기 방식으로 `o.rename/dup`) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임). 방 템플릿은 맵 편집 화면이라 속성 창 맨 위에 같은 도구 줄 + "방 미리보기" 창의 카드마다 편집 · 복제 · 삭제(오른쪽 클릭 = 같은 메뉴) |
 | `clip.js` | 공용 클립보드 `PDM.clip` — Ctrl+C/V. 메모리 + 시스템 클립보드 JSON(다른 프로젝트 · 창에도). kind: `res:<종류>` · `list:<저장 키>` · `nodes` · `mapobj` · `cmds`. 붙여넣기는 지금 탭의 `ctx.copy/paste` → 리소스 · 목록 항목 기본 처리 |
 | `keys.js` | 단축키 `PDM.keys` — 동작 표(id · 기본 키 · scope global/draw) + 사용자 키(`localStorage pdm.keys`), `e.code` 기준 키 이름, 편집 › 단축키 설정 창 |
 | `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 복사/붙여넣기 · 삭제 · id 바꾸기 · 쓰는 곳(이벤트 명령 `cmdType`+`cmdKey` · 맵 오브젝트 `objType` · 참조 칸 `fields`) · 순서 `PDM.listOps` — 도구 줄은 resOps 와 같은 모양 |

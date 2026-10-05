@@ -93,8 +93,20 @@
     let closeBtn;
     const body = h('div', { style: { width: 'min(860px, 88vw)' } },
       h('p', { class: 'hint' }, '게임 기본 방은 게임이 실제로 만든 표본입니다 (만들 때마다 크기·모양이 달라짐). 누르면 다른 표본과 설명. 노란 점 = 아이템, 빨간 점 = 몬스터, 초록 점 = NPC.'),
-      mine.length ? h('h4', {}, `프로젝트 방 템플릿 (${mine.length})`) : null,
-      mine.length ? grid(mine.map(r => card(roomCanvas(r, 10, 96), r.name, r.id, () => { closeBtn(); PDM.tabs.open('room:' + r.id); }))) : null,
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, h('h4', {}, `프로젝트 방 템플릿 (${mine.length})`),
+        h('button', { class: 'btn xs add', onclick: () => { closeBtn(); newRoom(); } }, '+ 새 방 템플릿')),
+      mine.length ? null : h('p', { class: 'hint' }, '아직 없습니다 — "+ 새 방 템플릿"으로 만드세요.'),
+      mine.length ? grid(mine.map(r => {
+        // 프로젝트 방: 누르면 편집, 아래 버튼 = 편집 · 복제 · 삭제 (오른쪽 클릭 = 리소스 목록과 같은 메뉴)
+        const c = card(roomCanvas(r, 10, 96), r.name, r.id, () => { closeBtn(); PDM.tabs.open('room:' + r.id); });
+        const btn = (t, tip, run, cls) => h('button', { class: 'btn xs' + (cls ? ' ' + cls : ''), title: tip, onclick: e => { e.stopPropagation(); run(); } }, t);
+        c.append(h('div', { style: { display: 'flex', gap: '3px', justifyContent: 'center', marginTop: '4px' } },
+          btn('편집', '열어서 고치기', () => { closeBtn(); PDM.tabs.open('room:' + r.id); }),
+          btn('복제', '사본을 만들어 엶', () => { closeBtn(); PDM.resOps.dup('room', r.id); }),
+          btn('삭제', '방 템플릿 삭제 (쓰는 곳 수를 보여 줌)', async () => { if (await PDM.resOps.remove('room', r.id)) { closeBtn(); showRoomGallery(); } }, 'danger')));
+        c.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); PDM.ui.menu(e.clientX, e.clientY, PDM.resOps.menu('room', r.id).map(m => m && m.run ? Object.assign({}, m, { run: () => { closeBtn(); m.run(); } }) : m)); };
+        return c;
+      })) : null,
       ...gameRoomGroups().filter(g => g.cat !== 'base').map(g => h('div', {}, h('h4', {}, `${g.name} (${g.rooms.length})`),
         grid(g.rooms.map(r => { const pv = gameRoomPreviews(r)[0]; return card(pv ? roomCanvas(pv, 10, 96) : null, r.name, r.cls + (r.noUse ? ' — ' + r.noUse : ''), () => showGameRoom(r), !!r.noUse); })))));
     closeBtn = () => { const b = body.closest('.modal-bg'); if (b) b.remove(); };
@@ -1133,6 +1145,7 @@
         if (kind === 'room') {
           const used = roomUsage(fl.id);
           el = h('div', {},
+            PDM.resOps.bar('room', fl.id),   // id 바꾸기 · 복제 · 복사 · 쓰는 곳 · 삭제 (리소스 목록 오른쪽 클릭과 같은 동작)
             F.text(key, ['name'], { label: '방 이름', rerender: true }),
             F.select(key, ['kind'], { standard: '일반 방 (여러 방과 연결)', special: '특수 방 (입구 하나, 막다른 방)' }, { label: '종류' }),
             PDM.filters ? PDM.filters.field(key, ['filter'], '화면 필터 (영웅이 이 방 안에 있는 동안)', '(없음 — 맵 설정대로)') : null,
