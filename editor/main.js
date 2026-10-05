@@ -179,25 +179,33 @@ ipcMain.handle('app:close', wrap(() => { win.__forceClose = true; win.close(); r
 // (기존 pixel-dungeon-maker 의 MakerServer 방식을 그대로 가져옴)
 function findJavaHome() {
   const c = [];
-  if (IS_WIN) {
-    const pf = process.env.ProgramFiles || 'C:\\Program Files';
-    const la = process.env.LOCALAPPDATA || '';
-    c.push(path.join(pf, 'Android', 'Android Studio', 'jbr'), path.join(la, 'Programs', 'Android Studio', 'jbr'),
-      path.join(pf, 'Android', 'Android Studio', 'jre'));
-  } else {
-    c.push('/opt/android-studio/jbr', '/usr/lib/jvm/default-java');
-  }
-  if (process.env.JAVA_HOME) c.push(process.env.JAVA_HOME);
-  // 흔한 JDK 설치 폴더 (Temurin · Microsoft · Oracle · Zulu) + PDMaker 가 내려받은 JDK
   const scan = dir => { try { return fs.readdirSync(dir).map(f => path.join(dir, f)).sort().reverse(); } catch (_) { return []; } };
+  // 순서: JAVA_HOME → 흔한 JDK 설치 폴더 (Temurin · Microsoft · Oracle · Zulu · BellSoft) → PDMaker 가 내려받은 JDK → Android Studio 에 딸린 JBR
+  if (process.env.JAVA_HOME) c.push(process.env.JAVA_HOME);
   if (IS_WIN) {
     const pf = process.env.ProgramFiles || 'C:\\Program Files';
     ['Eclipse Adoptium', 'Microsoft', 'Java', 'Zulu', 'BellSoft'].forEach(v => c.push(...scan(path.join(pf, v))));
-  }
+  } else c.push(...scan('/usr/lib/jvm'));
   c.push(...scan(jdkDir()));
-  const ok = p => { if (!p || !fs.existsSync(path.join(p, 'bin', IS_WIN ? 'java.exe' : 'java'))) return false;
-    const m = path.basename(p).match(/(?:jdk|jre)-?(\d+)/i); return !m || +m[1] >= 17; };   // 이 게임은 Java 17 이상
-  return c.find(ok) || null;
+  if (IS_WIN) {
+    const pf = process.env.ProgramFiles || 'C:\\Program Files', la = process.env.LOCALAPPDATA || '';
+    c.push(path.join(pf, 'Android', 'Android Studio', 'jbr'), path.join(la, 'Programs', 'Android Studio', 'jbr'), path.join(pf, 'Android', 'Android Studio', 'jre'));
+  } else c.push('/opt/android-studio/jbr');
+  return c.find(javaOk) || null;
+}
+/** 쓸 수 있는 JDK 인지: java · javac 와 lib/jvm.cfg 가 있고(망가진 · 덜 설치된 것 제외) 버전이 17 이상 */
+const javaBad = new Set();
+function javaOk(p) {
+  if (!p) return false;
+  const exe = n => path.join(p, 'bin', IS_WIN ? n + '.exe' : n);
+  if (!fs.existsSync(exe('java'))) return false;
+  const miss = [exe('javac'), path.join(p, 'lib', 'jvm.cfg')].filter(f => !fs.existsSync(f));
+  if (miss.length) { if (!javaBad.has(p)) { javaBad.add(p); log(`> Java 건너뜀 (망가졌거나 JDK 가 아님 — ${miss.map(f => path.relative(p, f)).join(', ')} 없음): ${p}`); } return false; }
+  let v = 0;
+  try { const m = /JAVA_VERSION="(\d+)(?:\.(\d+))?/.exec(fs.readFileSync(path.join(p, 'release'), 'utf8')); if (m) v = +m[1] === 1 ? +m[2] : +m[1]; } catch (_) { /* release 파일 없음 */ }
+  if (!v) { const m = path.basename(p).match(/(?:jdk|jre)-?(\d+)/i); v = m ? +m[1] : 17; }
+  if (v < 17) { if (!javaBad.has(p)) { javaBad.add(p); log(`> Java 건너뜀 (버전 ${v} — 17 이상 필요): ${p}`); } return false; }   // 이 게임은 Java 17 이상
+  return true;
 }
 /** PDMaker 가 Java 를 내려받아 두는 곳 */
 function jdkDir() { return path.join(app.getPath('userData'), 'jdk'); }
