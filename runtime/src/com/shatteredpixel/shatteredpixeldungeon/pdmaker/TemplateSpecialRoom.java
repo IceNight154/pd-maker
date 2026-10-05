@@ -12,18 +12,19 @@ import com.watabou.utils.Point;
 public class TemplateSpecialRoom extends SpecialRoom {
 
 	public String templateKey = "";
+	public int var = 0;   // 변형 (TemplateRoom.pickVar)
 
 	public TemplateSpecialRoom() { super(); }
-	public TemplateSpecialRoom(String key) { super(); templateKey = key; }
+	public TemplateSpecialRoom(String key) { super(); templateKey = key; var = TemplateRoom.pickVar(MakerRuntime.template(key), key); }
 
 	JsonValue tpl() { return MakerRuntime.template(templateKey); }
 
-	@Override public int minWidth()  { return TemplateRoom.tw(tpl()); }
-	@Override public int maxWidth()  { return TemplateRoom.tw(tpl()); }
-	@Override public int minHeight() { return TemplateRoom.th(tpl()); }
-	@Override public int maxHeight() { return TemplateRoom.th(tpl()); }
+	@Override public int minWidth()  { return TemplateRoom.vw(tpl(), var); }
+	@Override public int maxWidth()  { return TemplateRoom.vw(tpl(), var); }
+	@Override public int minHeight() { return TemplateRoom.vh(tpl(), var); }
+	@Override public int maxHeight() { return TemplateRoom.vh(tpl(), var); }
 
-	@Override public boolean canConnect(Point p) { return super.canConnect(p) && TemplateRoom.doorAllowed(this, tpl(), p); }
+	@Override public boolean canConnect(Point p) { return super.canConnect(p) && TemplateRoom.doorAllowed(this, tpl(), p, var); }
 	@Override public boolean canPlaceWater(Point p) { return false; }
 	@Override public boolean canPlaceGrass(Point p) { return false; }
 	@Override public boolean canPlaceTrap(Point p) { return false; }
@@ -32,11 +33,11 @@ public class TemplateSpecialRoom extends SpecialRoom {
 
 	@Override
 	public void paint(Level level) {
-		TemplateRoom.paintTemplate(level, this, tpl());
+		TemplateRoom.paintTemplate(level, this, tpl(), var);
 		if (entrance() != null) entrance().set(Door.Type.REGULAR);
 		LevelHooks.painted.add(this);
 	}
 
-	@Override public void storeInBundle(Bundle bundle) { super.storeInBundle(bundle); bundle.put("pdm_tpl", templateKey); }
-	@Override public void restoreFromBundle(Bundle bundle) { super.restoreFromBundle(bundle); templateKey = bundle.getString("pdm_tpl"); }
+	@Override public void storeInBundle(Bundle bundle) { super.storeInBundle(bundle); bundle.put("pdm_tpl", templateKey); bundle.put("pdm_var", var); }
+	@Override public void restoreFromBundle(Bundle bundle) { super.restoreFromBundle(bundle); templateKey = bundle.getString("pdm_tpl"); var = bundle.contains("pdm_var") ? bundle.getInt("pdm_var") : 0; }
 }

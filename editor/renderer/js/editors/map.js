@@ -338,13 +338,19 @@
       const canSpawn = kind === 'node' && fl.mode === 'handmade';
       let spawnL = canSpawn ? (((fl.layers || {}).spawn || []).length === W * H ? fl.layers.spawn.slice() : new Array(W * H).fill(0)) : null;
       const SPAWN_VALS = { 1: ['스폰 구역', '#5fd66a'], 2: ['스폰 금지', '#ff5a6a'], 0: ['지우개', '#9a93ad'] };
+      // 무작위 칸 (방 템플릿만): 0 없음 · n = randSets[n-1] — 방이 들어갈 때마다 그 묶음의 선택지 중 하나로
+      const canRand = kind === 'room';
+      let randL = canRand ? (((fl.layers || {}).rand || []).length === W * H ? fl.layers.rand.slice() : new Array(W * H).fill(0)) : null;
+      const RAND_COLORS = ['#ffb347', '#6ec6ff', '#c084fc', '#7ee08a', '#ff6b9a', '#f5e050', '#4dd4c6', '#ff8a5c'];
+      const randColor = n => RAND_COLORS[(n - 1) % RAND_COLORS.length];
+      if (ui.randVal === undefined) ui.randVal = 1; if (!ui.randShape) ui.randShape = 'pen';
       let tilesImg = null, paintImg = null;
       const theme = themeKey(themeOf(fl, kind));
 
       // ---- 팔레트 ----
       const palette = h('div', { class: 'palette' });
-      const tileTool = () => ui.tool !== 'object' && ui.tool !== 'select' && ui.tool !== 'spawn' && ui.tool !== 'erase';
-      const ERASE = { all: '전부', wall: '벽', floor: '바닥·타일', object: '오브젝트', spawn: '스폰 구역' };
+      const tileTool = () => ui.tool !== 'object' && ui.tool !== 'select' && ui.tool !== 'spawn' && ui.tool !== 'erase' && ui.tool !== 'rand';
+      const ERASE = { all: '전부', wall: '벽', floor: '바닥·타일', object: '오브젝트', spawn: '스폰 구역', rand: '무작위 칸' };
       if (!ui.eraseKind) ui.eraseKind = 'all'; if (ui.port === undefined) ui.port = -1;
       const pickTile = v => { ui.terrain = v; if (!tileTool() || ui.tool === 'pick') ui.tool = 'pen'; drawPalette(); drawTools(); };
       /** 확장 기능이 꺼진 종류는 팔레트에서 숨김 (이 맵에 이미 놓은 것이 있으면 보임) */
@@ -366,7 +372,7 @@
               h('button', { class: 'btn xs' + (ui.terrain === -1 && tileTool() ? ' pri' : ''), title: '아무것도 그리지 않은 칸 — 맵에 들어가지 않습니다 (게임에서는 막힌 벽)', onclick: () => pickTile(-1) }, '▢ 빈 칸 (지우기)'),
               h('button', { class: 'btn xs' + (ui.terrain === 0 && tileTool() ? ' pri' : ''), title: '바닥이 없는 칸 — 떨어지면 아래층으로', onclick: () => pickTile(0) }, '▼ 낭떠러지')),
             h('div', { class: 'fl' }, '지우개'),
-            h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, ...Object.entries(ERASE).filter(([k]) => k !== 'spawn' || canSpawn).map(([k, t]) => h('button', { class: 'btn xs' + (ui.tool === 'erase' && ui.eraseKind === k ? ' pri' : ''), title: k === 'all' ? '타일·오브젝트·스폰 구역을 모두 지웁니다 (끌어서)' : t + '만 지웁니다 (끌어서)', onclick: () => { ui.tool = 'erase'; ui.eraseKind = k; drawPalette(); drawTools(); } }, t))),
+            h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, ...Object.entries(ERASE).filter(([k]) => (k !== 'spawn' || canSpawn) && (k !== 'rand' || canRand)).map(([k, t]) => h('button', { class: 'btn xs' + (ui.tool === 'erase' && ui.eraseKind === k ? ' pri' : ''), title: k === 'all' ? '타일·오브젝트·스폰 구역을 모두 지웁니다 (끌어서)' : t + '만 지웁니다 (끌어서)', onclick: () => { ui.tool = 'erase'; ui.eraseKind = k; drawPalette(); drawTools(); } }, t))),
             h('button', { class: 'btn xs danger', style: { margin: '6px 0 10px' }, onclick: clearAll }, '🗑 맵 전체 지우기'),
             kind === 'node' ? h('div', { class: 'fl' }, '입구 · 출구') : '',
             kind === 'node' ? h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
@@ -387,6 +393,16 @@
             h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, ...[1, 2, 0].map(v => [v, SPAWN_VALS[v]]).map(([v, [t, c]]) => h('button', { class: 'btn xs' + (ui.tool === 'spawn' && ui.spawnVal === +v ? ' pri' : ''), style: { borderColor: c }, onclick: () => { ui.tool = 'spawn'; ui.spawnVal = +v; ui.showSpawn = true; drawPalette(); drawTools(); paint(); } }, t))),
             h('div', { style: { display: 'flex', gap: '4px', margin: '4px 0', flexWrap: 'wrap' } }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형'], ['fill', '▧ 방 채우기']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.spawnShape === k ? ' pri' : ''), onclick: () => { ui.spawnShape = k; ui.tool = 'spawn'; ui.showSpawn = true; drawPalette(); drawTools(); paint(); } }, t))),
             h('div', { class: 'hint', style: { marginBottom: '10px' } }, (fl.spawn || {}).enabled ? '초록 = 이 안에서만 몬스터가 생김 · 빨강 = 절대 안 생김. 초록이 없으면 빨강을 뺀 아무 곳.' : '속성의 "몬스터 스폰"을 켜야 게임에서 적용됩니다.'));
+        }
+        if (canRand) {
+          const sets = fl.randSets || [];
+          palette.append(h('div', { class: 'fl' }, '🎲 무작위 칸 (방이 들어갈 때마다 달라짐)'),
+            h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+              ...sets.map((st, i) => h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === i + 1 ? ' pri' : ''), style: { borderColor: randColor(i + 1) }, title: (st.opts || []).map(o => (o.t === -2 ? '그대로' : (PDM.TERRAIN_BY_ID[o.t] || {}).name || o.t) + ' ' + (o.w ?? 1)).join(' · '), onclick: () => { ui.tool = 'rand'; ui.randVal = i + 1; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, `${i + 1}. ${st.name || '묶음'}`)),
+              sets.length ? h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === 0 ? ' pri' : ''), onclick: () => { ui.tool = 'rand'; ui.randVal = 0; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, '지우개') : null,
+              h('button', { class: 'btn xs', title: '새 무작위 칸 묶음 — 오른쪽 속성의 "변형"에서 선택지를 정합니다', onclick: () => addRandSet() }, '+ 묶음')),
+            sets.length ? h('div', { style: { display: 'flex', gap: '4px', margin: '4px 0', flexWrap: 'wrap' } }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.randShape === k ? ' pri' : ''), onclick: () => { ui.randShape = k; ui.tool = 'rand'; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, t))) : null,
+            h('div', { class: 'hint', style: { marginBottom: '10px' } }, sets.length ? '칠한 칸은 게임에서 그 묶음의 선택지 중 하나가 됩니다 (예: 물 50 · 풀 50). 오른쪽 "변형"에서 선택지 · 무게 · 칸마다/묶음 전체를 정하고 「🎲 변형 미리보기」로 확인하세요.' : '"+ 묶음"을 눌러 무작위 칸 묶음을 만든 뒤 칸에 칠하세요.'));
         }
         palette.append(h('div', { class: 'fl' }, '오브젝트 놓기'));
         const typeSel = h('select', { onchange: () => { ui.objType = typeSel.value; ui.objRef = ''; ui.tool = 'object'; drawPalette(); drawTools(); } },
@@ -423,6 +439,8 @@
         const T = (id, label, tip) => h('button', { class: 'tool' + (ui.tool === id ? ' on' : ''), title: tip || '', onclick: () => { ui.tool = id; drawTools(); drawPalette(); } }, label);
         if (drawable) tools.append(T('pen', '✎ 펜', '타일 그리기 (B)'), T('rect', '▭ 사각형', '끌어서 채운 사각형'), T('room', '▣ 방', '끌어서 벽 두른 방'), T('fill', '▧ 채우기', '(G)'), T('pick', '⊙ 스포이드', '(I)'), T('erase', '⌫ 지우개', '끌어서 지우기 (E) — 무엇을 지울지는 왼쪽 「지우개」에서'));
         tools.append(T('select', '⇱ 선택', '오브젝트 · 입구/출구 계단 선택/이동 (M)'), T('object', '✚ 오브젝트'));
+        if (canRand && (fl.randSets || []).length) tools.append(T('rand', '🎲 무작위 칸', '방이 들어갈 때마다 달라지는 칸 칠하기 (왼쪽에서 묶음 고르기)'),
+          h('button', { class: 'tool' + (ui.showRand !== false ? ' on' : ''), title: '무작위 칸 보이기', onclick: () => { ui.showRand = ui.showRand === false; drawTools(); paint(); } }, '무작위 표시'));
         if (canSpawn) tools.append(T('spawn', '☗ 스폰 구역', '몬스터가 생기는 구역 / 안 생기는 구역 칠하기'),
           h('button', { class: 'tool' + (ui.showSpawn ? ' on' : ''), title: '스폰 구역 보이기', onclick: () => { ui.showSpawn = !ui.showSpawn; drawTools(); paint(); } }, '구역 표시'));
         if (kind === 'node' && fl.mode === 'handmade') tools.append(h('button', { class: 'tool', title: '맵 전체를 한 장의 그림으로 직접 그립니다 (게임에서는 타일 그림 대신 이 그림이 보임)', onclick: () => { ui.paintMode = true; PDM.tabs.refresh(key); } }, '🖌 맵 세부 그리기'));
@@ -567,6 +585,16 @@
           for (let y = 0; y <= H; y++) { g.moveTo(0, y * s + .5); g.lineTo(W * s, y * s + .5); }
           g.stroke();
         }
+        // 무작위 칸
+        if (canRand && (ui.showRand !== false || ui.tool === 'rand')) {
+          g.font = `bold ${Math.max(8, s * .38)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+          for (let i = 0; i < W * H; i++) {
+            const v = randL[i]; if (!v) continue;
+            const x = (i % W) * s, y = Math.floor(i / W) * s, c = randColor(v);
+            g.fillStyle = c + '55'; g.fillRect(x, y, s, s); g.strokeStyle = c; g.lineWidth = 1; g.setLineDash([3, 2]); g.strokeRect(x + 1.5, y + 1.5, s - 3, s - 3); g.setLineDash([]);
+            if (s >= 14) { g.fillStyle = '#000a'; g.fillText('🎲' + v, x + s / 2 + 1, y + s / 2 + 1); g.fillStyle = '#fff'; g.fillText('🎲' + v, x + s / 2, y + s / 2); }
+          }
+        }
         // 스폰 구역
         if (canSpawn && (ui.showSpawn || ui.tool === 'spawn')) {
           for (let i = 0; i < W * H; i++) {
@@ -631,7 +659,7 @@
         });
         if (dragRect) {
           const [a, b, c, d] = dragRect, rx = Math.min(a, c) * s, ry = Math.min(b, d) * s, rw = (Math.abs(c - a) + 1) * s, rh = (Math.abs(d - b) + 1) * s;
-          g.strokeStyle = down === 'spawnrect' ? SPAWN_VALS[ui.spawnVal][1] : '#a58bff'; g.lineWidth = 2; g.strokeRect(rx, ry, rw, rh);
+          g.strokeStyle = down === 'spawnrect' ? SPAWN_VALS[ui.spawnVal][1] : down === 'randrect' ? (ui.randVal ? randColor(ui.randVal) : '#9a93ad') : '#a58bff'; g.lineWidth = 2; g.strokeRect(rx, ry, rw, rh);
         }
         if (drawable && ui.port >= 0 && isStair(terrain[ui.port])) {   // 고른 계단
           const px = ui.port % W, py = Math.floor(ui.port / W);
@@ -653,14 +681,14 @@
       // ---- 맵 크기 바꾸기 (모서리 손잡이 · 바깥에 그리기 · 그린 영역에 맞춰 자르기) ----
       /** 새 크기로 옮겨 담기: 옛 (ox, oy) 가 새 (0, 0). 새 칸은 빈 칸(-1). edit(nt, nw, nh) 로 마무리 손질 */
       function reshape(ox, oy, nw, nh, label, editFn) {
-        const nt = new Array(nw * nh).fill(-1), ns = new Array(nw * nh).fill(0);
+        const nt = new Array(nw * nh).fill(-1), ns = new Array(nw * nh).fill(0), nr = new Array(nw * nh).fill(0);
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
           const tx = x - ox, ty = y - oy; if (tx < 0 || ty < 0 || tx >= nw || ty >= nh) continue;
-          nt[ty * nw + tx] = terrain[y * W + x]; if (spawnL) ns[ty * nw + tx] = spawnL[y * W + x] || 0;
+          nt[ty * nw + tx] = terrain[y * W + x]; if (spawnL) ns[ty * nw + tx] = spawnL[y * W + x] || 0; if (randL) nr[ty * nw + tx] = randL[y * W + x] || 0;
         }
         const gone = editFn ? editFn(nt, nw, nh) || (() => false) : () => false;
         store.edit(key, label, r => {
-          r.size = { w: nw, h: nh }; r.layers.terrain = nt; if (r.layers.spawn) r.layers.spawn = ns;
+          r.size = { w: nw, h: nh }; r.layers.terrain = nt; if (r.layers.spawn) r.layers.spawn = ns; if (r.layers.rand) r.layers.rand = nr;
           r.objects = (r.objects || []).filter(o => { if (!o.at || o.at.x == null) return true; o.at.x -= ox; o.at.y -= oy; return o.at.x >= 0 && o.at.y >= 0 && o.at.x < nw && o.at.y < nh && !gone(o.at.x, o.at.y); });
         });
       }
@@ -771,24 +799,25 @@
         const i = y * W + x, k = ui.eraseKind, v = terrain[i], t = PDM.TERRAIN_BY_ID[v];
         if (drawable && v >= 0 && (k === 'all' || (k === 'wall' && t && !t.pass && v !== 0) || (k === 'floor' && (!t || t.pass || v === 0)))) terrain[i] = -1;
         if (spawnL && (k === 'all' || k === 'spawn')) spawnL[i] = 0;
+        if (randL && (k === 'all' || k === 'rand')) randL[i] = 0;
         if (k === 'all' || k === 'object') down.objs.add(i);
         paint();
       }
       function commitErase(objs) {
-        const copy = terrain ? terrain.slice() : null, sp = spawnL ? spawnL.slice() : null; ui.sel = -1;
+        const copy = terrain ? terrain.slice() : null, sp = spawnL ? spawnL.slice() : null, rp = randL ? randL.slice() : null; ui.sel = -1;
         withPorts('지우개', () => store.edit(key, '지우개', r => {
-          if (copy) r.layers.terrain = copy; if (sp && r.layers.spawn) r.layers.spawn = sp;
+          if (copy) r.layers.terrain = copy; if (sp && r.layers.spawn) r.layers.spawn = sp; if (rp && r.layers.rand) r.layers.rand = rp;
           if (objs.size) r.objects = (r.objects || []).filter(o => !(o.at && o.at.x != null && objs.has(o.at.y * W + o.at.x)));
         }));
       }
       async function clearAll() {
         const what = await PDM.ui.modal('맵 전체 지우기', h('p', {}, '이 맵에 그린 것을 모두 지웁니다. (실행 취소로 되돌릴 수 있습니다)'), [['취소', false], ['타일만', 'tiles'], ['타일 + 오브젝트 + 스폰 구역', 'all', 'pri']]);
         if (!what) return;
-        terrain = new Array(W * H).fill(-1); if (what === 'all' && spawnL) spawnL = new Array(W * H).fill(0);
+        terrain = new Array(W * H).fill(-1); if (what === 'all' && spawnL) spawnL = new Array(W * H).fill(0); if (what === 'all' && randL) randL = new Array(W * H).fill(0);
         const copy = terrain.slice(); ui.sel = -1; ui.port = -1;
         withPorts('맵 전체 지우기', () => store.edit(key, '맵 전체 지우기', r => {
           r.layers.terrain = copy;
-          if (what === 'all') { if (r.layers.spawn) r.layers.spawn = new Array(W * H).fill(0); r.objects = (r.objects || []).filter(o => !o.at || o.at.x == null); }
+          if (what === 'all') { if (r.layers.spawn) r.layers.spawn = new Array(W * H).fill(0); if (r.layers.rand) r.layers.rand = new Array(W * H).fill(0); r.objects = (r.objects || []).filter(o => !o.at || o.at.x == null); }
         }));
       }
       function objAt(x, y) {
@@ -799,6 +828,12 @@
         const t0 = terrain[y0 * W + x0]; if (t0 === v) return;
         const st = [[x0, y0]];
         while (st.length) { const [x, y] = st.pop(); if (!inB(x, y) || terrain[y * W + x] !== t0) continue; terrain[y * W + x] = v; st.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]); }
+      }
+      function commitRand(label) { const copy = randL.slice(); store.edit(key, label, r => { r.layers.rand = copy; }, { silent: true }); }
+      function addRandSet() {
+        const n = (fl.randSets || []).length + 1;   // 새 묶음 번호 (edit 뒤의 fl 은 예전 것일 수 있어서 먼저 셈)
+        ui.tool = 'rand'; ui.randVal = n; ui.showRand = true;
+        store.edit(key, '무작위 칸 묶음 추가', r => { (r.randSets = r.randSets || []).push({ name: '묶음 ' + n, mode: 'cell', opts: [{ t: 29, w: 1 }, { t: 2, w: 1 }] }); });
       }
       function commitSpawn(label) { const copy = spawnL.slice(); store.edit(key, label, r => { r.layers.spawn = copy; if (!r.spawn) r.spawn = { enabled: true, mobs: [], initial: 3, max: 6, respawn: 50, minDist: 8 }; }, { silent: !!fl.spawn }); }
       function spawnFill(x0, y0, v) {
@@ -836,6 +871,12 @@
           return;
         }
         if (drawable && e.button === 2 && inB(x, y)) { ui.terrain = terrain[y * W + x]; if (ui.tool === 'object' || ui.tool === 'select') ui.tool = 'pen'; drawPalette(); drawTools(); return; }
+        if (ui.tool === 'rand' && canRand && inB(x, y)) {
+          if (e.button === 2) return;
+          if (ui.randShape === 'rect') { down = 'randrect'; dragRect = [x, y, x, y]; paint(); }
+          else { down = 'rand'; randL[y * W + x] = ui.randVal; paint(); }
+          return;
+        }
         if (ui.tool === 'spawn' && canSpawn && inB(x, y)) {
           if (e.button === 2) return;
           if (ui.spawnShape === 'rect') { down = 'spawnrect'; dragRect = [x, y, x, y]; paint(); }
@@ -869,10 +910,11 @@
         if (nav || navKey) return;
         if (ui.moveObj >= 0) { cv.style.cursor = 'move'; info.textContent = `옮길 칸을 누르세요 (오른쪽 클릭 · Esc = 취소)  (${x}, ${y})`; const nt = inB(x, y) ? [x, y] : null; if (String(nt) !== String(ui.moveTo)) { ui.moveTo = nt; paint(); } return; }
         if (!down) cv.style.cursor = drawable && cornerAt(e) ? (c => c[0] === c[1] ? 'nwse-resize' : 'nesw-resize')(cornerAt(e)) : '';
-        info.textContent = `(${x}, ${y})  ${t ? PDM.terrainName(t, up) + ' [' + t.id + ']' : ''}${canSpawn && inB(x, y) && spawnL[y * W + x] ? ' · ' + SPAWN_VALS[spawnL[y * W + x]][0] : ''}  ${oi >= 0 ? '· ' + PDM.OBJECT_TYPES[fl.objects[oi].type].name + ' ' + (fl.objects[oi].ref || '') : ''}`;
+        info.textContent = `(${x}, ${y})  ${t ? PDM.terrainName(t, up) + ' [' + t.id + ']' : ''}${canSpawn && inB(x, y) && spawnL[y * W + x] ? ' · ' + SPAWN_VALS[spawnL[y * W + x]][0] : ''}${canRand && inB(x, y) && randL[y * W + x] ? ' · 🎲' + randL[y * W + x] + ' ' + ((fl.randSets || [])[randL[y * W + x] - 1] || {}).name : ''}  ${oi >= 0 ? '· ' + PDM.OBJECT_TYPES[fl.objects[oi].type].name + ' ' + (fl.objects[oi].ref || '') : ''}`;
         if (down === 'pen' && inB(x, y)) { let ch = false; brushCells(x, y).forEach(([bx, by]) => { if (terrain[by * W + bx] !== ui.terrain) { terrain[by * W + bx] = ui.terrain; ch = true; } }); if (ch) { lastCell = y * W + x; paint(); } }
         else if (down === 'spawn' && inB(x, y) && spawnL[y * W + x] !== ui.spawnVal) { spawnL[y * W + x] = ui.spawnVal; paint(); }
-        else if ((down === 'rect' || down === 'room' || down === 'spawnrect') && dragRect) { dragRect[2] = PDM.clamp(x, 0, W - 1); dragRect[3] = PDM.clamp(y, 0, H - 1); paint(); }
+        else if (down === 'rand' && inB(x, y) && randL[y * W + x] !== ui.randVal) { randL[y * W + x] = ui.randVal; paint(); }
+        else if ((down === 'rect' || down === 'room' || down === 'spawnrect' || down === 'randrect') && dragRect) { dragRect[2] = PDM.clamp(x, 0, W - 1); dragRect[3] = PDM.clamp(y, 0, H - 1); paint(); }
         else if (down && down.erase) { if (inB(x, y)) brushCells(x, y).forEach(([bx, by]) => eraseCell(bx, by)); }
         else if (down && (down.move !== undefined || down.port !== undefined)) { if (inB(x, y)) { down.to = [x, y]; paint(); } }
       });
@@ -889,6 +931,12 @@
         if (down && down.port !== undefined) { const a = down.port, to = down.to; down = null; if (to) movePort(a, to[1] * W + to[0]); paint(); return; }
         if (down === 'pen') { commitTerrain('타일 그리기'); if (kind === 'node' && isStair(ui.terrain) && lastCell >= 0 && terrain[lastCell] === ui.terrain) { ui.port = lastCell; ui.sel = -1; down = null; drawPalette(); paint(); showInspector(); return; } }
         else if (down === 'spawn') commitSpawn('스폰 구역 칠하기');
+        else if (down === 'rand') commitRand('무작위 칸 칠하기');
+        else if (down === 'randrect' && dragRect) {
+          const [a, b, c, d] = dragRect;
+          for (let y = Math.min(b, d); y <= Math.max(b, d); y++) for (let x = Math.min(a, c); x <= Math.max(a, c); x++) randL[y * W + x] = ui.randVal;
+          dragRect = null; paint(); commitRand('무작위 칸 사각형');
+        }
         else if (down === 'spawnrect' && dragRect) {
           const [a, b, c, d] = dragRect;
           for (let y = Math.min(b, d); y <= Math.max(b, d); y++) for (let x = Math.min(a, c); x <= Math.max(a, c); x++) spawnL[y * W + x] = ui.spawnVal;
@@ -996,6 +1044,7 @@
               : F.select(key, [...p, 'at', 'rule'], PDM.PLACE_RULES, { label: '배치 규칙' }),
             F.cond(key, [...p, 'cond'], { label: '등장 조건', hint: '비우면 항상 등장. 예: !switch.mireille_joined' }),
             o.type === 'mob' || o.type === 'item' ? F.num(key, [...p, 'count'], { label: '개수', min: 1, int: true }) : null,
+            kind === 'room' ? F.num(key, [...p, 'chance'], { label: '나올 확률 (%)', int: true, min: 0, max: 100, def: 100, hint: '방이 들어갈 때마다 이 확률로 놓임 (100 = 늘)' }) : null,
             o.type === 'item' ? F.select(key, [...p, 'container'], PDM.ITEM_CONTAINERS, { label: '담는 방식' }) : null,
             o.type === 'npc' ? F.ref(key, [...p, 'event'], 'event', { label: '말 걸면 실행할 이벤트', empty: '(캐릭터의 인사 대사)' }) : null,
             o.type === 'start' ? (() => { const W0 = store.get('world') || {}, linked = [...new Set((W0.edges || []).filter(e => e.from === fl.id || e.to === fl.id).map(e => e.from === fl.id ? e.to : e.from))];
@@ -1049,6 +1098,7 @@
                 ((store.get('world') || {}).groups || []).filter(g => !g.safe).map(g => h('label', { style: { display: 'block' } },
                   h('input', { type: 'checkbox', checked: (fl.autoGroups || []).includes(g.id), onchange: e => store.edit(key, '자동 생성 그룹', r => { const a = new Set(r.autoGroups || []); e.target.checked ? a.add(g.id) : a.delete(g.id); r.autoGroups = [...a]; }) }), ' ' + g.name))) : null,
               h('div', { class: 'hint' }, fl.auto ? '그룹·노드의 "추가 방"이나 구성 블럭에 이미 넣은 맵에는 중복으로 넣지 않습니다. 보스 층과 직접 그린 맵에는 들어가지 않습니다.' : '꺼 두면 그룹·노드의 "추가 방"이나 구성 블럭에서 고른 맵에만 들어갑니다.')),
+            variationSection(),
             section('크기 (5~18칸, 벽 포함)', resizeUI(5, 18), h('div', { class: 'hint' }, '맵 모서리의 손잡이를 끌어도 크기를 바꿀 수 있습니다.')),
             h('div', { class: 'hint' }, '쓰는 곳: ', used.length ? used.join(', ') : '없음 — 장 구성 화면이나 층 속성의 "추가 방"에서 고르세요'),
             F.textarea(key, ['note'], { label: '메모' }),
@@ -1107,6 +1157,60 @@
           h('div', { class: 'hint' }, `오브젝트 ${(fl.objects || []).length}개 · 파일 maps/nodes/${fl.id}.json`));
         PDM.inspector.show(`${W_.fullName(fl.id)} 속성`, el);
       }
+      // ---- 방 템플릿 변형 (뒤집기 · 돌리기 · 무작위 칸) — 런타임 TemplateRoom 과 같은 계산 ----
+      function variationSection() {
+        const { F, section, row } = PDM.ui;
+        const sets = fl.randSets || [];
+        const TER = [[-2, '(그린 타일 그대로)'], ...PDM.TERRAIN.map(t => [t.id, t.name])];
+        return section('변형 (방이 들어갈 때마다 달라짐)',
+          h('div', { class: 'hint' }, '같은 방이라도 들어갈 때마다 모양이 바뀌게 합니다. 오브젝트 · 문 자리도 같이 뒤집히고 돌아갑니다.'),
+          row(F.bool(key, ['variation', 'flipH'], { label: '좌우 뒤집기 (반반)' }), F.bool(key, ['variation', 'flipV'], { label: '상하 뒤집기 (반반)' }), F.bool(key, ['variation', 'rotate'], { label: '90° 돌리기 (반반 · 가로세로가 바뀜)' })),
+          h('div', { class: 'fl', style: { marginTop: '6px' } }, `🎲 무작위 칸 묶음 (${sets.length})`),
+          ...sets.map((st, i) => h('div', { class: 'card', style: { padding: '6px', margin: '4px 0', borderLeft: '4px solid ' + randColor(i + 1) } },
+            row(F.text(key, ['randSets', i, 'name'], { label: `${i + 1}. 이름`, rerender: true }),
+              F.select(key, ['randSets', i, 'mode'], { cell: '칸마다 따로 굴림', all: '묶음 전체가 같은 결과' }, { label: '굴리는 방식', hint: '"묶음 전체" = 예) 이 웅덩이가 통째로 물이거나 통째로 용암' }),
+              h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => { store.edit(key, '무작위 칸 묶음 삭제', r => { r.randSets.splice(i, 1); if (r.layers.rand) r.layers.rand = r.layers.rand.map(v => v === i + 1 ? 0 : v > i + 1 ? v - 1 : v); }); } }, '삭제')),
+            ...(st.opts || []).map((op, j) => row(F.select(key, ['randSets', i, 'opts', j, 't'], TER, { label: j ? '' : '선택지 (지형)', number: true }),
+              F.num(key, ['randSets', i, 'opts', j, 'w'], { label: j ? '' : '무게', min: 0, step: 1, def: 1, hint: j ? '' : '숫자가 클수록 자주 (예: 3 · 1 → 75% · 25%)' }),
+              h('button', { class: 'btn xs', style: { alignSelf: 'end' }, onclick: () => store.edit(key, '선택지 삭제', r => { r.randSets[i].opts.splice(j, 1); }) }, '×'))),
+            h('button', { class: 'btn xs add', onclick: () => store.edit(key, '선택지 추가', r => { (r.randSets[i].opts = r.randSets[i].opts || []).push({ t: -2, w: 1 }); }) }, '+ 선택지'),
+            h('button', { class: 'btn xs', style: { marginLeft: '4px' }, onclick: () => { ui.tool = 'rand'; ui.randVal = i + 1; ui.showRand = true; drawTools(); drawPalette(); paint(); } }, '이 묶음으로 칠하기'))),
+          h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' } },
+            h('button', { class: 'btn sm add', onclick: () => addRandSet() }, '+ 무작위 칸 묶음'),
+            h('button', { class: 'btn sm', onclick: () => previewVariants() }, '🎲 변형 미리보기')),
+          h('div', { class: 'hint' }, '오브젝트마다 "나올 확률"도 정할 수 있습니다 (오브젝트를 고르면 속성에 있음).'));
+      }
+      /** 런타임과 같은 방식으로 변형 하나 만들기 → { w, h, t, objs, m } */
+      function makeVariant() {
+        const v = fl.variation || {}, sets = fl.randSets || [], rl = randL || [];
+        let m = 0; if (v.flipH && Math.random() < 0.5) m |= 1; if (v.flipV && Math.random() < 0.5) m |= 2; if (v.rotate && Math.random() < 0.5) m |= 4;
+        const pick = st => { const os = (st && st.opts) || []; const sum = os.reduce((a, o) => a + Math.max(0, o.w ?? 1), 0); if (!sum) return -1; let r = Math.random() * sum; for (let k = 0; k < os.length; k++) { r -= Math.max(0, os[k].w ?? 1); if (r < 0) return k; } return os.length - 1; };
+        const all = sets.map(pick), res = terrain.slice();
+        if (rl.length === W * H) for (let i = 0; i < W * H; i++) { const s = rl[i] - 1; if (s < 0 || !sets[s]) continue; const k = sets[s].mode === 'all' ? all[s] : pick(sets[s]); const o = (sets[s].opts || [])[k]; if (o && o.t !== -2 && o.t != null) res[i] = +o.t; }
+        const w = m & 4 ? H : W, hh = m & 4 ? W : H;
+        const src = (rx, ry) => { let x = rx, y = ry; if (m & 4) [x, y] = [y, x]; if (m & 2) y = H - 1 - y; if (m & 1) x = W - 1 - x; return y * W + x; };
+        const dst = (tx, ty) => { let x = tx, y = ty; if (m & 1) x = W - 1 - x; if (m & 2) y = H - 1 - y; if (m & 4) [x, y] = [y, x]; return [x, y]; };
+        const t = []; for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) t.push(res[src(x, y)]);
+        const objs = (fl.objects || []).filter(o => o.at && o.at.x != null && Math.random() * 100 < (o.chance ?? 100)).map(o => ({ o, at: dst(o.at.x, o.at.y) }));
+        return { w, h: hh, t, objs, m };
+      }
+      function previewVariants() {
+        const N = 6, grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: '10px', justifyContent: 'center' } });
+        const roll = () => {
+          grid.innerHTML = '';
+          for (let n = 0; n < N; n++) {
+            const vr = makeVariant(), s = Math.max(6, Math.min(16, Math.floor(220 / Math.max(vr.w, vr.h))));
+            const c = h('canvas', { width: vr.w * s, height: vr.h * s, style: { imageRendering: 'pixelated', border: '1px solid var(--line)', borderRadius: '4px' } }), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+            vr.t.forEach((v, i) => { const x = (i % vr.w) * s, y = Math.floor(i / vr.w) * s; if (v == null || v < 0) { g.fillStyle = '#15131c'; g.fillRect(x, y, s, s); } else PDM.assets.drawTerrain(g, tilesImg, v, x, y, s); });
+            vr.objs.forEach(({ o, at }) => { const col = (PDM.OBJECT_TYPES[o.type] || {}).color || '#fff'; g.fillStyle = col; g.globalAlpha = .9; g.beginPath(); g.arc(at[0] * s + s / 2, at[1] * s + s / 2, s * .3, 0, 7); g.fill(); g.globalAlpha = 1; });
+            const tag = [vr.m & 1 ? '좌우' : '', vr.m & 2 ? '상하' : '', vr.m & 4 ? '90°' : ''].filter(Boolean).join(' · ') || '그대로';
+            grid.append(h('div', { style: { textAlign: 'center' } }, c, h('div', { class: 'hint' }, tag)));
+          }
+        };
+        roll();
+        PDM.ui.modal('변형 미리보기 — ' + (fl.name || fl.id), h('div', {}, h('div', { class: 'hint', style: { marginBottom: '8px' } }, '게임에서 이 방이 들어갈 때 나올 수 있는 모양 몇 가지입니다 (동그라미 = 오브젝트, 연결 안 된 문 자리는 게임에서 벽이 됨).'), grid,
+          h('div', { style: { textAlign: 'center', marginTop: '8px' } }, h('button', { class: 'btn sm pri', onclick: e => { e.preventDefault(); roll(); } }, '🎲 다시 굴리기'))), [['닫기', true]]);
+      }
       /** 연결 한 줄 설명: 종류 + 쓰는 출구·입구 번호 */
       function portText(e, out) {
         const k = e.kind || 'main';
@@ -1148,9 +1252,10 @@
             const nw = PDM.clamp(+wI.value | 0, minS, maxS), nh = PDM.clamp(+hI.value | 0, minS, maxS);
             const nt = new Array(nw * nh).fill(-1);
             for (let y = 0; y < Math.min(nh, H); y++) for (let x = 0; x < Math.min(nw, W); x++) nt[y * nw + x] = terrain[y * W + x];
-            const ns = new Array(nw * nh).fill(0);
+            const ns = new Array(nw * nh).fill(0), nr = new Array(nw * nh).fill(0);
             if (spawnL) for (let y = 0; y < Math.min(nh, H); y++) for (let x = 0; x < Math.min(nw, W); x++) ns[y * nw + x] = spawnL[y * W + x] || 0;
-            store.edit(key, '크기 바꾸기', r => { r.size = { w: nw, h: nh }; r.layers.terrain = nt; if (r.layers.spawn) r.layers.spawn = ns; r.objects = (r.objects || []).filter(o => !o.at || o.at.x == null || (o.at.x < nw && o.at.y < nh)); });
+            if (randL) for (let y = 0; y < Math.min(nh, H); y++) for (let x = 0; x < Math.min(nw, W); x++) nr[y * nw + x] = randL[y * W + x] || 0;
+            store.edit(key, '크기 바꾸기', r => { r.size = { w: nw, h: nh }; r.layers.terrain = nt; if (r.layers.spawn) r.layers.spawn = ns; if (r.layers.rand) r.layers.rand = nr; r.objects = (r.objects || []).filter(o => !o.at || o.at.x == null || (o.at.x < nw && o.at.y < nh)); });
           } }, '크기 적용'),
           h('button', { class: 'btn sm', style: { marginLeft: '4px' }, onclick: () => { terrain = blankTerrain(W, H, true); paint(); commitTerrain('방 틀로 초기화'); } }, '방 틀로 초기화'));
       }

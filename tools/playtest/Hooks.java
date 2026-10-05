@@ -183,6 +183,25 @@ public class Hooks {
 				}
 				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
 				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
+				case "tplvar": { // tplvar,<n> — 지금 깊이의 하수도 층을 n번 만들어 방 템플릿(TemplateRoom)의 변형 번호와 실제 지형을 출력
+					int n = Integer.parseInt(p[1]);
+					for (int k = 0; k < n; k++) {
+						com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel l = new com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel();
+						long seed0 = com.shatteredpixel.shatteredpixeldungeon.Dungeon.seed;
+						com.shatteredpixel.shatteredpixeldungeon.Dungeon.seed = seed0 + 7919L * (k + 1);   // 판마다 다른 씨앗 (같은 씨앗이면 같은 층)
+						try { l.create(); } finally { com.shatteredpixel.shatteredpixeldungeon.Dungeon.seed = seed0; }
+						for (com.shatteredpixel.shatteredpixeldungeon.levels.rooms.Room r : l.rooms()) {
+							int var; String key;
+							if (r instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateRoom) { var = ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateRoom) r).var; key = ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateRoom) r).templateKey; }
+							else if (r instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateSpecialRoom) { var = ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateSpecialRoom) r).var; key = ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.TemplateSpecialRoom) r).templateKey; }
+							else continue;
+							StringBuilder sb = new StringBuilder("[TEST] tpl " + key + " var=" + var + " " + r.width() + "x" + r.height() + "\n");
+							for (int y = r.top; y <= r.bottom; y++) { for (int x = r.left; x <= r.right; x++) { int t = l.map[x + y * l.width()]; sb.append(t == 4 ? '#' : t == 29 ? '~' : t == 2 ? '"' : t == 1 ? '.' : t == 5 || t == 6 ? 'D' : t == 25 ? 'S' : t == 14 ? '_' : '?'); } sb.append('\n'); }
+							System.out.print(sb);
+						}
+					}
+					break;
+				}
 				case "roomtest": { // roomtest,<id 목록 파일> — 게임 기본 방을 하나씩 "추가 방"으로 넣어 층을 만들어 봄
 					com.badlogic.gdx.utils.JsonValue f = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.here();
 					if (f.get("procedural") == null) f.addChild("procedural", new com.badlogic.gdx.utils.JsonValue(com.badlogic.gdx.utils.JsonValue.ValueType.object));

@@ -326,13 +326,17 @@ public class LevelHooks {
 	static void placeTemplateObjects(Level level) {
 		for (Room r : painted) {
 			String key = r instanceof TemplateRoom ? ((TemplateRoom) r).templateKey : ((TemplateSpecialRoom) r).templateKey;
+			int var = r instanceof TemplateRoom ? ((TemplateRoom) r).var : ((TemplateSpecialRoom) r).var;
 			JsonValue t = MakerRuntime.template(key);
 			if (t == null || t.get("objects") == null) continue;
 			for (JsonValue o : t.get("objects")) {
 				JsonValue at = o.get("at");
 				if (at == null || !at.has("x")) continue;
 				if (!Cond.eval(o.getString("cond", ""), StoryState.globalResolver())) continue;
-				int cell = (r.left + at.getInt("x")) + (r.top + at.getInt("y")) * level.width();
+				float ch = o.getFloat("chance", 100f);
+				if (ch < 100f && com.watabou.utils.Random.Float(100f) >= ch) continue;   // 나올 확률
+				int[] d = TemplateRoom.dst(t, var, at.getInt("x"), at.getInt("y"));   // 변형(뒤집기 · 돌리기)을 따라감
+				int cell = (r.left + d[0]) + (r.top + d[1]) * level.width();
 				if (cell >= 0 && cell < level.length()) placeObject(level, o, cell);
 			}
 		}
