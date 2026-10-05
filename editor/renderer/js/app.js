@@ -695,21 +695,33 @@
   let creating = false;   // 새 프로젝트를 만드는 중 (저장소를 고르기 전의 자동 알림을 막음)
   async function newProject() {
     if (!(await guardDirty())) return;
-    const d = await pdm.openFolder('새 프로젝트를 만들 빈 폴더 선택'); if (!d) return;
-    if (await pdm.exists(pdm.join(d, 'project.json'))) { toast('이미 프로젝트가 있는 폴더입니다', 'bad'); return; }
+    const base = await pdm.openFolder('새 프로젝트를 만들 위치 선택 (그 안에 프로젝트 이름으로 폴더를 만듭니다)'); if (!base) return;
+    // 폴더 이름: 프로젝트 이름에서 윈도우에서 못 쓰는 글자를 뺌
+    const folderName = n => String(n || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '').replace(/[. ]+$/, '').trim() || '새 픽셀 던전';
     // 프로젝트 이름 + 게임 이름 · 패키지 이름 (게임 저장소 build.gradle 의 appName · appPackageName — 세이브 폴더도 이걸로 정해짐)
     const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '') || 'mygame';
-    const iName = h('input', { type: 'text', value: '새 픽셀 던전' }), iApp = h('input', { type: 'text', value: 'My Pixel Dungeon' }), iPkg = h('input', { type: 'text', value: 'com.pdmaker.mypixeldungeon' }), warn = h('small', { class: 'hint', style: { color: 'var(--bad)' } });
+    const iName = h('input', { type: 'text', value: '새 픽셀 던전' }), iSub = h('input', { type: 'checkbox', checked: true }), where = h('small', { class: 'hint', style: { display: 'block', wordBreak: 'break-all' } }), iApp = h('input', { type: 'text', value: 'My Pixel Dungeon' }), iPkg = h('input', { type: 'text', value: 'com.pdmaker.mypixeldungeon' }), warn = h('small', { class: 'hint', style: { color: 'var(--bad)' } });
     let pkgTouched = false;
+    const target = () => iSub.checked ? pdm.join(base, folderName(iName.value)) : base;
+    const showWhere = () => { where.textContent = '만들 곳: ' + target(); };
+    iName.addEventListener('input', showWhere); iSub.addEventListener('change', showWhere); showWhere();
     iApp.addEventListener('input', () => { if (!pkgTouched) iPkg.value = 'com.pdmaker.' + slug(iApp.value); });
     iPkg.addEventListener('input', () => { pkgTouched = true; warn.textContent = PDM.validPackage(iPkg.value) ? '' : '패키지 이름은 영문 소문자·숫자를 점으로 이은 꼴이어야 합니다 (예: com.myname.mygame)'; });
     const made = await PDM.ui.modal('새 프로젝트', h('div', { style: { minWidth: '460px', maxWidth: '560px' } },
       PDM.ui.field('프로젝트 이름', iName),
+      h('label', { class: 'check' }, iSub, '고른 위치 안에 프로젝트 이름으로 폴더 만들기'), where,
       PDM.ui.field('게임 이름 (appName) — 게임 창 제목 · 세이브 폴더 이름', iApp, '영문을 권합니다. 원작(Shattered Pixel Dungeon)과 다르게 지어야 세이브가 섞이지 않습니다.'),
       PDM.ui.field('패키지 이름 (appPackageName)', iPkg), warn,
       h('p', { class: 'hint' }, '이 둘은 테스트 플레이·게임 내보내기 때 게임 저장소의 build.gradle 에 적힙니다. 세이브는 %APPDATA%\\.<패키지 둘째 마디>\\<게임 이름> 폴더에 따로 저장됩니다. 나중에 프로젝트 설정에서 바꿀 수 있습니다.')),
-      [['취소', null], ['만들기', () => ({ name: iName.value.trim() || '새 픽셀 던전', appName: iApp.value.trim(), pkg: iPkg.value.trim() }), 'pri']]);
+      [['취소', null], ['만들기', () => ({ name: iName.value.trim() || '새 픽셀 던전', appName: iApp.value.trim(), pkg: iPkg.value.trim(), dir: target(), sub: iSub.checked }), 'pri']]);
     if (!made) return;
+    const d = made.dir;
+    if (await pdm.exists(pdm.join(d, 'project.json'))) { toast('이미 프로젝트가 있는 폴더입니다: ' + d, 'bad'); return; }
+    if (made.sub && await pdm.exists(d)) {
+      const items = (await pdm.list(d)) || [];
+      if (items.length && !(await PDM.ui.confirm(`「${d}」 폴더가 이미 있고 비어 있지 않습니다 (${items.length}개). 그래도 이 폴더에 만들까요?`))) return;
+    }
+    if (made.sub) { try { await pdm.mkdir(d); } catch (e) { toast('폴더를 만들지 못했습니다: ' + e.message, 'bad'); return; } }
     const name = made.name;
     PDM.tabs.closeAll();
     creating = true;
@@ -934,7 +946,7 @@
       h('p', { class: 'lead' }, 'Shattered Pixel Dungeon 기반 게임 제작 도구. 맵 · 캐릭터 · 아이템 · 이벤트 · 스토리를 만들고 바로 테스트 플레이합니다.'),
       !pdm.isElectron ? h('p', { class: 'hint bad' }, '웹 모드로 실행 중입니다. 저장은 브라우저 안에만 되고, 테스트 플레이는 할 수 없습니다.') : null,
       h('div', { class: 'cards' },
-        h('div', { class: 'card', onclick: newProject }, h('b', {}, '새 프로젝트'), h('span', {}, '빈 폴더에 26층 기본 구조로 시작')),
+        h('div', { class: 'card', onclick: newProject }, h('b', {}, '새 프로젝트'), h('span', {}, '프로젝트 이름의 새 폴더에 26층 기본 구조로 시작')),
         h('div', { class: 'card', onclick: openProject }, h('b', {}, '프로젝트 열기'), h('span', {}, 'project.json 이 있는 폴더 선택')),
         h('div', { class: 'card', onclick: importProject }, h('b', {}, '프로젝트 가져오기'), h('span', {}, '내보낸 .pdmproj 파일을 빈 폴더에 풀어서 열기'))),
       rec.length ? h('div', { class: 'recent-head' }, h('h3', {}, '최근 프로젝트'),

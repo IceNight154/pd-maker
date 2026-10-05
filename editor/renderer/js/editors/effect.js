@@ -188,7 +188,7 @@
     bakeCache.set(key, out); return out;
   }
   function simulator(cv, getFx, getOpt) {
-    const g = cv.getContext('2d'); let sim = null, key = '', last = performance.now(), raf = 0, idle = 0;
+    const g = cv.getContext('2d'); let sim = null, key = '', last = performance.now(), raf = 0, idle = 0, peak = 0;
     const restart = () => { sim = null; };
     const frame = now => {
       raf = requestAnimationFrame(frame);
@@ -198,7 +198,7 @@
       const k2 = JSON.stringify(fx) + o.loop; if (k2 !== key) { key = k2; sim = null; }
       const Z = o.zoom, W = cv.width / Z, H = cv.height / Z, c = { x: W / 2, y: H / 2 + 8, vx: 0, vy: 0 };
       if (o.mouse) { c.vx = (o.mouse.x - (o.pm || o.mouse).x) / Math.max(dt, 0.001); c.vy = (o.mouse.y - (o.pm || o.mouse).y) / Math.max(dt, 0.001); c.x = o.mouse.x; c.y = o.mouse.y; o.pm = { x: o.mouse.x, y: o.mouse.y }; }
-      if (!sim) { sim = Sim(fx, o.loop); idle = 0; }
+      if (!sim) { sim = Sim(fx, o.loop); idle = 0; peak = 0; }
       sim.update(dt, c);
       if (!o.loop && sim.done() && (idle += dt) > 0.6) sim = null;
       g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; g.imageSmoothingEnabled = false;
@@ -216,6 +216,18 @@
         if (e.type === 'box') g.rect(-sx / 2, -sy / 2, sx, sy); else if (e.type === 'cone') { g.moveTo(0, 0); g.lineTo(-sx / 2, -sy); g.lineTo(sx / 2, -sy); g.closePath(); } else g.arc(0, 0, Math.max(1, sx / 2), 0, Math.PI * 2);
         g.moveTo(0, 0); g.lineTo(0, -6 * Z); g.stroke(); g.restore(); });
       drawSim(g, sim, c, Z, loadSprite);
+      // 광원: 게임(MakerEffect · MakerLights)과 같게 — 이펙트 가운데를 따라가고, 한 번 재생이면 살아 있는 알갱이 수에 맞춰 어두워짐, 깜빡임 주기
+      const L = fx.light;
+      if (L && L.on && PDM.drawLightPreview) {
+        const n = sim.count(); peak = Math.max(peak, n);
+        let amt = o.loop || !peak ? 1 : n / peak;
+        const per = num(L.pulse, 0);
+        if (per > 0) { const lo = Math.max(0, Math.min(1, num(L.pulseMin, 60) / 100)); amt *= lo + (1 - lo) * (0.5 + 0.5 * Math.sin(now / 1000 * 2 * Math.PI / per)); }
+        if (amt > 0.004) {
+          const hx = String(L.color || '#ffe9a8').replace('#', ''), ch = i => Math.round((parseInt(hx.slice(i, i + 2), 16) || 0) * amt).toString(16).padStart(2, '0');
+          PDM.drawLightPreview(g, c.x * Z, c.y * Z, Object.assign({}, L, { color: '#' + ch(0) + ch(2) + ch(4) }), 16 * Z);
+        }
+      }
       if (o.onCount) o.onCount(sim.count());
     };
     raf = requestAnimationFrame(frame);
