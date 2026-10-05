@@ -455,7 +455,8 @@ ipcMain.handle('game:export', wrap(async ({ repo, project, outDir, kind, name, s
       const tmp = path.join(repo, 'desktop', 'build', 'pdmaker-installer'), app = path.join(tmp, path.basename(img));
       fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
       fs.cpSync(img, app, { recursive: true });
-      copyProjectInto(project, path.join(app, 'app'));
+      // 게임 데이터는 zip 하나로 (MSI(WiX)는 코드 페이지 1252 라 한글 파일 이름을 넣으면 light.exe 가 311 로 실패) — 런타임이 처음 실행할 때 사용자 폴더에 풂
+      zip.zipDir(project, path.join(app, 'app', 'project.zip'), { exclude: skipProj });
       makeInstaller(repo, project, app, dest, nm).then(file => { fs.rmSync(tmp, { recursive: true, force: true }); log('> 설치 파일: ' + file); done(); }, e => fail('설치 파일 만들기 실패: ' + e.message));
       return;
     }
@@ -522,7 +523,7 @@ async function makeInstaller(repo, project, appImage, dest, nm) {
     const p = spawn(jp, args, { env });
     const pipe = b => b.toString().split(/\r?\n/).forEach(l => { if (l) log(l); });
     p.stdout.on('data', pipe); p.stderr.on('data', pipe);
-    p.on('close', c => c === 0 ? res() : rej(new Error('jpackage 종료 코드 ' + c + ' (게임 이름에 한글이 있으면 영어 이름으로 다시 해 보세요)'))); p.on('error', rej);
+    p.on('close', c => c === 0 ? res() : rej(new Error('jpackage 종료 코드 ' + c + (/[^\x00-\x7f]/.test(path.basename(appImage)) ? ' (게임 이름에 한글 · 특수 문자가 있으면 설치 파일을 만들 수 없습니다 — 영어 이름으로 다시 해 보세요)' : '')))); p.on('error', rej);
   });
   const exe = newestFile(dest, /\.exe$/i);
   if (!exe) throw new Error('설치 파일(.exe)이 만들어지지 않았습니다');

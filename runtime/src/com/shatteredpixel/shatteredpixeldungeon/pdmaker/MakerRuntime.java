@@ -4,6 +4,7 @@
  * 프로젝트 폴더 찾는 순서
  *   1) -Dpdmaker.project=경로   (에디터의 ▶ 테스트 플레이가 넘겨줌)
  *   2) 실행 폴더의 project/ · jar(또는 jpackage 실행 파일) 옆의 project/  (에디터의 "게임 파일 내보내기")
+ *      · 같은 자리의 project.zip (Windows 설치 파일 — 사용자 폴더의 .pdmaker-games/ 에 한 번 풀어서 씀)
  *   3) 게임 assets 안의 pdmaker-project/ (안드로이드 등 내장 배포)
  *   없으면 isActive() == false 이고, 게임은 원래대로 동작합니다.
  */
@@ -110,6 +111,8 @@ public class MakerRuntime {
 			for (int i = 0; i < 3 && d != null; i++, d = d.getParentFile()) {
 				java.io.File pj = new java.io.File(d, "project");
 				if (new java.io.File(pj, "project.json").exists()) return Gdx.files.absolute(pj.getAbsolutePath());
+				java.io.File zip = new java.io.File(d, "project.zip");   // Windows 설치 파일: 한글 파일 이름을 MSI 에 넣을 수 없어서 zip 하나로 넣음
+				if (zip.isFile()) { java.io.File x = unpackProject(zip); if (x != null) return Gdx.files.absolute(x.getAbsolutePath()); }
 			}
 		} catch (Exception ignored) { }
 		try {
@@ -117,6 +120,36 @@ public class MakerRuntime {
 			if (internal.child("project.json").exists()) return internal;
 		} catch (Exception ignored) { }
 		return null;
+	}
+	/** project.zip 을 사용자 폴더(~/.pdmaker-games/<zip 자리>-<크기>-<날짜>)에 한 번 풀어 둠 — 같은 zip 이면 다시 풀지 않고, 예전 판은 지움 */
+	private static java.io.File unpackProject(java.io.File zip) {
+		try {
+			java.io.File base = new java.io.File(System.getProperty("user.home"), ".pdmaker-games");
+			String key = Integer.toHexString(zip.getAbsolutePath().hashCode());
+			java.io.File dir = new java.io.File(base, key + "-" + zip.length() + "-" + zip.lastModified());
+			if (new java.io.File(dir, ".done").exists() && new java.io.File(dir, "project.json").exists()) return dir;
+			java.io.File[] old = base.listFiles(); if (old != null) for (java.io.File o : old) if (o.getName().startsWith(key + "-") && !o.equals(dir)) deleteTree(o);
+			deleteTree(dir); dir.mkdirs();
+			String root = dir.getCanonicalPath() + java.io.File.separator;
+			byte[] buf = new byte[65536];
+			try (java.util.zip.ZipInputStream in = new java.util.zip.ZipInputStream(new java.io.FileInputStream(zip), java.nio.charset.StandardCharsets.UTF_8)) {
+				for (java.util.zip.ZipEntry e; (e = in.getNextEntry()) != null; ) {
+					java.io.File f = new java.io.File(dir, e.getName());
+					if (!f.getCanonicalPath().startsWith(root)) continue;   // 바깥 경로는 막음
+					if (e.isDirectory()) { f.mkdirs(); continue; }
+					f.getParentFile().mkdirs();
+					try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) { for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n); }
+				}
+			}
+			if (!new java.io.File(dir, "project.json").exists()) { log("project.zip 안에 project.json 이 없습니다: " + zip); return null; }
+			new java.io.File(dir, ".done").createNewFile();
+			log("project.zip 을 풀었습니다: " + dir);
+			return dir;
+		} catch (Exception e) { log("project.zip 을 풀지 못했습니다: " + e); return null; }
+	}
+	private static void deleteTree(java.io.File f) {
+		java.io.File[] c = f.listFiles(); if (c != null) for (java.io.File x : c) deleteTree(x);
+		f.delete();
 	}
 	private static JsonValue readOpt(JsonReader r, String rel) {
 		FileHandle f = root.child(rel);
