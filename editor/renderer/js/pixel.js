@@ -209,18 +209,18 @@ PDM.pixelEditor = function (o) {
     if (/INPUT|TEXTAREA|SELECT/.test((document.activeElement || {}).tagName || '')) return;
     const k = e.key.toLowerCase(), c = e.ctrlKey || e.metaKey, code = e.code;
     if (e.key === 'Alt') { e.preventDefault(); return; }   // Alt = 선택 빼기 (창 메뉴로 초점이 가지 않게)
-    if (c && code === 'KeyZ') { e.preventDefault(); e.stopPropagation(); e.shiftKey ? redo() : undo(); return; }
+    const K = PDM.keys;
+    if (K.is(e, 'redo')) { e.preventDefault(); e.stopPropagation(); redo(); return; }
+    if (K.is(e, 'undo')) { e.preventDefault(); e.stopPropagation(); undo(); return; }
     // Space 를 누른 채 끌기 = 작업 영역 이동 · Z 를 누른 채 끌기 = 확대/축소 (가운데에서 바깥으로 = 확대, 안쪽으로 = 축소)
     if (code === 'Space' && !c) { e.preventDefault(); e.stopPropagation(); if (!navKey) { navKey = 'pan'; view.style.cursor = 'grab'; } return; }
     if (code === 'KeyZ' && !c && !e.altKey) { e.preventDefault(); if (!navKey) { navKey = 'zoom'; view.style.cursor = 'zoom-in'; } return; }
-    if (c && code === 'KeyD') { e.preventDefault(); e.stopPropagation(); deselect(); return; }   // 선택 해제
-    if (c && code === 'KeyY') { e.preventDefault(); e.stopPropagation(); redo(); return; }
-    if (!c && !e.altKey) {
-      const tk = { KeyB: 'pen', KeyE: 'erase', KeyG: 'fill', KeyL: 'lasso', KeyW: 'wand', KeyM: 'select', KeyI: 'pick' }[code];
-      if (tk) { e.preventDefault(); if (!SEL_TOOLS.includes(tk)) commitFloating(); setTool(tk); draw(); return; }
-      if (code === 'BracketLeft') { e.preventDefault(); setBrush(brush - 1); return; }
-      if (code === 'BracketRight') { e.preventDefault(); setBrush(brush + 1); return; }
-    }
+    if (K.is(e, 'draw.deselect')) { e.preventDefault(); e.stopPropagation(); deselect(); return; }   // 선택 해제
+    // 도구 · 브러쉬 크기 — 편집 › 단축키 설정 의 "그리기" 키
+    const tk = K.tool(e, ['pen', 'erase', 'fill', 'lasso', 'wand', 'select', 'pick']);
+    if (tk) { e.preventDefault(); if (!SEL_TOOLS.includes(tk)) commitFloating(); setTool(tk); draw(); return; }
+    if (K.is(e, 'draw.brushDown')) { e.preventDefault(); setBrush(brush - 1); return; }
+    if (K.is(e, 'draw.brushUp')) { e.preventDefault(); setBrush(brush + 1); return; }
     if (c && k === 'c') { e.preventDefault(); copySel(false); }
     else if (c && k === 'x') { e.preventDefault(); copySel(true); }
     else if (c && k === 'v') { e.preventDefault(); pasteClip(); }

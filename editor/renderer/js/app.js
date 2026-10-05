@@ -53,6 +53,7 @@
       drawTabbar();
     },
     closeAll() { tabs.slice().forEach(t => this.close(t.key)); },
+    cycle(d) { if (!tabs.length) return; const i = tabs.indexOf(active); activate(tabs[(i + d + tabs.length) % tabs.length]); },
     refresh(key) { tabs.filter(t => !key || t.key === key).forEach(render); },
     get active() { return active && active.key; }
   };
@@ -323,22 +324,24 @@
   const chk = on => (on ? '✓ ' : '\u2003 ');
   const MENUS = {
     '파일': () => [
-      { label: '새 프로젝트…', hint: 'Ctrl+N', run: newProject },
-      { label: '프로젝트 열기…', hint: 'Ctrl+O', run: openProject },
+      { label: '새 프로젝트…', hint: PDM.keys.label('newProject'), run: newProject },
+      { label: '프로젝트 열기…', hint: PDM.keys.label('openProject'), run: openProject },
       '-',
-      { label: '저장', hint: 'Ctrl+S', run: saveAll, disabled: !store.isOpen },
-      { label: '다른 이름으로 저장…', hint: 'Ctrl+Shift+S', run: saveAs, disabled: !store.isOpen || !pdm.isElectron },
+      { label: '저장', hint: PDM.keys.label('save'), run: saveAll, disabled: !store.isOpen },
+      { label: '다른 이름으로 저장…', hint: PDM.keys.label('saveAs'), run: saveAs, disabled: !store.isOpen || !pdm.isElectron },
       '-',
-      { label: '프로젝트 내보내기 (.pdmproj)…', hint: 'Ctrl+E', run: exportProject, disabled: !store.isOpen || !pdm.isElectron },
+      { label: '프로젝트 내보내기 (.pdmproj)…', hint: PDM.keys.label('exportProject'), run: exportProject, disabled: !store.isOpen || !pdm.isElectron },
       { label: '프로젝트 가져오기…', run: importProject, disabled: !pdm.isElectron },
-      { label: '게임 파일 내보내기…', hint: 'Ctrl+Shift+E', run: exportGame, disabled: !store.isOpen || !pdm.isElectron },
+      { label: '게임 파일 내보내기…', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !store.isOpen || !pdm.isElectron },
       '-',
       { label: '프로젝트 폴더 열기', run: () => pdm.openExternal(store.root), disabled: !store.isOpen || !pdm.isElectron },
       { label: '닫기', run: closeProject, disabled: !store.isOpen }
     ],
     '편집': () => [
-      { label: '실행 취소' + (store.undoLabel() ? ` (${store.undoLabel()})` : ''), hint: 'Ctrl+Z', run: undo, disabled: !store.undoLabel() },
-      { label: '다시 실행' + (store.redoLabel() ? ` (${store.redoLabel()})` : ''), hint: 'Ctrl+Y', run: redo, disabled: !store.redoLabel() }
+      { label: '실행 취소' + (store.undoLabel() ? ` (${store.undoLabel()})` : ''), hint: PDM.keys.label('undo'), run: undo, disabled: !store.undoLabel() },
+      { label: '다시 실행' + (store.redoLabel() ? ` (${store.redoLabel()})` : ''), hint: PDM.keys.label('redo'), run: redo, disabled: !store.redoLabel() },
+      '-',
+      { label: '단축키 설정…', hint: PDM.keys.label('keySettings'), run: () => PDM.keys.dialog() }
     ],
     '보기': () => [
       { label: chk(T().mode === 'system') + '테마: 시스템 따르기', run: () => T().setMode('system') },
@@ -353,16 +356,16 @@
     ],
     '프로젝트': () => [
       { label: '프로젝트 설정', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
-      { label: '검사 (끊어진 참조 찾기)', hint: 'F7', run: runCheck, disabled: !store.isOpen },
+      { label: '검사 (끊어진 참조 찾기)', hint: PDM.keys.label('check'), run: runCheck, disabled: !store.isOpen },
       '-',
-      { label: '▶ 테스트 플레이', hint: 'F5', run: () => playtest(), disabled: !store.isOpen },
+      { label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen },
       { label: '▶ 테스트 플레이 — desktop:debug (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen },
       { label: '▶ 테스트 플레이 — PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen },
       { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen },
       { label: '빌드 정리 (gradlew clean)', run: cleanBuild, disabled: !store.isOpen || !pdm.isElectron },
-      { label: '■ 중지', run: stopGame },
+      { label: '■ 중지', hint: PDM.keys.label('stopGame'), run: stopGame },
       '-',
-      { label: '게임 파일 내보내기…', hint: 'Ctrl+Shift+E', run: exportGame, disabled: !store.isOpen || !pdm.isElectron }
+      { label: '게임 파일 내보내기…', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !store.isOpen || !pdm.isElectron }
     ],
     '도구': () => [
       { label: '용어 관리', run: () => PDM.tabs.open('terms'), disabled: !store.isOpen },
@@ -427,21 +430,21 @@
     const webTip = el ? '' : ' — 웹 모드에서는 쓸 수 없습니다';
     const grp = (...kids) => h('div', { class: 'tb-grp' }, ...kids);
     tb.append(
-      grp(tbBtn('new', '새로', newProject, { iconOnly: true, tip: '새 프로젝트', key: 'Ctrl+N' }),
-        tbBtn('open', '열기', openProject, { iconOnly: true, tip: '프로젝트 열기', key: 'Ctrl+O' }),
-        tbBtn('save', '저장', saveAll, { disabled: !open, tip: '프로젝트 저장', key: 'Ctrl+S', cls: store.isDirty() ? 'dirty' : '' }),
-        tbBtn('saveAs', '다른 이름으로', saveAs, { iconOnly: true, disabled: !open || !el, tip: '다른 이름으로 저장 (다른 폴더에 복사해서 계속 작업)' + webTip, key: 'Ctrl+Shift+S' })),
-      grp(tbBtn('exportProj', '프로젝트 내보내기', exportProject, { disabled: !open || !el, tip: '프로젝트 내보내기 — 폴더 전체를 .pdmproj 파일 하나로 (다른 PC·백업·공유용)' + webTip, key: 'Ctrl+E' }),
+      grp(tbBtn('new', '새로', newProject, { iconOnly: true, tip: '새 프로젝트', key: PDM.keys.label('newProject') }),
+        tbBtn('open', '열기', openProject, { iconOnly: true, tip: '프로젝트 열기', key: PDM.keys.label('openProject') }),
+        tbBtn('save', '저장', saveAll, { disabled: !open, tip: '프로젝트 저장', key: PDM.keys.label('save'), cls: store.isDirty() ? 'dirty' : '' }),
+        tbBtn('saveAs', '다른 이름으로', saveAs, { iconOnly: true, disabled: !open || !el, tip: '다른 이름으로 저장 (다른 폴더에 복사해서 계속 작업)' + webTip, key: PDM.keys.label('saveAs') })),
+      grp(tbBtn('exportProj', '프로젝트 내보내기', exportProject, { disabled: !open || !el, tip: '프로젝트 내보내기 — 폴더 전체를 .pdmproj 파일 하나로 (다른 PC·백업·공유용)' + webTip, key: PDM.keys.label('exportProject') }),
         tbBtn('importProj', '가져오기', importProject, { iconOnly: true, disabled: !el, tip: '프로젝트 가져오기 (.pdmproj / .zip)' + webTip }),
-        tbBtn('exportGame', '게임 파일 내보내기', exportGame, { disabled: !open || !el, tip: '게임 파일 내보내기 — 친구에게 줄 수 있는 실행 파일 폴더(JAR 또는 Java 포함 실행 파일) 만들기' + webTip, key: 'Ctrl+Shift+E' })),
-      grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: 'Ctrl+Z' }),
-        tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: 'Ctrl+Y' })),
+        tbBtn('exportGame', '게임 파일 내보내기', exportGame, { disabled: !open || !el, tip: '게임 파일 내보내기 — 친구에게 줄 수 있는 실행 파일 폴더(JAR 또는 Java 포함 실행 파일) 만들기' + webTip, key: PDM.keys.label('exportGame') })),
+      grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: PDM.keys.label('undo') }),
+        tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: PDM.keys.label('redo') })),
       grp(tbBtn('gradle', 'build.gradle', editBuildGradle, { disabled: !open, tip: 'build.gradle — 게임 저장소의 빌드 설정(게임 이름 · 패키지 이름 · 버전)을 보고 고치기' }),
         tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
       h('span', { class: 'grow' }),
-      grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: 'F7' }),
+      grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: PDM.keys.label('check') }),
         tbBtn('clean', '정리', cleanBuild, { iconOnly: true, disabled: !open || !el || running, tip: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때' + webTip })),
-      grp(tbBtn('play', '테스트 플레이', playtest, { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장·검사 후 게임 실행', key: 'F5' }),
+      grp(tbBtn('play', '테스트 플레이', playtest, { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장·검사 후 게임 실행', key: PDM.keys.label('playtest') }),
         tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running && el, tip: '실행·빌드 중지' })),
       grp(tbBtn('theme', '테마', e => { const r = e.currentTarget.getBoundingClientRect(); PDM.ui.menu(r.right - 220, r.bottom + 2, MENUS['보기']().slice(0, 7)); }, { iconOnly: true, tip: `테마: ${({ system: '시스템 따르기', light: '밝게', dark: '어둡게' })[T().mode]}` }),
         tbBtn('settings', '설정', () => PDM.tabs.open('project'), { iconOnly: true, disabled: !open, tip: '프로젝트 설정 (게임 저장소 · 런타임)' })));
@@ -1024,18 +1027,17 @@
     store.on('load', () => { try { const pj = store.get('project'); if (pj && (!pj.extensions || pj.extensions.prop === undefined) && store.all('prop').length) store.edit('project', '확장 기능 켜기: 맵 오브젝트', r => { r.extensions = Object.assign({}, r.extensions, { prop: true }); }, { silent: true }); } catch (_) { /* 무시 */ }
       drawAll(); resolveRepo(true).then(() => offerBundle()).then(() => { if (!creating) offerLegacyRepo(); }); });
     store.on('change', () => drawToolbar());
+    // 단축키: keys.js 의 동작 표 (편집 › 단축키 설정… 에서 바꿈)
+    const K = PDM.keys;
+    K.define('newProject', newProject); K.define('openProject', openProject); K.define('save', saveAll); K.define('saveAs', saveAs);
+    K.define('exportProject', exportProject); K.define('exportGame', exportGame); K.define('undo', undo); K.define('redo', redo);
+    K.define('keySettings', () => K.dialog()); K.define('playtest', () => playtest()); K.define('stopGame', stopGame); K.define('check', runCheck);
+    K.define('projectSettings', () => store.isOpen && PDM.tabs.open('project')); K.define('showLog', () => showBottom('log'));
+    K.define('closeTab', () => active && PDM.tabs.close(active.key)); K.define('nextTab', () => PDM.tabs.cycle(1)); K.define('prevTab', () => PDM.tabs.cycle(-1));
+    K.define('treeSearch', () => { const i = $('#treeSearch input'); if (i) { i.focus(); i.select(); } });
+    K.onChange(() => { drawMenubar(); drawToolbar(); });
     addEventListener('keydown', e => {
-      const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveAs(); }
-      else if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveAll(); }
-      else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') { e.preventDefault(); exportGame(); }
-      else if (e.ctrlKey && e.key.toLowerCase() === 'e') { e.preventDefault(); exportProject(); }
-      else if (e.ctrlKey && e.key.toLowerCase() === 'n') { e.preventDefault(); newProject(); }
-      else if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openProject(); }
-      else if (e.ctrlKey && !typing && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
-      else if (e.ctrlKey && !typing && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
-      else if (e.key === 'F5') { e.preventDefault(); playtest(); }
-      else if (e.key === 'F7') { e.preventDefault(); runCheck(); }
+      K.handle(e, /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
     });
     pdm.on('game:log', l => PDM.log(l, /error|오류|exception|FAILED/i.test(l) ? 'err' : /warning|경고/i.test(l) ? 'warn' : ''));
     pdm.on('game:exit', code => { setRunning(false); PDM.log(`게임/빌드 종료 (코드 ${code})`, code === 0 ? 'ok' : 'warn'); });

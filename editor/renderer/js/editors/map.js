@@ -1037,12 +1037,12 @@
         if (e.key === 'Escape' && ui.moveObj >= 0) { ui.moveObj = -1; ui.moveTo = null; cv.style.cursor = ''; info.textContent = '이동 취소'; paint(); return; }
         if (e.code === 'Space' && !c) { e.preventDefault(); if (!navKey) { navKey = 'pan'; cv.style.cursor = 'grab'; } return; }
         if (e.code === 'KeyZ' && !c && !e.altKey) { e.preventDefault(); if (!navKey) { navKey = 'zoom'; cv.style.cursor = 'zoom-in'; } return; }
-        if (c && e.code === 'KeyD') { e.preventDefault(); ui.sel = -1; ui.port = -1; paint(); showInspector(); return; }
-        if (!c && !e.altKey) {
-          const tk = { KeyB: 'pen', KeyE: 'erase', KeyG: 'fill', KeyI: 'pick', KeyM: 'select' }[e.code];
-          if (tk && (drawable || tk === 'select')) { e.preventDefault(); ui.tool = tk; drawTools(); drawPalette(); return; }
-          if (e.code === 'BracketLeft' || e.code === 'BracketRight') { e.preventDefault(); ui.brush = PDM.clamp((ui.brush || 1) + (e.code === 'BracketRight' ? 1 : -1), 1, 9); drawTools(); return; }
-        }
+        const K = PDM.keys;
+        if (K.is(e, 'draw.deselect')) { e.preventDefault(); ui.sel = -1; ui.port = -1; paint(); showInspector(); return; }
+        // 도구 · 브러쉬 크기 — 편집 › 단축키 설정 의 "그리기" 키 (스프라이트 편집과 같은 키)
+        const tk = K.tool(e, ['pen', 'erase', 'fill', 'pick', 'select']);
+        if (tk && (drawable || tk === 'select')) { e.preventDefault(); ui.tool = tk; drawTools(); drawPalette(); return; }
+        if (K.is(e, 'draw.brushDown') || K.is(e, 'draw.brushUp')) { e.preventDefault(); ui.brush = PDM.clamp((ui.brush || 1) + (K.is(e, 'draw.brushUp') ? 1 : -1), 1, 9); drawTools(); return; }
         if (e.key === 'Enter') { e.preventDefault(); zoomFit(); return; }
         if (e.key === 'Delete' && ui.sel < 0 && ui.port >= 0 && drawable && isStair(terrain[ui.port])) { deletePort(ui.port); return; }
         if (e.key === 'Delete' && ui.sel >= 0) { const i = ui.sel; ui.sel = -1; withPorts('오브젝트 삭제', () => store.edit(key, '오브젝트 삭제', r => { r.objects.splice(i, 1); })); }
