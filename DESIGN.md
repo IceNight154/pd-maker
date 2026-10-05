@@ -406,6 +406,7 @@ MyProject/
 - **항목별 코드** (전직 · 직업 능력 · 특성 · 패시브의 `code: { 훅: "Java" }`): 훅 = `onGain`(전직할 때 · 고를 때 · 포인트 올릴 때 · 열릴 때) · `onUse`(능력을 쓸 때) + 영웅 훅들. 영웅 클래스에 `_<kind><i>_<id>_<훅>` 메서드로 넣고 켜진 항목만 부름(전직 `subclassId()` · 능력 `abilityId()` · 특성 `talent(id) > 0`(본문에 `int points`) · 패시브 `passive(id)`). 값 훅은 켜진 항목들 → 영웅 코드 순서로 이어 받음.
 - 무기 · 갑옷은 원본을 상속하므로 강화 · 마법 부여 · 각인 · 저주 · 감정이 원래대로, 세이브에도 그 클래스로. 수치 식 `기본 + 강화 × 강화당`.
 - 아이템 클래스 폴더 = 분류/세부 종류 (`codegen.pkgSeg`). 분류를 옮기면 다음 생성 때 새 폴더로(예전 파일은 설치기가 지움). 런타임은 `gen/GenIndex.java`(`GenSupport.loadIndex/cls`)로 찾고, 예전 위치(`gen.I_<id>`) 세이브는 Bundle 별칭. 모든 프로젝트 아이템에 클래스를 만듦.
+- **아이템 만들기 · 주기** (코드에서): `MakerItem.give(hero, "id"[, 개수])` = 만들어 가방에(꽉 차면 발밑). `MakerItem.create(이름)` 은 프로젝트 아이템 id → 생성 클래스 이름(`I_<id>`) → 게임 아이템 이름 순으로 찾음 — 게임 아이템은 `spd:` 없이도 `"Cudgel"` · `"cudgel"` · `"potion_of_healing"` · `"weapon.melee.Cudgel"`(첫 글자 대문자 · snake→CamelCase · items 폴더들 · Generator 목록 대소문자 무시). 생성 파일마다 **모든 프로젝트 아이템 클래스를 import**(`new I_<id>()` 바로 사용)하고, 게임 items 폴더 전부(wands · rings · artifacts · stones · bags · keys · quest · spells · bombs · trinkets · exotic · brews · elixirs · darts …)를 기본 import (SPD 4.0 에서 이름 겹침 없음 확인). 4.0.0 헤드리스에서 7가지 방식 모두 확인.
 - 오류: 실행 중 예외는 잡아서 로그 + 화면 경고 한 번. 컴파일 오류에는 `에디터 코드 오류: 아이템 wind_bell · 행동 ring · 6번째 줄` 처럼 위치를 덧붙임(`codegen.locate`). 런타임 바탕: `MakerHeroCode` · `GenSupport`(이름 · 설명 · 그림 · 가격을 데이터에서, `Class.forName`).
 
 ### 6.6 완전히 새 영웅 · 선택 화면 · 저장 슬롯

@@ -17,6 +17,10 @@
     `${PKG}.*`, `${PKG}.actors.*`, `${PKG}.actors.buffs.*`, `${PKG}.actors.hero.*`, `${PKG}.actors.mobs.*`,
     `${PKG}.items.*`, `${PKG}.items.weapon.*`, `${PKG}.items.weapon.melee.*`, `${PKG}.items.weapon.missiles.*`,
     `${PKG}.items.armor.*`, `${PKG}.items.potions.*`, `${PKG}.items.scrolls.*`, `${PKG}.items.food.*`,
+    // 게임 아이템 폴더 전부 — new WandOfFireblast() · new RingOfHaste() 처럼 import 없이 바로 (이름이 겹치는 클래스 없음 — SPD 4.0 확인)
+    `${PKG}.items.wands.*`, `${PKG}.items.rings.*`, `${PKG}.items.artifacts.*`, `${PKG}.items.stones.*`, `${PKG}.items.bags.*`, `${PKG}.items.keys.*`,
+    `${PKG}.items.quest.*`, `${PKG}.items.spells.*`, `${PKG}.items.bombs.*`, `${PKG}.items.trinkets.*`, `${PKG}.items.potions.exotic.*`, `${PKG}.items.potions.brews.*`,
+    `${PKG}.items.potions.elixirs.*`, `${PKG}.items.scrolls.exotic.*`, `${PKG}.items.weapon.missiles.darts.*`,
     `${PKG}.effects.*`, `${PKG}.levels.*`, `${PKG}.mechanics.*`, `${PKG}.scenes.*`, `${PKG}.sprites.*`,
     `${PKG}.utils.GLog`, `${PKG}.pdmaker.*`, `${PKG}.ui.BuffIndicator`, `${PKG}.ui.HeroIcon`,
     'com.watabou.utils.Random', 'com.watabou.utils.PathFinder', 'com.watabou.utils.Bundle', 'com.watabou.noosa.audio.Sample',
@@ -98,9 +102,13 @@
   /** gen 패키지 뒤에 붙는 부분: .items.weapon.melee */
   const itemPkg = it => '.' + itemDirs(it).join('.');
 
+  // 프로젝트 아이템 목록 (generate 가 정함, 편집기 미리보기는 PDM.store) — 생성 파일마다 아이템 클래스를 import 해서 new I_<id>() 를 바로 쓸 수 있게
+  let projItems = null;
+  const itemsNow = () => projItems || (typeof PDM !== 'undefined' && PDM.store && PDM.store.isOpen ? PDM.store.all('item') : []);
   function header(extraImports, what, sub) {
     if (sub) extraImports = `${PKG}.pdmaker.gen.*\n` + (extraImports || '');
-    const imps = [...IMPORTS, ...String(extraImports || '').split(/[\n;]+/).map(x => x.trim().replace(/^import\s+/, '')).filter(Boolean)];
+    const itemImps = itemsNow().filter(it => it && it.id && itemNeedsClass(it)).map(it => `${PKG}.pdmaker.gen${itemPkg(it)}.${itemClass(it.id)}`);
+    const imps = [...IMPORTS, ...itemImps, ...String(extraImports || '').split(/[\n;]+/).map(x => x.trim().replace(/^import\s+/, '')).filter(Boolean)];
     return `// 자동 생성 파일 — PDMaker 가 ${what} 데이터로 만듭니다. 직접 고치지 말고 에디터에서 고치세요.\n` +
       `package ${PKG}.pdmaker.gen${sub || ''};\n\n` + [...new Set(imps)].map(i => `import ${i};`).join('\n') + '\n\n';
   }
@@ -318,12 +326,14 @@
   /** 프로젝트 전체 → { '파일이름.java': 소스 } */
   function generate(heroes, items) {
     const out = {};
+    projItems = items || [];
     (heroes || []).forEach(h => { if (h && h.id && heroNeedsClass(h)) out[heroClass(h.id) + '.java'] = heroSource(h); });
     const index = [];
     (items || []).forEach(it => { if (it && it.id && itemNeedsClass(it)) { out[itemPath(it)] = itemSource(it); index.push([itemClass(it.id), itemPkg(it).slice(1) + '.' + itemClass(it.id)]); } });
     // 클래스 찾기 표: 런타임(GenSupport)이 아이템 id 로 클래스를 찾을 때 씀 (분류를 옮기면 패키지가 바뀌므로)
     out['GenIndex.java'] = `// 자동 생성 파일 — PDMaker 가 만듭니다. 아이템 클래스가 어느 폴더(분류/세부 종류)에 있는지.\npackage ${PKG}.pdmaker.gen;\n\npublic class GenIndex {\n\tpublic static final String[][] ITEMS = {\n`
       + index.map(([a, b]) => `\t\t{ ${lit(a)}, ${lit(b)} },\n`).join('') + '\t};\n}\n';
+    projItems = null;
     return out;
   }
 

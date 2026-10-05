@@ -52,9 +52,16 @@ public class MakerItem extends Item {
 	/** 프로젝트 아이템 id → MakerItem,  'spd:ClassName' → 게임 기본 아이템 */
 	public static Item create(String id) {
 		if (id == null || id.isEmpty()) return null;
+		id = id.trim();
 		if (id.startsWith("spd:")) return spdItem(id.substring(4));
 		JsonValue d = MakerRuntime.item(id);
-		if (d == null) { MakerRuntime.log("없는 아이템: " + id); return null; }
+		if (d == null && id.startsWith("I_") && MakerRuntime.item(id.substring(2)) != null) { id = id.substring(2); d = MakerRuntime.item(id); }   // 생성 클래스 이름으로 불러도
+		if (d == null) {
+			// 프로젝트 아이템이 아니면 게임 아이템으로 — "Cudgel" · "cudgel" · "potion_of_healing" · "weapon.melee.Cudgel" 모두 (spd: 를 붙이지 않아도)
+			Item g = gameItem(id);
+			if (g == null) MakerRuntime.log("없는 아이템: " + id + " — 프로젝트 아이템 id 또는 게임 아이템 클래스 이름(예: Cudgel, PotionOfHealing, spd:weapon.melee.Cudgel)");
+			return g;
+		}
 		// 무기·갑옷이나 코드가 있는 아이템은 에디터가 만든 클래스(gen/I_<id>)로
 		Item gen = GenSupport.item(id);
 		if (gen != null) {
@@ -83,16 +90,45 @@ public class MakerItem extends Item {
 	static final String[] PKGS = { "", "potions.", "potions.exotic.", "potions.brews.", "potions.elixirs.", "scrolls.", "scrolls.exotic.", "food.",
 			"weapon.", "weapon.melee.", "weapon.missiles.", "weapon.missiles.darts.", "weapon.codices.melee.", "weapon.codices.ranged.", "weapon.codices.cast.",
 			"armor.", "wands.", "rings.", "artifacts.", "stones.", "bags.", "bags.grimoire.", "keys.", "quest.", "spells.", "bombs.", "trinkets.", "journal.", "remains." };
-	static Item spdItem(String cls) {
+	/** 아이템을 만들어 영웅에게 줌 (가방이 꽉 차면 발밑에). 코드에서: MakerItem.give(hero, "knuckleduster") · MakerItem.give(hero, "Cudgel", 2) */
+	public static Item give(com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero, String id) { return give(hero, id, 1); }
+	public static Item give(com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero, String id, int count) {
+		Item it = create(id);
+		if (it == null || hero == null) return it;
+		if (count > 1 && it.stackable) it.quantity(count);
+		if (!it.collect()) com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.drop(it, hero.pos).sprite.drop();
+		return it;
+	}
+	/** 게임 아이템을 이름으로: 그대로 · 첫 글자 대문자 · snake/kebab → CamelCase · 무작위 생성 목록(Generator)에서 대소문자 무시 */
+	static Item gameItem(String name) {
+		String n = name.replace('/', '.');
+		java.util.LinkedHashSet<String> cand = new java.util.LinkedHashSet<>();
+		cand.add(n);
+		int dot = n.lastIndexOf('.'); String pre = dot >= 0 ? n.substring(0, dot + 1) : "", simple = n.substring(dot + 1);
+		if (!simple.isEmpty()) cand.add(pre + Character.toUpperCase(simple.charAt(0)) + simple.substring(1));
+		StringBuilder camel = new StringBuilder(); for (String part : simple.split("[_\\-\\s]+")) if (!part.isEmpty()) camel.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+		if (camel.length() > 0) cand.add(pre + camel);
+		for (String c : cand) { Item it = spdItemQuiet(c); if (it != null) return it; }
+		String low = camel.toString().toLowerCase();
+		for (com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category cat : com.shatteredpixel.shatteredpixeldungeon.items.Generator.Category.values()) {
+			if (cat.classes == null) continue;
+			for (Class<?> c : cat.classes) if (c.getSimpleName().toLowerCase().equals(low) || c.getSimpleName().equalsIgnoreCase(simple)) { try { return (Item) Reflection.newInstance(c); } catch (Throwable ignored) { } }
+		}
+		return null;
+	}
+	static Item spdItemQuiet(String cls) {
 		if (cls.startsWith("items.")) cls = cls.substring(6);
 		for (String p : PKGS) {
-			try {
-				Class<?> c = Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p + cls);
-				if (Item.class.isAssignableFrom(c)) return (Item) Reflection.newInstance(c);
-			} catch (ClassNotFoundException ignored) { }
+			try { Class<?> c = Class.forName("com.shatteredpixel.shatteredpixeldungeon.items." + p + cls); if (Item.class.isAssignableFrom(c)) return (Item) Reflection.newInstance(c); }
+			catch (ClassNotFoundException ignored) { }
 		}
-		MakerRuntime.log("게임 아이템 클래스를 찾지 못함: " + cls);
 		return null;
+	}
+	static Item spdItem(String cls) {
+		Item it = spdItemQuiet(cls);
+		if (it == null) it = gameItem(cls.startsWith("items.") ? cls.substring(6) : cls);   // spd:cudgel 처럼 대소문자가 달라도
+		if (it == null) MakerRuntime.log("게임 아이템 클래스를 찾지 못함: " + cls);
+		return it;
 	}
 
 	protected JsonValue data() { return MakerRuntime.item(makerId); }

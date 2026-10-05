@@ -510,7 +510,8 @@ PDM.ui = (function () {
     ['주변 적 모두', 'for (Mob m : Dungeon.level.mobs.toArray(new Mob[0])) {\n    if (m.alignment == Char.Alignment.ENEMY && Dungeon.level.distance(hero.pos, m.pos) <= 2) {\n        \n    }\n}'],
     ['메시지', 'GLog.i("메시지");        // GLog.p 긍정 · GLog.w 경고 · GLog.n 부정'],
     ['효과음', 'Sample.INSTANCE.play(Assets.Sounds.HIT);'],
-    ['아이템 주기', 'Item it = MakerItem.create("item_id");\nif (it != null && !it.collect()) Dungeon.level.drop(it, hero.pos).sprite.drop();'],
+    ['아이템 주기', 'MakerItem.give(hero, "item_id");        // 프로젝트 아이템 id 또는 게임 아이템 이름 (예: "Cudgel", "PotionOfHealing") · 개수: give(hero, "id", 3)'],
+    ['아이템 만들기 (직접 다루기)', 'Item it = MakerItem.create("item_id");   // 또는 new Cudgel() · new I_내아이템id()\nif (it != null && !it.collect()) Dungeon.level.drop(it, hero.pos).sprite.drop();'],
     ['스위치/변수 (이벤트와 공유)', 'if (StoryState.sw("my_switch")) { StoryState.setVar("my_var", StoryState.var("my_var") + 1); }'],
     ['이벤트 실행', 'EventInterpreter.runEvent("event_id", null);']
   ];
