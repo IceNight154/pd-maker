@@ -38,8 +38,8 @@ public class MakerSprite extends MobSprite {
 			light.frame(frame()); light.camera = camera();
 			light.x = x; light.y = y; light.scale.set(scale.x, scale.y); light.origin.set(origin.x, origin.y); light.angle = angle; light.flipHorizontal = flipHorizontal;
 			MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg) * alpha(), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
-			if (bloom != null && frame() != null) { int col = Math.round(frame().left * texture.width / bfw), row = Math.round(frame().top * texture.height / bfh);
-				bloom.drawTop(row * bloom.cols + col, x, y, scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg) * alpha(), camera()); }   // 번짐은 맨 위 빛 층에서
+			if (bloom != null && frame() != null) { try { int col = Math.round(frame().left * texture.width / bfw), row = Math.round(frame().top * texture.height / bfh);
+				bloom.draw(row * bloom.cols + col, x, y, scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg) * alpha(), camera()); } finally { MakerBloom.done(); } }
 		} catch (Throwable t) { light = null; }
 	}
 	public boolean setup(JsonValue ch) {

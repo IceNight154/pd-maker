@@ -12,7 +12,9 @@
  *       ② 빛: 감쇠식을 셰이더에서 계산해 덧셈 (z = 광원 z, 깊이 검사 — 그림자 볼륨 뒤는 그려지지 않음)
  *       광원마다 z 를 조금씩 앞으로 당겨서 앞 광원의 그림자가 뒤 광원을 가리지 않음 (깊이 버퍼는 한 번만 지움).
  *     캐릭터 그림자도 같은 깊이 단계에 씀 (그 광원의 빛만 빠짐 — 캐릭터 몸에는 그림자가 덮이지 않게 몸 자리를 되돌림).
- *   · 빛 지도를 화면에 얹음: 화면 × (1 + 빛) + 빛 × GLOW — 그림 무늬를 살린 채 밝힘 (흰색으로 덮어 버리지 않음). 그다음 다른 그림들이 미뤄 둔 번짐(블룸)도 여기서 그림 (defer).
+ *   · 빛 지도를 화면에 얹음: 화면 × (1 + 빛) + 빛 × GLOW — 그림 무늬를 살린 채 밝힘 (흰색으로 덮어 버리지 않음).
+ *   · 영웅이 지금 못 보는 칸은 빛 지도에서 지움 (다른 방 · 벽 너머로 빛이 남지 않게).
+ *   · 번짐(블룸)은 여기서 그리지 않음 — 각 그림 바로 위에 그대로 (맨 위로 올리면 자기 그림을 하얗게 덮음).
  *   광원 버퍼를 못 쓰는 기기에서는 예전 방식(각도별 광선 + 부채꼴)으로 그림.
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -81,42 +83,35 @@ public class MakerLights extends CustomTilemap {
 	static float soft(float x) { return x <= 0 ? 0 : 1 - (float) Math.exp(-x); }
 	/** 빛 지도를 화면에 얹는 방식: 화면 × (1 + 빛) (그림의 무늬를 살린 채 밝힘) + 빛 × GLOW (어두운 곳에 은은한 빛 기운) */
 	static final float GLOW = 0.3f;
+	/** 테스트 플레이 때 게임 로그에 한 번 보여 주는 판 (런타임이 새것으로 바뀌었는지 확인용) */
+	static final String VERSION = "v3"; static boolean told;
 
-	/** 게임 화면을 만들기 직전: 맨 위 빛 층을 벽 층(customWalls) 맨 끝에 하나 넣음 — 광원이 없어도 번짐(블룸)을 맨 위에 그리려고 늘 넣음 */
+	/** 게임 화면을 만들기 직전: 이 맵에 광원이 있으면 맨 위 빛 층을 벽 층(customWalls) 맨 끝에 하나 넣음 */
 	public static void ensure(Level l) {
 		try {
 			if (l == null || l.customTiles == null || l.customWalls == null) return;
 			for (CustomTilemap t : l.customTiles.toArray(new CustomTilemap[0])) if (t instanceof MakerLights) l.customTiles.remove(t);   // 예전 세이브 (지형 층에 있던 것)
 			for (CustomTilemap t : l.customWalls.toArray(new CustomTilemap[0])) if (t instanceof MakerLights) l.customWalls.remove(t);
-			if (!MakerRuntime.isActive()) return;
+			if (!MakerRuntime.isActive() || !any(l)) return;
 			MakerLights t = new MakerLights();
 			t.tileX = 0; t.tileY = 0; t.tileW = l.width(); t.tileH = l.height();
 			l.customWalls.add(t);
 		} catch (Throwable e) { MakerRuntime.log("광원 오류: " + e); }
 	}
 
+	static boolean any(Level l) {
+		try {
+			JsonValue f = WorldGraph.node(WorldGraph.current());
+			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) return true;
+			for (JsonValue p : MakerRuntime.props.values()) { JsonValue lt = p.get("light"); if (lt != null && lt.getBoolean("on", false)) return true; }
+		} catch (Throwable ignored) { }
+		return false;
+	}
+
 	@Override public Tilemap create() { vis = new Vis(); return vis; }
 	@Override public Image image(int tileX, int tileY) { return null; }
 	@Override public String name(int tileX, int tileY) { return null; }
 	@Override public String desc(int tileX, int tileY) { return null; }
-
-	// ------------------------------------------------------------ 맨 위에 그리기 (미루기)
-
-	static final ArrayList<Runnable> late = new ArrayList<>();
-	/** 번짐 같은 빛 효과를 맨 위 빛 층에서 그리도록 미룸. 그 층이 같은 카메라로 그려지고 있을 때만 true (아니면 바로 그리세요 — 대화창 그림 등) */
-	public static boolean defer(Camera cam, Runnable r) {
-		Vis v = current;
-		if (v == null || !v.alive || v.parent == null || cam == null || cam != v.camera()) return false;
-		if (late.size() > 4000) late.clear();   // 빛 층이 한동안 안 그려졌으면 버림
-		late.add(r);
-		return true;
-	}
-	static void flush() {
-		if (late.isEmpty()) return;
-		Runnable[] rs = late.toArray(new Runnable[0]); late.clear();
-		for (Runnable r : rs) try { r.run(); } catch (Throwable ignored) { }
-		com.watabou.glwrap.Blending.setNormalMode();
-	}
 
 	// ------------------------------------------------------------ 빛을 가리는 것
 
@@ -328,9 +323,11 @@ public class MakerLights extends CustomTilemap {
 				}
 			} catch (Throwable t) { MakerRuntime.log("광원 오류: " + t); }
 		}
+		String note;
 		@Override public void update() {
 			super.update();
 			current = this;
+			if (note != null) { try { com.shatteredpixel.shatteredpixeldungeon.utils.GLog.i(note); } catch (Throwable ignored) { } note = null; }
 			if ((verWait -= Game.elapsed) <= 0 && Dungeon.level != null) {   // 벽 · 문이 바뀌었는지 (바뀌면 캐릭터 그림자용 광선을 다시 계산)
 				verWait = 0.25f; Level l = Dungeon.level; int hsh = 17;
 				for (int i = 0; i < l.solid.length; i++) if (l.solid[i] && l.losBlocking[i]) hsh = hsh * 31 + i;
@@ -478,6 +475,16 @@ public class MakerLights extends CustomTilemap {
 					gl.glUniform3f(s.uColor.location(), e.cr, e.cg, e.cb);
 					s.draw(vs.buf, vs.n);
 				}
+				// ⑤ 영웅이 지금 못 보는 칸은 빛을 지움 (다른 방 · 벽 너머로 빛이 남아 보이지 않게)
+				boolean[] fov = l.heroFOV;
+				if (fov != null && fov.length == l.length()) {
+					gl.glDisable(GL20.GL_DEPTH_TEST); gl.glDisable(GL20.GL_BLEND); gl.glColorMask(true, true, true, true);
+					vs.clear();
+					int cx0 = Math.max(0, (int) Math.floor(ox / 16)), cx1 = Math.min(l.width() - 1, (int) Math.floor((ox + fw) / 16));
+					int cy0 = Math.max(0, (int) Math.floor(oy / 16)), cy1 = Math.min(l.height() - 1, (int) Math.floor((oy + fh) / 16));
+					for (int cy = cy0; cy <= cy1; cy++) for (int cx = cx0; cx <= cx1; cx++) if (!fov[cx + cy * l.width()]) vs.rect(cx * 16, cy * 16, cx * 16 + 16, cy * 16 + 16);
+					s.uMode.value1f(0); s.draw(vs.buf, vs.n);
+				}
 			} finally {
 				gl.glColorMask(true, true, true, true);
 				gl.glDisable(GL20.GL_DEPTH_TEST);
@@ -489,7 +496,7 @@ public class MakerLights extends CustomTilemap {
 				com.watabou.glwrap.Texture.clear();
 				com.watabou.glwrap.Blending.setNormalMode();
 			}
-			// 빛 지도를 화면에 덧셈
+			// 빛 지도를 화면에 얹음
 			NoosaScript sc = NoosaScript.get();
 			sc.resetCamera(); sc.camera(cam);
 			sc.uModel.valueM4(ident);
@@ -509,10 +516,16 @@ public class MakerLights extends CustomTilemap {
 			} finally { com.watabou.glwrap.Blending.setNormalMode(); }
 			return true;
 		}
+		static boolean seen(float x, float y) {
+			Level l = Dungeon.level; int cx = (int) Math.floor(x / 16), cy = (int) Math.floor(y / 16);
+			if (l == null || l.heroFOV == null || cx < 0 || cy < 0 || cx >= l.width() || cy >= l.height()) return true;
+			return l.heroFOV[cx + cy * l.width()];
+		}
 		/** 예전 방식: 각도별 광선으로 만든 부채꼴 + 캐릭터 그림자 그림 (그림자는 빛 위에 어둡게) */
 		void fallback(Camera cam) {
 			try {
 				for (Lit e : active) {   // 빛 지도와 같은 얹는 방식: 화면 × (1 + 빛) + 빛 × GLOW
+					if (!seen(e.r.x, e.r.y)) continue;   // 못 보는 칸의 광원은 그리지 않음 (빛 지도를 못 쓰면 칸마다 지울 수 없어서)
 					SmartTexture tx = bake(e.z / e.r.range, e.k / e.r.range);
 					Gdx.gl.glBlendFunc(GL20.GL_DST_COLOR, GL20.GL_ONE); fan.draw(tx, e.r, cam, e.cr, e.cg, e.cb);
 					Gdx.gl.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE); fan.draw(tx, e.r, cam, e.cr * GLOW, e.cg * GLOW, e.cb * GLOW);
@@ -533,7 +546,7 @@ public class MakerLights extends CustomTilemap {
 		// 크기가 없는 그림이라 게임이 "화면 밖"으로 여겨 건너뛰지 않게 (화면을 옮기면 빛이 사라지던 문제)
 		@Override public boolean isVisible() { return visible && camera() != null; }
 		@Override public void draw() {
-			Camera cam = camera(); if (cam == null || Dungeon.level == null) { late.clear(); return; }
+			Camera cam = camera(); if (cam == null || Dungeon.level == null) return;
 			current = this;
 			try {
 				active.clear();
@@ -552,12 +565,15 @@ public class MakerLights extends CustomTilemap {
 						MakerRuntime.warnOnce("광원 버퍼를 쓸 수 없어 예전 방식으로 그립니다: " + e + " @ " + (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : ""));
 					}
 					if (!done) fallback(cam);
+					if (!told && System.getProperty("pdmaker.project") != null) {   // 테스트 플레이: 어느 방식으로 그리는지 한 번 알림
+						told = true;
+						note = ("[PDMaker] 광원 " + VERSION + ": " + (done ? "빛 지도 + 그림자 볼륨" : "예전 방식 (광원 버퍼 없음)") + " · 광원 " + active.size() + "개");   // 그리는 중에 로그 창을 바꾸지 않게 update 에서 씀
+					}
 				}
 			} catch (Throwable e) { MakerRuntime.warnOnce("광원 그리기 오류: " + e + " @ " + (e.getStackTrace().length > 0 ? e.getStackTrace()[0] : "")); } finally { com.watabou.glwrap.Blending.setNormalMode(); }
-			flush();   // 미뤄 둔 번짐(블룸) — 캐릭터 · 오브젝트 · 벽 위에
 		}
 		@Override public void destroy() {
-			if (current == this) { current = null; late.clear(); }
+			if (current == this) current = null;
 			super.destroy();
 		}
 	}

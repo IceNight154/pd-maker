@@ -90,7 +90,7 @@ public class MakerTileLight extends CustomTilemap {
 				float am = amount * MakerBloom.power(cfg);
 				int mg = 3, x0 = Math.max(0, (int) Math.floor(c.scroll.x / SIZE) - mg), y0 = Math.max(0, (int) Math.floor(c.scroll.y / SIZE) - mg);
 				int x1 = Math.min(mapWidth - 1, (int) Math.ceil((c.scroll.x + c.width) / SIZE) + mg), y1 = Math.min(mapHeight - 1, (int) Math.ceil((c.scroll.y + c.height) / SIZE) + mg);
-				for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) { int v = data[y * mapWidth + x]; if (bloom.has(v)) bloom.drawTop(v, x * SIZE, y * SIZE, unit, am, c); }   // 맨 위 빛 층에서
+				for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) { int v = data[y * mapWidth + x]; if (bloom.has(v)) bloom.draw(v, x * SIZE, y * SIZE, unit, am, c); }
 			} catch (Throwable ignored) { } finally { MakerBloom.done(); }
 		}
 	}

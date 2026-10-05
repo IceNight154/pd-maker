@@ -91,7 +91,7 @@ public class MakerProp extends CustomTilemap {
 		}
 		@Override public void draw() { if (img != null && visible) { img.camera = camera(); img.draw();
 			if (light != null && img.visible) { light.camera = img.camera; light.x = img.x; light.y = img.y; light.scale.set(img.scale.x, img.scale.y); MakerRuntime.drawLight(light, MakerRuntime.lightAmount(lightCfg), lightCfg == null ? "add" : lightCfg.getString("lightMode", "add"));
-				if (bloom != null && part != 2) bloom.drawTop(frames[cur], img.x, part == 1 ? img.y - cut * fh0 * img.scale.y : img.y, img.scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg), img.camera); } } }   // 번짐은 맨 위 빛 층에서
+				if (bloom != null && part != 2) { try { bloom.draw(frames[cur], img.x, part == 1 ? img.y - cut * fh0 * img.scale.y : img.y, img.scale.x, MakerRuntime.lightAmount(lightCfg) * MakerBloom.power(lightCfg), img.camera); } finally { MakerBloom.done(); } } } } }
 	}
 
 	@Override
