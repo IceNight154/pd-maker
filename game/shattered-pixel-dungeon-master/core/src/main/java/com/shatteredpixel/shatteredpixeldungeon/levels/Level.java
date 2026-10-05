@@ -534,6 +534,7 @@ public abstract class Level implements Bundlable {
 	private ArrayList<Class<?extends Mob>> mobsToSpawn = new ArrayList<>();
 	
 	public Mob createMob() {
+		{ Mob pdmTm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.themeMob(this); if (pdmTm != null) return pdmTm; } // >>> pdmaker
 		if (mobsToSpawn == null || mobsToSpawn.isEmpty()) {
 			mobsToSpawn = MobSpawner.getMobRotation(Dungeon.depth);
 		}
