@@ -11,7 +11,7 @@
  *     shake { power, every(초), time(초) }                                                가끔 흔들림
  *   나타남 · 사라짐: inType / outType (none | fade | dissolve | slide), inSec / outSec — 필터가 바뀔 때 앞의 것은 사라지고 새것이 나타남
  *     dissolve 는 색 덮기 · 레터박스에서 점 무늬로, 그 밖의 층은 fade 로. slide 는 레터박스 띠가 밀려 들어오고 그 밖의 층은 fade
- *   어떤 필터를 쓸지 (앞이 우선):  이벤트 명령 "화면 필터" → 영웅이 서 있는 방 템플릿의 filter → 맵 노드의 filter → 그룹의 filter
+ *   어떤 필터를 쓸지 (앞이 우선):  이벤트 명령 "화면 필터" → 영웅이 서 있는 방 템플릿의 filter → 맵 노드의 filter → 그룹의 filter → 테마(world.themeFilters)
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
@@ -85,7 +85,13 @@ public class MakerFilter {
 		if (!f.isEmpty()) return f;
 		String id = WorldGraph.current();
 		JsonValue g = id == null ? null : WorldGraph.group(id);
-		return g == null ? "" : g.getString("filter", "");
+		String gf = g == null ? "" : g.getString("filter", "");
+		if (!gf.isEmpty()) return gf;
+		// 테마별 화면 필터 (world.themeFilters { "SEWER" | "custom:<id>": 필터 id })
+		JsonValue tf = WorldGraph.world == null ? null : WorldGraph.world.get("themeFilters");
+		if (tf == null) return "";
+		String th = Dungeon.level instanceof MakerLevel ? WorldGraph.theme(((MakerLevel) Dungeon.level).nodeId) : id == null ? null : WorldGraph.theme(id);
+		return th == null ? "" : tf.getString(th, "");
 	}
 
 	static int rgb(String s, int d) { try { return Integer.parseInt(s.replace("#", ""), 16) & 0xFFFFFF; } catch (Throwable t) { return d; } }

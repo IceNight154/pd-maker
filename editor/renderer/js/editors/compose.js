@@ -439,7 +439,17 @@
       const paramEl = ([k, label, kind, def, opts]) => {
         const cur = sel.p && sel.p[k] !== undefined ? sel.p[k] : def; let inp;
         if (kind === 'num') { inp = h('input', { type: 'text', value: cur, class: 'mono', title: '숫자 또는 식 — t(0~1 한 바퀴) · frame · frames · pi · sin() cos() abs() floor() min() max() rand(n). 예: t*360 · sin(t*2*pi)*3' });
-          inp.oninput = () => { const v = inp.value.trim(), num = /^-?\d*\.?\d+$/.test(v); const ok = v !== '' && (num || PDM.composeExprOk(v)); inp.style.outline = ok ? '' : '1px solid var(--bad)'; if (ok) setP(k, num ? parseFloat(v) : v); }; }
+          inp.oninput = () => { const v = inp.value.trim(), num = /^-?\d*\.?\d+$/.test(v); const ok = v !== '' && (num || PDM.composeExprOk(v)); inp.style.outline = ok ? '' : '1px solid var(--bad)'; if (ok) setP(k, num ? parseFloat(v) : v); };
+          // 다른 숫자 칸처럼 마우스를 올리고 휠로 ±1 (Shift ±10 · Alt ±0.1). 식(t*360 …)이 들어 있으면 그대로 둠
+          inp.title += ' · 마우스 휠 = ±1 (Shift ±10 · Alt ±0.1)';
+          inp.addEventListener('wheel', e => {
+            const v = inp.value.trim(); if (e.ctrlKey || (v !== '' && !/^-?\d*\.?\d+$/.test(v))) return;
+            e.preventDefault();
+            const step = e.altKey ? 0.1 : e.shiftKey ? 10 : 1, dec = e.altKey || /\.\d/.test(v) ? Math.max(1, (v.split('.')[1] || '').length) : 0;
+            const n = (parseFloat(v) || 0) + (e.deltaY < 0 ? step : -step);
+            inp.value = dec ? n.toFixed(Math.min(3, dec)) : String(Math.round(n));
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+          }, { passive: false }); }
         else if (kind === 'color') { inp = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#000000', style: { width: '48px', padding: 0 } }); inp.oninput = () => setP(k, inp.value); }
         else if (kind === 'bool') { const c = h('input', { type: 'checkbox', checked: !!cur }); c.onchange = () => setP(k, c.checked); return h('label', { class: 'check' }, c, label); }
         else if (kind === 'select') { inp = h('select', {}, Object.entries(opts || {}).map(([v, t]) => h('option', { value: v, selected: v === cur }, t))); inp.onchange = () => setP(k, inp.value); }

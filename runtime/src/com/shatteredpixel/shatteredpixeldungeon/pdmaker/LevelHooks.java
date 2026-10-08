@@ -398,6 +398,7 @@ public class LevelHooks {
 		if (d == null || d.getString("game", "").isEmpty() || !d.getBoolean("useGame", true)) return null;
 		Mob m = gameMob(d.getString("game"));
 		if (m == null) MakerRuntime.warnOnce("게임 캐릭터 클래스를 찾지 못함: " + d.getString("game") + " (" + charId + ") — 데이터 캐릭터로 대신합니다");
+		else { MakerCharAI.tag(m, charId); MakerCharAI.onCreate(m); }   // 복제한 원작 캐릭터(같은 게임 클래스)도 이 캐릭터의 설정으로
 		return m;
 	}
 

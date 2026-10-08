@@ -37,10 +37,19 @@ public class MakerCharAI {
 		if (c instanceof MakerMob) return ((MakerMob) c).charId;
 		if (c instanceof MakerNPC) return ((MakerNPC) c).charId;
 		if (!(c instanceof Mob) || MakerRuntime.chars == null) return null;
+		String t = tags.get(c);
+		if (t != null) return t;
 		String id = byClass.get(c.getClass());
-		if (id == null) { id = MakerDrops.charOf((Mob) c); byClass.put(c.getClass(), id == null ? NONE : id); }
+		if (id == null) { id = MakerDrops.charOfClass(c.getClass()); byClass.put(c.getClass(), id == null ? NONE : id); }
 		return id == null || id.equals(NONE) ? null : id;
 	}
+	/** 프로젝트 캐릭터로 만든 게임 클래스 몬스터 → 그 캐릭터 id (LevelHooks.gameChar 가 붙임 · Mob 저장 연결 줄로 저장) */
+	private static final Map<Char, String> tags = new WeakHashMap<>();
+	public static void tag(Mob m, String charId) { if (m != null && charId != null && !(m instanceof MakerMob) && !(m instanceof MakerNPC)) tags.put(m, charId); }
+	static String tagOf(Mob m) { return tags.get(m); }
+	/** Mob.storeInBundle · restoreFromBundle 연결 줄 */
+	public static void store(Mob m, com.watabou.utils.Bundle b) { String t = tags.get(m); if (t != null) b.put("pdm_charTag", t); }
+	public static void restore(Mob m, com.watabou.utils.Bundle b) { if (b.contains("pdm_charTag")) { tags.put(m, b.getString("pdm_charTag")); onCreate(m); } }
 	static JsonValue data(Char c) { String id = charId(c); return id == null ? null : MakerRuntime.character(id); }
 	static JsonValue part(JsonValue d, String k) { return d == null ? null : d.get(k); }
 
@@ -95,8 +104,10 @@ public class MakerCharAI {
 		String id = charId(self);
 		try {
 			Class<?> g = Class.forName(GenSupport.GEN + "GenCharAI");
-			Object r = g.getMethod("act", String.class, Mob.class, Ctl.class).invoke(null, id, self, new Ctl(self));
-			if (r instanceof Boolean && (Boolean) r) return true;
+			Ctl ctl = new Ctl(self);
+			Object r = g.getMethod("act", String.class, Mob.class, Ctl.class).invoke(null, id, self, ctl);
+			if (ctl.anim) return false;   // 공격 동작이 끝나면 게임이 이어서 (Mob.onAttackComplete)
+			if ((r instanceof Boolean && (Boolean) r) || ctl.acted) return true;   // return 을 빠뜨려도 도우미로 턴을 썼으면 그걸로 (원래 AI 가 또 움직이지 않게)
 		} catch (java.lang.reflect.InvocationTargetException e) {
 			MakerRuntime.log("캐릭터 AI 코드 오류 (" + id + "): " + e.getCause());
 			MakerRuntime.warnOnce("캐릭터 AI 코드 오류 (" + id + "): " + e.getCause());
@@ -144,6 +155,7 @@ public class MakerCharAI {
 	public static String damageInfo(Char c) {
 		St t = states.get(c);
 		if (t == null || t.hits == 0) return "";
+		try { JsonValue st = part(data(c), "stats"); if (st == null || !st.getBoolean("infiniteHp", false)) return ""; } catch (Throwable e) { return ""; }
 		return "\n\n받은 피해: 합계 " + t.total + " · " + t.hits + "번 · 평균 " + Math.round(t.total / (float) t.hits) + " · 마지막 " + t.last;
 	}
 
@@ -152,24 +164,29 @@ public class MakerCharAI {
 	/** 코드에서 쓰는 도우미 — self 를 대신 움직이고 턴을 씀. 이동 · 공격 · 기다리기는 true 를 돌려주니 그대로 return 하세요 */
 	public static class Ctl {
 		public final Mob self;
+		/** 이번 차례에 턴을 쓰는 도우미를 불렀는지 */
+		public boolean acted, anim;
 		public Ctl(Mob self) { this.self = self; }
+		void spendT(float t) { if (acted) return; acted = true; MakerCharAI.spend(self, t); }   // 한 차례에 한 번만
 		/** 원래 AI 에 맡김 (return ai.def();) */
 		public Boolean def() { return null; }
 		/** 한 턴 (또는 turns 턴) 기다림 */
-		public boolean waitTurn() { spend(self, Actor.TICK); return true; }
-		public boolean waitTurns(float turns) { spend(self, Math.max(0.1f, turns)); return true; }
+		public boolean waitTurn() { spendT(Actor.TICK); return true; }
+		public boolean waitTurns(float turns) { spendT(Math.max(0.1f, turns)); return true; }
 		/** 그 칸 쪽으로 한 칸 (막혔으면 기다림) */
 		public boolean stepTo(int cell) {
+			if (acted) return true;   // 이번 차례에 이미 움직임
 			if (cell == self.pos || self.rooted) return waitTurn();
 			boolean[] all = new boolean[Dungeon.level.length()]; java.util.Arrays.fill(all, true);
 			int step = Dungeon.findStep(self, cell, Dungeon.level.passable, all, true);
 			if (step == -1) return waitTurn();
 			int old = self.pos; self.move(step); if (self.sprite != null) self.sprite.move(old, self.pos);
-			spend(self, 1f / self.speed());
+			spendT(1f / self.speed());
 			return true;
 		}
 		/** 그 칸에서 멀어지는 쪽으로 한 칸 */
 		public boolean stepAway(int cell) {
+			if (acted) return true;   // 이번 차례에 이미 움직임
 			if (self.rooted) return waitTurn();
 			int best = -1, bd = Dungeon.level.distance(self.pos, cell);
 			for (int o : PathFinder.NEIGHBOURS8) {
@@ -179,11 +196,12 @@ public class MakerCharAI {
 			}
 			if (best < 0) return waitTurn();
 			int old = self.pos; self.move(best); if (self.sprite != null) self.sprite.move(old, self.pos);
-			spend(self, 1f / self.speed());
+			spendT(1f / self.speed());
 			return true;
 		}
 		/** 무작위로 한 칸 */
 		public boolean wander() {
+			if (acted) return true;   // 이번 차례에 이미 움직임
 			int c = self.pos + PathFinder.NEIGHBOURS8[com.watabou.utils.Random.Int(8)];
 			if (c < 0 || c >= Dungeon.level.length() || !Dungeon.level.passable[c] || Actor.findChar(c) != null) return waitTurn();
 			return stepTo(c);
@@ -194,15 +212,19 @@ public class MakerCharAI {
 			if (!Dungeon.level.adjacent(self.pos, target.pos)) return stepTo(target.pos);
 			try {
 				if (ENEMY == null) { ENEMY = Mob.class.getDeclaredField("enemy"); ENEMY.setAccessible(true); DO_ATTACK = Mob.class.getDeclaredMethod("doAttack", Char.class); DO_ATTACK.setAccessible(true); }
+				if (acted) return true;
 				ENEMY.set(self, target);
-				DO_ATTACK.invoke(self, target);
-				return true;
-			} catch (Throwable e) { self.attack(target); spend(self, Actor.TICK); return true; }
+				acted = true;
+				boolean done = (Boolean) DO_ATTACK.invoke(self, target);   // false = 공격 동작을 보여 주는 중 (끝나면 게임이 턴을 씀)
+				if (!done) anim = true;
+				return done;
+			} catch (Throwable e) { self.attack(target); spendT(Actor.TICK); return true; }
 		}
 		/** 대상을 쫓게 하고 원래 AI 에 맡김 (return ai.hunt(hero);) */
 		public Boolean hunt(Char target) { if (target != null) { self.aggro(target); self.state = self.HUNTING; } return null; }
 		/** 그 칸으로 순간이동 (빈 칸일 때) */
 		public boolean teleport(int cell) {
+			if (acted) return true;   // 이번 차례에 이미 움직임
 			if (cell < 0 || cell >= Dungeon.level.length() || !Dungeon.level.passable[cell] || Actor.findChar(cell) != null) return waitTurn();
 			self.pos = cell; Dungeon.level.occupyCell(self); if (self.sprite != null) self.sprite.place(cell);
 			return waitTurn();

@@ -349,7 +349,7 @@
   }
 
   /** 캐릭터 AI 코드 (ai.mode = code) — 런타임 MakerCharAI 가 GenCharAI.act(charId, self, ai) 로 매 행동마다 부름 */
-  const CHARAI_DOC = '쓸 수 있는 것: self (이 캐릭터 — Mob) · hero · level · ai (도우미: ai.stepTo(칸) · ai.stepAway(칸) · ai.wander() · ai.attack(대상) · ai.waitTurn() · ai.teleport(칸) · ai.hunt(대상) · ai.say("글") · ai.cell(x, y) · ai.dist(칸) · ai.sees(캐릭터) · ai.near(캐릭터) · ai.now()). 턴을 쓰는 도우미는 true 를 돌려주니 "return ai.…;" 로 끝내세요. 아무것도 return 하지 않거나 return ai.def(); 이면 원래 AI 대로.';
+  const CHARAI_DOC = '쓸 수 있는 것: self (이 캐릭터 — Mob) · hero · level · ai (도우미: ai.stepTo(칸) · ai.stepAway(칸) · ai.wander() · ai.attack(대상) · ai.waitTurn() · ai.teleport(칸) · ai.hunt(대상) · ai.say("글") · ai.cell(x, y) · ai.dist(칸) · ai.sees(캐릭터) · ai.near(캐릭터) · ai.now()). 턴을 쓰는 도우미(이동 · 공격 · 기다리기)를 부르면 그 차례는 그걸로 끝납니다 (return 을 빠뜨려도 됨 · 한 차례에 하나만). 아무 도우미도 안 부르거나 return ai.def(); 이면 원래 AI 대로.';
   const CHARAI_SNIPPET = '// 영웅이 보이면 3칸 거리를 두고, 붙으면 공격, 안 보이면 돌아다님\nif (ai.sees(hero)) {\n\tif (ai.near(hero)) return ai.attack(hero);\n\tif (ai.dist(hero.pos) < 3) return ai.stepAway(hero.pos);\n\treturn ai.waitTurn();\n}\nreturn ai.wander();';
   function charAISource(chars) {
     const list = (chars || []).filter(c => c && c.id && c.ai && c.ai.mode === 'code' && has(c.ai.code));

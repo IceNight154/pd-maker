@@ -325,7 +325,7 @@ MyProject/
 
 ### 5.6 화면 필터 (확장 `filters` · `editors/filter.js` · 런타임 `MakerFilter`)
 - `filters.json { list: [{ id, name, overUI, inType, outType, inSec, outSec, layers }] }`. 층: `tint`(색 · 진하기 · 더하기 · 깜빡임) · `image`(반복 무늬 — 배율 · 흐름 · 튐 · 시트 프레임, `fit: stretch` = 한 장 늘려 덮기) · `vignette`(조리개) · `letterbox`(띠, side tb|lr) · `flash` · `shake` · `code`(JS/CSS 를 편집기가 PNG 시트로 구움 — 게임에서 코드는 실행되지 않음, 여러 프레임이면 `_anim.png` APNG 도).
-- 적용 우선순위: 이벤트 명령 `filter`(set/map/off → StoryState `__filter`, 저장됨) → 영웅이 있는 방 템플릿 → 노드 → 그룹. 런타임은 UI 아래 · 위 `Host` 두 개, 바뀌면 이전 것을 `leave()` 시키고 새것을 나타냄(fade · dissolve(16단계 점 무늬) · slide · none). 대사창이 UI 를 숨겨도 필터는 그대로.
+- 적용 우선순위: 이벤트 명령 `filter`(set/map/off → StoryState `__filter`, 저장됨) → 영웅이 있는 방 템플릿 → 노드 → 그룹 → 테마(`world.themeFilters { "SEWER" | "custom:<id>": 필터 id }` — 맵 그래프 월드 설정 "테마별 화면 필터"). 노드 필터는 맵 화면 설정과 맵 그래프 노드 속성 창 양쪽에서(확장이 꺼져 있으면 "켜기" 링크). 런타임은 UI 아래 · 위 `Host` 두 개, 바뀌면 이전 것을 `leave()` 시키고 새것을 나타냄(fade · dissolve(16단계 점 무늬) · slide · none). 대사창이 UI 를 숨겨도 필터는 그대로.
 - 예시: 비 · 폭풍우 · 눈 · 안개 · 밤 · 노을 · 노이즈 · 주사선 · 글리치 · 위험 · 조리개 · 깨진 유리 · 훑는 빛. 기본 그림 `assets/filters/*.png`.
 
 ### 5.7 글자 연출 (APNG) (확장 `textfx` · `editors/textfx.js` · 런타임 `MakerTextFx`)
@@ -339,6 +339,7 @@ MyProject/
 - 이벤트 명령 `trailer { id, nowait }`. 영상이 아니라 UI 카메라 위에 실시간으로 그림(화면을 누르면 다음 장면).
 
 ### 5.9 노드 합성기 (확장 `compose` · `editors/compose.js` · `compose.json`)
+- 숫자 칸(식도 넣을 수 있는 글 칸): 숫자만 들어 있으면 마우스를 올리고 휠로 ±1 (Shift ±10 · Alt ±0.1) — 다른 편집기의 숫자 칸과 같은 손맛. 식이 들어 있으면 휠은 건드리지 않음.
 - 노드를 이어 배경 타일 · 오브젝트 스프라이트를 만드는 그림 합성 도구. 그래프 `{ w, h, out, frames, fps, cols, nodes[{id,type,x,y,p}], links[{from,to,port}] }`, 노드마다 출력은 w×h 캔버스. 계산은 편집기에서만, 게임에는 PNG 만.
 - 노드: 입력(그림 · 직접 그리기 · 단색 · 그라데이션 · 노이즈 · 도형 · 무늬 · 시트 칸 · 글자 · 파티클 · 이펙트) / 변형(이동 · 회전 · 크기 · 반복 · 뒤집기 · 픽셀화 · 대칭 · 물결 · 밀어내기) / 색(색조 · 채도 · 밝기 · 팔레트 · 색 바꾸기 · 반전 · 외곽선 · 그림자 · 투명도) / 합성(겹치기 · 마스크) / 효과(흐림 · 빛 번짐 · 넓히기/깎기 · 입체감) / 출력.
 - 숫자 칸에 식(`t` 0~1 · `frame` · `frames` · `pi` · sin/cos/abs/floor/min/max/rand — 허용한 이름만) → 프레임마다 계산(`evaluateAll`), 여러 프레임이면 시트(`toSheet`) · APNG.
@@ -454,8 +455,9 @@ MyProject/
 
 - **AI 추가 방식 · 체력** (`MakerCharAI` — 데이터 캐릭터 `MakerMob` · `MakerNPC` 와 게임 클래스 캐릭터(`MakerDrops.charOf` — game 이 같은 캐릭터) 모두):
   - `fixed` 제자리에 고정: `rooted` + `Property.IMMOVABLE`(밀치기 · 자리 바꾸기에도 안 밀림, 만들 때 · 맞을 때 · 차례마다 붙잡음). 몬스터는 `fixedAttack` 이면 원래 AI(걷지 못하니 옆에 온 적만 공격), 끄면 PASSIVE 로 가만히.
-  - `code` 코드로 직접: 생성 파일 `gen/GenCharAI.java`(`codegen.charAISource` — 캐릭터마다 `case "<id>": { if (true) { 코드 } break; }`), 런타임이 차례마다 `GenCharAI.act(charId, self, ai)` — true = 턴을 씀, null/false = 원래 AI. 도우미 `MakerCharAI.Ctl`: stepTo · stepAway · wander · attack(반사로 Mob.doAttack) · waitTurn · waitTurns · teleport · hunt · say · cell · x · y · dist · sees · near · now. 오류는 경고 한 번 + 원래 AI.
-  - `stats.infiniteHp` 체력 무한(샌드백): `Char.damage` 의 `if (HP < 0) HP = 0;` 앞 연결 줄 `afterDamage` 가 HP = HT 로 되돌림(피해 숫자는 그대로 뜸) + `Mob.die` 맨 앞 `preventDeath`(즉사 효과). 받은 피해(합계 · 횟수 · 평균 · 마지막)를 `MakerMob.description` 에 붙임.
+  - 어느 캐릭터인지: 데이터 캐릭터는 자기 charId, 게임 클래스 캐릭터는 `LevelHooks.gameChar` 가 붙인 표(`MakerCharAI.tag` — Mob 저장 연결 줄로 `pdm_charTag` 저장)라서 원작 캐릭터를 복제한 샌드백(같은 게임 클래스)도 구별. 게임이 스스로 만든 몬스터는 원작 캐릭터(id = 클래스 이름 snake_case)로 (`MakerDrops.charOfClass`).
+  - `code` 코드로 직접: 생성 파일 `gen/GenCharAI.java`(`codegen.charAISource` — 캐릭터마다 `case "<id>": { if (true) { 코드 } break; }`), 런타임이 차례마다 `GenCharAI.act(charId, self, ai)` — true = 턴을 씀, null/false = 원래 AI. 도우미 `MakerCharAI.Ctl`: stepTo · stepAway · wander · attack(반사로 Mob.doAttack) · waitTurn · waitTurns · teleport · hunt · say · cell · x · y · dist · sees · near · now. 오류는 경고 한 번 + 원래 AI. 턴을 쓰는 도우미를 한 번 부르면(`Ctl.acted`) return 이 없어도 그 차례는 끝(원래 AI 가 또 움직이지 않음), 공격 동작 중이면 false(게임이 onAttackComplete 로 이어 감).
+  - `stats.infiniteHp` 체력 무한(샌드백): `Char.damage` 의 `if (HP < 0) HP = 0;` 앞 연결 줄 `afterDamage` 가 HP = HT 로 되돌림(피해 숫자는 그대로 뜸) + `Mob.die` 맨 앞 `preventDeath`(즉사 효과). 받은 피해(합계 · 횟수 · 평균 · 마지막)를 살펴보기에 붙임(`Mob.info` 연결 줄 — 게임 클래스 캐릭터에도).
   - `stats.regen` 지속 회복: `regenEvery` 턴마다 `regen`, 마지막으로 맞은 뒤 `regenDelay` 턴이 지나야(초록 숫자). 편집기 "🎯 샌드백으로" = fixed + 공격 안 함 + 체력 무한.
   - 연결 줄: `Mob.act` 의 `super.act()` 바로 뒤 · `Char.damage` · `Mob.die` 맨 앞(목록 맨 끝 — 같은 자리의 "몬스터 처치"보다 먼저). `MakerNPC.act` 는 직접 부름(동료일 때는 빼고). 헤드리스 `eval:charai` · `charhit` · `charstat`.
 - 원작 캐릭터 72명(`spd-chars.js` ← `tools/data/extract_spd_chars.py`): `useGame: true` 면 맵에 놓거나 소환하면 게임 클래스 그대로(`LevelHooks.gameChar`), 끄면 데이터로 도는 캐릭터(`MakerMob` · `MakerNPC`).
@@ -858,7 +860,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **81개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **84개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -872,7 +874,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `tiles/DungeonTilemap.java` | 큰 타일셋 (한 칸이 16px 이 아닌 타일셋)<br>큰 타일셋: 발견 연출 타일 크기 |
 | `tiles/DungeonTerrainTilemap.java` | 큰 타일셋: 정보 창 타일 크기 |
 | `actors/hero/Hero.java` | 맵 오브젝트: 옆에서 누르면 밀기·상호작용<br>영웅 코드: 명중<br>영웅 코드: 회피<br>영웅 코드: 피해<br>영웅 코드: 방어<br>영웅 코드: 속도<br>영웅 코드: 공격 적중<br>영웅 코드: 공격 받음<br>특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)<br>전직 이름 (영웅 정보 창) |
-| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치<br>캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복<br>캐릭터 체력 무한: 쓰러지지 않음 |
+| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치<br>캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복<br>캐릭터 체력 무한: 쓰러지지 않음<br>캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 저장 · 불러오기<br>샌드백: 받은 피해를 살펴보기에 |
 | `actors/mobs/MobSpawner.java` | 등장 금지한 몬스터 빼기 |
 | `sprites/ItemSprite.java` | 아이템 그림 배율 (바닥에 놓였을 때) |
 | `windows/WndHero.java` | 영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문 |

@@ -45,7 +45,7 @@ public class MakerMob extends Mob {
 
 	@Override public CharSprite sprite() { return new MakerSprite(data()); }
 	@Override public String name() { JsonValue d = data(); return d == null ? "?" : d.getString("name", charId); }
-	@Override public String description() { JsonValue d = data(); return (d == null ? "" : d.getString("desc", "")) + MakerCharAI.damageInfo(this); }
+	@Override public String description() { JsonValue d = data(); return d == null ? "" : d.getString("desc", ""); }   // 받은 피해는 Mob.info 연결 줄이 붙임
 
 	@Override public int damageRoll() { JsonValue s = stats(); return s == null ? Random.NormalIntRange(1, 4) : Random.NormalIntRange(s.getInt("attackMin", 1), s.getInt("attackMax", 4)); }
 	@Override public int attackSkill(Char target) { JsonValue s = stats(); return s == null ? 8 : s.getInt("accuracy", 8); }

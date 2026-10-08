@@ -464,8 +464,12 @@ public class Hooks {
 						int before = m.pos;
 						com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica tr = new com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica(m.pos, m.pos + 2, com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica.MAGIC_BOLT);
 						com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.throwChar(m, tr, 2, false, false, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero);
-						System.out.println("[TEST] charhit " + p[1] + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " pos " + before + "->" + m.pos + " desc:" + m.description().replace("\n", " "));
+						System.out.println("[TEST] charhit " + p[1] + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " pos " + before + "->" + m.pos + " desc:" + m.info().replace("\n", " "));
 					}
+					break; }
+				case "charclick": { // charclick,<캐릭터 id> — 그 캐릭터 칸을 사람이 누른 것처럼 (공격 · 말 걸기)
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
+						if (p[1].equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m))) { System.out.println("[TEST] charclick " + p[1] + " at " + m.pos + " HP " + m.HP + "/" + m.HT + " state " + m.state.getClass().getSimpleName() + " hero " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos); com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(m.pos); break; }
 					break; }
 				case "charstat": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) { String id = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m); if (id != null && !id.equals("moss_rat")) System.out.println("[TEST] charstat " + id + " pos " + m.pos + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " heroDist " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); } break; }
 				case "waterfx": { // 테마 물 타일: 물 칸 수 · 효과 타일 수 · 첫 물 칸의 살펴보기 이름
