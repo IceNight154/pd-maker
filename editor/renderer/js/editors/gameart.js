@@ -142,7 +142,7 @@
       const rel = `assets/tiles/${c.id}_water.png`;
       try { await pdm.writeDataURL(store.abs(rel), o.toDataURL('image/png')); } catch (err) { toast('물 그림 저장 실패: ' + err.message, 'bad'); return; }
       store.edit('world', '물 그림 ← 사용자 타일 ' + (t.name || t.id), w => { w.customThemes[i].water = rel; w.customThemes[i].waterTile = t.id; });
-      PDM.assets.clear(); ctx.refresh(); toast(`물 그림을 사용자 타일 「${t.name || t.id}」 로 바꿨습니다`);
+      PDM.assets.clear(); ctx.refresh(); toast(`이 테마의 물 = 사용자 타일 「${t.name || t.id}」 (그림 · 효과 · 이름)`);
     };
     const tileChoices = () => userTiles().filter(t => t.image);
     const srcTile = c.waterTile && userTiles().find(t => t.id === c.waterTile);
@@ -162,7 +162,10 @@
                 : [{ label: '그림이 있는 사용자 타일이 없습니다 — 아래 "사용자 타일"에서 만드세요', run: () => {} }]),
               srcTile ? h('button', { class: 'btn sm', title: '그 사용자 타일의 그림을 고쳤으면 다시 가져옴', onclick: () => waterFromTile(srcTile) }, `↻ 「${srcTile.name || srcTile.id}」 다시 가져오기`) : null,
               c.water ? h('button', { class: 'btn sm', onclick: () => { store.edit('world', '물 그림 되돌리기', w => { w.customThemes[i].water = ''; delete w.customThemes[i].waterTile; }); PDM.assets.clear(); ctx.refresh(); } }, '바탕 테마 물로') : null),
-            h('p', { class: 'hint' }, `${c.water ? c.water : '지금: 바탕 테마(' + (PDM.THEMES[c.base || 'SEWER'] || {}).name + ')의 물'} — 물 칸 아래에 깔려 천천히 흐르는 그림입니다. 게임 물은 32×32 이고 가로 · 세로로 이어 붙여 쓰므로 끝과 끝이 이어지게 그리세요 (왼쪽 미리보기 = 2×2). 물가 모양은 타일셋의 물가 칸이 정합니다.${srcTile ? ` · 사용자 타일 「${srcTile.name || srcTile.id}」 에서 가져옴 (그 타일의 효과 · 이름은 물 칸에 붙지 않음 — 효과까지 원하면 그 사용자 타일을 맵에 칠하세요)` : ' · "사용자 타일에서…"로 내가 만든 타일의 그림을 물로 쓸 수 있습니다 (칸 타일은 이어 붙여 32×32).'}`))),
+            h('p', { class: 'hint' }, `${c.water ? c.water : '지금: 바탕 테마(' + (PDM.THEMES[c.base || 'SEWER'] || {}).name + ')의 물'} — 물 칸 아래에 깔려 천천히 흐르는 그림입니다. 게임 물은 32×32 이고 가로 · 세로로 이어 붙여 쓰므로 끝과 끝이 이어지게 그리세요 (왼쪽 미리보기 = 2×2). 물가 모양은 타일셋의 물가 칸이 정합니다.${srcTile ? '' : ' · "사용자 타일에서…"로 내가 만든 사용자 타일(그림 · 흐름 · 효과 · 살펴보기 이름)을 이 테마의 물로 쓸 수 있습니다.'}`),
+            srcTile ? h('div', { class: 'card', style: { padding: '6px 10px', marginTop: '4px' } },
+              h('div', { class: 'hint' }, `이 테마의 물 = 사용자 타일 「${srcTile.name || srcTile.id}」 — 그림${srcTile.flow ? ` · 흐름(가로 ${srcTile.flowX || 0}, 세로 ${srcTile.flowY ?? -5} px/초)` : '(칸을 이어 붙임)'}${srcTile.gameFx ? ' · ✦ ' + (PDM.GAME_TILE_FX[srcTile.gameFx] || srcTile.gameFx) : ''}${srcTile.fx ? ' · ✦ 이펙트 ' + srcTile.fx : ''}${srcTile.title || srcTile.desc ? ' · 살펴보기 「' + (srcTile.title || '물') + '」' : ''} 가 이 테마를 쓰는 맵의 모든 물 칸에 적용됩니다. 그 사용자 타일을 고치면 게임에도 그대로 (위 미리보기 그림은 "다시 가져오기"로 갱신).`),
+              (srcTile.fx || srcTile.gameFx) ? F.num('world', ['customThemes', i, 'waterFxEvery'], { label: '효과는 몇 칸마다 (1 = 모든 물 칸 — 넓은 물에서 무거우면 늘리세요)', int: true, min: 1, max: 20, def: 1 }) : null) : null)),
         h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
           h('button', { class: 'btn sm pri', onclick: edit }, '✎ 타일셋 편집…'),
           h('span', { style: { display: 'inline-flex', gap: '4px', alignItems: 'center' }, title: '한 칸을 더 많은 픽셀로 그려 세밀하게 (게임에서도 적용 — 화면의 타일 크기는 그대로)' }, scaleSel, h('button', { class: 'btn sm', onclick: rescale }, '배율 적용'), scaleInfo),

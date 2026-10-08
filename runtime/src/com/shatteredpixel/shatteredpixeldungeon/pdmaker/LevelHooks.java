@@ -269,6 +269,7 @@ public class LevelHooks {
 	public static void afterCreate(Level level) {
 		if (!MakerRuntime.isActive()) return;
 		WorldGraph.wire(level, false);
+		MakerUserTiles.themeWater(level, WorldGraph.theme(level instanceof MakerLevel ? ((MakerLevel) level).nodeId : WorldGraph.current()));   // 테마의 물 = 사용자 타일이면 물 칸마다 효과 · 이름
 		MakerUserTiles.finish(level);   // 맵 그리기로 칠한 사용자 타일
 		if (!(level instanceof MakerLevel)) {
 			MakerDrops.chestLoot(level);
@@ -467,18 +468,63 @@ public class LevelHooks {
 		try { if (img != null && img.width > 0 && img.width != 16) img.scale.set(16f / img.width); } catch (Throwable ignored) { }
 	}
 	public static String customTiles(String id) { return customTex(id, "tiles"); }
+	/** 사용자 타일의 그림 → 물 그림 (흐르는 타일 = 그림 전체, 칸 타일 = 그 칸을 이어 붙여 32×32 이상) */
+	static Pixmap tileWater(JsonValue ut) {
+		try {
+			String img = ut.getString("image");
+			com.badlogic.gdx.files.FileHandle fh = img.startsWith("game:") ? com.badlogic.gdx.Gdx.files.internal(img.substring(5)) : MakerRuntime.root().child(img);
+			if (!fh.exists()) return null;
+			Pixmap src = new Pixmap(fh);
+			if (ut.getBoolean("flow", false)) return src;
+			int z = Math.max(1, ut.getInt("size", 16)), sx = ut.getInt("x", 0) * z, sy = ut.getInt("y", 0) * z, w = Math.max(32, z), h = Math.max(32, z);
+			Pixmap out = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+			out.setBlending(Pixmap.Blending.None);
+			for (int y = 0; y < h; y += z) for (int x = 0; x < w; x += z) out.drawPixmap(src, sx, sy, z, z, x, y, z, z);
+			src.dispose();
+			return out;
+		} catch (Throwable e) { MakerRuntime.log("물 타일 그림 실패: " + e); return null; }
+	}
+	/** GameScene.update 연결 줄 — 테마 물이 흐르는 사용자 타일이면 그 속도로 (가로 flowX · 세로 flowY px/초, 게임 물은 0 · -5).
+	 *  waterOfs -= 5 * Game.elapsed 바로 앞: 돌려준 값에서 게임이 5 를 빼면 원하는 세로 위치 */
+	public static float waterFlowY(float ofs) {
+		float[] v = flow(); return v == null ? ofs : ofs + (5 + v[1]) * com.watabou.noosa.Game.elapsed;
+	}
+	/** water.offsetTo(0, waterOfs) 바로 뒤: 가로 흐름 */
+	public static void waterFlowX(com.watabou.noosa.SkinnedBlock water) {
+		float[] v = flow(); if (v == null || v[0] == 0) return;
+		waterX += v[0] * com.watabou.noosa.Game.elapsed;
+		water.offsetTo(waterX, water.offsetY()); waterX = water.offsetX();
+	}
+	private static float waterX; private static Level flowLevel; private static float[] flowV;
+	static float[] flow() {
+		Level l = Dungeon.level;
+		if (l == null || !MakerRuntime.isActive()) return null;
+		if (l != flowLevel) {
+			flowLevel = l; flowV = null;
+			try {
+				String t = WorldGraph.theme(l instanceof MakerLevel ? ((MakerLevel) l).nodeId : WorldGraph.current());
+				JsonValue c = t.startsWith("custom:") ? customTheme(t.substring(7)) : null;
+				JsonValue ut = c == null ? null : MakerUserTiles.def(c.getString("waterTile", ""));
+				if (ut != null && ut.getBoolean("flow", false)) flowV = new float[]{ ut.getFloat("flowX", 0f), ut.getFloat("flowY", -5f) };
+			} catch (Throwable e) { MakerRuntime.log("물 흐름 오류: " + e); }
+		}
+		return flowV;
+	}
 	/** 사용자 테마의 물 그림 (world.customThemes[].water — 비우면 null → 바탕 테마 물) */
 	public static String customWater(String id) { return customTex(id, "water"); }
 	static String customTex(String id, String field) {
 		JsonValue c = customTheme(id);
-		if (c == null || c.getString(field, "").isEmpty()) return null;
+		JsonValue ut = field.equals("water") && c != null ? MakerUserTiles.def(c.getString("waterTile", "")) : null;
+		if (ut != null && ut.getString("image", "").isEmpty()) ut = null;
+		if (c == null || (ut == null && c.getString(field, "").isEmpty())) return null;
 		String key = "pdmaker:" + field + ":" + id;
 		try {
 			Field f = TextureCache.class.getDeclaredField("all");
 			f.setAccessible(true);
 			Map<Object, SmartTexture> all = (Map<Object, SmartTexture>) f.get(null);
 			if (!all.containsKey(key)) {
-				Pixmap p = new Pixmap(MakerRuntime.root().child(c.getString(field)));
+				Pixmap p = ut != null ? tileWater(ut) : null;   // 사용자 타일을 물로: 지금 그 타일의 그림 그대로 (편집기의 PNG 사본은 미리보기용)
+				if (p == null) p = new Pixmap(MakerRuntime.root().child(c.getString(field)));
 				all.put(key, new SmartTexture(p));
 			}
 			return key;

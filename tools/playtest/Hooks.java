@@ -468,6 +468,12 @@ public class Hooks {
 					}
 					break; }
 				case "charstat": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) { String id = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m); if (id != null && !id.equals("moss_rat")) System.out.println("[TEST] charstat " + id + " pos " + m.pos + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " heroDist " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); } break; }
+				case "waterfx": { // 테마 물 타일: 물 칸 수 · 효과 타일 수 · 첫 물 칸의 살펴보기 이름
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					int water = 0, first = -1; for (int i = 0; i < l.length(); i++) if (l.map[i] == com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER) { water++; if (first < 0) first = i; }
+					java.util.Map<String, Integer> kinds = new java.util.TreeMap<>(); for (Object t : l.customTiles) kinds.merge(t.getClass().getSimpleName(), 1, Integer::sum);
+					System.out.println("[TEST] waterfx water=" + water + " tiles=" + kinds + " waterTex=" + l.waterTex() + (first >= 0 ? " name@" + first + "=" + com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoCell.cellName(first) : ""));
+					break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

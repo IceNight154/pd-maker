@@ -261,7 +261,10 @@ MyProject/
 
 - 사용자 테마 `customThemes[{ id, name, base, tiles, water, music, light* }]` — 게임 테마 타일셋을 복사해 고침. 16×16칸이면 크기 자유(가로 ÷ 16 = 한 칸 px), "배율 적용"(×0.25~×4). 게임: 연결 줄 3개(`DungeonTilemap` → `LevelHooks.hiresTiles` 가 큰 칸 필름으로, `tileImg` 가 발견 연출 · 정보 창 크기 맞춤).
 - **물 그림**: 사용자 테마의 `water` — "물 그림 만들기(바탕 테마 물 복사 → `assets/tiles/<id>_water.png`)" · 편집 · PNG 불러오기 · 바탕 테마 물로, 2×2 이음매 미리보기. 런타임 `MakerLevel.waterTex` → `LevelHooks.customWater`(`pdmaker:water:<id>` 텍스처, 비우면 바탕 테마 물). 게임 물 그림(water0~4)은 "게임 물 그림"에서 고침(그 테마 전체). 편집기 맵 화면도 물 칸을 실제 물 그림으로(`assets.themeWater` — 사용자 테마는 타일셋 사본 캔버스에 물을 묶음).
-  "▦ 사용자 타일에서…": 그림이 있는 사용자 타일을 골라 물 그림으로 — 흐르는 타일은 그림 전체, 칸 타일은 그 칸을 이어 붙여 32×32 이상으로 `assets/tiles/<id>_water.png` 에 써 넣고 `waterTile` 에 출처를 남김("↻ 다시 가져오기"). 그림만 가져옴(그 타일의 효과 · 살펴보기 이름은 물 칸에 붙지 않음).
+  "▦ 사용자 타일에서…": 사용자 타일을 이 테마의 **물** 로 — `waterTile`(타일 id) · `waterFxEvery`(효과는 몇 칸마다, 기본 1).
+  - 그림: 런타임 `LevelHooks.customTex` 가 그 타일 그림으로 물 텍스처를 만듦(`tileWater` — 흐르는 타일 = 그림 전체, 칸 타일 = 그 칸을 32×32 이상으로 이어 붙임; 타일을 고치면 게임에도 그대로). 편집기는 미리보기용 사본 `assets/tiles/<id>_water.png`("↻ 다시 가져오기").
+  - 효과 · 살펴보기 이름: `LevelHooks.afterCreate` → `MakerUserTiles.themeWater` 가 그 층의 물 칸마다 타일 id + `#water`(효과 건너뛰는 칸은 `#waterq`)로 넣음 → `finish` 가 효과(fx · gameFx) · 이름만 붙이고 그림은 덮지 않음(물가 모양 그대로). 맵에 직접 칠한 칸은 그대로.
+  - 흐름: 흐르는 타일이면 `GameScene.update` 연결 줄 2개(`waterOfs -= 5 * Game.elapsed` 앞 `waterFlowY` · `water.offsetTo` 뒤 `waterFlowX`)가 그 속도(flowX · flowY)로.
 - **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over, fx, gameFx, title, desc }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿 `layers.utile[칸] = id`(지우개 "사용자 타일", 크기 바꾸기 · 맵 전체 지우기도 함께). 런타임 `MakerUserTiles`: `MakerLevel.build` · `TemplateRoom.paintTemplate` 가 `put(칸, id)` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
 - **흐르는 그림 타일** (물 그림을 사용자 타일로): `flow` · `flowX` · `flowY`(px/초, 게임 물 0 · -5) — 그림 고르기에 게임 물(water0~4) · 사용자 테마 물이 있음, "+ 효과 타일"에 "흐르는 물 그림" · "빛나는 물(물 + 치유의 샘)". 런타임 `MakerUserTiles.FlowTiles`(칸마다 SkinnedBlock, 세상 좌표 + 시간으로 오프셋 → 이음매 없이 흐름, 다른 사용자 타일 · 효과 아래). 효과 · 살펴보기 이름도 함께. 편집기는 이어 붙인 멈춘 모습.
 - **효과 타일** (희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일): 사용자 타일의 `gameFx`(게임 효과 — sink 배수구 물방울 · torch 감옥 횃불 · vein 광맥 · smoke · greenflame · stream · alchemy 솥 거품 · sacrificial 희생의 불꽃 · healing · flame · sparks) · `fx`(effects.json — `MakerEffect.place`) · `title`/`desc`(살펴보기 창). `image` 를 비우면 그림 없이 지형(칠할 때 지형)의 원래 그림 + 효과. 맵 그림의 "+ 효과 타일 (게임 프리셋)"(재단 · 솥 · 배수구 · 횃불 벽 · 샘 · 연기 벽 · 광맥 · 초록 불꽃). 런타임: `finish` 가 칸마다 효과를 놓음 — `MakerUserTiles.GameFx`(CustomTilemap, 지형 층에 효과 Gizmo 를 붙임): 공개 클래스(PrisonLevel.Torch · CityLevel.Smoke/GreenFlame)는 그대로, 지역 전용 비공개 장식(SewerLevel Sink · CavesLevel Vein · HallsLevel Stream)은 `Level.map` 을 잠깐 그 칸만 해당 지형으로 바꾼 채 `add…Visuals` 를 불러 그 칸 것만 만듦, 솥 · 재단 · 샘 · 불꽃은 게임 입자(Speck.BUBBLE · SacrificialParticle · Speck.HEALING · FlameParticle · SparkParticle)를 `CellEmitter`(영웅이 보는 칸만)로. 이름 · 설명이 있으면 `image()/name()/desc()` 로 살펴보기 창(그림 없는 타일은 지형 그림). 편집기 맵 화면 · 팔레트에 ✦ 표시. 헤드리스 `eval:cellname,x,y`.
@@ -855,13 +858,13 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **79개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **81개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
 | `Dungeon.java` | 새 게임 시작 시 스토리 초기화<br>영웅 편집기의 영웅 적용 (시작 아이템·주문서·능력치) · 시작 층<br>직접 그린 층 · 층 사이 맵으로 바꾸기<br>절차 생성 층에 오브젝트 넣기<br>저장<br>불러오기<br>플레이어 스폰 위치 (맵에 놓은 시작 위치 오브젝트)<br>저장 슬롯: 어떤 영웅인지 읽기 |
 | `messages/Messages.java` | 게임 글자 바꾸기 (texts.json) |
-| `scenes/GameScene.java` | 층 입장 이벤트<br>진행 방향(탑 모드) 계단 그림 |
+| `scenes/GameScene.java` | 층 입장 이벤트<br>진행 방향(탑 모드) 계단 그림<br>테마 물 = 흐르는 사용자 타일: 그 속도로 (세로 · 가로) |
 | `levels/RegularLevel.java` | 자동 생성 층에 직접 만든 방 추가<br>구성 블럭: 층 구조·분위기 |
 | `scenes/InterlevelScene.java` | 소개 화면: 로딩 배경 그림<br>소개 화면: 구역 이야기 글<br>층을 떠날 때 (감정 결정화·일기) |
 | `Badges.java` | 게임 원래 배지의 얻는 조건 끄기 · 바꾸기 |

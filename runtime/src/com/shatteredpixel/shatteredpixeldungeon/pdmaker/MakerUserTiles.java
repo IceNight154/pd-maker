@@ -8,6 +8,8 @@
  *   노드 · 방 템플릿  layers.utile [칸] = 타일 id ("" = 없음) — 지형(판정)은 layers.terrain 그대로 (편집기가 타일의 terrain 으로 같이 칠함)
  *   층을 만들 때 MakerLevel.build · TemplateRoom.paintTemplate 이 put(칸, id) 로 모아 두고, LevelHooks.afterCreate 가 finish 로
  *   (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나를 customTiles(지형 위) 또는 customWalls(캐릭터 위)에 넣음. 세이브에 칸 배치를 저장.
+ *   테마의 물을 사용자 타일로 (world.customThemes[].waterTile · waterFxEvery): 물 그림은 LevelHooks.customWater 가 그 타일 그림으로,
+ *   물 칸마다 그 타일의 효과 · 살펴보기 이름을 붙임(themeWater — id 뒤에 "#water", 효과를 건너뛰는 칸은 "#waterq": 그림 · 흐름은 안 씀 → 물가 모양 그대로)
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
@@ -38,6 +40,7 @@ public class MakerUserTiles extends CustomTilemap {
 	static JsonValue def(String id) {
 		JsonValue w = WorldGraph.world, l = w == null ? null : w.get("userTiles");
 		if (l == null || id == null || id.isEmpty()) return null;
+		int k = id.indexOf('#'); if (k >= 0) id = id.substring(0, k);
 		for (JsonValue t : l) if (id.equals(t.getString("id", ""))) return t;
 		return null;
 	}
@@ -53,6 +56,29 @@ public class MakerUserTiles extends CustomTilemap {
 		JsonValue v = u.get(i);
 		return v == null || v.isNull() ? "" : v.asString();
 	}
+	static final String WATER = "#water", WATER_Q = "#waterq";
+	/** 테마의 물 타일 (사용자 테마 waterTile) — 그 층의 물 칸마다 효과 · 이름 (finish 전에, 맵에 직접 칠한 칸은 그대로) */
+	public static void themeWater(Level l, String themeId) {
+		try {
+			JsonValue c = themeId == null || !themeId.startsWith("custom:") ? null : LevelHooks.customTheme(themeId.substring(7));
+			String id = c == null ? "" : c.getString("waterTile", "");
+			JsonValue d = def(id);
+			if (d == null) return;
+			boolean any = !d.getString("fx", "").isEmpty() || !d.getString("gameFx", "").isEmpty() || !d.getString("title", "").isEmpty() || !d.getString("desc", "").isEmpty();
+			if (!any) return;
+			int every = Math.max(1, c.getInt("waterFxEvery", 1)), n = 0;
+			LinkedHashMap<Integer, String> m = pending.computeIfAbsent(l, k -> new LinkedHashMap<>());
+			for (int i = 0; i < l.length(); i++) {
+				if (l.map[i] != com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER || m.containsKey(i)) continue;
+				int x = i % l.width(), y = i / l.width();
+				boolean fxHere = every <= 1 || ((x + 2 * y) % every == 0);   // 고르게 흩어 놓음
+				m.put(i, id + (fxHere ? WATER : WATER_Q));
+				n++;
+			}
+			if (n > 0) MakerRuntime.log("테마 물 타일 " + id + ": 물 " + n + "칸");
+		} catch (Throwable t) { MakerRuntime.log("테마 물 타일 오류: " + t); }
+	}
+
 	/** 모은 칸을 (그림 · 크기 · 위/아래) 묶음마다 타일맵 하나로 */
 	public static void finish(Level l) {
 		LinkedHashMap<Integer, String> m = pending.remove(l);
@@ -68,10 +94,13 @@ public class MakerUserTiles extends CustomTilemap {
 				JsonValue d = def(e.getValue());
 				if (d == null) { MakerRuntime.warnOnce("없는 사용자 타일: " + e.getValue()); continue; }
 				int cell = e.getKey();
+				boolean water = e.getValue().contains(WATER), quiet = e.getValue().endsWith(WATER_Q);
 				// 효과 (그림과 따로 — 그림이 없어도)
-				String fx = d.getString("fx", ""); if (!fx.isEmpty()) MakerEffect.place(l, fx, cell);
-				String gf = d.getString("gameFx", ""); if (!gf.isEmpty()) { GameFx g = new GameFx(); g.kind = gf; g.pos(cell, l); l.customTiles.add(g); }
-				String img = d.getString("image", "");
+				if (!quiet) {
+					String fx = d.getString("fx", ""); if (!fx.isEmpty()) MakerEffect.place(l, fx, cell);
+					String gf = d.getString("gameFx", ""); if (!gf.isEmpty()) { GameFx g = new GameFx(); g.kind = gf; g.pos(cell, l); l.customTiles.add(g); }
+				}
+				String img = water ? "" : d.getString("image", "");   // 테마 물: 그림은 물 그림으로 (칸에 덮지 않음)
 				if (d.getBoolean("flow", false) && !img.isEmpty()) {   // 흐르는 그림: 따로 (이름 · 설명만 아래 타일맵에)
 					String fk = img + "|" + d.getFloat("flowX", 0f) + "|" + d.getFloat("flowY", -5f);
 					FlowTiles ft = flows.get(fk);
