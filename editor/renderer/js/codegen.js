@@ -324,8 +324,23 @@
     return s;
   }
 
+  /** 마법봉 공격 이펙트 코드 (wandFx.bolt = code) — 프로젝트 마법봉(item:<id>) · 게임 마법봉(gameitems spd:wands.X) 를 한 파일에. 런타임 MakerWand 가 GenWandFx.fx(key, …) 로 부름 */
+  const WANDFX_DOC = '쓸 수 있는 것: wand (이 마법봉) · bolt (Ballistica — 날아가는 길) · cell (닿는 칸 = bolt.collisionPos) · hero · done (날아가는 효과가 끝났을 때 부르기 — 부르면 마법봉 효과가 일어남, 꼭 한 번)';
+  const WANDFX_SNIPPET = 'MagicMissile.boltFromChar(hero.sprite.parent, MagicMissile.FIRE, hero.sprite, cell, done);\nSample.INSTANCE.play(Assets.Sounds.ZAP);';
+  function wandFxSource(items, gameitems) {
+    const list = [];
+    (items || []).forEach(it => { const f = it && it.wandFx; if (f && f.on && f.bolt === 'code' && has(f.code)) list.push(['item:' + it.id, '아이템 ' + it.id, f]); });
+    Object.entries(((gameitems || {}).items) || {}).forEach(([k, v]) => { const f = v && v.wandFx; if (f && f.on && f.bolt === 'code' && has(f.code)) list.push([k, '게임 아이템 ' + k, f]); });
+    const imps = list.map(([, , f]) => f.imports || '').join('\n') + `\n${PKG}.items.wands.Wand\n${PKG}.mechanics.Ballistica\ncom.watabou.utils.Callback\n${PKG}.effects.particles.*`;
+    let s = header(imps, '마법봉 공격 이펙트 코드', '');
+    s += `public class GenWandFx {\n\t/** key = item:<id> 또는 spd:wands.<클래스> — 코드가 있으면 실행하고 true */\n\tpublic static boolean fx(String key, Wand wand, Ballistica bolt, Callback done) {\n\t\tHero hero = Dungeon.hero; int cell = bolt.collisionPos;\n\t\tswitch (key) {\n`;
+    list.forEach(([k, what, f]) => { s += `\t\t\tcase ${lit(k)}: {\n\t\t\t\t${mark(what, '마법봉 이펙트 코드')}\n${indent(f.code, '\t\t\t\t')}\n\t\t\t\treturn true;\n\t\t\t}\n`; });
+    s += `\t\t}\n\t\treturn false;\n\t}\n}\n`;
+    return s;
+  }
+
   /** 프로젝트 전체 → { '파일이름.java': 소스 } */
-  function generate(heroes, items) {
+  function generate(heroes, items, gameitems) {
     const out = {};
     projItems = items || [];
     (heroes || []).forEach(h => { if (h && h.id && heroNeedsClass(h)) out[heroClass(h.id) + '.java'] = heroSource(h); });
@@ -334,6 +349,7 @@
     // 클래스 찾기 표: 런타임(GenSupport)이 아이템 id 로 클래스를 찾을 때 씀 (분류를 옮기면 패키지가 바뀌므로)
     out['GenIndex.java'] = `// 자동 생성 파일 — PDMaker 가 만듭니다. 아이템 클래스가 어느 폴더(분류/세부 종류)에 있는지.\npackage ${PKG}.pdmaker.gen;\n\npublic class GenIndex {\n\tpublic static final String[][] ITEMS = {\n`
       + index.map(([a, b]) => `\t\t{ ${lit(a)}, ${lit(b)} },\n`).join('') + '\t};\n}\n';
+    out['GenWandFx.java'] = wandFxSource(items, gameitems);
     projItems = null;
     return out;
   }
@@ -376,5 +392,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
 });

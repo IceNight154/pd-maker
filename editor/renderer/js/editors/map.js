@@ -410,7 +410,7 @@
           uts.forEach(t => {
             const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'utile' && ui.utile === t.id ? ' on' : ''), title: `${t.name || t.id} — ${t.terrain >= 0 ? '칠하면 지형: ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형은 그대로 (그림만 덮음)'}${t.over ? ' · 캐릭터 위' : ''}`,
               onclick: () => { ui.tool = 'utile'; ui.utile = t.id; drawPalette(); drawTools(); } });
-            PDM.drawUserTile(c.getContext('2d'), t, 0, 0, 16);
+            PDM.drawUserTile(c.getContext('2d'), t, 0, 0, 16, tilesImg);
             ug.append(c);
           });
           palette.append(h('div', { class: 'fl' }, `사용자 타일 (${uts.length})`),
@@ -613,11 +613,13 @@
           }
           // 사용자 타일 (그림이 아직 없으면 불러온 뒤 다시 그림)
           if (utileL && ui.showUtile !== false) for (let i = 0; i < W * H; i++) {
-            const t = utDef(utileL[i]); if (!t || !t.image) continue;
+            const t = utDef(utileL[i]); if (!t) continue;
+            if (!t.image) { if (t.fx || t.gameFx) PDM.drawUserTile(g, t, (i % W) * s, Math.floor(i / W) * s, s, tilesImg).catch(() => { }); continue; }   // 그림 없는 효과 타일: 지형 위에 ✦ (지형은 이미 그림)
             const img = utImgs.get(t.image);
             if (img === undefined) { utImgs.set(t.image, null); PDM.assets.load(t.image).then(im => { utImgs.set(t.image, im || false); if (im) paint(); }); continue; }
             if (!img) continue;
             const z = Math.max(1, t.size || 16); g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, (i % W) * s, Math.floor(i / W) * s, s, s);
+            if (t.fx || t.gameFx) { g.font = `bold ${Math.max(7, s * .45)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#ffe27a'; g.fillText('✦', (i % W) * s + s - 1, Math.floor(i / W) * s); }
           }
           if (ui.zones) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {   // 구역 색: 벽 빨강 · 바닥 파랑 · 문 초록 · 낭떠러지 빗금
             const v = terrain[y * W + x], t = PDM.TERRAIN_BY_ID[v];

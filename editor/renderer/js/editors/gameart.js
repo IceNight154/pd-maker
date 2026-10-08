@@ -158,9 +158,26 @@
   const userTiles = () => (store.get('world') || {}).userTiles || [];
   PDM.userTiles = userTiles;
   /** 사용자 타일 한 칸을 g 의 (x, y, s×s)에 그림 (그림이 아직 없으면 불러온 뒤 then) */
-  PDM.drawUserTile = function (g, t, x, y, s) {
-    return PDM.assets.load(t.image).then(img => { if (!img) return; const z = Math.max(1, t.size || 16); g.imageSmoothingEnabled = false; g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, x, y, s, s); return img; });
+  PDM.drawUserTile = function (g, t, x, y, s, tilesImg) {
+    const mark = () => { if (!t.fx && !t.gameFx) return; g.font = `bold ${Math.max(7, s * .45)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#000a'; g.fillText('✦', x + s, y + 1); g.fillStyle = '#ffe27a'; g.fillText('✦', x + s - 1, y); };
+    if (!t.image) {   // 그림 없는 타일 = 지형 + 효과
+      if (t.terrain >= 0) PDM.assets.drawTerrain(g, tilesImg || null, t.terrain, x, y, s); mark(); return Promise.resolve(null);
+    }
+    return PDM.assets.load(t.image).then(img => { if (!img) return; const z = Math.max(1, t.size || 16); g.imageSmoothingEnabled = false; g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, x, y, s, s); mark(); return img; });
   };
+  /** 게임 효과 (런타임 MakerUserTiles.make) */
+  PDM.GAME_TILE_FX = { sink: '하수도 배수구 물방울', torch: '감옥 횃불 (불꽃 + 빛무리)', vein: '동굴 광맥 반짝임', smoke: '도시 연기', greenflame: '도시 초록 불꽃', stream: '전당 물 김',
+    alchemy: '연금술 솥 거품', sacrificial: '희생의 불꽃', healing: '치유의 샘 반짝임', flame: '불꽃', sparks: '전기 불꽃' };
+  /** 게임의 "효과가 붙은 타일" 프리셋 — 그림 없이 지형 + 게임 효과 + 이름 */
+  const TILE_PRESETS = [
+    ['희생의 재단', { terrain: 11, gameFx: 'sacrificial', title: '희생의 재단', desc: '' }],
+    ['연금술 솥', { terrain: 28, gameFx: 'alchemy', title: '', desc: '' }],
+    ['하수도 배수구', { terrain: 12, gameFx: 'sink', title: '', desc: '' }],
+    ['횃불 벽', { terrain: 12, gameFx: 'torch', title: '횃불', desc: '벽에 걸린 횃불이 타오르고 있다.' }],
+    ['치유의 샘', { terrain: 24, gameFx: 'healing', title: '', desc: '' }],
+    ['연기 나는 벽', { terrain: 12, gameFx: 'smoke', title: '', desc: '' }],
+    ['수정 광맥', { terrain: 12, gameFx: 'vein', title: '', desc: '' }],
+    ['초록 불꽃 화로', { terrain: 12, gameFx: 'greenflame', title: '초록 불꽃', desc: '' }]];
   /** 이 타일을 칠한 곳 (노드 · 방 이름과 칸 수) */
   function userTileUsage(id) {
     const out = [];
@@ -175,7 +192,10 @@
     const themeSheets = [...Object.entries(PDM.THEMES).map(([k, t]) => ['game:' + t.tiles, t.name + ' 타일셋']), ...customThemes().filter(c => c.tiles).map(c => [c.tiles, c.name + ' (사용자 테마)'])];
     return h('div', {},
       h('h2', { style: { marginTop: '18px' } }, `사용자 타일 (${userTiles().length})`),
+      h('p', { class: 'hint' }, '희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일도 여기서 만듭니다 — 지형 + 게임 효과(또는 내 이펙트) + 살펴보기 이름 · 설명. 그림은 비워 두면 지형의 원래 그림.'),
       h('p', { class: 'hint' }, '타일셋의 정해진 칸(게임이 지형에 따라 고르는 그림) 말고도, 아무 그림의 한 칸을 타일로 만들어 두고 맵 그리기 팔레트의 "사용자 타일"에서 골라 원하는 칸에 칠할 수 있습니다. 칠하면 지형 위에 그 그림이 덮이고, 판정(벽 · 바닥 · 물 등)은 "칠할 때 지형"으로 정합니다. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서 씁니다.'),
+      h('div', { class: 'btnbar' }, h('span', { class: 'hint' }, '게임의 효과 타일로 시작:'),
+        PDM.ui.dropBtn('+ 효과 타일 (게임 프리셋)', () => TILE_PRESETS.map(([n, o]) => ({ label: `${n} — ${PDM.GAME_TILE_FX[o.gameFx]}`, run: () => store.edit('world', '효과 타일 추가: ' + n, w => { w.userTiles = w.userTiles || []; w.userTiles.push(Object.assign({ id: PDM.uid('ut'), name: n, image: '', x: 0, y: 0, size: 16, over: false, fx: '' }, o)); }) })))),
       listEditor('world', ['userTiles'], { addLabel: '사용자 타일', dup: false, emptyText: '아직 없습니다 — "+ 사용자 타일"을 눌러 만드세요.',
         make: () => ({ id: PDM.uid('ut'), name: '새 타일', image: themeSheets[0][0], x: 0, y: 0, size: 16, terrain: -2, over: false }),
         render: (t, i, p) => {
@@ -193,13 +213,13 @@
             for (let y = 0; y <= img.height; y += z) { g.moveTo(0, y * k + .5); g.lineTo(pick.width, y * k + .5); }
             g.stroke(); g.strokeStyle = '#ffd166'; g.lineWidth = 2; g.strokeRect((t.x || 0) * z * k + 1, (t.y || 0) * z * k + 1, z * k - 2, z * k - 2);
             pick.onclick = e => { const r = pick.getBoundingClientRect(), sx = pick.width / r.width; const cx = Math.floor((e.clientX - r.left) * sx / k / z), cy = Math.floor((e.clientY - r.top) * sx / k / z); store.edit('world', '사용자 타일 칸', w => { const o = w.userTiles[i]; o.x = cx; o.y = cy; }); };
-            const pg = prev.getContext('2d'); pg.imageSmoothingEnabled = false; pg.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, 0, 0, 48, 48);
           });
+          PDM.drawUserTile(prev.getContext('2d'), t, 0, 0, 48);
           const used = userTileUsage(t.id);
           const open = !!st['ut' + i];
           return h('details', { open, ontoggle: e => { st['ut' + i] = e.target.open; } },
             h('summary', { style: { cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center' } }, prev,
-              h('b', {}, t.name || t.id), h('span', { class: 'hint' }, ` ${t.id} · (${t.x || 0}, ${t.y || 0}) · ${t.terrain >= 0 ? '칠하면 ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형 그대로'}${t.over ? ' · 캐릭터 위' : ''} · ${used.length ? '쓰는 곳 ' + used.length + '군데' : '아직 안 씀'}`)),
+              h('b', {}, t.name || t.id), h('span', { class: 'hint' }, ` ${t.id} · (${t.x || 0}, ${t.y || 0}) · ${t.terrain >= 0 ? '칠하면 ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형 그대로'}${t.over ? ' · 캐릭터 위' : ''}${t.gameFx ? ' · ✦ ' + (PDM.GAME_TILE_FX[t.gameFx] || t.gameFx) : ''}${t.fx ? ' · ✦ 이펙트 ' + t.fx : ''}${t.image ? '' : ' · 그림 없음 (지형 그림)'} · ${used.length ? '쓰는 곳 ' + used.length + '군데' : '아직 안 씀'}`)),
             row(F.text('world', [...p, 'name'], { label: '이름', rerender: true }),
               F.select('world', [...p, 'terrain'], [[-2, '칠한 칸의 지형 그대로 (그림만 덮음)'], ...PDM.TERRAIN.map(x => [x.id, `${x.name} (${x.id})`])], { label: '칠할 때 지형 (판정)', number: true, rerender: true }),
               F.select('world', [...p, 'size'], [[8, '8px'], [16, '16px (기본)'], [32, '32px'], [48, '48px'], [64, '64px']], { label: '그림의 한 칸 크기', number: true, rerender: true })),
@@ -207,7 +227,12 @@
               h('div', { class: 'field' }, h('span', { class: 'fl' }, '타일셋에서 고르기'), h('select', { onchange: e => { const v = e.target.value; if (v) store.edit('world', '사용자 타일 그림', w => { w.userTiles[i].image = v; }); } },
                 h('option', { value: '' }, '(테마 타일셋 …)'), themeSheets.map(([v, n]) => h('option', { value: v, selected: v === t.image }, n))))),
             F.bool('world', [...p, 'over'], { label: '캐릭터 위에 그림 (지붕 · 나뭇가지 · 벽 장식처럼 앞을 가림)', rerender: true }),
-            h('div', { class: 'fl', style: { marginTop: '4px' } }, '칸 고르기 — 그림을 누르세요'), pick,
+            row(F.select('world', [...p, 'gameFx'], PDM.GAME_TILE_FX, { label: '게임 효과 (그 칸에서 계속)', empty: '(없음)', rerender: true }),
+              F.select('world', [...p, 'fx'], PDM.ui.refOptions('effect'), { label: '내 이펙트 (이펙트 · 파티클)', empty: '(없음)', rerender: true }),
+              h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('effects') }, '이펙트 편집…'))),
+            row(F.text('world', [...p, 'title'], { label: '살펴보기 이름 (비우면 지형 이름)', rerender: true }), F.text('world', [...p, 'desc'], { label: '살펴보기 설명 (비우면 지형 설명)' })),
+            t.image ? h('div', {}, h('div', { class: 'fl', style: { marginTop: '4px' } }, '칸 고르기 — 그림을 누르세요'), pick)
+              : h('p', { class: 'hint' }, '그림 없음 — 게임이 지형(칠할 때 지형)의 원래 그림을 그리고 효과만 더합니다. 위 "그림"에 타일셋 · PNG 를 넣으면 그 칸 그림을 덮습니다.'),
             h('div', { class: 'btnbar', style: { marginTop: '6px' } },
               h('button', { class: 'btn sm', onclick: async () => { const img = await PDM.assets.load(t.image); if (!img) { toast('그림을 먼저 정하세요', 'bad'); return; }
                 if (String(t.image).startsWith('game:')) { toast('게임 그림은 여기서 직접 고칠 수 없습니다 — 사용자 테마의 타일셋을 고르거나 PNG 를 만들어 쓰세요', 'bad'); return; }

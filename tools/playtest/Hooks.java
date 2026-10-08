@@ -392,6 +392,7 @@ public class Hooks {
 					((com.shatteredpixel.shatteredpixeldungeon.scenes.CellSelector.Listener) lf.get(null)).onSelect(tgt);
 					break; }
 				case "mobhp": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) System.out.println("[TEST] mobhp " + m.name() + " " + m.HP + "/" + m.HT); break; }
+				case "cellname": { int c = Integer.parseInt(p[1]) + Integer.parseInt(p[2]) * com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width(); System.out.println("[TEST] cellname " + com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoCell.cellName(c) + " | terrain " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.map[c]); break; }   // cellname,x,y — 살펴보기 이름
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

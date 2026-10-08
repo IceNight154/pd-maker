@@ -214,7 +214,8 @@ function generate(repo, projectDir, log = console.log) {
   const codegen = require('./renderer/js/codegen');
   const gen = path.join(javaDir(repo), 'pdmaker', 'gen');
   const readAll = dir => { const d = path.join(projectDir, dir); if (!fs.existsSync(d)) return []; return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')); } catch (e) { log(`읽기 실패 ${dir}/${f}: ${e.message}`); return null; } }).filter(Boolean); };
-  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items')) : {};
+  const readOne = rel => { const f = path.join(projectDir, rel); try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; } catch (e) { log(`읽기 실패 ${rel}: ${e.message}`); return null; } };
+  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items'), readOne('gameitems.json')) : {};
   fs.mkdirSync(gen, { recursive: true });
   // 이제 안 쓰는 파일 지우기 (분류를 옮기면 예전 폴더의 파일) + 빈 폴더 정리
   const sweep = (dir, rel) => {

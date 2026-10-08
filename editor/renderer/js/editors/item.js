@@ -354,13 +354,20 @@
   PDM.wandFxEditor = function (key, base) {
     const { F, row } = PDM.ui;
     const W = p => [...base, p], cur = PDM.deepGet(store.get(key), base) || {};
-    const bolts = Object.assign({ game: '게임 원래 효과 (소리 · 이펙트만 더하기)', sprite: '그림이 날아감 (아래에서 고른 그림)' }, Object.fromEntries(Object.entries(PDM.SKILL_VISUALS).map(([k, v]) => [k, k === 'none' ? '없음 (바로 맞음)' : '마법 화살: ' + v])));
+    const bolts = Object.assign({ game: '게임 원래 효과 (소리 · 이펙트만 더하기)', sprite: '그림이 날아감 (아래에서 고른 그림)', code: '코드로 직접 (Java)' }, Object.fromEntries(Object.entries(PDM.SKILL_VISUALS).map(([k, v]) => [k, k === 'none' ? '없음 (바로 맞음)' : '마법 화살: ' + v])));
     return h('div', {},
       F.bool(key, W('on'), { label: '이 마법봉의 공격 이펙트 바꾸기', rerender: true }),
       cur.on ? h('div', {},
         row(F.select(key, W('bolt'), bolts, { label: '날아가는 것', rerender: true }),
           cur.bolt === 'sprite' ? F.bool(key, W('spin'), { label: '날아가며 빙글빙글' }) : null),
         cur.bolt === 'sprite' ? flyingSprite(key, W('sprite'), '날아가는 그림', 'SPIRIT_ARROW') : null,
+        cur.bolt === 'code' ? h('div', {},
+          F.code(key, W('code'), { sig: 'void wandFx(Wand wand, Ballistica bolt, int cell, Hero hero, Callback done) {', doc: PDM.codegen.WANDFX_DOC + ' — 오류가 나면 게임 원래 효과로 대신하고 게임 안 경고로 알려 줍니다.', rows: 8, rerender: true }),
+          F.code(key, W('imports'), { label: 'import (한 줄에 하나 — 게임 effects · particles · sprites · mechanics 등은 이미 들어 있음)', rows: 2 }),
+          h('div', { class: 'btnbar' },
+            !String(cur.code || '').trim() ? h('button', { class: 'btn sm', onclick: () => store.edit(key, '마법봉 이펙트 코드 예시', r => { PDM.deepSet(r, W('code'), PDM.codegen.WANDFX_SNIPPET); }) }, '예시 넣기 (불 화살)') : null,
+            h('button', { class: 'btn sm', onclick: () => PDM.ui.codeView('GenWandFx.java', PDM.codegen.wandFxSource(store.all('item'), store.get('gameitems'))) }, '생성될 코드 보기'),
+            h('button', { class: 'btn sm', title: '게임 마법봉들의 fx() 함수를 참고하세요 (각 마법봉 파일)', onclick: () => PDM.showCodeFile('items/wands/Wand.java', '게임 코드 — Wand.fx (기본 마법 화살)') }, '게임 코드 참고 (Wand.java)'))) : null,
         ...fxRow(key, base),
         h('p', { class: 'hint' }, '"게임 원래 효과"는 게임이 그리는 광선 · 화살 위에 소리와 이펙트만 더합니다. 다른 것을 고르면 게임 효과 대신 그것이 날아가고, 닿으면 마법봉의 원래 효과(피해 · 불 · 얼음 …)가 그대로 일어납니다. 저주받은 마법봉의 무작위 효과는 바꾸지 않습니다.')) : null);
   };
