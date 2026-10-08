@@ -438,7 +438,7 @@
   /** 추가 기능 (한 아이템에 종류 여러 개 — 런타임 MakerFacets): 사용 효과 · 던지기 효과 · 가방 기능 */
   function facetsSection(key, it) {
     const { F, row } = PDM.ui;
-    const misc = (it.kind || 'misc') === 'misc', missile = it.kind === 'missile';
+    const misc = (it.kind || 'misc') === 'misc', missile = it.kind === 'missile' || (it.kind === 'game' && /^weapon\.missiles\./.test(it.base || ''));
     const u = it.useFx || {}, t = it.throwFx || {}, b = it.bagFx || {};
     const turnOn = (k, def) => store.edit(key, '추가 기능', o => { const cur = o[k] || {}; o[k] = Object.assign(def(), cur, { on: !cur.on }); });
     const head = (k, label, on, def, hint) => h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 4px' } },
@@ -452,15 +452,15 @@
           F.select(key, ['useFx', 'fx'], PDM.ui.refOptions('effect'), { label: '영웅에게 이펙트', empty: '(없음)' })),
         h('div', { class: 'fl' }, '효과 (대상 = 영웅이 서 있는 칸 — "자신" · "범위 안의 적" · "범위 안 모두")'),
         PDM.castEffectsEditor(key, ['useFx', 'effects'], { emptyText: '효과 없음', make: () => ({ type: 'heal', on: 'self', amount: 10 }) })) : null,
-      missile ? h('p', { class: 'hint' }, '투척 무기는 던지면 적을 맞히는 원래 규칙을 따릅니다 — 맞혔을 때 효과는 "코드 › 적중 시"로.') : head('throwFx', '던지기 효과', t.on, PDM.make.throwFx, '던져서 떨어진 칸에서 효과 (물약이 깨짐 · 폭탄 · 룬석)'),
-      !missile && t.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
-        row(F.bool(key, ['throwFx', 'consume'], { label: '던지면 사라짐 (끄면 효과 뒤 바닥에 남음)', def: true }),
-          F.num(key, ['throwFx', 'fuse'], { label: '터지기까지 턴 (0 = 바로, 폭탄 2)', int: true, min: 0, max: 20, def: 0 }),
-          F.sound(key, ['throwFx', 'sound'], { label: '터질 때 소리', kind: 'se', empty: '(없음)' }),
-          F.select(key, ['throwFx', 'fx'], PDM.ui.refOptions('effect'), { label: '터질 때 이펙트', empty: '(없음)' })),
+      head('throwFx', '던지기 효과', t.on, missile ? () => Object.assign(PDM.make.throwFx(), { when: 'always', effects: [{ type: 'damage', on: 'target', min: 3, max: 6 }] }) : PDM.make.throwFx, missile ? '던져서 맞히거나 떨어진 칸에서 효과가 더해짐 (원래 피해 · 박힘 · 내구는 그대로)' : '던져서 떨어진 칸에서 효과 (물약이 깨짐 · 폭탄 · 룬석)'),
+      t.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
+        row(missile ? F.select(key, ['throwFx', 'when'], [['always', '맞히든 빗나가든'], ['hit', '맞혔을 때만']], { label: '언제', def: 'always' }) : F.bool(key, ['throwFx', 'consume'], { label: '던지면 사라짐 (끄면 효과 뒤 바닥에 남음)', def: true }),
+          missile ? null : F.num(key, ['throwFx', 'fuse'], { label: '터지기까지 턴 (0 = 바로, 폭탄 2)', int: true, min: 0, max: 20, def: 0 }),
+          F.sound(key, ['throwFx', 'sound'], { label: missile ? '효과 소리' : '터질 때 소리', kind: 'se', empty: '(없음)' }),
+          F.select(key, ['throwFx', 'fx'], PDM.ui.refOptions('effect'), { label: missile ? '그 칸 이펙트' : '터질 때 이펙트', empty: '(없음)' })),
         h('div', { class: 'fl' }, '효과 (대상 = 떨어진 칸 — "대상"은 그 칸의 캐릭터, 반경을 주면 둘레까지)'),
-        PDM.castEffectsEditor(key, ['throwFx', 'effects'], { emptyText: '효과 없음', make: () => ({ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }) }),
-        h('p', { class: 'hint' }, '터지기까지 턴을 주면 바닥에 놓였다가 그 턴 뒤 터집니다 (그 사이 주워 가면 터지지 않음).')) : null,
+        PDM.castEffectsEditor(key, ['throwFx', 'effects'], { emptyText: '효과 없음', make: () => missile ? ({ type: 'damage', on: 'target', min: 3, max: 6 }) : ({ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }) }),
+        h('p', { class: 'hint' }, missile ? '맞힐 때의 일은 "코드 › 적중 시"로도 쓸 수 있습니다.' : '터지기까지 턴을 주면 바닥에 놓였다가 그 턴 뒤 터집니다 (그 사이 주워 가면 터지지 않음 · 저장하고 불러와도 이어서 탐).')) : null,
       it.kind === 'bag' ? null : head('bagFx', '가방 기능', b.on, PDM.make.bagFx, '"넣기" · "열기" 버튼 — 이 아이템 안에 다른 아이템을 담음'),
       it.kind !== 'bag' && b.on ? h('div', { class: 'card', style: { padding: '6px 10px' } }, ...bagUI(key, ['bagFx'], b, false)) : null];
   }

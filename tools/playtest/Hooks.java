@@ -435,6 +435,19 @@ public class Hooks {
 					com.shatteredpixel.shatteredpixeldungeon.items.Item copy = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); copy.restoreFromBundle(bd);
 					System.out.println("[TEST] bagfx saved/restored inner=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.inner(copy).items.size());
 					break; }
+				case "baguse": { // baguse,<가방 기능 아이템 id>,<넣을 아이템 id> — 가방 기능 안에 든 채로 기본 행동(사용) · 꺼내기
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item host = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); host.identify(); host.collect();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.Inner in = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.inner(host);
+					com.shatteredpixel.shatteredpixeldungeon.items.Item x = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[2]); x.quantity(2); x.collect(in);
+					hero.HP = Math.max(1, hero.HP - 15); int before = hero.HP;
+					System.out.println("[TEST] baguse inner=" + in.items.size() + " qty=" + x.quantity() + " actions=" + x.actions(hero) + " HP " + before);
+					x.execute(hero, x.defaultAction());
+					System.out.println("[TEST] baguse after use HP " + hero.HP + " qty=" + x.quantity() + " inner=" + in.items.size());
+					x.execute(hero, com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.AC_BAG_TAKE);
+					System.out.println("[TEST] baguse after take inner=" + in.items.size() + " inBackpack=" + hero.belongings.backpack.items.contains(x));
+					break; }
+				case "heaps": { for (com.shatteredpixel.shatteredpixeldungeon.items.Heap h : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.heaps.valueList()) System.out.println("[TEST] heap " + h.pos + " " + h.items); break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

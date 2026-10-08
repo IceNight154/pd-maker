@@ -518,11 +518,12 @@ MyProject/
 
 ### 8.4 원거리 무기 · 마법봉 · 마법봉 공격 이펙트
 - **게임 동작이 있는 분류** (마법봉 · 반지 · 아티팩트 · 장신구 · 가방(그리모어 말고)): 새 아이템 창에서 "바탕 게임 아이템"을 골라 `kind: game` + `base` 로 만듦(`asGameBased` — 마법봉 기본 WandOfMagicMissile) → 충전 · 쏘기 · 장착 · 강화를 게임 그대로 물려받음. "게임 아이템을 프로젝트 아이템으로 복사"도 같은 방식. 예전에 `misc` 로 만든 그런 아이템은 "종류와 수치"에 경고 + "이 게임 아이템을 바탕으로 바꾸기". 무기 · 갑옷은 세부 종류로 kind 를 정함(근거리 melee · 원거리 ranged · 투척 missile · 갑옷 armor).
-- **추가 기능 — 한 아이템에 종류 여러 개** (`editors/item.js` "추가 기능" · 런타임 `MakerFacets`, 연결 줄 Item.java 5개 + actions 는 flagActions 에서): 아이템 종류와 상관없이(무기 · 갑옷 · 일반 · 게임 아이템 상속 · gameitems) 덧붙임.
+- **추가 기능 — 한 아이템에 종류 여러 개** (`editors/item.js` "추가 기능" · 런타임 `MakerFacets`, 연결 줄 Item.java 6개(actionName · execute · onThrow · detachAll · store · restore) + MissileWeapon.rangedHit · Actor.init, actions 는 flagActions 에서): 아이템 종류와 상관없이(무기 · 갑옷 · 일반 · 게임 아이템 상속 · gameitems) 덧붙임.
   - `useFx { on, label, consume, time, sound, fx, effects }` — 효과 목록(MakerCast — 대상 = 영웅 칸: 자신 · 범위 안의 적 · **범위 안 모두** `everyone`). 일반 아이템은 "사용(마시기 · 읽기)"에 합쳐짐, 그 밖은 "사용" 버튼(`PDM_FXUSE`).
-  - `throwFx { on, consume, fuse, sound, fx, effects }` — 연결 줄 `Item.onThrow` 맨 앞: 떨어진 칸에서 효과(물약 깨짐 · 룬석), `fuse` 턴이면 바닥에 놓였다가 Actor 로 터짐(주워 가면 안 터짐 · 저장하면 퓨즈는 사라짐). 투척 무기는 제외.
-  - `bagFx { on, capacity, holds, categories, items, tags, openLabel, putLabel }` — "넣기"(배낭에서 골라 담음) · "열기 (n/칸)"(골라 꺼냄), 내용물은 `Item.storeInBundle/restoreFromBundle` 연결 줄로 저장. 주울 때 저절로 들어가지 않음(원래 기능 — 장착 · 퀵슬롯 그대로).
-  - 새 아이템 기본값(일반 kind): 물약 = 마시면 회복 15 + 던지면 깨짐, 폭탄 = 퓨즈 2 · 범위 1 모두 8~16, 룬석 = 던지면 범위 마비, 주문서 · 마법 = 사용하면 신속. 헤드리스 `eval:usetest` · `throwfx` · `bagfx`.
+  - `throwFx { on, consume, fuse, sound, fx, effects, when }` — 연결 줄 `Item.onThrow` 맨 앞: 떨어진 칸에서 효과(물약 깨짐 · 룬석), `fuse` 턴이면 바닥에 놓였다가 `MakerFacets.Fuse`(Actor)로 터짐(주워 가면 안 터짐). 퓨즈는 그 아이템의 저장 묶음에 남은 턴 `pdm_fuse` 로 저장 → 불러온 뒤 `Actor.init` 연결 줄(`reviveFuses` — 바닥 더미를 훑음)이 다시 붙임(층을 떠났다 돌아와도 이어서 탐).
+  - 투척 무기(`MissileWeapon`)의 throwFx: 원래 규칙(맞힘 · 박힘 · 내구 · 바닥에 남기)은 그대로 두고 그 칸에서 효과만 더함 — 맞힘은 `MissileWeapon.rangedHit` 연결 줄(`missileHit`), 빗나감 · 바닥은 `Item.onThrow` 연결 줄(when `always` 일 때). consume · fuse 는 안 씀.
+  - `bagFx { on, capacity, holds, categories, items, tags, openLabel, putLabel }` — "넣기"(배낭에서 골라 담음) · "열기 (n/칸)"(보통 가방 창 `WndBag(inner)` — 누르면 그 자리에서 사용 · 장착 · 던지기, 또는 "꺼내기" `PDM_BAG_TAKE`). 안에 든 채로 쓸 수 있는 건 `Item.detachAll` 맨 앞 연결 줄(`detachFrom` — 배낭에 없고 가방 기능 안에 있으면 그곳에서 뺌) 덕분. 내용물은 `Item.storeInBundle/restoreFromBundle` 연결 줄로 저장. 주울 때 저절로 들어가지 않음(원래 기능 — 장착 · 퀵슬롯 그대로).
+  - 새 아이템 기본값(일반 kind): 물약 = 마시면 회복 15 + 던지면 깨짐, 폭탄 = 퓨즈 2 · 범위 1 모두 8~16, 룬석 = 던지면 범위 마비, 주문서 · 마법 = 사용하면 신속. 헤드리스 `eval:usetest` · `throwfx` · `bagfx` · `baguse` · `heaps`(+ `reload` 로 퓨즈 저장 확인).
 - **판매 불가 · 버리기 금지** `noSell` · `noDrop`(새 아이템 창 · 기본 칸, 게임 아이템은 보기 창 → gameitems.json): 연결 줄 `Item.actions`(AC_THROW 뒤 → `MakerItem.flagActions` — 버리기 · (투척 무기가 아니면) 던지기 버튼을 뺌) · `Shopkeeper.canSell` 맨 앞(`MakerItem.noSell`). 프로젝트 아이템 → 게임 클래스 사슬 순으로 설정을 찾음.
 - **완전히 새 가방** `kind: "bag"`(새 아이템 › 가방 › "완전히 새 가방", 기본) → 생성 클래스가 런타임 `MakerBag`(Bag) 상속: `bag { capacity, holds: all|filter, categories(분류 + missile · seed), items(프로젝트 id · spd:경로 — 상속 포함), tags, tabIcon }`. `canHold` = 설정에 맞고(가방은 안 받음) 게임 규칙(칸 수 · 겹침). 주운 아이템이 먼저 들어가는 것 · 가방 창 탭은 게임 그대로, 탭 아이콘은 연결 줄 `WndBag.icon` · `InventoryPane.bagIcon` → `MakerBag.icon`(가방 그림 또는 게임 가방 아이콘). 헤드리스 `eval:bagtest,<가방>,<아이템>`.
 - **마법봉 수치** `wand { charges, min, max, minPerLvl, maxPerLvl }`(kind game + `wands.*`): 코드 생성이 `initialCharges()` · (피해 마법봉 `codegen.DAMAGE_WANDS` 만) `min(lvl)` · `max(lvl)` 을 덮어씀, 비우면 게임 그대로.
@@ -846,7 +847,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **73개** 연결점 · **33개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **76개** 연결점 · **35개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -876,7 +877,9 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `items/wands/Wand.java` | 마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트) |
 | `actors/mobs/npcs/Shopkeeper.java` | 판매 불가 (아이템 noSell) |
 | `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |
-| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop)<br>아이템 추가 기능: 버튼 이름 · 버튼 동작 · 던져서 떨어졌을 때 · 저장 · 불러오기 |
+| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop)<br>아이템 추가 기능: 버튼 이름 · 버튼 동작 · 던져서 떨어졌을 때 · 가방 기능 안에서 빼내기(detachAll) · 저장 · 불러오기 |
+| `items/weapon/missiles/MissileWeapon.java` | 아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과 |
+| `actors/Actor.java` | 아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기 |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |
 | `services/updates/…/GitHubUpdates.java` | 업데이트 확인: 끄기 (타이틀 하위 페이지) (선택)<br>업데이트 확인: 내 GitHub 저장소 (타이틀 하위 페이지) (선택)<br>업데이트 버튼: 다운로드 페이지 (타이틀 하위 페이지) (선택) |
