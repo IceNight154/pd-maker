@@ -393,6 +393,17 @@ public class Hooks {
 					break; }
 				case "mobhp": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) System.out.println("[TEST] mobhp " + m.name() + " " + m.HP + "/" + m.HT); break; }
 				case "cellname": { int c = Integer.parseInt(p[1]) + Integer.parseInt(p[2]) * com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width(); System.out.println("[TEST] cellname " + com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoCell.cellName(c) + " | terrain " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.map[c]); break; }   // cellname,x,y — 살펴보기 이름
+				case "bagtest": { // bagtest,<가방 id>,<판매·버리기 금지 아이템 id> — 새 가방(MakerBag) · noSell · noDrop
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.items.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item bag = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); bag.collect();
+					for (String c : new String[]{"potions.PotionOfHealing", "potions.PotionOfStrength", "potions.PotionOfMindVision", "potions.PotionOfHaste", "scrolls.ScrollOfIdentify"}) ((com.shatteredpixel.shatteredpixeldungeon.items.Item) Class.forName(P + c).getDeclaredConstructor().newInstance()).collect();
+					com.shatteredpixel.shatteredpixeldungeon.items.bags.Bag b = (com.shatteredpixel.shatteredpixeldungeon.items.bags.Bag) bag;
+					StringBuilder sb = new StringBuilder(); for (com.shatteredpixel.shatteredpixeldungeon.items.Item i : b.items) sb.append(i.getClass().getSimpleName()).append(' ');
+					System.out.println("[TEST] bagtest " + bag.getClass().getSimpleName() + " " + bag.name() + " cap=" + b.capacity() + " in bag: " + sb);
+					if (p.length > 2) { com.shatteredpixel.shatteredpixeldungeon.items.Item k = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[2]); k.collect();
+						System.out.println("[TEST] flags " + p[2] + " actions=" + k.actions(hero) + " canSell=" + com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.Shopkeeper.canSell(k)); }
+					break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

@@ -49,6 +49,36 @@ public class MakerItem extends Item {
 		} catch (Throwable ignored) { }
 	}
 
+	// ------------------------------------------------------------ 판매 불가 · 버리기 금지 (noSell · noDrop)
+	/** 그 아이템의 설정: 프로젝트 아이템 데이터, 아니면 gameitems.json 의 게임 클래스(상속 사슬) */
+	static JsonValue flagsOf(Item it) {
+		if (it == null || !MakerRuntime.isActive()) return null;
+		String pid = MakerAudio.projectItemId(it);
+		if (pid != null) return MakerRuntime.item(pid);
+		JsonValue gi = MakerRuntime.gameitems == null ? null : MakerRuntime.gameitems.get("items");
+		if (gi == null) return null;
+		final String P = "com.shatteredpixel.shatteredpixeldungeon.items.";
+		for (Class<?> c = it.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+			if (!c.getName().startsWith(P)) continue;
+			JsonValue e = gi.get("spd:" + c.getName().substring(P.length()).replace('$', '.'));
+			if (e != null) return e;
+		}
+		return null;
+	}
+	/** Item.actions 연결 줄 — 버리기 금지면 버리기 (· 투척 무기가 아니면 던지기) 버튼을 뺌 */
+	public static void flagActions(Item it, java.util.ArrayList<String> actions) {
+		try {
+			JsonValue d = flagsOf(it);
+			if (d == null || !d.getBoolean("noDrop", false)) return;
+			actions.remove(Item.AC_DROP);
+			if (!(it instanceof com.shatteredpixel.shatteredpixeldungeon.items.weapon.missiles.MissileWeapon)) actions.remove(Item.AC_THROW);
+		} catch (Throwable t) { MakerRuntime.log("버리기 금지 오류: " + t); }
+	}
+	/** Shopkeeper.canSell 연결 줄 — 판매 불가면 true */
+	public static boolean noSell(Item it) {
+		try { JsonValue d = flagsOf(it); return d != null && d.getBoolean("noSell", false); } catch (Throwable t) { return false; }
+	}
+
 	/** 프로젝트 아이템 id → MakerItem,  'spd:ClassName' → 게임 기본 아이템 */
 	public static Item create(String id) {
 		if (id == null || id.isEmpty()) return null;
@@ -72,6 +102,7 @@ public class MakerItem extends Item {
 		}
 		String kind = d.getString("kind", "misc");
 		if (kind.equals("grimoire")) { MakerCodex.MakerGrimoire g = new MakerCodex.MakerGrimoire(); g.makerId = id; g.applyData(); return g; }
+		if (kind.equals("bag")) { MakerBag g = new MakerBag(); g.makerId = id; g.applyData(); return g; }
 		if (kind.equals("codex")) {
 			MakerCodex c = new MakerCodex(); c.makerId = id; c.applyData(); c.initQuantity();
 			if (d.getInt("level", 0) > 0) c.upgrade(d.getInt("level", 0));

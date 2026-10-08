@@ -348,7 +348,7 @@ iframe.legacy { width: 100%; height: 100%; border: 0; background: #fff; }
 .wg-port.out:hover { transform: scale(1.4); }
 .wg-marq { position: absolute; border: 1px dashed var(--accent); background: var(--accent-soft); pointer-events: none; }
 .wg-help { position: absolute; left: 10px; bottom: 8px; color: var(--dim); font-size: 11px; pointer-events: none; }
-.tabpage:has(> .wg) { height: 100%; }
+.tabpage:has(> .wg), .tabpage:has(> .page.full) { height: 100%; }   /* 화면 가득 쓰는 편집기(그래프 · 맵 그리기): 탭 높이에 맞춰야 안쪽에서 세로로도 스크롤 (예전엔 맵 그리기가 늘어나 상하 이동이 안 됨) */
 .wg { position: absolute; inset: 0; height: auto; }
 
 /* ---------- Java 코드 칸 ---------- */

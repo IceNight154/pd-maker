@@ -479,7 +479,7 @@ MyProject/
   "name": "달빛 잎", "desc": "…", "sprite": { "sheet": "builtin:items", "index": 12, "name": "…" },   // 또는 { "png": "assets/sprites/items/moonleaf.png" }
   "stackable": true, "price": 30, "unique": false, "tags": ["herb","gift"], "consumable": true, "useLabel": "",
   "stats": { "energy": 0 }, "onUse": [ /* 이벤트 명령 */ ], "giftValue": { "default": 5 },
-  "kind": "misc|melee|ranged|missile|armor|codex|grimoire|game", "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
+  "kind": "misc|melee|ranged|missile|armor|bag|codex|grimoire|game", "noSell": false, "noDrop": false, "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
   "ranged": { "shootLabel": "", "needEquip": true, "ammo": "none|item", "projectile": "<투척 무기 id>", "proj": { "name", "sprite", "spin", "damage": "bow|own", "min", "max", "minPerLvl", "maxPerLvl", "accuracy", "sound", "hitSound", "castEffect", "hitEffect" } },
   "wandFx": { "on": false, "bolt": "game|none|sprite|magic|fire|frost|…", "sprite", "spin", "sound", "hitSound", "castEffect", "hitEffect" },   // kind game + base wands.*
   "level": 0, "cursed": false, "code": {}, "actions": [ { "id": "ring", "name": "흔들기", "default": true, "consume": false, "time": 1, "code": "…" } ],
@@ -517,6 +517,8 @@ MyProject/
 
 ### 8.4 원거리 무기 · 마법봉 · 마법봉 공격 이펙트
 - **게임 동작이 있는 분류** (마법봉 · 반지 · 아티팩트 · 장신구 · 가방(그리모어 말고)): 새 아이템 창에서 "바탕 게임 아이템"을 골라 `kind: game` + `base` 로 만듦(`asGameBased` — 마법봉 기본 WandOfMagicMissile) → 충전 · 쏘기 · 장착 · 강화를 게임 그대로 물려받음. "게임 아이템을 프로젝트 아이템으로 복사"도 같은 방식. 예전에 `misc` 로 만든 그런 아이템은 "종류와 수치"에 경고 + "이 게임 아이템을 바탕으로 바꾸기". 무기 · 갑옷은 세부 종류로 kind 를 정함(근거리 melee · 원거리 ranged · 투척 missile · 갑옷 armor).
+- **판매 불가 · 버리기 금지** `noSell` · `noDrop`(새 아이템 창 · 기본 칸, 게임 아이템은 보기 창 → gameitems.json): 연결 줄 `Item.actions`(AC_THROW 뒤 → `MakerItem.flagActions` — 버리기 · (투척 무기가 아니면) 던지기 버튼을 뺌) · `Shopkeeper.canSell` 맨 앞(`MakerItem.noSell`). 프로젝트 아이템 → 게임 클래스 사슬 순으로 설정을 찾음.
+- **완전히 새 가방** `kind: "bag"`(새 아이템 › 가방 › "완전히 새 가방", 기본) → 생성 클래스가 런타임 `MakerBag`(Bag) 상속: `bag { capacity, holds: all|filter, categories(분류 + missile · seed), items(프로젝트 id · spd:경로 — 상속 포함), tags, tabIcon }`. `canHold` = 설정에 맞고(가방은 안 받음) 게임 규칙(칸 수 · 겹침). 주운 아이템이 먼저 들어가는 것 · 가방 창 탭은 게임 그대로, 탭 아이콘은 연결 줄 `WndBag.icon` · `InventoryPane.bagIcon` → `MakerBag.icon`(가방 그림 또는 게임 가방 아이콘). 헤드리스 `eval:bagtest,<가방>,<아이템>`.
 - **마법봉 수치** `wand { charges, min, max, minPerLvl, maxPerLvl }`(kind game + `wands.*`): 코드 생성이 `initialCharges()` · (피해 마법봉 `codegen.DAMAGE_WANDS` 만) `min(lvl)` · `max(lvl)` 을 덮어씀, 비우면 게임 그대로.
 - `kind: "ranged"`(무기 › 원거리 무기, 게임 원거리 무기를 복사해도) → 생성 클래스가 런타임 `MakerBow`(MeleeWeapon) 상속 — 영혼의 활과 같은 방식: 행동 "쏘기"(`AC_SHOOT`, 기본 행동, `needEquip`) → 칸 고르기 → 발사체 `cast`. `ammo: none` = 발사체(`MakerBow.Arrow`, 가방에 안 들어가고 땅에 안 떨어짐 — 피해 `bow`(활 수치 · 강화 · 마법 부여 그대로) 또는 `own`(min/max + 활 강화당), 명중 배율, 그림 · 빙글빙글(아니면 `StraightArrow` 를 `MissileSprite.ANGULAR_SPEEDS` 에 0 으로 등록), 소리 · 이펙트), `ammo: item` = 가방의 프로젝트 투척 무기(`projectile`)를 하나씩 cast(그 아이템의 수치 · 그림). 근접 수치 `weapon` 은 들고 때릴 때. 편집기: 종류와 수치 › "쏘기 · 발사체".
 - **마법봉 공격 이펙트 코드** `wandFx.bolt = "code"`(`code` · `imports`): 코드 생성이 `gen/GenWandFx.java` 하나에 `fx(key, wand, bolt, done)` 의 switch(key = `item:<id>` · `spd:wands.X` — 프로젝트 마법봉 · 게임 마법봉 같이, `generate(heroes, items, gameitems)`)로 넣음. 쓸 수 있는 것 wand · bolt · cell · hero · done(끝나면 꼭 한 번 — onZap · wandUsed). 런타임 `MakerWand` 가 리플렉션으로 부르고 없거나 오류면 게임 원래 fx(오류는 게임 안 경고). 편집기: 코드 칸 · import · 예시 넣기 · 생성될 코드 보기 · 게임 코드 참고.
@@ -838,7 +840,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **64개** 연결점 · **30개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **68개** 연결점 · **33개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -866,7 +868,9 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `windows/WndGameInProgress.java` | 저장 슬롯 초상화·이름 (이어하기 창) |
 | `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악) |
 | `items/wands/Wand.java` | 마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트) |
-| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때 |
+| `actors/mobs/npcs/Shopkeeper.java` | 판매 불가 (아이템 noSell) |
+| `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |
+| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop) |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |
 | `services/updates/…/GitHubUpdates.java` | 업데이트 확인: 끄기 (타이틀 하위 페이지) (선택)<br>업데이트 확인: 내 GitHub 저장소 (타이틀 하위 페이지) (선택)<br>업데이트 버튼: 다운로드 페이지 (타이틀 하위 페이지) (선택) |
@@ -903,7 +907,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ## 19. 개발 도구 · 확인
 
-- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `waterhere` · `shoottest` · `mobhp` · `cellname` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
+- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `waterhere` · `shoottest` · `mobhp` · `cellname` · `bagtest` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
 - **게임 데이터 뽑기** (`tools/data`): `extract_spd_items.py` → `spd-items.js` · `extract_spd_chars.py` → `spd-chars.js`(+ 영웅) · `extract_spd_rooms.py` → `spd-rooms.js` · `gen_terms_java.js` → `DefaultTerms.java`.
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.

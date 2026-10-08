@@ -57,8 +57,8 @@
     { key: 'drMax', kinds: ['armor'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 방어' },
     { key: 'onEquip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착했을 때' },
     { key: 'onUnequip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착을 풀었을 때' },
-    { key: 'onPickUp', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
-    { key: 'desc', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
+    { key: 'onPickUp', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire', 'bag'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
+    { key: 'desc', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire', 'bag'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
   ];
 
   const safeId = id => String(id).replace(/[^A-Za-z0-9_]/g, '_');
@@ -194,9 +194,9 @@
   const heroNeedsClass = hero => HERO_HOOKS.some(h => has((hero.code || {})[h.key])) || has((hero.code || {}).members) || codeCasts(hero).length > 0 || codeEntries(hero).length > 0;
 
   // ---------------------------------------------------------------- 아이템
-  const KIND_BASE = { melee: 'MeleeWeapon', ranged: 'MakerBow', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' };
+  const KIND_BASE = { melee: 'MeleeWeapon', ranged: 'MakerBow', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire', bag: 'MakerBag' };
   /** 데이터로 도는 종류 (MakerItem 계열: 이름·설명·값을 데이터에서 읽음) */
-  const DATA_KINDS = ['misc', 'codex', 'grimoire'];
+  const DATA_KINDS = ['misc', 'codex', 'grimoire', 'bag'];
   /** 게임 아이템 상속(kind game): 바탕 클래스 경로로 훅 종류 추측 */
   const gameBaseKind = base => /^weapon\.melee\./.test(base || '') ? 'melee' : /^weapon\.missiles\./.test(base || '') ? 'missile' : /^armor\.(?!glyphs)/.test(base || '') ? 'armor' : 'misc';
   const hookKind = it => it.kind === 'game' ? gameBaseKind(it.base) : (KIND_BASE[it.kind] ? it.kind : 'misc');

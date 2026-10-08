@@ -162,12 +162,19 @@
     fillSubs(sub);
     // 게임 동작이 있는 분류(마법봉 · 반지 · 아티팩트 · 장신구 · 가방)는 게임 아이템을 바탕으로 — 충전 · 쏘기 · 장착 등 그 분류의 성질을 그대로
     const baseSel = h('select', {}), baseRow = h('label', { style: { display: 'none', marginTop: '10px' } }, h('div', { class: 'fl' }, '바탕 게임 아이템 (이 분류의 성질 — 효과는 코드 · 수치로 고침)'), baseSel);
-    const fillBase = () => { const l = gameBases(catSel.value, subSel.disabled ? '' : subSel.value); baseRow.style.display = l.length ? '' : 'none'; baseSel.replaceChildren(...l.map(g => h('option', { value: g.p }, `${g.n} (${g.p})`))); if (l.length) baseSel.value = (l.find(g => DEFAULT_BASE[catSel.value] === g.p) || l[0]).p; };
+    const fillBase = () => {
+      const l = gameBases(catSel.value, subSel.disabled ? '' : subSel.value), bagNew = catSel.value === 'bag' && l.length;
+      baseRow.style.display = l.length ? '' : 'none';
+      baseSel.replaceChildren(...(bagNew ? [h('option', { value: '__newbag' }, '완전히 새 가방 (칸 수 · 넣을 수 있는 것을 직접)')] : []), ...l.map(g => h('option', { value: g.p }, `${g.n} (${g.p}) 상속`)));
+      if (l.length) baseSel.value = bagNew ? '__newbag' : (l.find(g => DEFAULT_BASE[catSel.value] === g.p) || l[0]).p;
+    };
     fillBase(); catSel.addEventListener('change', () => { fillSubs(); fillBase(); }); subSel.addEventListener('change', fillBase);
+    const noSell = h('input', { type: 'checkbox' }), noDrop = h('input', { type: 'checkbox' });
+    const flagRow = h('div', { style: { display: 'flex', gap: '14px', marginTop: '10px' } }, h('label', { class: 'check' }, noSell, h('span', {}, '판매 불가')), h('label', { class: 'check' }, noDrop, h('span', {}, '버리기 금지')));
     const id = await PDM.ui.modal('새 아이템', h('div', {}, h('div', { class: 'fl' }, 'id (영문)'), inp, out,
       h('small', { class: 'hint' }, '대문자는 소문자로, 영문·숫자 말고는 밑줄(_)로 바뀝니다 — 예: TestWeapon → testweapon. 이름도 처음엔 이 id 와 같게 만들고, 만든 뒤 "이름" 칸에서 바꿀 수 있습니다.'),
       h('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } },
-        h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), baseRow),
+        h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), baseRow, flagRow),
       [['취소', null], ['만들기', () => inp.value, 'pri']]);
     if (!id || !String(id).trim()) return;
     cat = catSel.value; sub = subSel.disabled ? undefined : subSel.value;
@@ -180,6 +187,8 @@
     if (cat === 'armor') { it.kind = 'armor'; it.armor = PDM.make.armorStats(1); it.stackable = false; }
     if (cat === 'codex') { it.kind = 'codex'; it.codex = PDM.make.codexStats(sub || 'melee', 1); it.stackable = true; }
     if (cat === 'bag' && sub === 'grimoire') { it.kind = 'grimoire'; it.bag = { capacity: 19, holds: 'codex' }; it.stackable = false; }
+    if (noSell.checked) it.noSell = true; if (noDrop.checked) it.noDrop = true;
+    if (baseRow.style.display !== 'none' && baseSel.value === '__newbag') { it.kind = 'bag'; it.bag = PDM.make.bagStats(); it.stackable = false; it.sprite = { sheet: 'builtin:items', name: 'POUCH' }; }
     const gb = baseRow.style.display !== 'none' && findGame(baseSel.value)[1];
     if (gb) await asGameBased(it, gb);
     store.add('item:' + clean, it, '아이템 추가'); PDM.tabs.open('item:' + clean);
@@ -411,6 +420,7 @@
       if (o.kind === 'armor' && !o.armor) o.armor = PDM.make.armorStats(tier);
       if (o.kind === 'codex' && !o.codex) o.codex = PDM.make.codexStats('melee', tier);
       if (o.kind === 'grimoire' && !o.bag) o.bag = { capacity: 19, holds: 'codex' };
+      if (o.kind === 'bag') { o.bag = Object.assign(PDM.make.bagStats(), o.bag && o.bag.holds !== 'codex' ? o.bag : {}); o.category = 'bag'; o.stackable = false; }
       if (o.kind === 'game' && !o.base) o.base = 'Item';
       if (o.kind !== 'misc' && o.kind !== 'game') o.stackable = o.kind === 'missile' || o.kind === 'codex';
       if (o.kind === 'melee' || o.kind === 'missile' || o.kind === 'ranged') o.category = 'weapon'; else if (o.kind === 'armor') o.category = 'armor';
@@ -419,6 +429,7 @@
     const kindHint = { misc: '일반 아이템: 사용 명령(이벤트)과 코드 행동 버튼으로 동작',
       codex: 'mod-2 코덱스(items/weapon/codices)처럼 겹쳐 쌓이고, "사용"하면 대상을 골라 공격·시전하며, 쓸 때마다 내구가 닳아 다 닳으면 하나가 사라집니다. 강화하면 피해와 사용 횟수(×1.5)가 늘어납니다. 원작·mod-2 모두에서 동작 (PDMaker MakerCodex)',
       grimoire: 'mod-2 그리모어(bags/grimoire)처럼 코덱스를 담는 가방입니다',
+      bag: '완전히 새 가방입니다 — 칸 수와 넣을 수 있는 것(분류 · 아이템 · 태그)을 정합니다. 게임 가방처럼 주운 아이템이 먼저 들어가고 가방 창에 탭이 생깁니다 (PDMaker MakerBag).',
       game: '게임의 아이템 클래스를 그대로 상속합니다 (효과·강화·감정 모두 게임 그대로). 이름·설명·그림·가격은 비워 두면 게임 것, 아래 "코드"의 훅·행동 버튼·추가 멤버로 동작을 고치거나 더합니다.' }[kind]
       || (kind === 'ranged' ? '활 · 석궁처럼 "쏘기" 버튼으로 발사체를 날리는 무기입니다 (게임의 영혼의 활과 같은 방식 — 강화 · 마법 부여 · 저주는 원래대로). 아래에서 발사체의 그림 · 피해 · 소리 · 이펙트나 탄환 아이템을 정합니다.'
       : `게임의 ${ {melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor'}[kind] } 을 상속한 클래스가 만들어집니다 (강화·마법 부여·저주 모두 원래대로)`);
@@ -496,6 +507,23 @@
       out.push(h('p', { class: 'hint' }, `근접·원거리는 원작처럼 빗나갈 수 있습니다. 피해 × (1 + 코덱스 피해 %: 게이지 단계·원소·특성·전직). 힘이 모자라면 위력 −33%. +0: ${cx.min | 0}~${cx.max | 0} · +3: ${(cx.min | 0) + 3 * (cx.minPerLvl | 0)}~${(cx.max | 0) + 3 * (cx.maxPerLvl | 0)} · 사용 +0 ${Math.round(cx.baseUses || 10)}회, +3 ${Math.round((cx.baseUses || 10) * 3.375)}회`));
       out.push(h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '추가 효과 (피해 뒤에 차례로 — 상태 효과·밀치기 등)'));
       out.push(PDM.castEffectsEditor ? PDM.castEffectsEditor(key, C('effects'), { emptyText: '추가 효과 없음', make: () => ({ type: 'buff', on: 'target', buff: 'Burning', turns: 3 }) }) : h('span'));
+    } else if (kind === 'bag') {
+      const B = p => ['bag', p], bg = it.bag || {};
+      const CATS = Object.assign({}, Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([k]) => !['bag', 'codex'].includes(k)).map(([k, v]) => [k, v.name])), { missile: '투척 무기 (다트 포함)', seed: '씨앗' });
+      const cats = new Set(bg.categories || []);
+      out.push(row(F.num(key, B('capacity'), { label: '칸 수', int: true, min: 1, max: 60, def: 20, hint: '게임 가방은 20 · 배낭은 20' }),
+        F.select(key, B('holds'), { all: '무엇이든 (가방은 빼고)', filter: '정한 것만 (아래)' }, { label: '넣을 수 있는 것', rerender: true }),
+        F.select(key, B('tabIcon'), { item: '가방 그림 그대로', backpack: '배낭 아이콘', pouch: '씨앗 주머니 아이콘', scroll: '주문서 통 아이콘', wand: '마법봉 꽂이 아이콘', potion: '물약 띠 아이콘' }, { label: '가방 창 탭 아이콘' })));
+      if (bg.holds === 'filter') {
+        out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 12px', margin: '2px 0 8px' } }, Object.entries(CATS).map(([k, v]) => h('label', { class: 'check' },
+            h('input', { type: 'checkbox', checked: cats.has(k), onchange: e => store.edit(key, '가방 분류', o => { const s2 = new Set((o.bag.categories) || []); e.target.checked ? s2.add(k) : s2.delete(k); o.bag.categories = [...s2]; }) }), h('span', {}, v)))),
+          h('div', { class: 'fl' }, '아이템 하나하나 (프로젝트 아이템 · 게임 아이템 — 게임 아이템은 그것을 상속한 것도)'),
+          PDM.ui.listEditor(key, B('items'), { addLabel: '아이템', compact: true, emptyText: '없음', make: () => '', render: (x, i, ip) => { const inp = h('input', { type: 'text', value: x || '', placeholder: '아이템 id 또는 spd:경로' }); inp.addEventListener('change', () => PDM.ui.commit(key, ip, inp.value.trim(), '가방 아이템', true)); return PDM.ui.combo(inp, () => PDM.ui.itemOptions()); } }),
+          F.text(key, B('tagsText'), { label: '태그 (쉼표로 — 이 태그가 있는 프로젝트 아이템)', placeholder: 'herb, gift', onchange: v => store.edit(key, '가방 태그', o => { o.bag.tags = String(v).split(',').map(t => t.trim()).filter(Boolean); }) }),
+          h('p', { class: 'hint' }, `분류 ${cats.size}개 · 아이템 ${(bg.items || []).filter(Boolean).length}개 · 태그 ${(bg.tags || []).length}개 중 하나라도 맞으면 넣을 수 있습니다.`));
+      }
+      out.push(h('p', { class: 'hint' }, '게임 가방과 같은 규칙: 이 가방을 가지고 있으면 넣을 수 있는 아이템을 주울 때 먼저 이 가방에 들어가고, 가방 창에 이 가방 탭이 생깁니다. 가방 안에 다른 가방은 넣지 않습니다.'));
     } else if (kind === 'grimoire') {
       out.push(row(F.num(key, ['bag', 'capacity'], { label: '칸 수', int: true, min: 1, max: 40, def: 19 }),
         F.select(key, ['bag', 'holds'], { codex: '코덱스만', all: '무엇이든' }, { label: '담는 것' })));
@@ -678,6 +706,7 @@
           categoryBlock(key, it),
           F.textarea(key, ['desc'], { label: '설명', rows: 3 }),
           row((it.kind || 'misc') === 'misc' ? F.bool(key, ['stackable'], { label: '겹쳐 쌓임' }) : null, F.bool(key, ['unique'], { label: '유일 아이템' }), F.bool(key, ['cursed'], { label: '저주받음' }), F.num(key, ['level'], { label: '생성 시 강화', int: true, min: 0 })),
+          row(F.bool(key, ['noSell'], { label: '판매 불가 (상점에 팔 수 없음)' }), F.bool(key, ['noDrop'], { label: '버리기 금지 (버리기 · 던지기 버튼 없음 — 투척 무기는 던지기만 남음)' })),
           F.list(key, ['tags'], { label: '태그', hint: '선물 취향·조건에 씀 (예: herb, gift, undead)' })),
         section('스프라이트',
           h('div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },
@@ -787,6 +816,7 @@
           PDM.wandFxEditor('gameitems', ['items', 'spd:' + g.p, 'wandFx'])) : null,
         PDM.ui.section('등장 · 드랍 테이블',
           PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'banned'], { label: '게임에 나오지 않게 (등장 금지) — 게임의 무작위 아이템 생성(바닥·상자·전리품·상점 무작위 칸)에서 뺍니다', rerender: true }),
+          PDM.ui.row(PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'noSell'], { label: '판매 불가 (상점에 팔 수 없음)' }), PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'noDrop'], { label: '버리기 금지' })),
           h('p', { class: 'hint' }, '등장 금지는 "무작위로 뽑는 곳"에만 적용됩니다. 직업의 시작 아이템, 퀘스트 보상처럼 게임 코드가 정해 놓고 주는 것은 그대로 나옵니다. 아래 드랍은 게임의 무작위 생성(Generator 확률표)에 더해집니다.'),
           dropsEditor('gameitems', ['items', 'spd:' + g.p, 'drops'])),
         PDM.ui.section('코드로 고치기',
