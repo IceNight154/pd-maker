@@ -388,7 +388,7 @@ public class Hooks {
 					cu.set(null, hero); ci.set(null, it);
 					java.lang.reflect.Field lf = it instanceof com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand ? com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand.class.getDeclaredField("zapper") : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerBow.class.getDeclaredField("shooter");
 					lf.setAccessible(true);
-					System.out.println("[TEST] shoottest " + it.getClass().getSimpleName() + " " + it.name() + " → rat HP " + rat.HP + " at " + tgt + " actions=" + it.actions(hero) + " wandFx=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerWand.cfg(it));
+					System.out.println("[TEST] shoottest " + it.getClass().getSimpleName() + " " + it.name() + " → rat HP " + rat.HP + " at " + tgt + " actions=" + it.actions(hero) + " charges=" + (it instanceof com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand ? ((com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand) it).curCharges + "/" + ((com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand) it).maxCharges : "-"));
 					((com.shatteredpixel.shatteredpixeldungeon.scenes.CellSelector.Listener) lf.get(null)).onSelect(tgt);
 					break; }
 				case "mobhp": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) System.out.println("[TEST] mobhp " + m.name() + " " + m.HP + "/" + m.HT); break; }

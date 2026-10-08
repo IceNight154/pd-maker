@@ -279,6 +279,8 @@
     return s;
   }
 
+  /** 피해를 주는 마법봉 (DamageWand — min/max 를 고칠 수 있음, SPD 4.0) */
+  const DAMAGE_WANDS = ['WandOfBlastWave', 'WandOfDisintegration', 'WandOfFireblast', 'WandOfFrost', 'WandOfLightning', 'WandOfLivingEarth', 'WandOfMagicMissile', 'WandOfPrismaticLight', 'WandOfTransfusion'];
   /** 게임 아이템 상속: items.<base> 를 그대로 상속하고, 이름·설명·그림·가격은 비어 있으면 게임 것, 훅·행동·추가 멤버로 고침 */
   function gameItemSource(it) {
     const code = it.code || {};
@@ -294,6 +296,13 @@
     if (hk('desc')) s += `\t${mark('아이템 ' + it.id, 'desc')}\n\t@Override public String desc() {\n\t\tString value = ${has(it.desc) ? 'GenSupport.desc(ID)' : 'super.desc()'};\n${hookBody(code.desc, hk('desc'), '\t\t')}\n\t}\n\n`;
     else if (has(it.desc)) s += `\t@Override public String desc() { return GenSupport.desc(ID); }\n`;
     if (num(it.price, 0) > 0) s += `\t@Override public int value() { return GenSupport.price(ID, super.value(), quantity); }\n`;
+    // 마법봉 수치 (wand { charges, min, max, minPerLvl, maxPerLvl } — 비우면 게임 그대로)
+    if (/^wands\./.test(base) && it.wand) {
+      const wd = it.wand, cls = base.split('.').pop();
+      if (num(wd.charges, 0) > 0) s += `\t@Override public int initialCharges() { return ${num(wd.charges, 2) | 0}; }\n`;
+      if (DAMAGE_WANDS.includes(cls) && typeof wd.min === 'number' && isFinite(wd.min)) s += `\t@Override public int min(int lvl) { return ${num(wd.min, 0) | 0} + lvl * ${num(wd.minPerLvl, 0) | 0}; }\n`;
+      if (DAMAGE_WANDS.includes(cls) && typeof wd.max === 'number' && isFinite(wd.max)) s += `\t@Override public int max(int lvl) { return ${num(wd.max, 0) | 0} + lvl * ${num(wd.maxPerLvl, 0) | 0}; }\n`;
+    }
     s += '\n';
     const w = { min: 'min', max: 'max' };
     ['min', 'max'].forEach(k => { if (hk(k)) s += `\t${mark('아이템 ' + it.id, k)}\n\t@Override public int ${k}(int lvl) {\n\t\tint value = super.${k}(lvl);\n${hookBody(code[k], hk(k), '\t\t')}\n\t}\n`; });
@@ -392,5 +401,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, DAMAGE_WANDS, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
 });
