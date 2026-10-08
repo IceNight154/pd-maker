@@ -352,6 +352,10 @@
       { label: chk(T().accent === 'default') + '강조색: PDMaker 보라', run: () => T().setAccent('default') },
       { label: chk(!['system', 'default'].includes(T().accent)) + '강조색: 직접 고르기…', run: pickAccent },
       '-',
+      { label: chk(PDM.tips.mode === 'hover') + '설명문: 마우스를 올리면 상자로 보기', run: () => PDM.tips.setMode('hover') },
+      { label: chk(PDM.tips.mode === 'inline') + '설명문: 화면에 항상 펼쳐 보기', run: () => PDM.tips.setMode('inline') },
+      { label: chk(PDM.tips.mode === 'off') + '설명문: 숨기기 (버튼 도움말만)', run: () => PDM.tips.setMode('off') },
+      '-',
       { label: '출력 창', run: () => showBottom('log') }, { label: '검사 결과', run: () => showBottom('check') }
     ],
     '프로젝트': () => [

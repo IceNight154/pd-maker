@@ -526,3 +526,13 @@ input[type=color] { height: 30px; padding: 1px 2px; border: 1px solid var(--line
 .ctx-i.chk { padding-left: 6px; justify-content: flex-start; gap: 4px; } .ctx-i.chk small { margin-left: auto; padding-left: 12px; }
 .ctx-ck { display: inline-block; width: 16px; color: var(--accent); }
 .ctx-h { padding: 4px 10px 2px; font-size: 11px; color: var(--dim); }
+
+/* ---------------- 설명문 상자 (tips.js) ---------------- */
+.hints-hover .tipped, .hints-off .tipped { display: none !important; }
+.hints-hover .tip-dot::after { content: 'ⓘ'; margin-left: 4px; font-size: 10px; color: var(--dim); font-weight: normal; vertical-align: 1px; opacity: .8; }
+.hints-hover .tip-mark:hover > .tip-dot::after, .hints-hover .tip-dot.tip-mark:hover::after { color: var(--accent); opacity: 1; }
+.tip-box { position: fixed; z-index: 10000; max-width: min(380px, 80vw); padding: 7px 10px; border-radius: 6px; pointer-events: none;
+  background: var(--bg3); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.28);
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere;
+  opacity: 0; transform: translateY(-2px); transition: opacity .12s, transform .12s; visibility: hidden; }
+.tip-box.on { opacity: 1; transform: none; visibility: visible; }

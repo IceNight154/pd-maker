@@ -83,6 +83,7 @@
 | `levelpreview.js` | 타일셋 실시간 미리보기 |
 | `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿 · 영웅 — 영웅은 id 바꾸기 · 복제를 자기 방식으로 `o.rename/dup`) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임). 방 템플릿은 맵 편집 화면이라 속성 창 맨 위에 같은 도구 줄 + "방 미리보기" 창의 카드마다 편집 · 복제 · 삭제(오른쪽 클릭 = 같은 메뉴) |
 | `clip.js` | 공용 클립보드 `PDM.clip` — Ctrl+C/V. 메모리 + 시스템 클립보드 JSON(다른 프로젝트 · 창에도). kind: `res:<종류>` · `list:<저장 키>` · `nodes` · `mapobj` · `cmds`. 붙여넣기는 지금 탭의 `ctx.copy/paste` → 리소스 · 목록 항목 기본 처리 |
+| `tips.js` | 설명문 표시 `PDM.tips` — 모드 hover(기본: 설명문을 숨기고 그 기능에 마우스를 올리면 상자) · inline(항상 펼침) · off(숨김), 보기 메뉴 · `localStorage pdm.hints`. 편집기 코드는 그대로 두고 MutationObserver 로 `p/div/small.hint` · `.lead` 를 찾아 붙일 곳을 정함(입력칸 설명 → `label.field`, 앞 요소, 앞이 여러 칸 묶음이거나 없으면 섹션 제목) → 대상에 `_tipEls`, 설명문에 `.tipped`(CSS 로 숨김), 제목 · 입력칸 이름에 ⓘ. 버튼 · 링크 · 입력칸을 담은 설명, 경고(글자색 · .bad), 테두리 상자, 대화상자 안, 줄 안의 `span.hint` 는 그대로. `title` 속성도 같은 상자로 (브라우저 말풍선 대신) |
 | `keys.js` | 단축키 `PDM.keys` — 동작 표(id · 기본 키 · scope global/draw) + 사용자 키(`localStorage pdm.keys`), `e.code` 기준 키 이름, 편집 › 단축키 설정 창 |
 | `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 복사/붙여넣기 · 삭제 · id 바꾸기 · 쓰는 곳(이벤트 명령 `cmdType`+`cmdKey` · 맵 오브젝트 `objType` · 참조 칸 `fields`) · 순서 `PDM.listOps` — 도구 줄은 resOps 와 같은 모양 |
 | `gamescan.js` · `gamehero.js` · `gameinfo.js` | 게임 저장소 소스를 읽어 목록 맞추기 · 원래 값 보여 주기 (§2.5) |
