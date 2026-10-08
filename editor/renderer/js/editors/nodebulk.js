@@ -3,6 +3,7 @@
 //   · 대상: 그룹의 노드들 (체크로 고름 · 자동 생성만 / 직접 그리기만)
 //   · 바꾸기: 체크한 항목만 모든 대상 노드에 같은 값으로 (생성 방식 · 테마 · 보스 · 몬스터 스폰 · 깊이 · 배경음 · 화면 필터 · 안전구역 · 들어올 때 이벤트)
 //   · 추가: 대상 노드마다 목록에 넣음 (지형 광원 · 자동 광원 — 여러 개, 세부 설정 전부 + 미리보기 · 추가 방 · 스폰 몬스터) — "기존 것 지우고" 를 켜면 바꿔 넣음
+//     광원은 노드에 지금 있는 것도 카드(노란 줄)로 보여 줌 — 고치면 그 값을 가진 노드들에서 바뀌고, ✕ 면 지워짐
 //   적용은 실행 취소 한 번으로 되돌릴 수 있음.
 // ================================================================
 (function () {
@@ -19,12 +20,21 @@
    * 광원 목록 (여러 개 · 세부 설정 전부 · 미리보기) — 노드 속성의 지형 광원 / 자동 광원 칸과 같은 값
    * area = 지형 광원. 돌려줌: { el, items() → 넣을 광원 객체 목록 }
    */
-  function lightList(area) {
+  /** 값 비교용 문자열 (키 순서 무관) */
+  const keyOf = o => JSON.stringify(Object.keys(o).sort().reduce((m, k) => { m[k] = o[k]; return m; }, {}));
+
+  /** existing = [{ item(노드에 있던 그대로), nodes: [노드 이름…] }] — 노드에 이미 있는 광원을 카드로 보여 주고 고치거나 뺄 수 있음 */
+  function lightList(area, existing) {
+    existing = existing || [];
     const D = area ? { terrain: 29, color: '#9a7cff', k: 1.5, z: 10, range: 2, pulse: 3, pulseMin: 55 }
       : { terrain: 25, chance: 100, max: 0, spacing: 3, ox: 0, oy: 0, cond: '', color: '#ffc870', k: 4, z: 10, range: 4, pulse: 0.8, pulseMin: 80, shadow: true, charShadow: true };
+    // 게임이 빈 칸에 쓰는 값 (노드에 있던 광원을 보여 줄 때 — 새 광원 기본값 D 와 다름)
+    const RT = area ? { color: '#9a7cff', k: 1.5, z: 10, range: 2, pulse: 0, pulseMin: 60 }
+      : { color: '#ffe9a8', chance: 100, max: 0, spacing: 3, ox: 0, oy: 0, cond: '', k: 3, z: 10, range: 4, pulse: 0, pulseMin: 60, shadow: true, charShadow: true };
     const list = [], box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' } });
     const lab = (t, input, title) => h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', margin: 0 }, title: title || '' }, h('span', { class: 'hint' }, t), input);
     function card(v) {
+      const src = v._src;   // 노드에 있던 광원이면 원래 값
       const cv = h('canvas', { width: 150, height: 76, style: { background: '#14121a', borderRadius: '6px', flex: 'none' } });
       const draw = () => {
         const g = cv.getContext('2d'); g.clearRect(0, 0, 150, 76);
@@ -38,13 +48,19 @@
         const el = o.check ? h('input', { type: 'checkbox', checked: v[k] !== false })
           : o.opts ? sel(o.opts, String(v[k])) : o.color ? color(v[k]) : o.text ? h('input', { type: 'text', value: v[k] || '', placeholder: o.ph || '', style: { width: '170px', flex: 'none' } }) : num(v[k], o);
         if (o.w) el.style.width = o.w;
-        const put = () => { v[k] = o.check ? el.checked : o.opts ? +el.value : o.color || o.text ? el.value : (el.value === '' ? D[k] : +el.value); draw(); };
+        const put = () => { v[k] = o.check ? el.checked : o.opts ? +el.value : o.color || o.text ? el.value : (el.value === '' ? (v._src ? RT : D)[k] : +el.value); draw(); };
         el.addEventListener('input', put); el.addEventListener('change', put);
         return el;
       };
-      const del = h('button', { class: 'btn xs', title: '이 광원 빼기', onclick: () => { const i = list.indexOf(v); if (i >= 0) list.splice(i, 1); el.remove(); if (!list.length) add(); } }, '✕');
-      const el = h('div', { class: 'card', style: { display: 'flex', gap: '8px', padding: '6px', alignItems: 'flex-start' } }, cv,
-        h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'center', flex: 1, minWidth: 0 } },
+      const del = h('button', { class: 'btn xs', title: src ? '대상 노드들에서 이 광원을 지움' : '이 광원 빼기', onclick: () => {
+        const i = list.indexOf(v); if (i >= 0) list.splice(i, 1);
+        if (src) removed.push(src);
+        el.remove(); box.dispatchEvent(new Event('change', { bubbles: true }));
+      } }, '✕');
+      const tag = src ? h('div', { class: 'hint', style: { width: '100%', fontWeight: 'bold', color: 'var(--gold, #e0b84a)' }, title: src.nodes.join(', ') },
+        `지금 있는 광원 — 노드 ${src.nodes.length}개 (${src.nodes.slice(0, 4).join(', ')}${src.nodes.length > 4 ? ' …' : ''}) · 고치면 그 노드들에서 바뀜`) : null;
+      const el = h('div', { class: 'card', style: { display: 'flex', gap: '8px', padding: '6px', alignItems: 'flex-start', borderLeft: src ? '3px solid var(--gold, #e0b84a)' : '' } }, cv,
+        h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'center', flex: 1, minWidth: 0 } }, tag,
           lab(area ? '지형' : '놓을 지형', inp('terrain', { opts: terrains() })), lab('빛 색', inp('color', { color: true })),
           lab('세기', inp('k', { min: 0, max: 60, step: 0.5, w: '64px' }), area ? '칸 하나의 세기 (칸이 모이면 더 밝아짐)' : '가운데 밝은 부분의 크기'),
           lab('부드러움', inp('z', { min: 1, max: 80, w: '64px' }), '클수록 넓고 은은하게'),
@@ -62,14 +78,40 @@
       draw();
       return el;
     }
-    function add(from) {
-      const v = Object.assign({}, from || D);
+    const removed = [];
+    function add(from, src) {
+      const v = Object.assign({}, src ? RT : D, from || {}); delete v._src;
+      if (src) v._src = src;
       list.push(v); box.insertBefore(card(v), more);
     }
-    const more = h('button', { class: 'btn xs add', style: { alignSelf: 'flex-start' }, onclick: () => { add(list[list.length - 1]); more.dispatchEvent(new Event('change', { bubbles: true })); } }, area ? '+ 지형 광원 하나 더' : '+ 자동 광원 하나 더');
+    const more = h('button', { class: 'btn xs add', style: { alignSelf: 'flex-start' }, onclick: () => { add(list.length ? list[list.length - 1] : D); more.dispatchEvent(new Event('change', { bubbles: true })); } }, area ? '+ 지형 광원 하나 더' : '+ 자동 광원 하나 더');
     box.append(more);
-    add();
-    return { el: box, items: () => list.map(v => { const o = Object.assign({}, v); if (!area) { if (!o.cond) delete o.cond; if (!o.ox) delete o.ox; if (!o.oy) delete o.oy; if (o.shadow !== false) delete o.shadow; if (o.charShadow !== false) delete o.charShadow; } return o; }) };
+    // 저장 모양으로 (기본값인 칸은 뺌)
+    const clean = v => { const o = Object.assign({}, v); delete o._src; if (!area) { if (!o.cond) delete o.cond; if (!o.ox) delete o.ox; if (!o.oy) delete o.oy; if (o.shadow !== false) delete o.shadow; if (o.charShadow !== false) delete o.charShadow; } return o; };
+    if (existing.length) existing.forEach(e => add(e.item, e)); else add();
+    const fresh = () => list.filter(v => !v._src);
+    const edited = () => list.filter(v => v._src && keyOf(clean(v)) !== keyOf(clean(Object.assign({}, RT, v._src.item))));
+    return {
+      el: box,
+      items: () => fresh().map(clean),
+      /** 모든 카드 (지금 있는 것 + 새 것) — "기존 것 지우고" 일 때 */
+      all: () => list.map(clean),
+      /** 노드 목록 arr 에: 고친 것은 바꾸고, 뺀 것은 지움 → 새 배열 */
+      patch: arr => {
+        const rep = new Map(edited().map(v => [v._src.key, clean(v)])), del = new Set(removed.map(x => x.key));
+        return (arr || []).filter(it => !del.has(keyOf(it))).map(it => rep.has(keyOf(it)) ? rep.get(keyOf(it)) : it);
+      },
+      changes: () => ({ add: fresh().length, edit: edited().length, del: removed.length }),
+    };
+  }
+  /** 노드들에 이미 있는 광원 (같은 값끼리 묶음) */
+  function existingLights(ids, path) {
+    const m = new Map();
+    ids.forEach(id => { const d = store.get('node:' + id); ((d && d[path]) || []).forEach(it => {
+      const k = keyOf(it); if (!m.has(k)) m.set(k, { key: k, item: it, nodes: [] });
+      const e = m.get(k), nm = d.name || PDM.World.label(id) || id; if (!e.nodes.includes(nm)) e.nodes.push(nm);
+    }); });
+    return [...m.values()];
   }
 
   /**
@@ -106,7 +148,7 @@
     function line(kind, label, inputs, apply, hint, count) {
       const cb = h('input', { type: 'checkbox', onchange: update });
       const wipe = kind === 'add' ? h('input', { type: 'checkbox', onchange: update }) : null;
-      const touch = () => { if (!cb.checked) { cb.checked = true; update(); } };
+      const touch = () => { if (!cb.checked) cb.checked = true; update(); };
       const ck = { display: 'inline-flex', alignItems: 'center', gap: '4px', margin: 0 };
       const el = h('div', { style: { display: 'grid', gridTemplateColumns: '150px 1fr', alignItems: 'center', gap: '6px', padding: '4px 0', borderBottom: '1px solid var(--line)' } },
         h('label', { class: 'check', style: ck }, cb, h('b', {}, label)),
@@ -152,7 +194,13 @@
       line('set', '들어올 때 이벤트', [sEnter], r => { r.onEnter = sEnter.value; }));
 
     // 추가
-    const tLights = lightList(true), aLights = lightList(false);
+    const tLights = lightList(true, existingLights(ids, 'terrainLights')), aLights = lightList(false, existingLights(ids, 'autoLights'));
+    /** 광원 줄 적용: 기존 것 지우고 → 카드 전부로 바꿈 · 아니면 고친 것 바꾸고 뺀 것 지우고 새 것 추가 */
+    const applyLights = (L, path) => (r, id, wipe) => {
+      const next = wipe ? L.all() : L.patch(r[path]).concat(L.items());
+      if (next.length) r[path] = next; else delete r[path];
+    };
+    const lightCount = L => () => { const c = L.changes(); return [c.add ? `추가 ${c.add}` : '', c.edit ? `수정 ${c.edit}` : '', c.del ? `삭제 ${c.del}` : ''].filter(Boolean).join(' · ') || '바뀐 것 없음'; };
     const rooms = PDM.ui.refOptions('room');
     const rmSel = sel(rooms.length ? rooms : [['', '(방 템플릿 없음)']], (rooms[0] || [''])[0]), rmCount = num(1, { min: 1, max: 20 }), rmChance = num(100, { min: 0, max: 100 });
     const mobOpts = PDM.mobRefOptions();
@@ -164,8 +212,8 @@
       o[k].push(item);
     };
     const addBox = h('div', {},
-      line('add', '지형 광원', [tLights.el], (r, id, wipe) => tLights.items().forEach((it, i) => push(r, ['terrainLights'], it, wipe && !i)), '고른 지형의 칸마다 은은한 빛 (그림자 없음)', () => tLights.items().length),
-      line('add', '자동 광원', [aLights.el], (r, id, wipe) => aLights.items().forEach((it, i) => push(r, ['autoLights'], it, wipe && !i)), '고른 지형 칸에 점광원을 자동으로 (그림자 있음)', () => aLights.items().length),
+      line('add', '지형 광원', [tLights.el], applyLights(tLights, 'terrainLights'), '고른 지형의 칸마다 은은한 빛 (그림자 없음) — 노란 줄 카드는 노드에 지금 있는 광원: 고치거나 ✕ 로 지울 수 있음', lightCount(tLights)),
+      line('add', '자동 광원', [aLights.el], applyLights(aLights, 'autoLights'), '고른 지형 칸에 점광원을 자동으로 (그림자 있음) — 노란 줄 카드는 노드에 지금 있는 광원: 고치거나 ✕ 로 지울 수 있음', lightCount(aLights)),
       rooms.length ? line('add', '추가 방', [rmSel, h('span', { class: 'hint' }, '개수'), rmCount, h('span', { class: 'hint' }, '확률 %'), rmChance],
         (r, id, wipe) => { if (r.mode === 'handmade') return false; push(r, ['procedural', 'rooms'], { room: rmSel.value, count: +rmCount.value || 1, chance: +rmChance.value || 0, cond: '' }, wipe); }, '자동 생성 · 혼합 노드만') : null,
       line('add', '스폰 몬스터', [mbSel, h('span', { class: 'hint' }, '무게'), mbW],
@@ -174,7 +222,7 @@
     function update() {
       const act = rows.filter(x => x.cb.checked);
       summary.textContent = !on.size ? '대상 노드를 고르세요' : !act.length ? '바꾸거나 추가할 항목을 체크하세요 (입력칸을 건드리면 자동으로 체크됩니다)'
-        : `노드 ${on.size}개에 적용: ${act.map(x => x.label + (x.count ? ` ${x.count()}개` : '') + (x.kind === 'add' ? (x.wipe.checked ? ' (바꿔 넣기)' : ' 추가') : '')).join(' · ')}`;
+        : `노드 ${on.size}개에 적용: ${act.map(x => x.label + (x.count ? (c => typeof c === 'number' ? ` ${c}개` : ` (${c})`)(x.count()) : '') + (x.kind === 'add' ? (x.wipe.checked ? ' (기존 것 지우고 카드대로)' : typeof (x.count && x.count()) === 'string' ? '' : ' 추가') : '')).join(' · ')}`;
     }
     update();
 

@@ -645,19 +645,30 @@
           else if (fl.mode === 'hybrid') { W_.tiles(fl.id, true).forEach((c, i) => tag({ cell: c, i, what: 'x' }, true)); }
         }
         // 지형 광원 미리보기: 그 지형 칸마다 (게임과 같은 감쇠)
-        if (drawable && (fl.terrainLights || []).length) (fl.terrainLights || []).forEach(tl => {
+        const grpL = kind === 'node' ? (groupOfNode(fl) || {}) : {};
+        const tLights = (fl.terrainLights || []).length ? fl.terrainLights : (grpL.terrainLights || []);
+        const aLights = (fl.autoLights || []).length ? fl.autoLights : (grpL.autoLights || []);
+        if (drawable && tLights.length) tLights.forEach(tl => {
           const o2 = Object.assign({ color: '#9a7cff', k: 1.5, z: 10, range: 2 }, tl);
           for (let i = 0; i < W * H; i++) if (terrain[i] === +tl.terrain) PDM.drawLightPreview(g, (i % W) * s + s / 2, Math.floor(i / W) * s + s / 2, o2, s);
         });
         // 광원 미리보기의 그림자: 빛을 가리는 칸 (벽 = 1 · 막힌 맵 오브젝트 = 2, 맵 밖 = 3 — 가장자리 벽의 바깥 변도 그림자를 만듦, 게임과 같음)
         let lightBlock = null;
-        if (drawable && (fl.objects || []).some(o => o.type === 'light')) {
+        if (drawable && ((fl.objects || []).some(o => o.type === 'light') || aLights.length)) {
           const pc = new Set();
           (fl.objects || []).forEach(o => { if (o.type !== 'prop' || !o.at || o.at.x == null) return; const sp = sprites['prop:' + o.ref], pr = sp && sp.prop; if (!pr || pr.castShadow === false) return;
             const st = (pr.states || [])[pr.start || 0]; if (st && st.solid === false) return;
             const ft = pr.foot || [1, 1]; for (let j = 0; j < Math.max(1, ft[1] | 0); j++) for (let k = 0; k < Math.max(1, ft[0] | 0); k++) pc.add((o.at.y - j) * W + o.at.x + k); });
           lightBlock = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 3 : PDM.terrainBlocksLight(terrain[y * W + x]) ? 1 : pc.has(y * W + x) ? 2 : 0;
         }
+        // 자동 광원 미리보기: 게임과 같은 규칙(확률 · 최대 개수 · 최소 간격)으로 고른 예시 자리 — 게임에서는 층마다 무작위로 다시 고름
+        if (drawable && aLights.length) aLights.forEach((al, idx) => {
+          PDM.autoLightCells(terrain, W, H, al, idx).forEach(([cx, cy]) => {
+            const px = cx * s + s / 2 + (+al.ox || 0) * s / 16, py = cy * s + s / 2 + (+al.oy || 0) * s / 16;
+            PDM.drawLightPreview(g, px, py, Object.assign({ color: '#ffc870', k: 4, z: 10, range: 4 }, al), s, al.shadow === false ? {} : { block: lightBlock });
+            g.save(); g.setLineDash([3, 3]); g.strokeStyle = 'rgba(255,214,140,.85)'; g.lineWidth = 1; g.beginPath(); g.arc(px, py, Math.max(3, s * .18), 0, Math.PI * 2); g.stroke(); g.restore();
+          });
+        });
         // 오브젝트
         (fl.objects || []).forEach((o, i) => {
           let x, y;
@@ -1190,7 +1201,7 @@
               ...PDM.lightFields(key, ['terrainLights', i], tl, { area: true }))),
             h('button', { class: 'btn sm add', onclick: () => store.edit(key, '지형 광원 추가', o => { (o.terrainLights = o.terrainLights || []).push({ terrain: 29, color: '#9a7cff', k: 1.5, z: 10, range: 2, pulse: 3, pulseMin: 55 }); }) }, '+ 지형 광원 추가')),
           section(`자동 광원 (${(fl.autoLights || []).length})`,
-            h('div', { class: 'hint' }, '고른 지형 칸에 겹치도록 점광원을 자동으로 놓습니다 (벽 · 물건 · 캐릭터 그림자 있음) — 자동 생성 층에서도 됩니다. 자리는 층마다 씨앗으로 정해져서 다시 들어와도 같습니다. 예) 석상마다 촛불, 장식 벽에 횃불(빛 위치를 ↓ 로 옮김), 물 몇 군데에 도깨비불.'),
+            h('div', { class: 'hint' }, '고른 지형 칸에 겹치도록 점광원을 자동으로 놓습니다 (벽 · 물건 · 캐릭터 그림자 있음) — 자동 생성 층에서도 됩니다. 자리는 층마다 씨앗으로 정해져서 다시 들어와도 같습니다. 예) 석상마다 촛불, 장식 벽에 횃불(빛 위치를 ↓ 로 옮김), 물 몇 군데에 도깨비불. 직접 그린 맵에서는 맵 그림에 점선 동그라미와 빛으로 미리 보입니다 (확률 · 간격 · 최대 개수를 따른 예시 자리 — 실제 자리는 게임에서 층마다 정해짐).'),
             ...(fl.autoLights || []).map((al, i) => h('div', { class: 'card', style: { padding: '6px', margin: '6px 0' } },
               row(F.select(key, ['autoLights', i, 'terrain'], PDM.TERRAIN.map(t => [t.id, t.name]), { label: '놓을 지형', number: true }),
                 F.num(key, ['autoLights', i, 'chance'], { label: '칸마다 확률 (%)', int: true, min: 0, max: 100, def: 100 }),

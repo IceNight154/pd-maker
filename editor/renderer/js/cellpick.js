@@ -98,6 +98,22 @@
         return h('div', {}, h('div', { class: 'hint' }, opts.area ? '미리보기 (파란 칸 = 그 지형, 네모 한 칸 = 타일 한 칸)' : '미리보기 (네모 한 칸 = 타일 한 칸)'), cv); })()].filter(Boolean);
   };
   /** 이 칸이 빛을 가리는지 — 게임의 solid && losBlocking (벽 · 장식 벽 · 책장 · 문 · 잠긴 문 · 숨겨진 문 · 바리케이드) */
+  /** 자동 광원 자리 (편집기 미리보기용 예시): 그 지형 칸을 섞어 확률 · 간격 · 최대 개수에 맞게 → [[x, y], …]. 게임은 층 씨앗으로 따로 고름 */
+  PDM.autoLightCells = function (terrain, W, H, a, idx) {
+    let st = (idx + 1) * 2654435761 >>> 0;
+    const rnd = () => { st = (st + 0x6D2B79F5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const ter = +a.terrain, chance = Math.max(0, Math.min(1, (a.chance == null ? 100 : +a.chance) / 100)), sp = Math.max(0, a.spacing == null ? 3 : +a.spacing), max = +a.max || 0;
+    const cells = []; for (let i = 0; i < W * H; i++) if (terrain[i] === ter) cells.push(i);
+    for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+    const out = [];
+    for (const c of cells) {
+      if (max > 0 && out.length >= max) break;
+      if (rnd() >= chance) continue;
+      const x = c % W, y = Math.floor(c / W);
+      if (!out.some(([px, py]) => Math.hypot(px - x, py - y) < sp)) out.push([x, y]);
+    }
+    return out;
+  };
   PDM.terrainBlocksLight = id => { const t = PDM.TERRAIN_BY_ID[id]; return !!(t && t.blockLight); };
   /** (cx, cy) 에 광원 o 를 한 칸 = s px 로 그림 (덧셈 합성).
    *  opt.block(x, y) → 0 = 빛이 지나감 · 1 = 벽 칸 · 2 = 막힌 맵 오브젝트 (칸 좌표, 캔버스 (0,0) = 칸 (0,0)) — 주면 그림자를 그림 */
