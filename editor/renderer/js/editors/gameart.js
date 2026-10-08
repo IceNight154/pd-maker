@@ -133,6 +133,19 @@
       PDM.assets.clear(); ctx.refresh();
     };
     wcv.ondblclick = editWater;
+    // 사용자 타일에서 물 그림 고르기: 흐르는 타일은 그림 전체, 칸 타일은 그 칸을 이어 붙여 32×32 이상으로 → assets/tiles/<id>_water.png
+    const waterFromTile = async t => {
+      const img = await PDM.assets.load(t.image); if (!img) { toast('그 사용자 타일에 그림이 없습니다', 'bad'); return; }
+      const z = Math.max(1, t.size || 16), sx = t.flow ? 0 : (t.x || 0) * z, sy = t.flow ? 0 : (t.y || 0) * z, sw = t.flow ? img.width : z, sh = t.flow ? img.height : z;
+      const o = h('canvas', { width: Math.max(32, sw), height: Math.max(32, sh) }), g = o.getContext('2d'); g.imageSmoothingEnabled = false;
+      for (let y = 0; y < o.height; y += sh) for (let x = 0; x < o.width; x += sw) g.drawImage(img, sx, sy, sw, sh, x, y, sw, sh);
+      const rel = `assets/tiles/${c.id}_water.png`;
+      try { await pdm.writeDataURL(store.abs(rel), o.toDataURL('image/png')); } catch (err) { toast('물 그림 저장 실패: ' + err.message, 'bad'); return; }
+      store.edit('world', '물 그림 ← 사용자 타일 ' + (t.name || t.id), w => { w.customThemes[i].water = rel; w.customThemes[i].waterTile = t.id; });
+      PDM.assets.clear(); ctx.refresh(); toast(`물 그림을 사용자 타일 「${t.name || t.id}」 로 바꿨습니다`);
+    };
+    const tileChoices = () => userTiles().filter(t => t.image);
+    const srcTile = c.waterTile && userTiles().find(t => t.id === c.waterTile);
     const { F, row } = PDM.ui;
     const used = themeUsage(c.id);
     return h('div', { class: 'li', style: { alignItems: 'flex-start', marginBottom: '8px' } }, cv,
@@ -145,8 +158,11 @@
             h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
               h('button', { class: 'btn sm', onclick: editWater }, c.water ? '✎ 물 그림 편집…' : '✎ 물 그림 만들기 (바탕 테마 물 복사)…'),
               h('button', { class: 'btn sm', onclick: async () => { const f = await PDM.ui.pickImage('tiles'); if (!f) return; store.edit('world', '물 그림 불러오기', w => { w.customThemes[i].water = f; }); PDM.assets.clear(); ctx.refresh(); } }, '⤓ PNG 불러오기'),
-              c.water ? h('button', { class: 'btn sm', onclick: () => { store.edit('world', '물 그림 되돌리기', w => { w.customThemes[i].water = ''; }); PDM.assets.clear(); ctx.refresh(); } }, '바탕 테마 물로') : null),
-            h('p', { class: 'hint' }, `${c.water ? c.water : '지금: 바탕 테마(' + (PDM.THEMES[c.base || 'SEWER'] || {}).name + ')의 물'} — 물 칸 아래에 깔려 천천히 흐르는 그림입니다. 게임 물은 32×32 이고 가로 · 세로로 이어 붙여 쓰므로 끝과 끝이 이어지게 그리세요 (왼쪽 미리보기 = 2×2). 물가 모양은 타일셋의 물가 칸이 정합니다.`))),
+              PDM.ui.dropBtn('▦ 사용자 타일에서…', () => tileChoices().length ? tileChoices().map(t => ({ label: `${t.name || t.id}${t.flow ? ' (흐르는 그림 — 전체)' : ` (${t.x || 0}, ${t.y || 0} 칸)`}`, run: () => waterFromTile(t) }))
+                : [{ label: '그림이 있는 사용자 타일이 없습니다 — 아래 "사용자 타일"에서 만드세요', run: () => {} }]),
+              srcTile ? h('button', { class: 'btn sm', title: '그 사용자 타일의 그림을 고쳤으면 다시 가져옴', onclick: () => waterFromTile(srcTile) }, `↻ 「${srcTile.name || srcTile.id}」 다시 가져오기`) : null,
+              c.water ? h('button', { class: 'btn sm', onclick: () => { store.edit('world', '물 그림 되돌리기', w => { w.customThemes[i].water = ''; delete w.customThemes[i].waterTile; }); PDM.assets.clear(); ctx.refresh(); } }, '바탕 테마 물로') : null),
+            h('p', { class: 'hint' }, `${c.water ? c.water : '지금: 바탕 테마(' + (PDM.THEMES[c.base || 'SEWER'] || {}).name + ')의 물'} — 물 칸 아래에 깔려 천천히 흐르는 그림입니다. 게임 물은 32×32 이고 가로 · 세로로 이어 붙여 쓰므로 끝과 끝이 이어지게 그리세요 (왼쪽 미리보기 = 2×2). 물가 모양은 타일셋의 물가 칸이 정합니다.${srcTile ? ` · 사용자 타일 「${srcTile.name || srcTile.id}」 에서 가져옴 (그 타일의 효과 · 이름은 물 칸에 붙지 않음 — 효과까지 원하면 그 사용자 타일을 맵에 칠하세요)` : ' · "사용자 타일에서…"로 내가 만든 타일의 그림을 물로 쓸 수 있습니다 (칸 타일은 이어 붙여 32×32).'}`))),
         h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
           h('button', { class: 'btn sm pri', onclick: edit }, '✎ 타일셋 편집…'),
           h('span', { style: { display: 'inline-flex', gap: '4px', alignItems: 'center' }, title: '한 칸을 더 많은 픽셀로 그려 세밀하게 (게임에서도 적용 — 화면의 타일 크기는 그대로)' }, scaleSel, h('button', { class: 'btn sm', onclick: rescale }, '배율 적용'), scaleInfo),

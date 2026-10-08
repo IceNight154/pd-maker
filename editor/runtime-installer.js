@@ -90,6 +90,11 @@ const PATCHES = [
     line: `${PKG}.MakerFacets.missileHit(this, cell);` },
   { file: 'actors/Actor.java', name: '아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기', anchor: /\n([ \t]*)for \(Blob blob : Dungeon\.level\.blobs\.values\(\)\) \{\s*add\( blob \);\s*\}[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerFacets.reviveFuses();` },
+  // ---- 캐릭터 AI · 체력 (MakerCharAI — 제자리 고정 · 코드로 직접 · 체력 무한 · 지속 회복) ----
+  { file: 'actors/mobs/Mob.java', name: '캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복', anchor: /protected boolean act\(\)\s*\{\s*\n\s*super\.act\(\);[^\n]*\n/, where: 'after',
+    line: `{ Boolean pdmAi = ${PKG}.MakerCharAI.act(this); if (pdmAi != null) return pdmAi; }` },
+  { file: 'actors/Char.java', name: '캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로)', anchor: /\n([ \t]*)if \(HP < 0\) HP = 0;/, where: 'before',
+    line: `${PKG}.MakerCharAI.afterDamage(this, dmg + shielded);` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
     anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
@@ -197,7 +202,10 @@ const PATCHES = [
     line: `if ({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }())` },
   { file: 'scenes/InterlevelScene.java', name: '층을 떠날 때 (감정 결정화·일기)',
     anchor: /public void create\(\)\s*\{\s*\n([ \t]*)super\.create\(\);[^\n]*\n/, where: 'after',
-    line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` }
+    line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` },
+  // (맨 끝: 같은 자리의 다른 줄보다 먼저 오게 — 나중에 넣은 줄이 바로 아래에 붙음)
+  { file: 'actors/mobs/Mob.java', name: '캐릭터 체력 무한: 쓰러지지 않음', anchor: /public void die\(\s*Object cause\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.MakerCharAI.preventDeath(this)) return;` },
 ];
 
 function javaDir(repo) { return path.join(repo, ...JAVA_ROOT); }
@@ -240,7 +248,7 @@ function generate(repo, projectDir, log = console.log) {
   const gen = path.join(javaDir(repo), 'pdmaker', 'gen');
   const readAll = dir => { const d = path.join(projectDir, dir); if (!fs.existsSync(d)) return []; return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')); } catch (e) { log(`읽기 실패 ${dir}/${f}: ${e.message}`); return null; } }).filter(Boolean); };
   const readOne = rel => { const f = path.join(projectDir, rel); try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; } catch (e) { log(`읽기 실패 ${rel}: ${e.message}`); return null; } };
-  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items'), readOne('gameitems.json')) : {};
+  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items'), readOne('gameitems.json'), readAll('characters')) : {};
   fs.mkdirSync(gen, { recursive: true });
   // 이제 안 쓰는 파일 지우기 (분류를 옮기면 예전 폴더의 파일) + 빈 폴더 정리
   const sweep = (dir, rel) => {

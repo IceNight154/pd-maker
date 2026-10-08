@@ -377,8 +377,9 @@ public class LevelHooks {
 		if (MakerRuntime.character(ref) == null) { MakerRuntime.log("없는 캐릭터: " + ref); return null; }
 		if (MakerRuntime.charOff(ref)) return null;
 		Mob g = gameChar(ref);
-		if (g != null) return g;
-		return MakerMob.create(ref);
+		Mob m = g != null ? g : MakerMob.create(ref);
+		MakerCharAI.onCreate(m);
+		return m;
 	}
 	/** 게임 캐릭터 클래스 (actors.mobs 기준: "Rat" · "npcs.Ghost" · "Shaman$RedShaman") → 새 인스턴스 */
 	public static Mob gameMob(String cls) {

@@ -79,7 +79,7 @@ PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구
 
 // ---------- 캐릭터 / 아이템 ----------
 PDM.CHAR_KINDS = { npc: 'NPC', companion: '동료', mob: '몬스터', boss: '보스' };
-PDM.AI_MODES = { stand: '제자리', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)' };
+PDM.AI_MODES = { stand: '제자리', fixed: '제자리에 고정 (움직이지도 밀려나지도 않음 — 샌드백)', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)', code: '코드로 직접 (Java)' };
 PDM.ANIM_KEYS = ['idle', 'run', 'attack', 'zap', 'die', 'operate'];
 /** 영웅 시트에만 있는 기본 동작 (게임 HeroSprite 의 fly · read) · 캐릭터는 fly 만 */
 PDM.ANIM_KEYS_HERO = ['idle', 'run', 'attack', 'zap', 'die', 'dead', 'operate', 'fly', 'read'];   // dead = 쓰러진 뒤 이어서 반복 (선택)

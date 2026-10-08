@@ -2,6 +2,7 @@
  * 데이터로 정의되는 몬스터 (캐릭터 종류 mob / boss). SPD 기본 몬스터 AI(돌아다님·추격)를 그대로 씁니다.
  *   stats: hp, attackMin, attackMax, defense, accuracy, evasion, speed
  *   behaviors.onDeath: 쓰러질 때 실행할 이벤트 명령 (예: 아이템 떨어뜨리기)
+ *   ai.mode fixed · code, stats.infiniteHp · regen 은 MakerCharAI (게임 캐릭터에도 같은 연결 줄로)
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
@@ -44,7 +45,7 @@ public class MakerMob extends Mob {
 
 	@Override public CharSprite sprite() { return new MakerSprite(data()); }
 	@Override public String name() { JsonValue d = data(); return d == null ? "?" : d.getString("name", charId); }
-	@Override public String description() { JsonValue d = data(); return d == null ? "" : d.getString("desc", ""); }
+	@Override public String description() { JsonValue d = data(); return (d == null ? "" : d.getString("desc", "")) + MakerCharAI.damageInfo(this); }
 
 	@Override public int damageRoll() { JsonValue s = stats(); return s == null ? Random.NormalIntRange(1, 4) : Random.NormalIntRange(s.getInt("attackMin", 1), s.getInt("attackMax", 4)); }
 	@Override public int attackSkill(Char target) { JsonValue s = stats(); return s == null ? 8 : s.getInt("accuracy", 8); }
@@ -61,6 +62,7 @@ public class MakerMob extends Mob {
 	}
 
 	@Override public void die(Object cause) {
+		if (MakerCharAI.preventDeath(this)) return;   // 체력 무한 (샌드백)
 		MakerAudio.charSound(charId, "die");
 		super.die(cause);
 		JsonValue d = data();

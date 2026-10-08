@@ -348,8 +348,21 @@
     return s;
   }
 
+  /** 캐릭터 AI 코드 (ai.mode = code) — 런타임 MakerCharAI 가 GenCharAI.act(charId, self, ai) 로 매 행동마다 부름 */
+  const CHARAI_DOC = '쓸 수 있는 것: self (이 캐릭터 — Mob) · hero · level · ai (도우미: ai.stepTo(칸) · ai.stepAway(칸) · ai.wander() · ai.attack(대상) · ai.waitTurn() · ai.teleport(칸) · ai.hunt(대상) · ai.say("글") · ai.cell(x, y) · ai.dist(칸) · ai.sees(캐릭터) · ai.near(캐릭터) · ai.now()). 턴을 쓰는 도우미는 true 를 돌려주니 "return ai.…;" 로 끝내세요. 아무것도 return 하지 않거나 return ai.def(); 이면 원래 AI 대로.';
+  const CHARAI_SNIPPET = '// 영웅이 보이면 3칸 거리를 두고, 붙으면 공격, 안 보이면 돌아다님\nif (ai.sees(hero)) {\n\tif (ai.near(hero)) return ai.attack(hero);\n\tif (ai.dist(hero.pos) < 3) return ai.stepAway(hero.pos);\n\treturn ai.waitTurn();\n}\nreturn ai.wander();';
+  function charAISource(chars) {
+    const list = (chars || []).filter(c => c && c.id && c.ai && c.ai.mode === 'code' && has(c.ai.code));
+    const imps = list.map(c => c.ai.imports || '').join('\n') + `\n${PKG}.actors.mobs.Mob\n${PKG}.levels.Level\n${PKG}.pdmaker.MakerCharAI`;
+    let s = header(imps, '캐릭터 AI 코드', '');
+    s += `public class GenCharAI {\n\t/** 코드가 있으면 실행 — true = 이번 턴을 씀, null · false = 원래 AI */\n\tpublic static Boolean act(String charId, Mob self, MakerCharAI.Ctl ai) {\n\t\tHero hero = Dungeon.hero; Level level = Dungeon.level;\n\t\tswitch (charId) {\n`;
+    list.forEach(c => { s += `\t\t\tcase ${lit(c.id)}: {\n\t\t\t\t${mark('캐릭터 ' + c.id, 'AI 코드')}\n\t\t\t\tif (true) {\n${indent(c.ai.code, '\t\t\t\t\t')}\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\t}\n`; });
+    s += `\t\t}\n\t\treturn null;\n\t}\n}\n`;
+    return s;
+  }
+
   /** 프로젝트 전체 → { '파일이름.java': 소스 } */
-  function generate(heroes, items, gameitems) {
+  function generate(heroes, items, gameitems, chars) {
     const out = {};
     projItems = items || [];
     (heroes || []).forEach(h => { if (h && h.id && heroNeedsClass(h)) out[heroClass(h.id) + '.java'] = heroSource(h); });
@@ -359,6 +372,7 @@
     out['GenIndex.java'] = `// 자동 생성 파일 — PDMaker 가 만듭니다. 아이템 클래스가 어느 폴더(분류/세부 종류)에 있는지.\npackage ${PKG}.pdmaker.gen;\n\npublic class GenIndex {\n\tpublic static final String[][] ITEMS = {\n`
       + index.map(([a, b]) => `\t\t{ ${lit(a)}, ${lit(b)} },\n`).join('') + '\t};\n}\n';
     out['GenWandFx.java'] = wandFxSource(items, gameitems);
+    out['GenCharAI.java'] = charAISource(chars);
     projItems = null;
     return out;
   }
@@ -401,5 +415,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, DAMAGE_WANDS, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, DAMAGE_WANDS, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, charAISource, CHARAI_DOC, CHARAI_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
 });

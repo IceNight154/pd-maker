@@ -261,6 +261,7 @@ MyProject/
 
 - 사용자 테마 `customThemes[{ id, name, base, tiles, water, music, light* }]` — 게임 테마 타일셋을 복사해 고침. 16×16칸이면 크기 자유(가로 ÷ 16 = 한 칸 px), "배율 적용"(×0.25~×4). 게임: 연결 줄 3개(`DungeonTilemap` → `LevelHooks.hiresTiles` 가 큰 칸 필름으로, `tileImg` 가 발견 연출 · 정보 창 크기 맞춤).
 - **물 그림**: 사용자 테마의 `water` — "물 그림 만들기(바탕 테마 물 복사 → `assets/tiles/<id>_water.png`)" · 편집 · PNG 불러오기 · 바탕 테마 물로, 2×2 이음매 미리보기. 런타임 `MakerLevel.waterTex` → `LevelHooks.customWater`(`pdmaker:water:<id>` 텍스처, 비우면 바탕 테마 물). 게임 물 그림(water0~4)은 "게임 물 그림"에서 고침(그 테마 전체). 편집기 맵 화면도 물 칸을 실제 물 그림으로(`assets.themeWater` — 사용자 테마는 타일셋 사본 캔버스에 물을 묶음).
+  "▦ 사용자 타일에서…": 그림이 있는 사용자 타일을 골라 물 그림으로 — 흐르는 타일은 그림 전체, 칸 타일은 그 칸을 이어 붙여 32×32 이상으로 `assets/tiles/<id>_water.png` 에 써 넣고 `waterTile` 에 출처를 남김("↻ 다시 가져오기"). 그림만 가져옴(그 타일의 효과 · 살펴보기 이름은 물 칸에 붙지 않음).
 - **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over, fx, gameFx, title, desc }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿 `layers.utile[칸] = id`(지우개 "사용자 타일", 크기 바꾸기 · 맵 전체 지우기도 함께). 런타임 `MakerUserTiles`: `MakerLevel.build` · `TemplateRoom.paintTemplate` 가 `put(칸, id)` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
 - **흐르는 그림 타일** (물 그림을 사용자 타일로): `flow` · `flowX` · `flowY`(px/초, 게임 물 0 · -5) — 그림 고르기에 게임 물(water0~4) · 사용자 테마 물이 있음, "+ 효과 타일"에 "흐르는 물 그림" · "빛나는 물(물 + 치유의 샘)". 런타임 `MakerUserTiles.FlowTiles`(칸마다 SkinnedBlock, 세상 좌표 + 시간으로 오프셋 → 이음매 없이 흐름, 다른 사용자 타일 · 효과 아래). 효과 · 살펴보기 이름도 함께. 편집기는 이어 붙인 멈춘 모습.
 - **효과 타일** (희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일): 사용자 타일의 `gameFx`(게임 효과 — sink 배수구 물방울 · torch 감옥 횃불 · vein 광맥 · smoke · greenflame · stream · alchemy 솥 거품 · sacrificial 희생의 불꽃 · healing · flame · sparks) · `fx`(effects.json — `MakerEffect.place`) · `title`/`desc`(살펴보기 창). `image` 를 비우면 그림 없이 지형(칠할 때 지형)의 원래 그림 + 효과. 맵 그림의 "+ 효과 타일 (게임 프리셋)"(재단 · 솥 · 배수구 · 횃불 벽 · 샘 · 연기 벽 · 광맥 · 초록 불꽃). 런타임: `finish` 가 칸마다 효과를 놓음 — `MakerUserTiles.GameFx`(CustomTilemap, 지형 층에 효과 Gizmo 를 붙임): 공개 클래스(PrisonLevel.Torch · CityLevel.Smoke/GreenFlame)는 그대로, 지역 전용 비공개 장식(SewerLevel Sink · CavesLevel Vein · HallsLevel Stream)은 `Level.map` 을 잠깐 그 칸만 해당 지형으로 바꾼 채 `add…Visuals` 를 불러 그 칸 것만 만듦, 솥 · 재단 · 샘 · 불꽃은 게임 입자(Speck.BUBBLE · SacrificialParticle · Speck.HEALING · FlameParticle · SparkParticle)를 `CellEmitter`(영웅이 보는 칸만)로. 이름 · 설명이 있으면 `image()/name()/desc()` 로 살펴보기 창(그림 없는 타일은 지형 그림). 편집기 맵 화면 · 팔레트에 ✦ 표시. 헤드리스 `eval:cellname,x,y`.
@@ -437,8 +438,9 @@ MyProject/
               "lightMode": "add", "lightPower": 100, "lightBloom": 0 },
   "portrait": { "default": "assets/portraits/mireille/default.png", "expressions": [ { "key": "smile", "image": "…" } ],
                 "scale": 1, "offsetX": 0, "offsetY": 0, "side": "", "flip": false },
-  "stats": { "hp": 20, "attack": [1,4], "defense": 0, "accuracy": 10, "evasion": 5, "speed": 1 },
-  "ai": { "mode": "stand|wander|patrol|follow|schedule", "path": [ … ], "wait": 3 },
+  "stats": { "hp": 20, "attack": [1,4], "defense": 0, "accuracy": 10, "evasion": 5, "speed": 1,
+             "infiniteHp": false, "regen": 0, "regenEvery": 1, "regenDelay": 0 },
+  "ai": { "mode": "stand|fixed|wander|patrol|follow|schedule|hunt|code", "path": [ … ], "wait": 3, "fixedAttack": false, "code": "", "imports": "" },
   "heart": { "enabled": true, "traits": ["CHEERFUL"], "likes": ["tag:herb"], "dislikes": [], "initial": { "favor": 0, "trust": 0 } },
   "behaviors": { "onSpawn": [], "onInteract": [], "onDamaged": [], "onDeath": [], "onSeeHero": [], "onTurn": [] },
   "dialogue": { /* §13.6 토픽 */ },
@@ -447,6 +449,12 @@ MyProject/
   "shop": { "on": false, … } }
 ```
 
+- **AI 추가 방식 · 체력** (`MakerCharAI` — 데이터 캐릭터 `MakerMob` · `MakerNPC` 와 게임 클래스 캐릭터(`MakerDrops.charOf` — game 이 같은 캐릭터) 모두):
+  - `fixed` 제자리에 고정: `rooted` + `Property.IMMOVABLE`(밀치기 · 자리 바꾸기에도 안 밀림, 만들 때 · 맞을 때 · 차례마다 붙잡음). 몬스터는 `fixedAttack` 이면 원래 AI(걷지 못하니 옆에 온 적만 공격), 끄면 PASSIVE 로 가만히.
+  - `code` 코드로 직접: 생성 파일 `gen/GenCharAI.java`(`codegen.charAISource` — 캐릭터마다 `case "<id>": { if (true) { 코드 } break; }`), 런타임이 차례마다 `GenCharAI.act(charId, self, ai)` — true = 턴을 씀, null/false = 원래 AI. 도우미 `MakerCharAI.Ctl`: stepTo · stepAway · wander · attack(반사로 Mob.doAttack) · waitTurn · waitTurns · teleport · hunt · say · cell · x · y · dist · sees · near · now. 오류는 경고 한 번 + 원래 AI.
+  - `stats.infiniteHp` 체력 무한(샌드백): `Char.damage` 의 `if (HP < 0) HP = 0;` 앞 연결 줄 `afterDamage` 가 HP = HT 로 되돌림(피해 숫자는 그대로 뜸) + `Mob.die` 맨 앞 `preventDeath`(즉사 효과). 받은 피해(합계 · 횟수 · 평균 · 마지막)를 `MakerMob.description` 에 붙임.
+  - `stats.regen` 지속 회복: `regenEvery` 턴마다 `regen`, 마지막으로 맞은 뒤 `regenDelay` 턴이 지나야(초록 숫자). 편집기 "🎯 샌드백으로" = fixed + 공격 안 함 + 체력 무한.
+  - 연결 줄: `Mob.act` 의 `super.act()` 바로 뒤 · `Char.damage` · `Mob.die` 맨 앞(목록 맨 끝 — 같은 자리의 "몬스터 처치"보다 먼저). `MakerNPC.act` 는 직접 부름(동료일 때는 빼고). 헤드리스 `eval:charai` · `charhit` · `charstat`.
 - 원작 캐릭터 72명(`spd-chars.js` ← `tools/data/extract_spd_chars.py`): `useGame: true` 면 맵에 놓거나 소환하면 게임 클래스 그대로(`LevelHooks.gameChar`), 끄면 데이터로 도는 캐릭터(`MakerMob` · `MakerNPC`).
 - 스프라이트 `scale`: 0 = 세로 24px 초과 시 15px 높이에 맞춤. 런타임 `MakerSprite`.
 - 확장 기능 칸 4종(초상화 · 마음 · 상황별 대사 · 행동 이벤트)은 켜야 편집 화면에 보임.
@@ -847,7 +855,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **76개** 연결점 · **35개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **79개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -861,7 +869,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `tiles/DungeonTilemap.java` | 큰 타일셋 (한 칸이 16px 이 아닌 타일셋)<br>큰 타일셋: 발견 연출 타일 크기 |
 | `tiles/DungeonTerrainTilemap.java` | 큰 타일셋: 정보 창 타일 크기 |
 | `actors/hero/Hero.java` | 맵 오브젝트: 옆에서 누르면 밀기·상호작용<br>영웅 코드: 명중<br>영웅 코드: 회피<br>영웅 코드: 피해<br>영웅 코드: 방어<br>영웅 코드: 속도<br>영웅 코드: 공격 적중<br>영웅 코드: 공격 받음<br>특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)<br>전직 이름 (영웅 정보 창) |
-| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치 |
+| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치<br>캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복<br>캐릭터 체력 무한: 쓰러지지 않음 |
 | `actors/mobs/MobSpawner.java` | 등장 금지한 몬스터 빼기 |
 | `sprites/ItemSprite.java` | 아이템 그림 배율 (바닥에 놓였을 때) |
 | `windows/WndHero.java` | 영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문 |
@@ -879,6 +887,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |
 | `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop)<br>아이템 추가 기능: 버튼 이름 · 버튼 동작 · 던져서 떨어졌을 때 · 가방 기능 안에서 빼내기(detachAll) · 저장 · 불러오기 |
 | `items/weapon/missiles/MissileWeapon.java` | 아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과 |
+| `actors/Char.java` | 캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로) |
 | `actors/Actor.java` | 아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기 |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |

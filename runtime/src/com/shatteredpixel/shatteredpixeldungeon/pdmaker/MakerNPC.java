@@ -1,7 +1,7 @@
 /*
  * 데이터로 정의되는 NPC (캐릭터 종류 npc / companion).
  *   · 말을 걸면: 맵 오브젝트에 지정한 이벤트 → 캐릭터의 onInteract 행동 → 기본 인사(마음 시스템 TALK + greet 토픽) 순
- *   · AI: stand / wander / patrol(경로 순찰)
+ *   · AI: stand / wander / patrol(경로 순찰) / schedule · fixed(제자리 고정) · code(코드로 직접 — MakerCharAI)
  *   · 공격받으면 다치지 않고 마음 시스템의 "attacked" 반응
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -228,6 +228,7 @@ public class MakerNPC extends NPC {
 			HeartSystem.decay(charId);
 		}
 		if (pageEvent) return actPageEvent();
+		if (!EventTriggers.inParty(charId)) { Boolean r = MakerCharAI.act(this); if (r != null) return r; }   // 제자리 고정 · 코드로 직접
 		// 동료(이벤트 명령 "동료 합류"): 영웅을 따라다님 — 멀어지면 옆으로 건너뜀
 		if (EventTriggers.inParty(charId) && Dungeon.hero != null && Dungeon.hero.isAlive()) {
 			int dist = Dungeon.level.distance(pos, Dungeon.hero.pos);

@@ -448,6 +448,26 @@ public class Hooks {
 					System.out.println("[TEST] baguse after take inner=" + in.items.size() + " inBackpack=" + hero.belongings.backpack.items.contains(x));
 					break; }
 				case "heaps": { for (com.shatteredpixel.shatteredpixeldungeon.items.Heap h : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.heaps.valueList()) System.out.println("[TEST] heap " + h.pos + " " + h.items); break; }
+				case "charai": { // charai,<캐릭터 id>,<거리> — 영웅 옆 거리 칸에 소환 (캐릭터 AI · 체력 무한 · 지속 회복)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					int dd = p.length > 2 ? Integer.parseInt(p[2]) : 2, tgt = -1;
+					for (int d : new int[]{dd, -dd, dd * l.width(), -dd * l.width()}) { int c = hero.pos + d; if (c > 0 && c < l.length() && l.passable[c] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c) == null) { tgt = c; break; } }
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m = com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.createMob(p[1]);
+					m.pos = tgt; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(m);
+					System.out.println("[TEST] charai " + p[1] + " " + m.getClass().getSimpleName() + " at " + tgt + " HP " + m.HP + "/" + m.HT);
+					break; }
+				case "charhit": { // charhit,<캐릭터 id>,<피해> — 그 캐릭터에게 피해 · 밀치기
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs.toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob[0])) {
+						if (!p[1].equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m))) continue;
+						m.damage(Integer.parseInt(p[2]), com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero);
+						int before = m.pos;
+						com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica tr = new com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica(m.pos, m.pos + 2, com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica.MAGIC_BOLT);
+						com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.throwChar(m, tr, 2, false, false, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero);
+						System.out.println("[TEST] charhit " + p[1] + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " pos " + before + "->" + m.pos + " desc:" + m.description().replace("\n", " "));
+					}
+					break; }
+				case "charstat": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) { String id = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m); if (id != null && !id.equals("moss_rat")) System.out.println("[TEST] charstat " + id + " pos " + m.pos + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " heroDist " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); } break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;
