@@ -269,6 +269,7 @@ public class LevelHooks {
 	public static void afterCreate(Level level) {
 		if (!MakerRuntime.isActive()) return;
 		WorldGraph.wire(level, false);
+		MakerUserTiles.finish(level);   // 맵 그리기로 칠한 사용자 타일
 		if (!(level instanceof MakerLevel)) {
 			MakerDrops.chestLoot(level);
 			// 노드의 "몬스터 스폰" 을 끄면(noMobs): 게임이 놓은 적 몬스터를 치움 (다시 생기는 것은 MakerRuntime.onFloorEnter 에서 막음)
@@ -464,21 +465,24 @@ public class LevelHooks {
 	public static void tileImg(com.watabou.noosa.Image img) {
 		try { if (img != null && img.width > 0 && img.width != 16) img.scale.set(16f / img.width); } catch (Throwable ignored) { }
 	}
-	public static String customTiles(String id) {
+	public static String customTiles(String id) { return customTex(id, "tiles"); }
+	/** 사용자 테마의 물 그림 (world.customThemes[].water — 비우면 null → 바탕 테마 물) */
+	public static String customWater(String id) { return customTex(id, "water"); }
+	static String customTex(String id, String field) {
 		JsonValue c = customTheme(id);
-		if (c == null || c.getString("tiles", "").isEmpty()) return null;
-		String key = "pdmaker:tiles:" + id;
+		if (c == null || c.getString(field, "").isEmpty()) return null;
+		String key = "pdmaker:" + field + ":" + id;
 		try {
 			Field f = TextureCache.class.getDeclaredField("all");
 			f.setAccessible(true);
 			Map<Object, SmartTexture> all = (Map<Object, SmartTexture>) f.get(null);
 			if (!all.containsKey(key)) {
-				Pixmap p = new Pixmap(MakerRuntime.root().child(c.getString("tiles")));
+				Pixmap p = new Pixmap(MakerRuntime.root().child(c.getString(field)));
 				all.put(key, new SmartTexture(p));
 			}
 			return key;
 		} catch (Exception e) {
-			MakerRuntime.log("사용자 타일셋 등록 실패(" + id + "): " + e);
+			MakerRuntime.log("사용자 " + (field.equals("water") ? "물 그림" : "타일셋") + " 등록 실패(" + id + "): " + e);
 			return null;
 		}
 	}

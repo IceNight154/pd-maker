@@ -58,7 +58,7 @@ public class MakerLevel extends Level {
 	public String waterTex() {
 		if (MakerPaint.on(data())) return MakerPaint.blank();
 		String t = theme();
-		if (t.startsWith("custom:")) t = LevelHooks.customBase(t.substring(7));
+		if (t.startsWith("custom:")) { String k = LevelHooks.customWater(t.substring(7)); if (k != null) return k; t = LevelHooks.customBase(t.substring(7)); }
 		switch (t) {
 			case "PRISON": return Assets.Environment.WATER_PRISON;
 			case "CAVES":  return Assets.Environment.WATER_CAVES;
@@ -82,6 +82,7 @@ public class MakerLevel extends Level {
 			}
 		}
 		if (MakerPaint.on(f)) { MakerPaint mp = new MakerPaint(); mp.setRect(0, 0, w, h); customTiles.add(mp); }
+		for (int i = 0; i < w * h; i++) MakerUserTiles.put(this, i, MakerUserTiles.at(f, i));   // 사용자 타일 (afterCreate 에서 타일맵으로)
 		if (f.get("objects") != null) for (JsonValue o : f.get("objects")) {   // 투명 입구 오브젝트
 			JsonValue at = o.get("at");
 			if (!"entrance".equals(o.getString("type", "")) || at == null || !at.has("x")) continue;

@@ -260,6 +260,8 @@ MyProject/
 ### 4.6 타일셋 · 사용자 테마 (`editors/gameart.js` "맵 그림")
 
 - 사용자 테마 `customThemes[{ id, name, base, tiles, water, music, light* }]` — 게임 테마 타일셋을 복사해 고침. 16×16칸이면 크기 자유(가로 ÷ 16 = 한 칸 px), "배율 적용"(×0.25~×4). 게임: 연결 줄 3개(`DungeonTilemap` → `LevelHooks.hiresTiles` 가 큰 칸 필름으로, `tileImg` 가 발견 연출 · 정보 창 크기 맞춤).
+- **물 그림**: 사용자 테마의 `water` — "물 그림 만들기(바탕 테마 물 복사 → `assets/tiles/<id>_water.png`)" · 편집 · PNG 불러오기 · 바탕 테마 물로, 2×2 이음매 미리보기. 런타임 `MakerLevel.waterTex` → `LevelHooks.customWater`(`pdmaker:water:<id>` 텍스처, 비우면 바탕 테마 물). 게임 물 그림(water0~4)은 "게임 물 그림"에서 고침(그 테마 전체). 편집기 맵 화면도 물 칸을 실제 물 그림으로(`assets.themeWater` — 사용자 테마는 타일셋 사본 캔버스에 물을 묶음).
+- **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿 `layers.utile[칸] = id`(지우개 "사용자 타일", 크기 바꾸기 · 맵 전체 지우기도 함께). 런타임 `MakerUserTiles`: `MakerLevel.build` · `TemplateRoom.paintTemplate` 가 `put(칸, id)` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
 - 타일셋 · 물 그림을 픽셀 편집기로 열면 옆에 **실시간 미리보기**(`levelpreview.js` — 게임이 만든 층 표본 `spd-level-previews.js`, 바닥 · 벽 타일 칸 번호까지 담아 벽 이어 붙이기가 게임과 같음).
 - 타일 효과(빛) 레이어 · 번짐 → §5.2 · §5.3.
 
@@ -476,7 +478,9 @@ MyProject/
   "name": "달빛 잎", "desc": "…", "sprite": { "sheet": "builtin:items", "index": 12, "name": "…" },   // 또는 { "png": "assets/sprites/items/moonleaf.png" }
   "stackable": true, "price": 30, "unique": false, "tags": ["herb","gift"], "consumable": true, "useLabel": "",
   "stats": { "energy": 0 }, "onUse": [ /* 이벤트 명령 */ ], "giftValue": { "default": 5 },
-  "kind": "misc|melee|missile|armor|codex|grimoire|game", "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
+  "kind": "misc|melee|ranged|missile|armor|codex|grimoire|game", "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
+  "ranged": { "shootLabel": "", "needEquip": true, "ammo": "none|item", "projectile": "<투척 무기 id>", "proj": { "name", "sprite", "spin", "damage": "bow|own", "min", "max", "minPerLvl", "maxPerLvl", "accuracy", "sound", "hitSound", "castEffect", "hitEffect" } },
+  "wandFx": { "on": false, "bolt": "game|none|sprite|magic|fire|frost|…", "sprite", "spin", "sound", "hitSound", "castEffect", "hitEffect" },   // kind game + base wands.*
   "level": 0, "cursed": false, "code": {}, "actions": [ { "id": "ring", "name": "흔들기", "default": true, "consume": false, "time": 1, "code": "…" } ],
   "sound": "", "throwSound": "", "landSound": "", "pickupSound": "", "equipSound": "",
   "fxUse": "", "fxThrow": "", "fxEquip": "", "light": { "on": false }, "groundScale": 1, "catalog": true, "drops": [] }
@@ -484,7 +488,7 @@ MyProject/
 
 | 분류 (`category`) | 게임 폴더 | 세부 (`subtype`) | 사용 버튼 · 소모 |
 |---|---|---|---|
-| weapon 무기 | weapon/ | melee · missile · dart · bow | — (kind 로 무기 상속) |
+| weapon 무기 | weapon/ | melee · ranged · missile · dart | — (kind 로 무기 상속 — ranged = 쏘기) |
 | codex 코덱스 (mod-2) | weapon/codices/ | melee · ranged · cast | — |
 | armor 방어구 | armor/ | armor · class | — |
 | artifact · ring · wand | artifacts/ · rings/ · wands/ | | 사용 |
@@ -510,7 +514,11 @@ MyProject/
 - 연출: `magicImage`(items 칸) — 원거리는 그 그림이 날아감(`visual: item`, `spin`), 근접은 MagicImageAnimator(`anim` alternate · sweep · stab · charge · smash, mod-2 전용) · `hits`/`hitDelay` 연타 · `usesTargeting`(퀵슬롯 자동 조준).
 - `kind: "grimoire"` → `MakerCodex.MakerGrimoire`: `bag { capacity: 19, holds: "codex"|"all" }`.
 
-### 8.4 소리 · 이펙트 · 빛
+### 8.4 원거리 무기 · 마법봉 공격 이펙트
+- `kind: "ranged"`(무기 › 원거리 무기, 게임 원거리 무기를 복사해도) → 생성 클래스가 런타임 `MakerBow`(MeleeWeapon) 상속 — 영혼의 활과 같은 방식: 행동 "쏘기"(`AC_SHOOT`, 기본 행동, `needEquip`) → 칸 고르기 → 발사체 `cast`. `ammo: none` = 발사체(`MakerBow.Arrow`, 가방에 안 들어가고 땅에 안 떨어짐 — 피해 `bow`(활 수치 · 강화 · 마법 부여 그대로) 또는 `own`(min/max + 활 강화당), 명중 배율, 그림 · 빙글빙글(아니면 `StraightArrow` 를 `MissileSprite.ANGULAR_SPEEDS` 에 0 으로 등록), 소리 · 이펙트), `ammo: item` = 가방의 프로젝트 투척 무기(`projectile`)를 하나씩 cast(그 아이템의 수치 · 그림). 근접 수치 `weapon` 은 들고 때릴 때. 편집기: 종류와 수치 › "쏘기 · 발사체".
+- **마법봉 공격 이펙트** `wandFx`: 프로젝트 아이템(kind game + base `wands.*`, 종류와 수치에서) · 게임 마법봉(게임 아이템 보기 창 › "마법봉 공격 이펙트" → `gameitems.json items["spd:wands.X"].wandFx`). 연결 줄 `Wand.zapper` 의 `curWand.fx(` 앞 → `MakerWand.zap`: 설정이 켜져 있으면(프로젝트 → 게임 클래스 사슬 순) `bolt` game(게임 fx + 소리 · 이펙트만) · none · sprite(MissileSprite, 그림 · spin) · 마법 화살 종류(`MagicMissile.boltFromChar`, `MakerCast.missile`)로 날리고, 닿으면 hitSound · hitEffect → `onZap` → `wandUsed` 후 원래 줄을 건너뜀(저주 무작위 효과 · 공명 수지 추가 효과는 그대로/생략). 날아가는 그림 PNG 는 `MakerAssets` 아이템 시트에 함께 붙임. 헤드리스 `eval:shoottest,<id>[,<탄환 id>]` · `eval:mobhp`.
+
+### 8.5 소리 · 이펙트 · 빛
 - 프로젝트 아이템 `sound`(쓸 때 — 무기는 공격이 맞을 때 타격음 대신, `KindOfWeapon.hitSound` 연결 줄) · `throwSound`(**던지는 순간** — `Item.cast` 연결 줄 → `MakerAudio.onItemCast`, 던지기 버튼을 누를 때는 소리 없음) · `landSound`(떨어졌을 때 · 맞혔을 때 — `onItemLandHit/Ground`) · `pickupSound` · `equipSound`. 게임 아이템은 `sounds.json gameItems["spd:<경로>"] = { use, throw, land, pickup, equip }`.
 - 편집기 소리 칸: 기본 칸에 그 아이템의 **실제 기본 소리**를 게임 코드에서 읽어 표시(`PDM.gameItemSounds` — `extends` 사슬의 hitSound(메이스 = HIT_CRUSH 등) · 물약 DRINK · 주문서 READ · 음식 EAT · 완드 ZAP · doPickUp), 칸마다 🔇(`none`) · ↺(기본으로), "↺ 소리 모두 원래대로".
 - 이펙트 `fxUse` · `fxThrow` · `fxEquip`(§5.5), 빛 `light`(§5.4).
@@ -531,7 +539,7 @@ MyProject/
 - 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav. 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
 - `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 에 끼워 넣어 게임 설정의 음량 · 음소거를 그대로 따름. 게임 소리는 처음 재생 때 바로 불러옴(원래 `Sample.load` 는 다음 프레임이라 첫 소리가 빠졌음).
 - **배경음 우선순위**: 노드 `bgm` → 그룹(`bgm` + `bgmExtra[]` 층마다 무작위 — 전부 게임 곡이면 `Music.playTracks` 로 이어 재생, `bgmTense` + `bgmTenseWhen`, `bgmBoss`) → 사용자 테마 `music` → 게임 기본 테마 음악. "테마 기본 음악으로 채워서 고치기"(`PDM.THEME_MUSIC`).
-- **소리는 각 세부 설정에서**: 아이템(§8.4) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
+- **소리는 각 세부 설정에서**: 아이템(§8.5) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
 - **기본 소리 키** (`MakerAudio.SFX`, 편집 화면 없음 — 예전 `sfx` 값은 읽음): codex.melee · codex.meleeHit · codex.ranged · codex.cast · codex.hit · spell.cast · spell.hit · ability.cast · ability.hit · item.eat · item.drink · item.read · item.use · dialogue.open · dialogue.type · dialogue.next · choice.move · choice.select. mod-2 소리가 없으면 원작 소리로.
 - 편집기: 가져오기(→ `assets/audio`) · 게임 소리 복사 · 미리 듣기 · 쓰는 곳 목록 · **파형 편집**(구간 선택 · 확대 · 자르기 · 무음 · 페이드 · 음량 · 노멀라이즈 · 뒤집기 · 속도 · 모노 → WAV) · **효과음 합성기**(레이어 최대 4 × 파형 · 음높이 미끄러짐 · 유니즌 · FM · 비브라토 · ADSR · 바이쿼드 필터, 전체 드라이브 · 에코 · 리버브, 시작값 16개, "살짝 바꾸기" seed).
 - 코드: `MakerAudio.playSe("sound:bell")` · `playBgm(…)`, 이벤트 명령 "효과음 / 음악".
@@ -802,13 +810,14 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | | `MakerLevel` | 직접 그린 층 (`build` · `createMobs` · 투명 출입구 · 발판) |
 | | `LevelHooks` | 자동 생성 층 주입 · 구성 블럭 · 방 넣기 · 오브젝트 배치 · 밟기 · 스폰 위치 · 잠긴 맵 · 큰 타일셋 |
 | | `TemplateRoom` · `TemplateSpecialRoom` | 방 템플릿 (변형 · 무작위 칸) |
-| | `MakerProp` · `MakerPropTop` · `MakerPaint` | 맵 오브젝트 · 솟은 윗부분 · 맵 세부 그리기 |
+| | `MakerProp` · `MakerPropTop` · `MakerPaint` · `MakerUserTiles` | 맵 오브젝트 · 솟은 윗부분 · 맵 세부 그리기 · 사용자 타일 |
 | | `MakerSafe` · `MakerHomes` | 안전구역 · NPC 이주 |
 | 영웅 | `HeroRuntime` · `HeroSelect` | 영웅 적용 · 능력치 · 시트 · 초상화 · 저장 슬롯 · 코드 훅 / 영웅 선택 화면 · 해금 |
 | | `MakerCast` · `MakerSpells` · `MakerAbilities` · `MakerActive` · `MakerGauge` | 시전 엔진 · 주문 · 전직/직업 능력 · 전직 액티브 · 예전 게이지 |
 | | `MakerTalents` · `MakerTalentsPane` | 특성 포인트 · 효과 / 영웅 정보 창 특성 탭 |
 | 캐릭터 · 아이템 | `MakerNPC` · `MakerMob` · `MakerSprite` | 데이터 NPC/동료 · 몬스터 · 스프라이트(빛 레이어 · 번짐) |
 | | `MakerItem` · `MakerCodex` · `MakerCatalog` · `MakerDrops` | 데이터 아이템 · 코덱스/그리모어 · 도감 · 드랍/금지/상자 |
+| | `MakerBow` · `MakerWand` | 원거리 무기(쏘기 · 발사체) · 마법봉 공격 이펙트 |
 | | `MakerShop` · `MakerQuests` | 상인 창 · 퀘스트 |
 | 이벤트 · 마음 | `EventInterpreter` · `EventTriggers` | 명령 실행(창이 닫힐 때까지 대기) · 페이지 · 트리거 · `Ticker` |
 | | `HeartSystem` · `HeartMenu` · `HeartUI` | 마음 시스템 · 말 걸기 메뉴 · 마음 창/하트 버튼 |
@@ -825,7 +834,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **63개** 연결점 · **29개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **64개** 연결점 · **30개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
@@ -852,6 +861,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `scenes/StartScene.java` | 저장 슬롯 초상화·이름 (시작 화면) |
 | `windows/WndGameInProgress.java` | 저장 슬롯 초상화·이름 (이어하기 창) |
 | `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악) |
+| `items/wands/Wand.java` | 마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트) |
 | `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때 |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |
@@ -889,7 +899,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ## 19. 개발 도구 · 확인
 
-- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
+- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `waterhere` · `shoottest` · `mobhp` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
 - **게임 데이터 뽑기** (`tools/data`): `extract_spd_items.py` → `spd-items.js` · `extract_spd_chars.py` → `spd-chars.js`(+ 영웅) · `extract_spd_rooms.py` → `spd-rooms.js` · `gen_terms_java.js` → `DefaultTerms.java`.
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.

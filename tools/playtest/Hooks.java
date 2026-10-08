@@ -372,6 +372,26 @@ public class Hooks {
 					for (int i = 0; i < l.length(); i++) if (l.distance(i, hp) <= r && (com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.flags[l.map[i]] & com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.SOLID) == 0 && l.map[i] != com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.DOOR && l.map[i] != com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.OPEN_DOOR) com.shatteredpixel.shatteredpixeldungeon.levels.Level.set(i, com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER, l);
 					com.watabou.noosa.Game.runOnRenderThread(() -> { com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.updateMap(); });
 					System.out.println("[TEST] waterhere"); break; }
+				case "shoottest": { // shoottest,<아이템 id 또는 spd:경로> — 활(MakerBow)이나 마법봉을 들려 주고 3칸 앞 쥐에게 쏨 (원거리 무기 · 마법봉 이펙트)
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]);
+					if (it == null) { System.out.println("[TEST] shoottest no item"); break; }
+					it.identify(); it.collect();
+					if (it instanceof com.shatteredpixel.shatteredpixeldungeon.items.weapon.Weapon) ((com.shatteredpixel.shatteredpixeldungeon.items.EquipableItem) it).doEquip(hero);
+					if (p.length > 2) { com.shatteredpixel.shatteredpixeldungeon.items.Item am = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[2]); if (am != null) { am.quantity(5); am.collect(); } }
+					int tgt = -1; for (int d : new int[]{3, -3, 3 * l.width(), -3 * l.width(), 2, -2}) { int c = hero.pos + d; if (c > 0 && c < l.length() && l.passable[c] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c) == null) { tgt = c; break; } }
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob rat = (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob) Class.forName(P + "actors.mobs.Rat").getDeclaredConstructor().newInstance();
+					rat.HP = rat.HT = 500; rat.pos = tgt; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(rat); com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff.affect(rat, com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Paralysis.class, 50f); com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe();
+					java.lang.reflect.Field cu = com.shatteredpixel.shatteredpixeldungeon.items.Item.class.getDeclaredField("curUser"), ci = com.shatteredpixel.shatteredpixeldungeon.items.Item.class.getDeclaredField("curItem"); cu.setAccessible(true); ci.setAccessible(true);
+					cu.set(null, hero); ci.set(null, it);
+					java.lang.reflect.Field lf = it instanceof com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand ? com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand.class.getDeclaredField("zapper") : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerBow.class.getDeclaredField("shooter");
+					lf.setAccessible(true);
+					System.out.println("[TEST] shoottest " + it.getClass().getSimpleName() + " " + it.name() + " → rat HP " + rat.HP + " at " + tgt + " actions=" + it.actions(hero) + " wandFx=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerWand.cfg(it));
+					((com.shatteredpixel.shatteredpixeldungeon.scenes.CellSelector.Listener) lf.get(null)).onSelect(tgt);
+					break; }
+				case "mobhp": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) System.out.println("[TEST] mobhp " + m.name() + " " + m.HP + "/" + m.HT); break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

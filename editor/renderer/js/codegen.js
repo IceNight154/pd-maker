@@ -2,7 +2,7 @@
 //  코드 생성기 — 영웅/아이템 데이터 + 사용자 Java 코드 → 게임 저장소의 pdmaker/gen/*.java
 //   · 영웅 heroes/<id>.json 의 code.* → gen/H_<id>.java  (MakerHeroCode 를 상속, 훅 메서드)
 //   · 아이템 items/<id>.json 의 kind(melee·missile·armor) 또는 code.* → gen/I_<id>.java
-//       melee → MeleeWeapon,  missile → MissileWeapon,  armor → Armor,  그 외 → MakerItem
+//       melee → MeleeWeapon,  ranged → MakerBow(쏘기 · 발사체),  missile → MissileWeapon,  armor → Armor,  그 외 → MakerItem
 //   생성된 파일은 게임과 함께 컴파일됩니다 (▶ 테스트 플레이 / 설치 때 자동으로 다시 만듦).
 //   에디터 화면(미리보기)과 main.js(실제 생성)가 같은 파일을 씁니다.
 // ================================================================
@@ -49,16 +49,16 @@
 
   /** 아이템 훅 (kind 별로 쓸 수 있는 것) */
   const ITEM_HOOKS = [
-    { key: 'proc', kinds: ['melee', 'missile'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 무기로 맞혔을 때 (damage 를 바꾸면 적용)' },
+    { key: 'proc', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 무기로 맞혔을 때 (damage 를 바꾸면 적용)' },
     { key: 'armorProc', kinds: ['armor'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 갑옷을 입고 공격받았을 때' },
-    { key: 'min', kinds: ['melee', 'missile'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 피해 (lvl = 강화 수치)' },
-    { key: 'max', kinds: ['melee', 'missile'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 피해' },
+    { key: 'min', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 피해 (lvl = 강화 수치)' },
+    { key: 'max', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 피해' },
     { key: 'drMin', kinds: ['armor'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 방어' },
     { key: 'drMax', kinds: ['armor'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 방어' },
-    { key: 'onEquip', kinds: ['melee', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착했을 때' },
-    { key: 'onUnequip', kinds: ['melee', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착을 풀었을 때' },
-    { key: 'onPickUp', kinds: ['misc', 'melee', 'missile', 'armor', 'codex', 'grimoire'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
-    { key: 'desc', kinds: ['misc', 'melee', 'missile', 'armor', 'codex', 'grimoire'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
+    { key: 'onEquip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착했을 때' },
+    { key: 'onUnequip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착을 풀었을 때' },
+    { key: 'onPickUp', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
+    { key: 'desc', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
   ];
 
   const safeId = id => String(id).replace(/[^A-Za-z0-9_]/g, '_');
@@ -94,7 +94,7 @@
     return out;
   }
   const itemSub = i => i.subtype !== undefined && i.subtype !== null ? i.subtype
-    : i.kind === 'melee' ? 'melee' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
+    : i.kind === 'melee' ? 'melee' : i.kind === 'ranged' ? 'ranged' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
   /** ['items', 분류, 세부 종류] */
   const itemDirs = it => ['items', pkgSeg(it.category || 'misc') || 'misc', pkgSeg(itemSub(it))].filter(Boolean);
   /** gen 폴더 기준 파일 경로: items/weapon/melee/I_sword.java */
@@ -194,7 +194,7 @@
   const heroNeedsClass = hero => HERO_HOOKS.some(h => has((hero.code || {})[h.key])) || has((hero.code || {}).members) || codeCasts(hero).length > 0 || codeEntries(hero).length > 0;
 
   // ---------------------------------------------------------------- 아이템
-  const KIND_BASE = { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' };
+  const KIND_BASE = { melee: 'MeleeWeapon', ranged: 'MakerBow', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' };
   /** 데이터로 도는 종류 (MakerItem 계열: 이름·설명·값을 데이터에서 읽음) */
   const DATA_KINDS = ['misc', 'codex', 'grimoire'];
   /** 게임 아이템 상속(kind game): 바탕 클래스 경로로 훅 종류 추측 */
@@ -217,6 +217,7 @@
     // 초기값
     const init = [`image = GenSupport.image(ID, image);`];
     if (kind === 'melee') init.push(`tier = ${num(w.tier, 1) | 0};`, `DLY = ${fnum(num(w.delay, 1))};`, `RCH = ${num(w.reach, 1) | 0};`, `ACC = ${fnum(num(w.accuracy, 1))};`);
+    if (kind === 'ranged') init.push(`tier = ${num(w.tier, 1) | 0};`, `DLY = ${fnum(num(w.delay, 1))};`, `ACC = ${fnum(num(w.accuracy, 1))};`);   // 쏘기 · 발사체는 MakerBow 가 데이터(ranged)로
     if (kind === 'missile') init.push(`tier = ${num(w.tier, 1) | 0};`, `baseUses = ${fnum(num(w.baseUses, 8))};`, `sticky = ${w.sticky === false ? 'false' : 'true'};`, `DLY = ${fnum(num(w.delay, 1))};`, `ACC = ${fnum(num(w.accuracy, 1))};`);
     const dk = DATA_KINDS.includes(kind);
     if (dk) init.push(`makerId = ID;`, `applyData();`);
@@ -225,7 +226,7 @@
     if (kind !== 'misc' && it.stackable && kind === 'missile') { /* 투척 무기는 원래 겹침 */ }
     s += `\t{\n${init.map(x => '\t\t' + x).join('\n')}\n\t}\n\n`;
     // 이름·설명
-    if (kind === 'melee' || kind === 'missile') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn enchantment != null && (cursedKnown || !enchantment.curse()) ? enchantment.name(n) : n;\n\t}\n`;
+    if (kind === 'melee' || kind === 'missile' || kind === 'ranged') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn enchantment != null && (cursedKnown || !enchantment.curse()) ? enchantment.name(n) : n;\n\t}\n`;
     if (kind === 'armor') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn glyph != null && (cursedKnown || !glyph.curse()) ? glyph.name(n) : n;\n\t}\n`;
     if (!dk || hk('desc')) {
       if (hk('desc')) s += `\t${mark('아이템 ' + it.id, 'desc')}\n\t@Override public String desc() {\n\t\tString value = GenSupport.desc(ID);\n${hookBody(code.desc, hk('desc'), '\t\t')}\n\t}\n\n`;
@@ -241,7 +242,7 @@
       if (!hk(hook)) return `\t@Override public int ${fn}(int lvl) { return ${val}; }\n`;
       return `\t${mark('아이템 ' + it.id, hook)}\n\t@Override public int ${fn}(int lvl) {\n\t\tint value = ${val};\n${hookBody(code[hook], hk(hook), '\t\t')}\n\t}\n`;
     };
-    if (kind === 'melee' || kind === 'missile') {
+    if (kind === 'melee' || kind === 'missile' || kind === 'ranged') {
       s += dmgFn('min', w.min, w.minPerLvl, 'min') + dmgFn('max', w.max, w.maxPerLvl, 'max');
       if (num(w.str, 0) > 0) s += `\t@Override public int STRReq(int lvl) { return ${num(w.str, 0) | 0} + (super.STRReq(lvl) - super.STRReq(0)); }\n`;
       s += '\n';

@@ -154,6 +154,7 @@ public class TemplateRoom extends StandardRoom {
 				if (border && isDoor(v)) v = Terrain.WALL;               // 문 자리 → 연결 안 되면 벽
 				if (v == Terrain.ENTRANCE || v == Terrain.EXIT) v = Terrain.EMPTY_SP; // 템플릿 안의 계단은 장식으로
 				Painter.set(level, r.left + x, r.top + y, v);
+				MakerUserTiles.put(level, r.left + x + (r.top + y) * level.width(), MakerUserTiles.at(t, src(t, var, x, y)));   // 사용자 타일
 			}
 		}
 		// 연결된 문 안쪽이 막혀 있으면 한 칸 뚫기

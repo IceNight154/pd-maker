@@ -398,6 +398,8 @@ PDM.make = {
     if (kind === 'missile') return { tier, min: 2 * tier, max: 5 * tier, minPerLvl: 1, maxPerLvl: tier, str: 0, delay: 1, accuracy: 1, baseUses: 8, sticky: true };
     return { tier, min: tier, max: 5 * (tier + 1), minPerLvl: 1, maxPerLvl: tier + 1, str: 0, delay: 1, reach: 1, accuracy: 1 };
   },
+  /** 원거리 무기 기본값 — 영혼의 활처럼 화살을 무한히 (런타임 MakerBow) */
+  rangedStats() { return { shootLabel: '', needEquip: true, ammo: 'none', projectile: '', proj: { name: '', damage: 'bow', accuracy: 1, spin: false, sprite: { sheet: 'builtin:items', name: 'SPIRIT_ARROW', index: 0 } } }; },
   armorStats(tier) { tier = tier || 1; return { tier, drMin: 0, drMax: tier * 2, drMinPerLvl: 1, drMaxPerLvl: tier, str: 0 }; },
   itemAction() { return { id: 'use', name: '사용', cond: '', default: true, consume: false, time: 1, code: 'GLog.i("사용했다!");' }; },
   event(id, kind) {
@@ -464,7 +466,7 @@ PDM.SKILL_EFFECTS = {
   gauge: { name: '게이지 (과열) 바꾸기', fields: ['amount'] },
   code: { name: '코드 (Java)', fields: ['code'] }
 };
-PDM.ITEM_KINDS = { misc: '일반 (사용 명령·코드 행동)', melee: '근접 무기', missile: '투척 무기', armor: '갑옷', codex: '코덱스 (내구가 닳는 사용형 마법 — mod-2)', grimoire: '그리모어 (코덱스 가방)', game: '게임 아이템 상속 (게임 클래스를 코드로 고치기)' };
+PDM.ITEM_KINDS = { misc: '일반 (사용 명령·코드 행동)', melee: '근접 무기', ranged: '원거리 무기 (활 · 석궁 — 쏘기로 발사체)', missile: '투척 무기', armor: '갑옷', codex: '코덱스 (내구가 닳는 사용형 마법 — mod-2)', grimoire: '그리모어 (코덱스 가방)', game: '게임 아이템 상속 (게임 클래스를 코드로 고치기)' };
 PDM.CODEX_TYPES = { melee: '근접 (옆 칸 적)', ranged: '원거리 (날아가 맞힘)', cast: '시전 (범위·자신)' };
 /** 게임 전직 (HeroSubClass) — 전직의 "게임 전직 효과도 켜기" */
 PDM.GAME_SUBCLASSES = { BERSERKER: '광전사', GLADIATOR: '검투사', BATTLEMAGE: '전투 마법사', WARLOCK: '흑마법사', ASSASSIN: '암살자', FREERUNNER: '질주자',

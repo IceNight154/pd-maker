@@ -63,6 +63,8 @@ const PATCHES = [
     anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
   { file: 'levels/Level.java', name: '테마별 몬스터 (드랍 테이블 › 테마별 몬스터)',
     anchor: /public Mob createMob\(\)\s*\{[^\n]*\n/, where: 'after', line: `{ Mob pdmTm = ${PKG}.MakerDrops.themeMob(this); if (pdmTm != null) return pdmTm; }` },
+  { file: 'items/wands/Wand.java', name: '마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트)',
+    anchor: /\n([ \t]*)curWand\.fx\(\s*shot\s*,\s*new Callback\(\)\s*\{/, where: 'before', line: `if (${PKG}.MakerWand.zap(curWand, shot)) return;` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
     anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
