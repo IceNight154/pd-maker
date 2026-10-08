@@ -160,6 +160,7 @@
   /** 사용자 타일 한 칸을 g 의 (x, y, s×s)에 그림 (그림이 아직 없으면 불러온 뒤 then) */
   PDM.drawUserTile = function (g, t, x, y, s, tilesImg) {
     const mark = () => { if (!t.fx && !t.gameFx) return; g.font = `bold ${Math.max(7, s * .45)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#000a'; g.fillText('✦', x + s, y + 1); g.fillStyle = '#ffe27a'; g.fillText('✦', x + s - 1, y); };
+    if (t.image && t.flow) return PDM.assets.load(t.image).then(img => { if (!img) return; g.imageSmoothingEnabled = false; const z = Math.min(16, img.width, img.height); g.drawImage(img, 0, 0, z, z, x, y, s, s); mark(); return img; });   // 흐르는 그림: 그림의 한쪽 귀퉁이
     if (!t.image) {   // 그림 없는 타일 = 지형 + 효과
       if (t.terrain >= 0) PDM.assets.drawTerrain(g, tilesImg || null, t.terrain, x, y, s); mark(); return Promise.resolve(null);
     }
@@ -177,7 +178,9 @@
     ['치유의 샘', { terrain: 24, gameFx: 'healing', title: '', desc: '' }],
     ['연기 나는 벽', { terrain: 12, gameFx: 'smoke', title: '', desc: '' }],
     ['수정 광맥', { terrain: 12, gameFx: 'vein', title: '', desc: '' }],
-    ['초록 불꽃 화로', { terrain: 12, gameFx: 'greenflame', title: '초록 불꽃', desc: '' }]];
+    ['초록 불꽃 화로', { terrain: 12, gameFx: 'greenflame', title: '초록 불꽃', desc: '' }],
+    ['흐르는 물 그림 (하수도 물)', { terrain: -2, gameFx: '', image: 'game:environment/water0.png', flow: true, flowX: 0, flowY: -5, title: '', desc: '' }],
+    ['빛나는 물 (물 그림 + 치유의 샘 반짝임)', { terrain: 29, gameFx: 'healing', image: 'game:environment/water0.png', flow: true, flowX: 0, flowY: -5, title: '빛나는 물', desc: '물이 은은하게 빛난다.' }]];
   /** 이 타일을 칠한 곳 (노드 · 방 이름과 칸 수) */
   function userTileUsage(id) {
     const out = [];
@@ -189,7 +192,8 @@
   }
   function userTilesSection(ctx, st) {
     const { F, row, listEditor } = PDM.ui;
-    const themeSheets = [...Object.entries(PDM.THEMES).map(([k, t]) => ['game:' + t.tiles, t.name + ' 타일셋']), ...customThemes().filter(c => c.tiles).map(c => [c.tiles, c.name + ' (사용자 테마)'])];
+    const themeSheets = [...Object.entries(PDM.THEMES).map(([k, t]) => ['game:' + t.tiles, t.name + ' 타일셋']), ...customThemes().filter(c => c.tiles).map(c => [c.tiles, c.name + ' (사용자 테마)']),
+      ...Object.values(PDM.THEMES).map(t => ['game:' + t.water, t.name + ' 물 그림']), ...customThemes().filter(c => c.water).map(c => [c.water, c.name + ' 물 그림 (사용자 테마)'])];
     return h('div', {},
       h('h2', { style: { marginTop: '18px' } }, `사용자 타일 (${userTiles().length})`),
       h('p', { class: 'hint' }, '희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일도 여기서 만듭니다 — 지형 + 게임 효과(또는 내 이펙트) + 살펴보기 이름 · 설명. 그림은 비워 두면 지형의 원래 그림.'),
@@ -225,13 +229,17 @@
               F.select('world', [...p, 'size'], [[8, '8px'], [16, '16px (기본)'], [32, '32px'], [48, '48px'], [64, '64px']], { label: '그림의 한 칸 크기', number: true, rerender: true })),
             row(F.image('world', [...p, 'image'], { label: '그림 (타일셋 · 아무 PNG)', sub: 'tiles', rerender: true }),
               h('div', { class: 'field' }, h('span', { class: 'fl' }, '타일셋에서 고르기'), h('select', { onchange: e => { const v = e.target.value; if (v) store.edit('world', '사용자 타일 그림', w => { w.userTiles[i].image = v; }); } },
-                h('option', { value: '' }, '(테마 타일셋 …)'), themeSheets.map(([v, n]) => h('option', { value: v, selected: v === t.image }, n))))),
+                h('option', { value: '' }, '(테마 타일셋 · 물 그림 …)'), themeSheets.map(([v, n]) => h('option', { value: v, selected: v === t.image }, n))))),
+            row(F.bool('world', [...p, 'flow'], { label: '물처럼 흐르게 (그림 전체를 이어 붙여 흐름 — 물 그림에)', rerender: true }),
+              t.flow ? F.num('world', [...p, 'flowX'], { label: '가로 흐름 (px/초)', step: 1, def: 0 }) : null,
+              t.flow ? F.num('world', [...p, 'flowY'], { label: '세로 흐름 (px/초, 게임 물 -5)', step: 1, def: -5 }) : null),
             F.bool('world', [...p, 'over'], { label: '캐릭터 위에 그림 (지붕 · 나뭇가지 · 벽 장식처럼 앞을 가림)', rerender: true }),
             row(F.select('world', [...p, 'gameFx'], PDM.GAME_TILE_FX, { label: '게임 효과 (그 칸에서 계속)', empty: '(없음)', rerender: true }),
               F.select('world', [...p, 'fx'], PDM.ui.refOptions('effect'), { label: '내 이펙트 (이펙트 · 파티클)', empty: '(없음)', rerender: true }),
               h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('effects') }, '이펙트 편집…'))),
             row(F.text('world', [...p, 'title'], { label: '살펴보기 이름 (비우면 지형 이름)', rerender: true }), F.text('world', [...p, 'desc'], { label: '살펴보기 설명 (비우면 지형 설명)' })),
-            t.image ? h('div', {}, h('div', { class: 'fl', style: { marginTop: '4px' } }, '칸 고르기 — 그림을 누르세요'), pick)
+            t.image && t.flow ? h('p', { class: 'hint' }, '흐르는 그림 — 그림 전체가 칸들에 이음매 없이 이어져 흐릅니다 (가로 · 세로 크기는 16 · 32 · 64 처럼 2의 거듭제곱이 안전 — 게임 물은 32×32). 효과 · 살펴보기 이름도 함께 쓸 수 있습니다.')
+              : t.image ? h('div', {}, h('div', { class: 'fl', style: { marginTop: '4px' } }, '칸 고르기 — 그림을 누르세요'), pick)
               : h('p', { class: 'hint' }, '그림 없음 — 게임이 지형(칠할 때 지형)의 원래 그림을 그리고 효과만 더합니다. 위 "그림"에 타일셋 · PNG 를 넣으면 그 칸 그림을 덮습니다.'),
             h('div', { class: 'btnbar', style: { marginTop: '6px' } },
               h('button', { class: 'btn sm', onclick: async () => { const img = await PDM.assets.load(t.image); if (!img) { toast('그림을 먼저 정하세요', 'bad'); return; }

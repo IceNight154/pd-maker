@@ -400,6 +400,10 @@ PDM.make = {
   },
   /** 원거리 무기 기본값 — 영혼의 활처럼 화살을 무한히 (런타임 MakerBow) */
   rangedStats() { return { shootLabel: '', needEquip: true, ammo: 'none', projectile: '', proj: { name: '', damage: 'bow', accuracy: 1, spin: false, sprite: { sheet: 'builtin:items', name: 'SPIRIT_ARROW', index: 0 } } }; },
+  /** 아이템 추가 기능 기본값 (런타임 MakerFacets) */
+  useFx() { return { on: true, label: '', consume: false, time: 1, sound: '', fx: '', effects: [{ type: 'heal', on: 'self', amount: 10 }] }; },
+  throwFx() { return { on: true, consume: true, fuse: 0, sound: '', fx: '', effects: [{ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }] }; },
+  bagFx() { return { on: true, capacity: 10, holds: 'all', categories: [], items: [], tags: [], tagsText: '', openLabel: '', putLabel: '' }; },
   /** 완전히 새 가방 (런타임 MakerBag) */
   bagStats() { return { capacity: 20, holds: 'filter', categories: [], items: [], tags: [], tagsText: '', tabIcon: 'item' }; },
   armorStats(tier) { tier = tier || 1; return { tier, drMin: 0, drMax: tier * 2, drMinPerLvl: 1, drMaxPerLvl: tier, str: 0 }; },
@@ -474,7 +478,7 @@ PDM.CODEX_TYPES = { melee: '근접 (옆 칸 적)', ranged: '원거리 (날아가
 PDM.GAME_SUBCLASSES = { BERSERKER: '광전사', GLADIATOR: '검투사', BATTLEMAGE: '전투 마법사', WARLOCK: '흑마법사', ASSASSIN: '암살자', FREERUNNER: '질주자',
   SNIPER: '저격수', WARDEN: '감시자', CHAMPION: '챔피언', MONK: '수도사', PRIEST: '사제', PALADIN: '성기사',
   ARIA_HARMONY: '아리아: 조화 (mod-2)', ARIA_OVERHEAT: '아리아: 과열 (mod-2)', ARIA_GRIMOIRE_INK: '아리아: 잉크 그리모어 (mod-2)' };
-PDM.EFFECT_ON = { target: '대상', self: '자신', area: '범위 안의 적' };
+PDM.EFFECT_ON = { target: '대상', self: '자신', area: '범위 안의 적', everyone: '범위 안 모두 (자신 · 아군 포함)' };
 PDM.PASSIVE_STATS = { hp: '최대 체력 +', str: '힘 + (한 번)', regen: 'N턴마다 체력 1 회복', gold: '골드 + (한 번)', charges: '주문서 최대 충전 +' };
 /** 전직 · 게이지 단계 · 원소가 주는 능력치 ({stat, value}) */
 PDM.HERO_STATS = { hp: '최대 체력 +', accuracy: '명중 +', evasion: '회피 +', damage: '공격 피해 +', armor: '방어 +', speed: '이동 속도 +%',

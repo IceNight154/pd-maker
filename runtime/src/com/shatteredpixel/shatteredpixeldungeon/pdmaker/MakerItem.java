@@ -68,6 +68,7 @@ public class MakerItem extends Item {
 	/** Item.actions 연결 줄 — 버리기 금지면 버리기 (· 투척 무기가 아니면 던지기) 버튼을 뺌 */
 	public static void flagActions(Item it, java.util.ArrayList<String> actions) {
 		try {
+			MakerFacets.addActions(it, actions);   // 추가 기능 (사용 효과 · 가방 기능)
 			JsonValue d = flagsOf(it);
 			if (d == null || !d.getBoolean("noDrop", false)) return;
 			actions.remove(Item.AC_DROP);
@@ -207,7 +208,7 @@ public class MakerItem extends Item {
 	@Override public String defaultAction() { JsonValue d = data(); return usable(d) ? AC_USE : super.defaultAction(); }
 	/** 사용 명령이 있거나 음식이면 "사용(먹기)" 버튼 */
 	static boolean usable(JsonValue d) {
-		return d != null && ((d.get("onUse") != null && d.get("onUse").size > 0) || d.getString("category", "").equals("food"));
+		return d != null && ((d.get("onUse") != null && d.get("onUse").size > 0) || d.getString("category", "").equals("food") || MakerFacets.useFx(d) != null);
 	}
 
 	@Override
@@ -230,7 +231,9 @@ public class MakerItem extends Item {
 			} else if (d != null) {
 				MakerAudio.playSe(d.getString("sound", "").isEmpty() ? "sfx:item.use" : d.getString("sound", ""));
 			}
-			hero.spend(Actor.TICK); hero.busy();
+			JsonValue uf = MakerFacets.useFx(d);
+			if (uf != null) MakerFacets.applyUse(hero, uf);   // 사용 효과 (효과 목록 — 회복 · 상태 효과 · 둘레 피해 …)
+			hero.spend(uf != null ? Math.max(0f, uf.getFloat("time", 1f)) : Actor.TICK); hero.busy();
 			if (d != null && d.get("onUse") != null) EventInterpreter.run(d.get("onUse"), null, null);
 			hero.next();
 		} else if (action.equals(AC_GIFT)) {

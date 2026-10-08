@@ -3,6 +3,7 @@
  *   world.json  userTiles [{ id, name, image, x, y (칸 — size 단위), size (그림의 한 칸 px, 기본 16), terrain (-2 = 칠한 지형 그대로 · 지형 번호), over (캐릭터 위에 그림),
  *                            fx (effects.json id — 그 칸에서 계속 재생), gameFx (게임 효과: sink · torch · vein · smoke · greenflame · stream · alchemy · sacrificial · healing),
  *                            title · desc (살펴보기 창의 이름 · 설명 — 비우면 지형 그대로) }]
+ *   flow (true) · flowX · flowY (px/초 — 물은 0, -5) = 그림 전체를 칸에 이어 붙여 물처럼 흐르게 (FlowTiles — 물 그림을 타일로 쓸 때)
  *   그림이 없는(image "") 타일 = 지형 + 효과만 (희생의 재단 · 연금술 솥 · 배수구처럼 "효과가 붙은 타일")
  *   노드 · 방 템플릿  layers.utile [칸] = 타일 id ("" = 없음) — 지형(판정)은 layers.terrain 그대로 (편집기가 타일의 terrain 으로 같이 칠함)
  *   층을 만들 때 MakerLevel.build · TemplateRoom.paintTemplate 이 put(칸, id) 로 모아 두고, LevelHooks.afterCreate 가 finish 로
@@ -60,6 +61,8 @@ public class MakerUserTiles extends CustomTilemap {
 			for (CustomTilemap t : l.customTiles.toArray(new CustomTilemap[0])) if (t instanceof MakerUserTiles) l.customTiles.remove(t);
 			for (CustomTilemap t : l.customWalls.toArray(new CustomTilemap[0])) if (t instanceof MakerUserTiles) l.customWalls.remove(t);
 			Map<String, MakerUserTiles> groups = new LinkedHashMap<>();
+			Map<String, FlowTiles> flows = new LinkedHashMap<>();
+			for (CustomTilemap t : l.customTiles.toArray(new CustomTilemap[0])) if (t instanceof FlowTiles) l.customTiles.remove(t);
 			Map<String, java.util.ArrayList<int[]>> lists = new HashMap<>();
 			for (Map.Entry<Integer, String> e : m.entrySet()) {
 				JsonValue d = def(e.getValue());
@@ -69,6 +72,13 @@ public class MakerUserTiles extends CustomTilemap {
 				String fx = d.getString("fx", ""); if (!fx.isEmpty()) MakerEffect.place(l, fx, cell);
 				String gf = d.getString("gameFx", ""); if (!gf.isEmpty()) { GameFx g = new GameFx(); g.kind = gf; g.pos(cell, l); l.customTiles.add(g); }
 				String img = d.getString("image", "");
+				if (d.getBoolean("flow", false) && !img.isEmpty()) {   // 흐르는 그림: 따로 (이름 · 설명만 아래 타일맵에)
+					String fk = img + "|" + d.getFloat("flowX", 0f) + "|" + d.getFloat("flowY", -5f);
+					FlowTiles ft = flows.get(fk);
+					if (ft == null) { ft = new FlowTiles(); ft.image = img; ft.vx = d.getFloat("flowX", 0f); ft.vy = d.getFloat("flowY", -5f); ft.setRect(0, 0, l.width(), l.height()); flows.put(fk, ft); }
+					ft.cellList.add(cell);
+					img = "";
+				}
 				int sz = Math.max(1, d.getInt("size", 16)); boolean ov = d.getBoolean("over", false) && !img.isEmpty();
 				int cols = 1;
 				if (!img.isEmpty()) { Object tx = MakerRuntime.texture(img); if (tx == null) img = ""; else cols = Math.max(1, TextureCache.get(tx).width / sz); }
@@ -85,6 +95,7 @@ public class MakerUserTiles extends CustomTilemap {
 				for (int i = 0; i < a.size(); i++) { g.cells[i] = a.get(i)[0]; g.frames[i] = a.get(i)[1]; }
 				(g.over ? l.customWalls : l.customTiles).add(g);
 			}
+			for (FlowTiles ft : flows.values()) { ft.cells = new int[ft.cellList.size()]; for (int i = 0; i < ft.cells.length; i++) ft.cells[i] = ft.cellList.get(i); l.customTiles.add(0, ft); }   // 맨 아래 (다른 타일 · 효과 밑)
 		} catch (Throwable t) { MakerRuntime.log("사용자 타일 오류: " + t); }
 	}
 
@@ -121,6 +132,43 @@ public class MakerUserTiles extends CustomTilemap {
 	}
 	@Override public String name(int tx, int ty) { JsonValue d = defAt(tx, ty); String t = d == null ? "" : d.getString("title", ""); return t.isEmpty() ? null : t; }
 	@Override public String desc(int tx, int ty) { JsonValue d = defAt(tx, ty); String t = d == null ? "" : d.getString("desc", ""); return t.isEmpty() ? null : t; }
+
+	// ------------------------------------------------------------ 흐르는 그림 (물 그림을 타일로 — 게임 물처럼 SkinnedBlock 을 칸마다, 세상 좌표에 맞춰 이음매 없이)
+	public static class FlowTiles extends CustomTilemap {
+		public String image = ""; public float vx, vy = -5f; public int[] cells = new int[0];
+		transient java.util.ArrayList<Integer> cellList = new java.util.ArrayList<>();
+		class Vis extends Tilemap {
+			com.watabou.noosa.Group grp; java.util.ArrayList<com.watabou.noosa.SkinnedBlock> blocks = new java.util.ArrayList<>(); float t; boolean bad;
+			Vis() { super(com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES, new TextureFilm(com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TERRAIN_FEATURES, 16, 16)); }
+			@Override public void draw() { }
+			@Override public void update() {
+				super.update();
+				if (bad || parent == null) return;
+				try {
+					if (grp == null) {
+						Object tx = MakerRuntime.texture(image); if (tx == null) { bad = true; return; }
+						grp = new com.watabou.noosa.Group();
+						Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; int w = l.width();
+						for (int c : cells) { com.watabou.noosa.SkinnedBlock b = new com.watabou.noosa.SkinnedBlock(16, 16, tx); b.x = (c % w) * 16; b.y = (c / w) * 16; blocks.add(b); grp.add(b); }
+						parent.addToBack(grp);
+					}
+					if (!com.watabou.noosa.particles.Emitter.freezeEmitters) t += com.watabou.noosa.Game.elapsed;
+					int w = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width();
+					for (int i = 0; i < blocks.size() && i < cells.length; i++) {
+						com.watabou.noosa.SkinnedBlock b = blocks.get(i);
+						float tw = b.texture.width, th = b.texture.height;
+						float ox = ((cells[i] % w) * 16 + vx * t) % tw, oy = ((cells[i] / w) * 16 + vy * t) % th;   // 게임 물과 같은 방향 (vy -5 = 게임 물)
+						b.offsetTo(ox < 0 ? ox + tw : ox, oy < 0 ? oy + th : oy);
+					}
+				} catch (Throwable e) { bad = true; MakerRuntime.log("흐르는 타일 오류: " + e); }
+			}
+			@Override public void destroy() { if (grp != null) grp.killAndErase(); super.destroy(); }
+		}
+		@Override public Tilemap create() { vis = new Vis(); return vis; }
+		@Override public Image image(int tx, int ty) { return null; }
+		@Override public void storeInBundle(Bundle b) { super.storeInBundle(b); b.put("pdm_img", image); b.put("pdm_vx", vx); b.put("pdm_vy", vy); b.put("pdm_cells", cells); }
+		@Override public void restoreFromBundle(Bundle b) { super.restoreFromBundle(b); image = b.getString("pdm_img"); vx = b.getFloat("pdm_vx"); vy = b.getFloat("pdm_vy"); cells = b.contains("pdm_cells") ? b.getIntArray("pdm_cells") : new int[0]; }
+	}
 
 	// ------------------------------------------------------------ 게임 효과 (지역 장식 · 연금술 솥 · 희생의 재단처럼 그 칸에서 계속)
 	public static class GameFx extends CustomTilemap {

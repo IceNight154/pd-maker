@@ -223,6 +223,9 @@ public class MakerCast {
 			String on = e.getString("on", type.equals("heal") || type.equals("shield") ? "self" : "target");
 			int radius = efInt(def, e, "radius", "radius", 0);
 			if (on.equals("self")) targets.add(hero);
+			else if (on.equals("everyone")) {   // 범위 안 모두 (자신 · 아군 포함 — 폭탄처럼)
+				for (Char c : Actor.chars()) if (Dungeon.level.distance(cell, c.pos) <= radius) targets.add(c);
+			}
 			else if (on.equals("target") || on.equals("area")) {
 				Char c = Actor.findChar(cell);
 				if (c != null && c != hero && on.equals("target")) targets.add(c);

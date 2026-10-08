@@ -404,6 +404,37 @@ public class Hooks {
 					if (p.length > 2) { com.shatteredpixel.shatteredpixeldungeon.items.Item k = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[2]); k.collect();
 						System.out.println("[TEST] flags " + p[2] + " actions=" + k.actions(hero) + " canSell=" + com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.Shopkeeper.canSell(k)); }
 					break; }
+				case "throwfx": { // throwfx,<아이템 id> — 3칸 앞 쥐(마비) 칸에 던짐 (던지기 효과 · 폭탄 퓨즈)
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); it.collect();
+					int tgt = -1; for (int d : new int[]{3, -3, 3 * l.width(), -3 * l.width(), 2, -2}) { int c = hero.pos + d; if (c > 0 && c < l.length() && l.passable[c] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c) == null) { tgt = c; break; } }
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob rat = (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob) Class.forName(P + "actors.mobs.Rat").getDeclaredConstructor().newInstance();
+					rat.HP = rat.HT = 500; rat.pos = tgt; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(rat); com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff.affect(rat, com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Paralysis.class, 50f);
+					System.out.println("[TEST] throwfx " + it.name() + " actions=" + it.actions(hero) + " → rat at " + tgt);
+					it.cast(hero, tgt);
+					break; }
+				case "usetest": { // usetest,<아이템 id> — 체력을 깎고 기본 행동(사용)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); it.collect();
+					hero.HP = Math.max(1, hero.HP - 15); int before = hero.HP; String act = p.length > 2 ? p[2] : it.defaultAction();
+					System.out.println("[TEST] usetest " + it.name() + " actions=" + it.actions(hero) + " do " + act + " (" + it.actionName(act, hero) + ") HP " + before);
+					it.execute(hero, act);
+					System.out.println("[TEST] usetest after HP " + hero.HP + " count " + (hero.belongings.getItem(it.getClass()) == null ? 0 : hero.belongings.getItem(it.getClass()).quantity()));
+					break; }
+				case "bagfx": { // bagfx,<아이템 id> — 가방 기능: 넣기 · 버튼 이름
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.items.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); it.identify(); it.collect();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.Inner in = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.inner(it);
+					for (String c : new String[]{"potions.PotionOfHealing", "scrolls.ScrollOfIdentify"}) { com.shatteredpixel.shatteredpixeldungeon.items.Item x = (com.shatteredpixel.shatteredpixeldungeon.items.Item) Class.forName(P + c).getDeclaredConstructor().newInstance(); System.out.println("[TEST] bagfx canHold " + c + " " + in.canHold(x) + " put " + (in.canHold(x) && x.collect(in))); }
+					StringBuilder sb = new StringBuilder(); for (String a2 : it.actions(hero)) sb.append(a2).append('=').append(it.actionName(a2, hero)).append(' ');
+					System.out.println("[TEST] bagfx " + it.getClass().getSimpleName() + " actions: " + sb + " inner=" + in.items.size());
+					com.watabou.utils.Bundle bd = new com.watabou.utils.Bundle(); it.storeInBundle(bd);
+					com.shatteredpixel.shatteredpixeldungeon.items.Item copy = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); copy.restoreFromBundle(bd);
+					System.out.println("[TEST] bagfx saved/restored inner=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.inner(copy).items.size());
+					break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

@@ -618,7 +618,8 @@
             const img = utImgs.get(t.image);
             if (img === undefined) { utImgs.set(t.image, null); PDM.assets.load(t.image).then(im => { utImgs.set(t.image, im || false); if (im) paint(); }); continue; }
             if (!img) continue;
-            const z = Math.max(1, t.size || 16); g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, (i % W) * s, Math.floor(i / W) * s, s, s);
+            if (t.flow) { const cx = i % W, cy = Math.floor(i / W), sx = (cx * 16) % img.width, sy = (cy * 16) % img.height; g.drawImage(img, sx, sy, Math.min(16, img.width - sx), Math.min(16, img.height - sy), cx * s, cy * s, s, s); }   // 흐르는 그림: 게임처럼 이어 붙임 (멈춘 모습)
+            else { const z = Math.max(1, t.size || 16); g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, (i % W) * s, Math.floor(i / W) * s, s, s); }
             if (t.fx || t.gameFx) { g.font = `bold ${Math.max(7, s * .45)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#ffe27a'; g.fillText('✦', (i % W) * s + s - 1, Math.floor(i / W) * s); }
           }
           if (ui.zones) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {   // 구역 색: 벽 빨강 · 바닥 파랑 · 문 초록 · 낭떠러지 빗금

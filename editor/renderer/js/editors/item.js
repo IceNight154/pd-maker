@@ -188,6 +188,13 @@
     if (cat === 'codex') { it.kind = 'codex'; it.codex = PDM.make.codexStats(sub || 'melee', 1); it.stackable = true; }
     if (cat === 'bag' && sub === 'grimoire') { it.kind = 'grimoire'; it.bag = { capacity: 19, holds: 'codex' }; it.stackable = false; }
     if (noSell.checked) it.noSell = true; if (noDrop.checked) it.noDrop = true;
+    // 완전히 새 물약 · 폭탄 · 룬석 · 주문서 · 마법(연금): 그 분류답게 동작하는 기본 효과 (추가 기능 — 고쳐 쓰기)
+    if ((it.kind || 'misc') === 'misc') {
+      if (cat === 'potion') { it.useFx = Object.assign(PDM.make.useFx(), { effects: [{ type: 'heal', on: 'self', amount: 15 }] }); it.throwFx = Object.assign(PDM.make.throwFx(), { effects: [] }); }
+      if (cat === 'bomb') it.throwFx = Object.assign(PDM.make.throwFx(), { fuse: 2, effects: [{ type: 'damage', on: 'everyone', radius: 1, min: 8, max: 16 }] });
+      if (cat === 'stone') it.throwFx = Object.assign(PDM.make.throwFx(), { effects: [{ type: 'buff', on: 'area', radius: 1, buff: 'Paralysis', turns: 3 }] });
+      if (cat === 'scroll' || cat === 'spell') it.useFx = Object.assign(PDM.make.useFx(), { effects: [{ type: 'buff', on: 'self', buff: 'Haste', turns: 10 }] });
+    }
     if (baseRow.style.display !== 'none' && baseSel.value === '__newbag') { it.kind = 'bag'; it.bag = PDM.make.bagStats(); it.stackable = false; it.sprite = { sheet: 'builtin:items', name: 'POUCH' }; }
     const gb = baseRow.style.display !== 'none' && findGame(baseSel.value)[1];
     if (gb) await asGameBased(it, gb);
@@ -404,6 +411,60 @@
         h('p', { class: 'hint' }, '"게임 원래 효과"는 게임이 그리는 광선 · 화살 위에 소리와 이펙트만 더합니다. 다른 것을 고르면 게임 효과 대신 그것이 날아가고, 닿으면 마법봉의 원래 효과(피해 · 불 · 얼음 …)가 그대로 일어납니다. 저주받은 마법봉의 무작위 효과는 바꾸지 않습니다.')) : null);
   };
 
+  /** 가방 설정 (kind bag 의 bag · 추가 기능 bagFx 같이 씀) — 칸 수 · 넣을 수 있는 것(분류 · 아이템 · 태그) */
+  function bagUI(key, base, bg, isBag) {
+    const { F, row } = PDM.ui, out = [];
+      const B = p => [...base, p];
+      const CATS = Object.assign({}, Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([k]) => !['bag', 'codex'].includes(k)).map(([k, v]) => [k, v.name])), { missile: '투척 무기 (다트 포함)', seed: '씨앗' });
+      const cats = new Set(bg.categories || []);
+      out.push(row(F.num(key, B('capacity'), { label: '칸 수', int: true, min: 1, max: 60, def: 20, hint: '게임 가방은 20 · 배낭은 20' }),
+        F.select(key, B('holds'), { all: '무엇이든 (가방은 빼고)', filter: '정한 것만 (아래)' }, { label: '넣을 수 있는 것', rerender: true }),
+        isBag ? F.select(key, B('tabIcon'), { item: '가방 그림 그대로', backpack: '배낭 아이콘', pouch: '씨앗 주머니 아이콘', scroll: '주문서 통 아이콘', wand: '마법봉 꽂이 아이콘', potion: '물약 띠 아이콘' }, { label: '가방 창 탭 아이콘' })
+          : F.text(key, B('openLabel'), { label: '열기 버튼 이름', placeholder: '열기' }), isBag ? null : F.text(key, B('putLabel'), { label: '넣기 버튼 이름', placeholder: '넣기' })));
+      if (bg.holds === 'filter') {
+        out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 12px', margin: '2px 0 8px' } }, Object.entries(CATS).map(([k, v]) => h('label', { class: 'check' },
+            h('input', { type: 'checkbox', checked: cats.has(k), onchange: e => store.edit(key, '가방 분류', o => { const bb = PDM.deepGet(o, base); const s2 = new Set(bb.categories || []); e.target.checked ? s2.add(k) : s2.delete(k); bb.categories = [...s2]; }) }), h('span', {}, v)))),
+          h('div', { class: 'fl' }, '아이템 하나하나 (프로젝트 아이템 · 게임 아이템 — 게임 아이템은 그것을 상속한 것도)'),
+          PDM.ui.listEditor(key, B('items'), { addLabel: '아이템', compact: true, emptyText: '없음', make: () => '', render: (x, i, ip) => { const inp = h('input', { type: 'text', value: x || '', placeholder: '아이템 id 또는 spd:경로' }); inp.addEventListener('change', () => PDM.ui.commit(key, ip, inp.value.trim(), '가방 아이템', true)); return PDM.ui.combo(inp, () => PDM.ui.itemOptions()); } }),
+          F.text(key, B('tagsText'), { label: '태그 (쉼표로 — 이 태그가 있는 프로젝트 아이템)', placeholder: 'herb, gift', onchange: v => store.edit(key, '가방 태그', o => { PDM.deepGet(o, base).tags = String(v).split(',').map(t => t.trim()).filter(Boolean); }) }),
+          h('p', { class: 'hint' }, `분류 ${cats.size}개 · 아이템 ${(bg.items || []).filter(Boolean).length}개 · 태그 ${(bg.tags || []).length}개 중 하나라도 맞으면 넣을 수 있습니다.`));
+      }
+      out.push(h('p', { class: 'hint' }, isBag ? '게임 가방과 같은 규칙: 이 가방을 가지고 있으면 넣을 수 있는 아이템을 주울 때 먼저 이 가방에 들어가고, 가방 창에 이 가방 탭이 생깁니다. 가방 안에 다른 가방은 넣지 않습니다.'
+        : '"넣기"로 가방(배낭)의 아이템을 이 아이템 안에 담고, "열기"에서 골라 꺼냅니다 (주울 때 저절로 들어가지는 않음 — 장착 · 퀵슬롯 등 이 아이템 원래 기능은 그대로). 안의 아이템은 저장됩니다.'));
+    return out;
+  }
+
+  /** 추가 기능 (한 아이템에 종류 여러 개 — 런타임 MakerFacets): 사용 효과 · 던지기 효과 · 가방 기능 */
+  function facetsSection(key, it) {
+    const { F, row } = PDM.ui;
+    const misc = (it.kind || 'misc') === 'misc', missile = it.kind === 'missile';
+    const u = it.useFx || {}, t = it.throwFx || {}, b = it.bagFx || {};
+    const turnOn = (k, def) => store.edit(key, '추가 기능', o => { const cur = o[k] || {}; o[k] = Object.assign(def(), cur, { on: !cur.on }); });
+    const head = (k, label, on, def, hint) => h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 4px' } },
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!on, onchange: () => turnOn(k, def) }), h('span', { style: { fontWeight: 600 } }, label)), h('span', { class: 'hint' }, hint));
+    return [
+      h('p', { class: 'hint' }, '이 아이템의 종류(위)에 기능을 더합니다 — 예: 근접 무기 + 가방 기능(장착하면 무기, 가방 창에서 "열기"로 가방), 물약 + 던지기 효과(마시면 회복, 던지면 깨져서 둘레에 효과). 게임 아이템을 상속한 아이템에도 됩니다.'),
+      head('useFx', '사용 효과', u.on, PDM.make.useFx, misc ? '"사용(마시기 · 읽기 …)" 버튼에 효과가 더해짐' : '"사용" 버튼이 생김'),
+      u.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
+        row(misc ? null : F.text(key, ['useFx', 'label'], { label: '버튼 이름', placeholder: '사용' }), misc ? null : F.bool(key, ['useFx', 'consume'], { label: '쓰면 1개 사라짐' }),
+          F.num(key, ['useFx', 'time'], { label: '걸리는 턴', min: 0, step: 0.5, def: 1 }), F.sound(key, ['useFx', 'sound'], { label: '소리', kind: 'se', empty: '(기본)' }),
+          F.select(key, ['useFx', 'fx'], PDM.ui.refOptions('effect'), { label: '영웅에게 이펙트', empty: '(없음)' })),
+        h('div', { class: 'fl' }, '효과 (대상 = 영웅이 서 있는 칸 — "자신" · "범위 안의 적" · "범위 안 모두")'),
+        PDM.castEffectsEditor(key, ['useFx', 'effects'], { emptyText: '효과 없음', make: () => ({ type: 'heal', on: 'self', amount: 10 }) })) : null,
+      missile ? h('p', { class: 'hint' }, '투척 무기는 던지면 적을 맞히는 원래 규칙을 따릅니다 — 맞혔을 때 효과는 "코드 › 적중 시"로.') : head('throwFx', '던지기 효과', t.on, PDM.make.throwFx, '던져서 떨어진 칸에서 효과 (물약이 깨짐 · 폭탄 · 룬석)'),
+      !missile && t.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
+        row(F.bool(key, ['throwFx', 'consume'], { label: '던지면 사라짐 (끄면 효과 뒤 바닥에 남음)', def: true }),
+          F.num(key, ['throwFx', 'fuse'], { label: '터지기까지 턴 (0 = 바로, 폭탄 2)', int: true, min: 0, max: 20, def: 0 }),
+          F.sound(key, ['throwFx', 'sound'], { label: '터질 때 소리', kind: 'se', empty: '(없음)' }),
+          F.select(key, ['throwFx', 'fx'], PDM.ui.refOptions('effect'), { label: '터질 때 이펙트', empty: '(없음)' })),
+        h('div', { class: 'fl' }, '효과 (대상 = 떨어진 칸 — "대상"은 그 칸의 캐릭터, 반경을 주면 둘레까지)'),
+        PDM.castEffectsEditor(key, ['throwFx', 'effects'], { emptyText: '효과 없음', make: () => ({ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }) }),
+        h('p', { class: 'hint' }, '터지기까지 턴을 주면 바닥에 놓였다가 그 턴 뒤 터집니다 (그 사이 주워 가면 터지지 않음).')) : null,
+      it.kind === 'bag' ? null : head('bagFx', '가방 기능', b.on, PDM.make.bagFx, '"넣기" · "열기" 버튼 — 이 아이템 안에 다른 아이템을 담음'),
+      it.kind !== 'bag' && b.on ? h('div', { class: 'card', style: { padding: '6px 10px' } }, ...bagUI(key, ['bagFx'], b, false)) : null];
+  }
+
   const HOOK_LABEL = { proc: '적중 시', armorProc: '피격 시', min: '최소 피해', max: '최대 피해', drMin: '최소 방어', drMax: '최대 방어',
     onEquip: '장착', onUnequip: '해제', onPickUp: '주움', desc: '설명 글', members: '추가 멤버', imports: 'import' };
 
@@ -508,22 +569,7 @@
       out.push(h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '추가 효과 (피해 뒤에 차례로 — 상태 효과·밀치기 등)'));
       out.push(PDM.castEffectsEditor ? PDM.castEffectsEditor(key, C('effects'), { emptyText: '추가 효과 없음', make: () => ({ type: 'buff', on: 'target', buff: 'Burning', turns: 3 }) }) : h('span'));
     } else if (kind === 'bag') {
-      const B = p => ['bag', p], bg = it.bag || {};
-      const CATS = Object.assign({}, Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([k]) => !['bag', 'codex'].includes(k)).map(([k, v]) => [k, v.name])), { missile: '투척 무기 (다트 포함)', seed: '씨앗' });
-      const cats = new Set(bg.categories || []);
-      out.push(row(F.num(key, B('capacity'), { label: '칸 수', int: true, min: 1, max: 60, def: 20, hint: '게임 가방은 20 · 배낭은 20' }),
-        F.select(key, B('holds'), { all: '무엇이든 (가방은 빼고)', filter: '정한 것만 (아래)' }, { label: '넣을 수 있는 것', rerender: true }),
-        F.select(key, B('tabIcon'), { item: '가방 그림 그대로', backpack: '배낭 아이콘', pouch: '씨앗 주머니 아이콘', scroll: '주문서 통 아이콘', wand: '마법봉 꽂이 아이콘', potion: '물약 띠 아이콘' }, { label: '가방 창 탭 아이콘' })));
-      if (bg.holds === 'filter') {
-        out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
-          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 12px', margin: '2px 0 8px' } }, Object.entries(CATS).map(([k, v]) => h('label', { class: 'check' },
-            h('input', { type: 'checkbox', checked: cats.has(k), onchange: e => store.edit(key, '가방 분류', o => { const s2 = new Set((o.bag.categories) || []); e.target.checked ? s2.add(k) : s2.delete(k); o.bag.categories = [...s2]; }) }), h('span', {}, v)))),
-          h('div', { class: 'fl' }, '아이템 하나하나 (프로젝트 아이템 · 게임 아이템 — 게임 아이템은 그것을 상속한 것도)'),
-          PDM.ui.listEditor(key, B('items'), { addLabel: '아이템', compact: true, emptyText: '없음', make: () => '', render: (x, i, ip) => { const inp = h('input', { type: 'text', value: x || '', placeholder: '아이템 id 또는 spd:경로' }); inp.addEventListener('change', () => PDM.ui.commit(key, ip, inp.value.trim(), '가방 아이템', true)); return PDM.ui.combo(inp, () => PDM.ui.itemOptions()); } }),
-          F.text(key, B('tagsText'), { label: '태그 (쉼표로 — 이 태그가 있는 프로젝트 아이템)', placeholder: 'herb, gift', onchange: v => store.edit(key, '가방 태그', o => { o.bag.tags = String(v).split(',').map(t => t.trim()).filter(Boolean); }) }),
-          h('p', { class: 'hint' }, `분류 ${cats.size}개 · 아이템 ${(bg.items || []).filter(Boolean).length}개 · 태그 ${(bg.tags || []).length}개 중 하나라도 맞으면 넣을 수 있습니다.`));
-      }
-      out.push(h('p', { class: 'hint' }, '게임 가방과 같은 규칙: 이 가방을 가지고 있으면 넣을 수 있는 아이템을 주울 때 먼저 이 가방에 들어가고, 가방 창에 이 가방 탭이 생깁니다. 가방 안에 다른 가방은 넣지 않습니다.'));
+      out.push(...bagUI(key, ['bag'], it.bag || {}, true));
     } else if (kind === 'grimoire') {
       out.push(row(F.num(key, ['bag', 'capacity'], { label: '칸 수', int: true, min: 1, max: 40, def: 19 }),
         F.select(key, ['bag', 'holds'], { codex: '코덱스만', all: '무엇이든' }, { label: '담는 것' })));
@@ -732,6 +778,7 @@
           h('p', { class: 'hint' }, '몬스터가 죽을 때 떨어뜨리거나, 층을 만들 때 바닥에 놓이게 합니다. 여러 줄을 넣으면 줄마다 따로 확률을 굴립니다.'),
           dropsEditor(key, ['drops'])),
         section('종류와 수치', ...statsSection(key, it)),
+        section('추가 기능 (여러 종류 — 사용 · 던지기 · 가방)', ...facetsSection(key, it)),
         section('소리', ...itemSoundFields(key, it)),
         section('이펙트 (파티클)',
           PDM.ui.row(PDM.ui.F.ref(key, ['fxUse'], 'effect', { label: '쓸 때', empty: '(없음)' }), PDM.ui.F.ref(key, ['fxThrow'], 'effect', { label: '던질 때', empty: '(없음)' }), PDM.ui.F.ref(key, ['fxEquip'], 'effect', { label: '장착 · 해제할 때', empty: '(없음)' })),
