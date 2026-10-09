@@ -72,7 +72,9 @@ PDM.audio = (function () {
     let file = ref, e = null;
     if (ref.startsWith('sound:')) { e = entry(ref.slice(6)); if (!e) return null; file = e.file; }
     if (!file) return null;
-    const path = file.startsWith('game:') ? PDM.assets.resolvePath(file) : (file.startsWith('assets/') ? PDM.store.abs(file) : PDM.assets.resolvePath('game:' + file));
+    // game: → 게임 파일, 예전 형식 music/ · sounds/ → 게임 파일, 그 밖(assets/ · audio/ 등) → 프로젝트 파일 (런타임 MakerAudio.resolve 와 같은 순서)
+    const isGame = file.startsWith('game:') || /^(music|sounds)\//.test(file);
+    const path = isGame ? PDM.assets.resolvePath(file.startsWith('game:') ? file : 'game:' + file) : PDM.store.abs(file);
     return { path, file, entry: e, volume: e ? (e.volume ?? 1) : 1, pitch: e ? (e.pitch ?? 1) : 1, loop: e ? e.loop !== false : true };
   }
   function label(ref) {
@@ -82,9 +84,10 @@ PDM.audio = (function () {
     return ref.replace(/^game:/, '게임: ');
   }
   async function dataToBuffer(dataURL) {
-    const bin = atob(dataURL.split(',')[1]); const u = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    return ac().decodeAudioData(u.buffer);
+    let ab;
+    try { ab = await (await fetch(dataURL)).arrayBuffer(); }   // 큰 파일(수십 MB)도 빠르게 — 예전 atob 글자 반복은 2분짜리 WAV 에 수 초
+    catch (_) { const bin = atob(dataURL.split(',')[1]); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); ab = u.buffer; }
+    return ac().decodeAudioData(ab);
   }
   /** 파일 경로 → AudioBuffer (캐시) */
   function bufferOfPath(path) {
@@ -112,7 +115,8 @@ PDM.audio = (function () {
     const r = resolve(ref);
     if (!r || !r.path) { toast('소리를 찾지 못했습니다: ' + label(ref) + (ref && ref.startsWith('game:') ? ' (프로젝트 설정의 게임 저장소 경로 확인)' : ''), 'bad'); return null; }
     try {
-      const buf = await bufferOfPath(r.path);
+      const slow = setTimeout(() => toast('소리 불러오는 중… (긴 파일)'), 400);
+      const buf = await bufferOfPath(r.path).finally(() => clearTimeout(slow));
       return playBuffer(buf, { volume: r.volume * (o.volume ?? 1), pitch: r.pitch, loop: o.loop ?? false });
     } catch (e) { toast('재생 실패: ' + e.message, 'bad'); return null; }
   }
