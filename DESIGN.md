@@ -117,6 +117,7 @@
 | `effects` | 이펙트 · 파티클 | §5.5 |
 | `compose` | 노드 합성기 | §5.9 |
 | `filters` | 화면 필터 | §5.6 |
+| `motion` | 모션 랩 | §5.10 |
 | `sys` | 시스템 | 마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커) |
 | `charPortrait` · `charHeart` · `charDialogue` · `charBehavior` | 캐릭터 편집 칸 | 초상화 · 표정 / 마음 시스템 / 상황별 대사 / 행동 이벤트 |
 
@@ -331,7 +332,7 @@ MyProject/
 ### 5.7 글자 연출 (APNG) (확장 `textfx` · `editors/textfx.js` · 런타임 `MakerTextFx`)
 - `textfx.json { list: [{ id, name, text, font, size, color, stroke, glow, w, h, bg, inFx, hold, outFx, loopFx, perChar, stagger, css, fps, loop, apng, sheet … }] }` — 설정으로 HTML/CSS(@keyframes 프리셋 + 직접 CSS)를 만들고, shadow DOM 에서 Web Animations 를 시간별로 멈춰 SVG foreignObject → 캔버스로 프레임을 찍음.
 - 탭: 텍스트(서브 텍스트 · 세로쓰기 · 쪽 나누기) · 폰트(`fontFile` → `assets/fonts`) · 움직임(등장 24 · 퇴장 18 · 표시 중 10종) · 장식 · 배경/배치 · CSS. 템플릿 16종.
-- 내보내기: APNG(직접 조립 — acTL/fcTL/fdAT, `PDM.textfx.encodeApng`) `assets/fx/<id>.png` + **게임용 격자 시트** `<id>_sheet.png`(게임은 APNG 를 못 읽음) · PNG · 연번 PNG(ZIP).
+- 내보내기: APNG(직접 조립 — acTL/fcTL/fdAT, 공용 모션 코어 `PDM.motion.encodeApng` · 프레임 찍기도 `PDM.motion.shoot`) `assets/fx/<id>.png` + **게임용 격자 시트** `<id>_sheet.png`(게임은 APNG 를 못 읽음) · PNG · 연번 PNG(ZIP).
 - 게임: `MakerTextFx.show(id, pos, 너비%, 반복, done)`(uiCamera 위), 이벤트 명령 `textfx { fx, pos, width, loops, nowait }`.
 
 ### 5.8 예고편 컷신 (확장 `textfx` 에 포함 · `editors/trailer.js` · 런타임 `MakerTrailer`)
@@ -344,6 +345,22 @@ MyProject/
 - 노드: 입력(그림 · 직접 그리기 · 단색 · 그라데이션 · 노이즈 · 도형 · 무늬 · 시트 칸 · 글자 · 파티클 · 이펙트) / 변형(이동 · 회전 · 크기 · 반복 · 뒤집기 · 픽셀화 · 대칭 · 물결 · 밀어내기) / 색(색조 · 채도 · 밝기 · 팔레트 · 색 바꾸기 · 반전 · 외곽선 · 그림자 · 투명도) / 합성(겹치기 · 마스크) / 효과(흐림 · 빛 번짐 · 넓히기/깎기 · 입체감) / 출력.
 - 숫자 칸에 식(`t` 0~1 · `frame` · `frames` · `pi` · sin/cos/abs/floor/min/max/rand — 허용한 이름만) → 프레임마다 계산(`evaluateAll`), 여러 프레임이면 시트(`toSheet`) · APNG.
 - 연동: 결과를 오브젝트 그림 · 아이템 그림 · 사용자 테마 타일셋 칸 · 이펙트 알갱이 · 화면 필터 층에 바로 넣기, 픽셀 편집기 "🧩 노드 합성기에서 편집"(`PDM.compose.fromImage`). `PDM.compose = { TYPES, evaluate, render, … }`.
+
+### 5.10 모션 랩 · 모션 코어 (확장 `motion` · `editors/motion.js` · 공용 `motioncore.js` · `motion.json`)
+CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부품을 하나로 모으고, 그 위에 "움직이는 그림을 만들어 여러 곳에 보내는" 편집 화면을 둠. 게임 안에서 코드가 도는 것이 아니라 편집기에서 구운 그림(격자 시트 PNG)이 들어감.
+- **모션 코어** `PDM.motion` (motioncore.js — 모든 편집기보다 먼저 실림):
+  - `mount(doc, host, zoom)` · `shoot(doc, times)` — HTML · CSS 를 화면 밖 shadow 상자에 올리고 모든 애니메이션(Web Animations)을 멈춘 뒤 시각마다 `currentTime` 을 맞추고, 애니메이션이 바꾸는 속성의 계산된 값을 `[data-k]` 규칙으로 박아 SVG foreignObject 로 찍음 → animation-delay · 글자마다 어긋난 시작 · ::before/::after · CSS 변수까지 그대로 (예전 글자 연출 방식을 공용으로. 예전 필터 코드 층은 모든 요소에 같은 음수 delay 를 덮어써서 어긋난 시작이 사라졌음).
+  - `renderSrc(src)` — `src = { lang: css | js, html, code, w, h, frames, fps, seed, pixel }`. CSS 는 html 이 비면 그림 전체를 덮는 `<div class="fx">`(화면 필터 코드 층과 같은 약속), JS 는 `function (g, w, h, t, frame, frames, rand)`.
+  - `pixelize(frames, pixel)` 픽셀 아트로 굽기 — `px`(덩어리: 칸 평균색으로 줄임, `keep` 이면 다시 키움) · `alphaCut`(반투명 경계 자르기) · `palette`(편집기 기본 팔레트 `PDM.PALETTE` | 색마다 단계 수 `levels`) · `dither`(4×4 바이어) · `outline`(1칸 외곽선).
+  - `sheet(frames)`(가로 2048 이하 격자) · `encodeApng` · `bake(src, png)`(시트 + 옆에 `…_anim.png` APNG) · `exportApng`.
+- **모션 랩** `motion.json { list: [{ id, name, lang, html, code, w, h, frames, fps, seed, pixel, out, baked { fw, fh, frames, fps, cols, apng } }] }`:
+  - 왼쪽 코드(HTML · CSS 또는 JS) · 크기 · 프레임 · 초당 프레임 · 픽셀 설정, 오른쪽 실시간(코드 그대로 — CSS 는 shadow 상자에서 실제로 돌고 JS 는 프레임을 차례로) · 구운 결과(게임에 들어가는 그림) 재생, 확대 · 배경.
+  - 예시: 빈 CSS · 반짝이는 별 · 퍼지는 고리 · 도는 마법진 · 흐르는 물결 무늬(이어 붙임) · 글자가 하나씩 튀어 오름 · 떠오르는 불티(JS) · 일렁이는 불꽃(JS) + 화면 필터 예시(훑는 빛 · 깨진 화면).
+  - 💾 굽고 저장(`out`, 기본 `assets/motion/<id>.png`) · APNG 내보내기.
+  - ➜ 보내기 (`lab.SEND` — `targets()` · `apply(모션, 대상)`): 화면 필터 층(`code` 층 + `motion: <id>` — 필터에서 "다시 굽기"하면 모션의 코드 · 크기 · 픽셀 설정을 따름, 새 필터도 만들 수 있음) · 이펙트 알갱이(`sprite { png, fw, fh, frames "0-n", fps, anim loop }`) · 맵 오브젝트(`sprite.sheet · frame` + `anims.motion` · 첫 상태의 anim) · 노드 합성기 그림 노드(첫 장 `…_still.png`) · 아이템 그림(첫 장).
+  - ⤓ 가져오기: 화면 필터의 코드 층(모션으로 옮기고 그 층은 `motion` 으로 이어짐) · 글자 연출(`PDM.textfx.build` 결과 HTML · CSS 그대로 — 직접 다듬기용, 등록한 글꼴 · 넘치면 줄이기는 빠짐).
+  - `listOps` 의 `fields: ['motion']` — 쓰는 곳 · id 바꾸기가 화면 필터 층의 `motion` 도 따라 고침.
+- 화면 필터의 코드 층: "🎞 모션 랩 항목으로 그리기" 고르기(이어지면 코드 칸 대신 "모션 랩에서 열기" · 다시 굽기) · "모션 랩으로 옮기기".
 
 ---
 
