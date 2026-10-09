@@ -481,6 +481,31 @@ public class Hooks {
 				case "actors": { StringBuilder sb = new StringBuilder("[TEST] actors now=" + com.shatteredpixel.shatteredpixeldungeon.actors.Actor.now() + " hero.ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready);
 					for (com.shatteredpixel.shatteredpixeldungeon.actors.Actor x : com.shatteredpixel.shatteredpixeldungeon.actors.Actor.all()) sb.append(" | ").append(x.getClass().getSimpleName()).append('=').append(x.cooldown());
 					System.out.println(sb); break; }
+				case "swingtest": { // swingtest,<아이템 id 또는 spd:경로>,<방향 r|l|u|d> — 들려 주고 그쪽 옆 칸 쥐(마비)를 사람이 누른 것처럼 공격 (무기 공격 모션)
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = p[1].startsWith("spd:") ? (com.shatteredpixel.shatteredpixeldungeon.items.Item) Class.forName(P + "items." + p[1].substring(4)).getDeclaredConstructor().newInstance() : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]);
+					Object cur = hero.belongings.weapon;
+					if (cur == null || !cur.getClass().equals(it.getClass())) { it.identify(); it.collect(); ((com.shatteredpixel.shatteredpixeldungeon.items.EquipableItem) it).doEquip(hero); System.out.println("[TEST] swingtest equipped " + it.name() + " — 다시 부르면 공격"); break; }
+					String dir = p.length > 2 ? p[2] : "r"; int d = dir.equals("l") ? -1 : dir.equals("u") ? -l.width() : dir.equals("d") ? l.width() : 1;
+					int tgt = hero.pos + d;
+					com.shatteredpixel.shatteredpixeldungeon.actors.Char ex = com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(tgt);
+					if (ex == null) { if (!l.passable[tgt]) { System.out.println("[TEST] swingtest blocked " + dir); break; }
+						com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob rat = (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob) Class.forName(P + "actors.mobs.Rat").getDeclaredConstructor().newInstance();
+						rat.HP = rat.HT = 500; rat.pos = tgt; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(rat); com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff.affect(rat, com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Paralysis.class, 50f); com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe(); }
+					int before = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned;
+					if (hero.handle(tgt)) hero.next();   // 기본 칸 누르기와 같음 (DefaultCellListener)
+					System.out.println("[TEST] swingtest " + it.name() + " curAction=" + hero.curAction + " tgtChar=" + com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(tgt) + " fov=" + l.heroFOV[tgt] + " dir=" + dir + " weapon=" + hero.belongings.weapon + " ready=" + hero.ready + " spawnedBefore=" + before);
+					break; }
+				case "swingdirect": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; int d = p.length > 1 && p[1].equals("l") ? -1 : p.length > 1 && p[1].equals("u") ? -com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width() : p.length > 1 && p[1].equals("d") ? com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width() : 1;
+					com.shatteredpixel.shatteredpixeldungeon.actors.Char en = com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(hh.pos + d);
+					System.out.println("[TEST] swingdirect canAttack=" + (en != null && hh.canAttack(en)) + " weapon=" + hh.belongings.attackingWeapon()); hh.sprite.attack(hh.pos + d); System.out.println("[TEST] swingdirect spawned=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned); break; }
+				case "swinginfo": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					Object m = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(hh.sprite.parent, "members"); StringBuilder sb = new StringBuilder("[TEST] swinginfo heroCenter=" + hh.sprite.center() + " heroXY=" + hh.sprite.x + "," + hh.sprite.y);
+					if (m instanceof java.util.List) for (Object o : (java.util.List<?>) m) if (o instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing sw = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) o; sb.append(" | swing xy=").append(sw.x).append(',').append(sw.y).append(" wh=").append(sw.width).append('x').append(sw.height).append(" ang=").append(sw.angle).append(" a=").append(sw.alpha()).append(" vis=").append(sw.visible).append(" alive=").append(sw.alive).append(" frame=").append(sw.frame()); }
+					System.out.println(sb); break; }
+				case "swingcount": System.out.println("[TEST] swingcount " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned + " blocking=" + com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.interfaceBlockingHero() + " wnds=" + PlayTest.windows() + " curAction=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.curAction + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready + " para=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.paralysed); break;
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

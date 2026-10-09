@@ -523,6 +523,9 @@
         h('p', { class: 'hint' }, (dmg ? '피해 칸을 비우면 게임 수치 그대로. ' : '이 마법봉은 피해를 주는 종류가 아니라 피해 수치가 없습니다 — 효과는 "코드"(onZap 은 추가 멤버에 @Override)로. ') + '충전은 강화마다 +1 (최대 10) — 게임과 같음.'));
     }
     if (kind === 'game' && /^wands\./.test(it.base || '')) out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '마법봉 공격 이펙트'), PDM.wandFxEditor(key, ['wandFx']));
+    // 공격 모션: 근접 무기 · 활(들고 때릴 때) · 게임 근접 무기를 상속한 아이템 — 공격할 때 이 아이템 그림이 영웅 가운데에서 휘둘러짐 (런타임 MakerSwing)
+    if (kind === 'melee' || kind === 'ranged' || (kind === 'game' && /^weapon\.melee\./.test(it.base || '')))
+      out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '⚔ 공격 모션 (무기 그림이 휘둘러짐)'), PDM.swingEditor(key, ['attackFx'], () => (store.get(key) || {}).sprite));
     if (kind === 'melee' || kind === 'missile' || kind === 'ranged') {
       out.push(row(F.num(key, W('tier'), { label: '티어', int: true, min: 1, max: 5, hint: '힘 요구치 기본값' }),
         F.num(key, W('min'), { label: '최소 피해', int: true, min: 0 }), F.num(key, W('minPerLvl'), { label: '강화당 최소 +', int: true, min: 0 }),
@@ -858,6 +861,9 @@
             spriteTools('gameitems', ['items', gk, 'sprite'], cur, g.p.split('.').pop().toLowerCase(), { sheet: 'builtin:items', name: g.img }),
             cur && cur.png ? PDM.ui.F.image('gameitems', ['items', gk, 'sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true }) : null);
         })(),
+        /^weapon\.melee\./.test(g.p) ? PDM.ui.section('⚔ 공격 모션 (무기 그림이 휘둘러짐)',
+          h('p', { class: 'hint' }, '이 프로젝트에서 영웅이 게임의 이 무기로 공격할 때 무기 그림이 휘둘러지게 합니다 (gameitems.json 에 저장 — 이 무기를 상속한 프로젝트 아이템은 자기 설정이 먼저).'),
+          PDM.swingEditor('gameitems', ['items', 'spd:' + g.p, 'attackFx'], () => (((store.get('gameitems') || {}).items || {})['spd:' + g.p] || {}).sprite || { sheet: 'builtin:items', name: g.img })) : null,
         /^wands\./.test(g.p) ? PDM.ui.section('마법봉 공격 이펙트',
           h('p', { class: 'hint' }, '이 프로젝트에서 게임의 이 마법봉을 쏠 때 날아가는 것 · 소리 · 이펙트를 바꿉니다 (gameitems.json 에 저장 — 이 마법봉을 상속한 프로젝트 아이템도 따로 정하지 않으면 이것을 씀).'),
           PDM.wandFxEditor('gameitems', ['items', 'spd:' + g.p, 'wandFx'])) : null,
