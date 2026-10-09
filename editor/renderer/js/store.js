@@ -19,7 +19,7 @@
 // ================================================================
 PDM.store = (function () {
   const em = PDM.Emitter();
-  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json' };
+  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json', motion: 'motion.json' };
   const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events', prop: 'props' };
   let version = 0;           // 바뀔 때마다 +1 (계산 캐시용)
 
@@ -60,7 +60,7 @@ PDM.store = (function () {
         if (key === 'world') { const dw = PDM.World.defaultWorld(); data.world = dw.world; Object.entries(dw.data).forEach(([id, o]) => { data['node:' + id] = o; dirty.add('node:' + id); }); }
         else data[key] = PDM.defaults[key]();
         dirty.add(key);
-        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
+        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
       }
     }
     // 마음의 보석 → 마음의 결정 (예전 heart.json / terms.json)

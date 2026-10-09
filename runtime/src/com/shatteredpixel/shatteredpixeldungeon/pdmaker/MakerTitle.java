@@ -222,10 +222,10 @@ public class MakerTitle {
 					break;
 				}
 				default: {
-					Image im = BannerSprites.get(land ? BannerSprites.Type.TITLE_LAND : BannerSprites.Type.TITLE_PORT);
+					Image im = BannerSprites.get(MakerCompat.enumOf(BannerSprites.Type.class, land ? "TITLE_LAND" : "TITLE_PORT", "PIXEL_DUNGEON"));   // 예전 판(SPD 2.x)은 PIXEL_DUNGEON 하나
 					im.scale.set(sc); main = im;
 					if (lg.getBoolean("glow", true)) {
-						glow = new Image(BannerSprites.get(land ? BannerSprites.Type.TITLE_GLOW_LAND : BannerSprites.Type.TITLE_GLOW_PORT)) {
+						glow = new Image(BannerSprites.get(MakerCompat.enumOf(BannerSprites.Type.class, land ? "TITLE_GLOW_LAND" : "TITLE_GLOW_PORT", "PIXEL_DUNGEON_SIGNS"))) {
 							@Override public void draw() { Blending.setLightMode(); super.draw(); Blending.setNormalMode(); }
 						};
 						glow.scale.set(sc);
@@ -247,7 +247,7 @@ public class MakerTitle {
 			logoBaseX = (w - logoW) / 2f + lg.getFloat("offsetX", 0); logoBaseY = cy - logoH / 2f + lg.getFloat("offsetY", 0);
 			if (mode.equals("game") && lg.getBoolean("torches", true)) {
 				float[][] pts = land ? new float[][]{{30, 35}, {logoW / sc - 30, 35}} : new float[][]{{16, 70}, {logoW / sc - 16, 70}};
-				for (float[] p : pts) { Fireball fb = new Fireball(); fb.x = logoBaseX + p[0] * sc - fb.width() / 2f; fb.y = logoBaseY + p[1] * sc - fb.height(); add(fb); torches.add(fb); }
+				for (float[] p : pts) { Fireball fb = new Fireball(); MakerCompat.place(fb, logoBaseX + p[0] * sc - fb.width() / 2f, logoBaseY + p[1] * sc - fb.height()); add(fb); torches.add(fb); }   // 판마다 Fireball 이 MovieClip · Component
 			}
 		}
 		RenderedTextBlock logoText, subText;

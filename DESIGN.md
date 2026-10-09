@@ -117,6 +117,7 @@
 | `effects` | 이펙트 · 파티클 | §5.5 |
 | `compose` | 노드 합성기 | §5.9 |
 | `filters` | 화면 필터 | §5.6 |
+| `motion` | 모션 랩 | §5.10 |
 | `sys` | 시스템 | 마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커) |
 | `charPortrait` · `charHeart` · `charDialogue` · `charBehavior` | 캐릭터 편집 칸 | 초상화 · 표정 / 마음 시스템 / 상황별 대사 / 행동 이벤트 |
 
@@ -331,7 +332,7 @@ MyProject/
 ### 5.7 글자 연출 (APNG) (확장 `textfx` · `editors/textfx.js` · 런타임 `MakerTextFx`)
 - `textfx.json { list: [{ id, name, text, font, size, color, stroke, glow, w, h, bg, inFx, hold, outFx, loopFx, perChar, stagger, css, fps, loop, apng, sheet … }] }` — 설정으로 HTML/CSS(@keyframes 프리셋 + 직접 CSS)를 만들고, shadow DOM 에서 Web Animations 를 시간별로 멈춰 SVG foreignObject → 캔버스로 프레임을 찍음.
 - 탭: 텍스트(서브 텍스트 · 세로쓰기 · 쪽 나누기) · 폰트(`fontFile` → `assets/fonts`) · 움직임(등장 24 · 퇴장 18 · 표시 중 10종) · 장식 · 배경/배치 · CSS. 템플릿 16종.
-- 내보내기: APNG(직접 조립 — acTL/fcTL/fdAT, `PDM.textfx.encodeApng`) `assets/fx/<id>.png` + **게임용 격자 시트** `<id>_sheet.png`(게임은 APNG 를 못 읽음) · PNG · 연번 PNG(ZIP).
+- 내보내기: APNG(직접 조립 — acTL/fcTL/fdAT, 공용 모션 코어 `PDM.motion.encodeApng` · 프레임 찍기도 `PDM.motion.shoot`) `assets/fx/<id>.png` + **게임용 격자 시트** `<id>_sheet.png`(게임은 APNG 를 못 읽음) · PNG · 연번 PNG(ZIP).
 - 게임: `MakerTextFx.show(id, pos, 너비%, 반복, done)`(uiCamera 위), 이벤트 명령 `textfx { fx, pos, width, loops, nowait }`.
 
 ### 5.8 예고편 컷신 (확장 `textfx` 에 포함 · `editors/trailer.js` · 런타임 `MakerTrailer`)
@@ -344,6 +345,25 @@ MyProject/
 - 노드: 입력(그림 · 직접 그리기 · 단색 · 그라데이션 · 노이즈 · 도형 · 무늬 · 시트 칸 · 글자 · 파티클 · 이펙트) / 변형(이동 · 회전 · 크기 · 반복 · 뒤집기 · 픽셀화 · 대칭 · 물결 · 밀어내기) / 색(색조 · 채도 · 밝기 · 팔레트 · 색 바꾸기 · 반전 · 외곽선 · 그림자 · 투명도) / 합성(겹치기 · 마스크) / 효과(흐림 · 빛 번짐 · 넓히기/깎기 · 입체감) / 출력.
 - 숫자 칸에 식(`t` 0~1 · `frame` · `frames` · `pi` · sin/cos/abs/floor/min/max/rand — 허용한 이름만) → 프레임마다 계산(`evaluateAll`), 여러 프레임이면 시트(`toSheet`) · APNG.
 - 연동: 결과를 오브젝트 그림 · 아이템 그림 · 사용자 테마 타일셋 칸 · 이펙트 알갱이 · 화면 필터 층에 바로 넣기, 픽셀 편집기 "🧩 노드 합성기에서 편집"(`PDM.compose.fromImage`). `PDM.compose = { TYPES, evaluate, render, … }`.
+
+### 5.10 모션 랩 · 모션 코어 (확장 `motion` · `editors/motion.js` · 공용 `motioncore.js` · `motion.json`)
+CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부품을 하나로 모으고, 그 위에 "움직이는 그림을 만들어 여러 곳에 보내는" 편집 화면을 둠. 게임 안에서 코드가 도는 것이 아니라 편집기에서 구운 그림(격자 시트 PNG)이 들어감.
+- **모션 코어** `PDM.motion` (motioncore.js — 모든 편집기보다 먼저 실림):
+  - `mount(doc, host, zoom)` · `shoot(doc, times)` — HTML · CSS 를 화면 밖 shadow 상자에 올리고 모든 애니메이션(Web Animations)을 멈춘 뒤 시각마다 `currentTime` 을 맞추고, 애니메이션이 바꾸는 속성의 계산된 값을 `[data-k]` 규칙으로 박아 SVG foreignObject 로 찍음 → animation-delay · 글자마다 어긋난 시작 · ::before/::after · CSS 변수까지 그대로 (예전 글자 연출 방식을 공용으로. 예전 필터 코드 층은 모든 요소에 같은 음수 delay 를 덮어써서 어긋난 시작이 사라졌음).
+  - `renderSrc(src)` — `src = { lang: css | js, html, code, w, h, frames, fps, seed, pixel }`. CSS 는 html 이 비면 그림 전체를 덮는 `<div class="fx">`(화면 필터 코드 층과 같은 약속), JS 는 `function (g, w, h, t, frame, frames, rand)`.
+  - `pixelize(frames, pixel)` 픽셀 아트로 굽기 — `px`(덩어리: 칸 평균색으로 줄임, `keep` 이면 다시 키움) · `alphaCut`(반투명 경계 자르기) · `palette`(편집기 기본 팔레트 `PDM.PALETTE` | 색마다 단계 수 `levels`) · `dither`(4×4 바이어) · `outline`(1칸 외곽선).
+  - `sheet(frames)`(가로 2048 이하 격자) · `encodeApng` · `bake(src, png)`(시트 + 옆에 `…_anim.png` APNG) · `exportApng`.
+- **모션 랩** `motion.json { list: [{ id, name, lang, html, code, w, h, frames, fps, seed, pixel, out, baked { fw, fh, frames, fps, cols, apng } }] }`:
+  - 왼쪽 코드(HTML · CSS 또는 JS) · 크기 · 프레임 · 초당 프레임 · 픽셀 설정, 오른쪽 실시간(코드 그대로 — CSS 는 shadow 상자에서 실제로 돌고 JS 는 프레임을 차례로) · 구운 결과(게임에 들어가는 그림) 재생, 확대 · 배경.
+  - 예시 (묶음 메뉴 — 새로 만들기 · "📋 예시로 바꾸기"(지금 항목의 코드 · 크기 · 프레임 · 픽셀 설정을 바꿈, 직접 지은 이름은 그대로) · "🎞 예시 둘러보기"(실제 코드가 도는 갤러리)):
+    - 기본(픽셀 게임 움직임): 빈 CSS · 반짝이는 별 · 퍼지는 고리 · 도는 마법진 · 흐르는 물결 무늬(이어 붙임) · 글자가 하나씩 튀어 오름 · 떠오르는 불티(JS) · 일렁이는 불꽃(JS) + 화면 필터 예시(훑는 빛 · 깨진 화면).
+    - 웹 모션 24종 (`editors/motion-presets.js` — `PDM.MOTION_WEB_PRESETS` · `PDM.MOTION_PRESET_GROUPS`): 등장 01–08(페이드 인 · 슬라이드 인 · 스태거 · 텍스트 리빌 · 마스크 리빌 · 블러 인 · 타이프라이터 · 카운트업) / 스크롤 연동 09–16(읽기 진행률 · 패럴랙스 · 스크롤 줌 · 이미지 시퀀스 · SVG 라인 드로우 · 텍스트 필 · 배경색 트랜지션 · 마키) / 고정 · 전환 · 내비게이션 17–24(스티키 · 핀 고정 + 스크럽 · 스크롤텔링 · 카드 스택 · 스크롤 스냅 · 가로 스크롤 · 숨김 헤더 · 스크롤스파이). 게임 그림에는 스크롤이 없으므로 시간이 스크롤 대신 진행을 끌고 감. 바깥 그림 없이 그라데이션 · 도형 · 인라인 SVG, `animation-fill-mode: both` + 끝 모습 유지 구간으로 끊김 없이 반복.
+  - 코어 약속: `.fx` = 그림 전체 상자, HTML 은 그 안에 들어감(자기 `.stage` 가 있으면 — 글자 연출에서 가져온 것 — 그대로). `@property` 는 문서 전체에 등록(`registerProps` — shadow 상자 안의 @property 는 무시되므로)하고, `@keyframes` 안의 CSS 변수도 프레임마다 박아 넣음(getKeyframes 가 알려 주지 않음) → CSS 변수 애니메이션(카운트업 등)도 그대로 구워짐.
+  - 💾 굽고 저장(`out`, 기본 `assets/motion/<id>.png`) · APNG 내보내기.
+  - ➜ 보내기 (`lab.SEND` — `targets()` · `apply(모션, 대상)`): 화면 필터 층(`code` 층 + `motion: <id>` — 필터에서 "다시 굽기"하면 모션의 코드 · 크기 · 픽셀 설정을 따름, 새 필터도 만들 수 있음) · 이펙트 알갱이(`sprite { png, fw, fh, frames "0-n", fps, anim loop }`) · 맵 오브젝트(`sprite.sheet · frame` + `anims.motion` · 첫 상태의 anim) · 노드 합성기 그림 노드(첫 장 `…_still.png`) · 아이템 그림(첫 장).
+  - ⤓ 가져오기: 화면 필터의 코드 층(모션으로 옮기고 그 층은 `motion` 으로 이어짐) · 글자 연출(`PDM.textfx.build` 결과 HTML · CSS 그대로 — 직접 다듬기용, 등록한 글꼴 · 넘치면 줄이기는 빠짐).
+  - `listOps` 의 `fields: ['motion']` — 쓰는 곳 · id 바꾸기가 화면 필터 층의 `motion` 도 따라 고침.
+- 화면 필터의 코드 층: "🎞 모션 랩 항목으로 그리기" 고르기(이어지면 코드 칸 대신 "모션 랩에서 열기" · 다시 굽기) · "모션 랩으로 옮기기".
 
 ---
 
@@ -537,6 +557,11 @@ MyProject/
   - 투척 무기(`MissileWeapon`)의 throwFx: 원래 규칙(맞힘 · 박힘 · 내구 · 바닥에 남기)은 그대로 두고 그 칸에서 효과만 더함 — 맞힘은 `MissileWeapon.rangedHit` 연결 줄(`missileHit`), 빗나감 · 바닥은 `Item.onThrow` 연결 줄(when `always` 일 때). consume · fuse 는 안 씀.
   - `bagFx { on, capacity, holds, categories, items, tags, openLabel, putLabel }` — "넣기"(배낭에서 골라 담음) · "열기 (n/칸)"(보통 가방 창 `WndBag(inner)` — 누르면 그 자리에서 사용 · 장착 · 던지기, 또는 "꺼내기" `PDM_BAG_TAKE`). 안에 든 채로 쓸 수 있는 건 `Item.detachAll` 맨 앞 연결 줄(`detachFrom` — 배낭에 없고 가방 기능 안에 있으면 그곳에서 뺌) 덕분. 내용물은 `Item.storeInBundle/restoreFromBundle` 연결 줄로 저장. 주울 때 저절로 들어가지 않음(원래 기능 — 장착 · 퀵슬롯 그대로).
   - 새 아이템 기본값(일반 kind): 물약 = 마시면 회복 15 + 던지면 깨짐, 폭탄 = 퓨즈 2 · 범위 1 모두 8~16, 룬석 = 던지면 범위 마비, 주문서 · 마법 = 사용하면 신속. 헤드리스 `eval:usetest` · `throwfx` · `bagfx` · `baguse` · `heaps`(+ `reload` 로 퓨즈 저장 확인).
+- **무기 공격 모션** (`swing.js` — `PDM.SWING_MOTIONS` · `PDM.swingEditor` · 런타임 `MakerSwing`): 영웅이 공격할 때 그 무기의 아이템 그림이 영웅 가운데에서 휘둘러짐. 근접 무기 · 활(들고 때릴 때) · 게임 근접 무기 상속 아이템(아이템 편집기 "⚔ 공격 모션"), 게임 근접 무기(보기 창 → gameitems.json).
+  - 그림의 왼쪽 아래 = 손잡이(돌아가는 중심), 오른쪽 위 = 날(그림 안에서 -45°). 방향: θ = φ(영웅 → 대상) + 각도, 왼쪽을 보면(위 · 아래는 영웅 그림이 뒤집혀 있으면) θ = φ − 각도 + 그림도 좌우로(날 -135°, 중심 = 오른쪽 아래).
+  - `attackFx { on, motion, keys [[t, 각도, 거리, 크기, 불투명도]], hits [t], dur, dist, speed, scale, behind, trail, trailEvery, hit, hitAt tip|target, sound }` — 모션 버튼을 누르면 그 모션의 keys · hits · dur 를 복사(런타임은 keys 만 재생 — "고급: 키프레임 직접 고치기"로 직접 모션). 구간 보간 smoothstep(편집기 `PDM.swingSample` = 런타임 `MakerSwing.sample`).
+  - 모션 10종: 베기 · 찌르기 · 찍기 · 휘두르기 · 치기 · 올려치기/받아치기 · 밀치기 · 회전 베기 · 휩쓸기 · 연타/난무. 파티클: 휘두르는 동안 날 끝에서(`trail` 이펙트를 `trailEvery` 초마다) · 맞는 순간(`hits` 시각에 날 끝 또는 대상 칸). 미리보기는 같은 계산으로(게임 전사 그림 + 아이템 그림, 대상 방향 바꾸기, 파티클 자리 표시).
+  - 연결 줄: `CharSprite.attack(cell, callback)` 의 `play(attack)` 바로 뒤 `MakerSwing.onAttack` — 영웅 · `belongings.attackingWeapon()` 의 설정(프로젝트 아이템 자기 것 → 게임 클래스 사슬 gameitems). `ItemSprite` 를 영웅 그림과 같은 무리에 넣음(`behind` 면 영웅 바로 뒤). 게임의 공격 판정 · 피해 · 영웅 공격 동작은 그대로(그림만 더함). 헤드리스 `eval:swingtest` · `swingdirect` · `swinginfo`.
 - **판매 불가 · 버리기 금지** `noSell` · `noDrop`(새 아이템 창 · 기본 칸, 게임 아이템은 보기 창 → gameitems.json): 연결 줄 `Item.actions`(AC_THROW 뒤 → `MakerItem.flagActions` — 버리기 · (투척 무기가 아니면) 던지기 버튼을 뺌) · `Shopkeeper.canSell` 맨 앞(`MakerItem.noSell`). 프로젝트 아이템 → 게임 클래스 사슬 순으로 설정을 찾음.
 - **완전히 새 가방** `kind: "bag"`(새 아이템 › 가방 › "완전히 새 가방", 기본) → 생성 클래스가 런타임 `MakerBag`(Bag) 상속: `bag { capacity, holds: all|filter, categories(분류 + missile · seed), items(프로젝트 id · spd:경로 — 상속 포함), tags, tabIcon }`. `canHold` = 설정에 맞고(가방은 안 받음) 게임 규칙(칸 수 · 겹침). 주운 아이템이 먼저 들어가는 것 · 가방 창 탭은 게임 그대로, 탭 아이콘은 연결 줄 `WndBag.icon` · `InventoryPane.bagIcon` → `MakerBag.icon`(가방 그림 또는 게임 가방 아이콘). 헤드리스 `eval:bagtest,<가방>,<아이템>`.
 - **마법봉 수치** `wand { charges, min, max, minPerLvl, maxPerLvl }`(kind game + `wands.*`): 코드 생성이 `initialCharges()` · (피해 마법봉 `codegen.DAMAGE_WANDS` 만) `min(lvl)` · `max(lvl)` 을 덮어씀, 비우면 게임 그대로.
@@ -860,7 +885,9 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **84개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **85개** 연결점 · **37개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+
+**지원 저장소 · 판 차이** (`runtime-installer.js` `compat()` · 런타임 `MakerCompat`): 설치 전에 패키지(`com.shatteredpixel.shatteredpixeldungeon`) · 체력 형(int) · `LevelTransition.BRANCH_EXIT`(SPD 2.5+) · 연결 줄 위치를 살핌 → 안 되는 것은 설치하지 않고 이유를 알림, 위치를 못 찾은 줄은 경고(그 기능만 꺼짐 · 런타임 상태의 "필요한 줄 수"에서 빼서 매번 다시 설치하지 않음). 판마다 다른 API(GreenFlame · MissileWeapon.setID/spawnedForEffect · BannerSprites 종류 · Music.paused · Wand.wandUsed 접근 · customTiles 목록 형 · Fireball 위치 · MagicMissile.LIGHT_MISSILE)는 `MakerCompat` 반사로. 확인: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · javac 컴파일 · 헤드리스 테스트 플레이).
 
 | 파일 | 연결점 |
 |---|---|
@@ -892,6 +919,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |
 | `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop)<br>아이템 추가 기능: 버튼 이름 · 버튼 동작 · 던져서 떨어졌을 때 · 가방 기능 안에서 빼내기(detachAll) · 저장 · 불러오기 |
 | `items/weapon/missiles/MissileWeapon.java` | 아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과 |
+| `sprites/CharSprite.java` | 무기 공격 모션 (무기 그림이 휘둘러짐) |
 | `actors/Char.java` | 캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로) |
 | `actors/Actor.java` | 아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기 |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |

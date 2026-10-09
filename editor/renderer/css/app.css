@@ -168,7 +168,7 @@ table.grid td input, table.grid td select { padding: 3px 5px; }
 #stDirty.on { color: var(--gold); }
 
 /* ---- 메뉴 / 모달 / 알림 ---- */
-.ctx { position: fixed; z-index: 1000; background: var(--bg3); border: 1px solid var(--line); border-radius: 6px; padding: 4px; min-width: 190px; box-shadow: 0 8px 30px var(--shadow); }
+.ctx { position: fixed; z-index: 1000; background: var(--bg3); border: 1px solid var(--line); border-radius: 6px; padding: 4px; min-width: 190px; box-shadow: 0 8px 30px var(--shadow); max-height: calc(100vh - 8px); overflow-y: auto; }
 .ctx-i { padding: 6px 10px; border-radius: 4px; cursor: pointer; display: flex; gap: 12px; justify-content: space-between; }
 .ctx-i:hover { background: var(--accent2); color: var(--on-accent); } .ctx-i:hover small { color: inherit; opacity: .8; } .ctx-i small { color: var(--mute); } .ctx-i.dis { opacity: .4; pointer-events: none; }
 .ctx hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; }

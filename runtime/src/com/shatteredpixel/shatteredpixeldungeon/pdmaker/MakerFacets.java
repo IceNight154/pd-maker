@@ -93,7 +93,7 @@ public class MakerFacets {
 			final JsonValue f = facet(it, "throwFx");
 			if (f == null) return false;
 			if (it instanceof MissileWeapon) {   // 빗나가거나 바닥에 떨어짐 (맞힘은 rangedHit 연결 줄) — 원래처럼 바닥에 남김
-				if (!"hit".equals(f.getString("when", "always")) && !((MissileWeapon) it).spawnedForEffect) trigger(f, cell);
+				if (!"hit".equals(f.getString("when", "always")) && !MakerCompat.flag(it, "spawnedForEffect")) trigger(f, cell);
 				return false;
 			}
 			final boolean consume = f.getBoolean("consume", true);
@@ -105,8 +105,9 @@ public class MakerFacets {
 			}
 			// 퓨즈: 바닥에 놓였다가 fuse 턴 뒤 그 자리(주워 가면 터지지 않음)에서
 			final Heap heap = drop(it, cell);
-			if (heap != null && heap.sprite != null) MakerEffect.playAt(f.getString("fuseFx", ""), cell);
-			light(it, cell, fuse);
+			final int at = heap != null ? heap.pos : cell;   // 캐릭터가 서 있으면 게임이 옆 칸에 떨어뜨림 — 실제로 놓인 칸
+			if (heap != null && heap.sprite != null) MakerEffect.playAt(f.getString("fuseFx", ""), at);
+			light(it, at, fuse);
 			return true;
 		} catch (Throwable t) { MakerRuntime.log("던지기 효과 오류: " + t); return false; }
 	}
@@ -114,7 +115,7 @@ public class MakerFacets {
 	public static void missileHit(MissileWeapon m, int cell) {
 		try {
 			JsonValue f = facet(m, "throwFx");
-			if (f != null && !m.spawnedForEffect) trigger(f, cell);
+			if (f != null && !MakerCompat.flag(m, "spawnedForEffect")) trigger(f, cell);
 		} catch (Throwable t) { MakerRuntime.log("던지기 효과 오류: " + t); }
 	}
 
@@ -129,10 +130,13 @@ public class MakerFacets {
 			Actor.remove(this);
 			fuses.remove(it);
 			Heap h = Dungeon.level == null ? null : Dungeon.level.heaps.get(cell);
+			if (h != null && !h.items.contains(it)) h = null;
+			if (h == null && Dungeon.level != null) for (Heap x : Dungeon.level.heaps.valueList()) if (x.items.contains(it)) { h = x; break; }   // 다른 칸으로 굴러간 경우 (캐릭터에 맞고 옆 칸에 떨어짐)
 			JsonValue f = facet(it, "throwFx");
-			if (f != null && h != null && h.items.contains(it)) {   // 주워 갔으면 터지지 않음
+			if (f != null && h != null) {   // 주워 갔으면(바닥 어디에도 없으면) 터지지 않음
+				int at = h.pos;
 				if (f.getBoolean("consume", true)) h.remove(it);
-				trigger(f, cell);
+				trigger(f, at);
 			}
 			return true;
 		}

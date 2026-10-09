@@ -44,52 +44,21 @@
     return rel;
   }
 
-  // ---------------- 코드 층 굽기: JS(캔버스) · CSS → PNG (여러 프레임이면 시트)
-  const loadUrl = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('그림으로 바꾸지 못했습니다 (코드를 확인하세요)')); i.src = url; });
-  const escXml = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  async function codeFrame(l, w, hh, f, n) {
-    const cv = h('canvas', { width: w, height: hh }), g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
-    if (l.lang === 'css') {
-      const sec = f / Math.max(1, num(l.fps, 8));
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hh}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;height:${hh}px;position:relative;overflow:hidden"><style>.fx{position:absolute;left:0;top:0;width:${w}px;height:${hh}px;overflow:hidden}\n${escXml(l.code || '')}\n*,*::before,*::after{animation-play-state:paused!important;animation-delay:${-sec}s!important}</style><div class="fx"></div></div></foreignObject></svg>`;
-      g.drawImage(await loadUrl('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)), 0, 0);
-    } else {
-      const fn = new Function('g', 'w', 'h', 't', 'frame', 'frames', 'rand', l.code || '');
-      g.save(); fn(g, w, hh, f / n, f, n, rng(num(l.seed, 1) * 9973 + 17)); g.restore();
-    }
-    return cv;
-  }
-  /** 코드 층을 구워 l.png 에 저장하고 { fw, frames } 를 돌려줌 (l.png 가 비어 있으면 실패) */
-  const MAXF = 120;
-  const apngPath = png => String(png).replace(/\.png$/i, '') + '_anim.png';
-  const bytesUrl = bytes => { let bin = ''; const u = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes); for (let k = 0; k < u.length; k += 8192) bin += String.fromCharCode.apply(null, u.subarray(k, k + 8192)); return 'data:image/png;base64,' + btoa(bin); };
-  async function codeFrames(l) {
-    const w = PDM.clamp(num(l.w, 160) | 0, 8, 512), hh = PDM.clamp(num(l.h, 96) | 0, 8, 512), n = PDM.clamp(num(l.frames, 1) | 0, 1, MAXF), out = [];
-    for (let f = 0; f < n; f++) { out.push(await codeFrame(l, w, hh, f, n)); if (f % 8 === 7) await new Promise(r => setTimeout(r, 0)); }
-    return { frames: out, w, h: hh, n };
-  }
-  /** 코드 층을 구워 l.png(게임용 격자 시트)에 저장. 여러 프레임이면 옆에 APNG(<이름>_anim.png — 미리 보기 · 공유용)도 저장. { fw, frames, apng } 를 돌려줌 */
+  // ---------------- 코드 층 굽기: 공용 모션 코어(PDM.motion — motioncore.js)로. 층에 motion(모션 랩 항목 id)이 있으면 그 항목의 코드 · 크기 · 픽셀 설정으로
+  const MAXF = PDM.motion.MAXF;
+  const motionOf = id => (((store.get('motion') || {}).list) || []).find(x => x.id === id);
+  /** 층 → 모션 코어의 src */
+  const srcOf = l => { const m = l.motion && motionOf(l.motion); if (m) return m;
+    return { lang: l.lang, code: l.code, w: PDM.clamp(num(l.w, 160) | 0, 8, 512), h: PDM.clamp(num(l.h, 96) | 0, 8, 512), frames: l.frames, fps: l.fps, seed: l.seed }; };
+  async function codeFrames(l) { const r = await PDM.motion.renderSrc(srcOf(l)); return { frames: r.frames, w: r.w, h: r.h, n: r.n }; }
+  /** 코드 층을 구워 l.png(게임용 격자 시트)에 저장. 여러 프레임이면 옆에 APNG(<이름>_anim.png)도. { fw, frames, fps, apng } */
   async function bake(l) {
-    if (!l.png) throw new Error('저장할 경로가 없습니다');
-    const { frames, w, h: hh, n } = await codeFrames(l);
-    // 격자 시트: 한 변이 2048 을 넘지 않게 (런타임은 가로 칸 수 = 시트 너비 ÷ 한 칸 가로 로 읽음)
-    const cols = Math.max(1, Math.min(n, Math.floor(2048 / w))), rows = Math.ceil(n / cols);
-    if (rows * hh > 4096) throw new Error(`시트가 너무 큽니다 (${cols * w}×${rows * hh}px) — 그림 크기나 프레임 수를 줄이세요`);
-    const sheet = h('canvas', { width: w * cols, height: hh * rows }), sg = sheet.getContext('2d');
-    frames.forEach((f, i) => sg.drawImage(f, (i % cols) * w, Math.floor(i / cols) * hh));
-    await pdm.writeDataURL(store.abs(l.png), sheet.toDataURL('image/png'));
-    PDM.assets.invalidate(l.png); delete imgCache[l.png];
-    let apng = '';
-    if (n > 1 && PDM.textfx && PDM.textfx.encodeApng) { try { apng = apngPath(l.png); await pdm.writeDataURL(store.abs(apng), bytesUrl(await PDM.textfx.encodeApng(frames, Math.max(1, num(l.fps, 8)), 0))); } catch (e) { apng = ''; PDM.log && PDM.log('APNG 저장 실패: ' + (e.message || e), 'warn'); } }
-    return { fw: n > 1 ? w : 0, frames: n, apng };
+    const r = await PDM.motion.bake(srcOf(l), l.png);
+    delete imgCache[l.png];
+    return { fw: r.frames > 1 ? r.fw : 0, frames: r.frames, fps: r.fps, apng: r.apng };
   }
   /** 코드 층을 APNG 파일로 내보내기 (프로젝트 밖 아무 곳에나) */
-  async function exportApng(l, name) {
-    if (!PDM.textfx || !PDM.textfx.encodeApng) throw new Error('APNG 만들기 기능을 찾지 못했습니다');
-    const { frames } = await codeFrames(l), url = bytesUrl(await PDM.textfx.encodeApng(frames, Math.max(1, num(l.fps, 8)), 0));
-    try { const out = await pdm.saveFile('APNG 로 내보내기', name, ['png']); if (!out) return null; await pdm.writeDataURL(out, url); return out; }
-    catch (_) { const a = h('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove(); return name; }   // 웹 모드: 내려받기
-  }
+  const exportApng = (l, name) => PDM.motion.exportApng(srcOf(l), name);
 
   // ---------------- 새 필터 · 예시
   const L = {
@@ -293,14 +262,28 @@ for (let i = 0; i < 6; i++) {
       const codeBox = (l, i) => {
         const msg = h('div', { class: 'hint' }, l.png ? '구운 그림: ' + l.png : '');
         const run = async () => { const cur = ((store.get(K) || {}).list || [])[idx].layers[i], rel = cur.png || `assets/filters/${f.id}_${i + 1}_code.png`;
-          try { const r = await bake(Object.assign({}, cur, { png: rel })); store.edit(K, '코드 층 굽기', x => { Object.assign(x.list[idx].layers[i], { png: rel, fw: r.fw }); }, { silent: true }); msg.style.color = ''; msg.textContent = `구웠습니다: ${rel}` + (r.frames > 1 ? ` (${r.frames}프레임 시트)` : '') + (r.apng ? ` · APNG ${r.apng}` : ''); }
+          try { const r = await bake(Object.assign({}, cur, { png: rel })); store.edit(K, '코드 층 굽기', x => { Object.assign(x.list[idx].layers[i], { png: rel, fw: r.fw }, cur.motion ? { frames: r.frames, fps: r.fps } : {}); }, { silent: true }); msg.style.color = ''; msg.textContent = `구웠습니다: ${rel}` + (r.frames > 1 ? ` (${r.frames}프레임 시트)` : '') + (r.apng ? ` · APNG ${r.apng}` : ''); }
           catch (er) { msg.style.color = 'var(--bad)'; msg.textContent = '오류: ' + (er.message || er); } };
         const ta = h('textarea', { rows: 12, class: 'mono', spellcheck: false, style: { width: '100%', whiteSpace: 'pre', fontSize: '12px' } }); ta.value = l.code || '';
         ta.addEventListener('change', () => { store.edit(K, '필터 코드', x => { x.list[idx].layers[i].code = ta.value; }, { silent: true }); run(); });
         ta.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); const s0 = ta.selectionStart; ta.setRangeText('  ', s0, ta.selectionEnd, 'end'); } e.stopPropagation(); });
         const reRun = () => setTimeout(run, 0);
         if (!l.png) reRun(); else pdm.exists(store.abs(l.png)).then(ok => { if (!ok) run(); }).catch(() => { });   // 아직 굽지 않은 층(복제 · 새로 추가)
-        return h('div', {},
+        const ml = (((store.get('motion') || {}).list) || []), linked = l.motion && motionOf(l.motion);
+        const motionRow = PDM.motion.lab ? h('div', { class: 'card', style: { padding: '6px 10px', margin: '0 0 6px' } },
+          row(h('div', { class: 'field' }, h('span', { class: 'fl' }, '🎞 모션 랩 항목으로 그리기 (비우면 아래 코드)'),
+              h('select', { onchange: e => { store.edit(K, '모션 랩 항목', x => { const ly = x.list[idx].layers[i]; if (e.target.value) ly.motion = e.target.value; else delete ly.motion; }); reRun(); } },
+                h('option', { value: '' }, '(이 층의 코드)'), ml.map(m => h('option', { value: m.id, selected: m.id === l.motion }, `${m.name || m.id} (${m.id})`)))),
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('div', { style: { display: 'flex', gap: '4px' } },
+              linked ? h('button', { class: 'btn sm', onclick: () => PDM.motion.lab.show(l.motion) }, '모션 랩에서 열기') : null,
+              !linked && (l.code || '').trim() ? h('button', { class: 'btn sm', title: '이 층의 코드를 모션 랩 항목으로 옮기고, 이 층은 그 항목을 쓰게 합니다 (다른 필터 · 오브젝트 · 이펙트에서도 같은 움직임을 쓸 수 있음)', onclick: async () => { const id = await PDM.motion.lab.fromFilterLayer(f, i); if (id) { store.edit(K, '모션 랩 항목', x => { x.list[idx].layers[i].motion = id; }); reRun(); } } }, '모션 랩으로 옮기기') : null))),
+          linked ? h('div', { class: 'hint' }, `모션 랩 「${linked.name || linked.id}」 의 코드 · 크기(${linked.w}×${linked.h}) · 프레임(${linked.frames || 1}장 · 초당 ${linked.fps || 8}) · 픽셀 설정으로 굽습니다. 고치는 곳은 모션 랩 — 거기서 굽으면 이 층도 다시 구우세요(▶ 코드 적용).`) : null) : null;
+        if (linked) return h('div', {}, motionRow,
+          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '4px 0' } }, h('button', { class: 'btn sm pri', onclick: run }, '▶ 다시 굽기'), msg),
+          row(F.num(K, [...lp(i), 'alpha'], { label: '진하기 (0~100)', min: 0, max: 100, def: 100 }), F.select(K, [...lp(i), 'blend'], { normal: '보통', add: '더하기 (밝게)' }, { label: '겹치는 방식' }),
+            F.select(K, [...lp(i), 'fit'], { stretch: '화면에 맞게 늘리기', tile: '반복해서 깔기' }, { label: '놓는 방식', def: 'stretch', rerender: true })),
+          (l.fit || 'stretch') === 'tile' ? row(F.num(K, [...lp(i), 'scale'], { label: '배율', min: 0.25, max: 16, step: 0.25, def: 1 }), F.num(K, [...lp(i), 'vx'], { label: '흐름 → (px/초)', def: 0 }), F.num(K, [...lp(i), 'vy'], { label: '흐름 ↓ (px/초)', def: 0 }), F.num(K, [...lp(i), 'jitter'], { label: '튐 (초당)', min: 0, max: 60, def: 0 })) : null);
+        return h('div', {}, motionRow,
           row(F.select(K, [...lp(i), 'lang'], { js: 'JavaScript (캔버스에 그리기)', css: 'CSS (.fx 꾸미기)' }, { label: '코드 종류', rerender: true }),
             h('div', { class: 'field' }, h('span', { class: 'fl' }, '예시 코드 넣기'), h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
               [['crack', '깨진 화면', 'js'], ['tear', '찢김', 'js'], ['scanbar', '훑는 빛 (CSS)', 'css']].map(([k, n, lang]) => h('button', { class: 'btn xs', onclick: () => { store.edit(K, '예시 코드', x => { Object.assign(x.list[idx].layers[i], { lang, code: CODE[k] }); }); reRun(); } }, n))))),

@@ -73,6 +73,8 @@ PDM.defaults = {
   /** 내 배지 (editors/badges.js · 런타임 MakerBadges) */
   badges() { return { format: 'pdmaker-badges', version: PDM.FORMAT_VERSION, list: [], orig: {} }; },
   filters() { return { format: 'pdmaker-filters', version: PDM.FORMAT_VERSION, list: [] }; },
+  /** 모션 랩 (editors/motion.js — CSS · JS 로 만든 움직이는 그림, 게임에는 구운 PNG 시트만) */
+  motion() { return { format: 'pdmaker-motion', version: PDM.FORMAT_VERSION, list: [] }; },
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },
   textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },

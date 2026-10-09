@@ -281,53 +281,30 @@ ${o.css || ''}`;
     return out.join('\n');
   }
 
-  /** 연출을 host 에 올리고 모든 애니메이션을 멈춘 채 돌려줌 → { stage, anims, b, seek(초) } */
+  /** 연출을 host 에 올리고 모든 애니메이션을 멈춘 채 돌려줌 → { stage, anims, b, seek(초) } (공용 모션 코어 PDM.motion.mount) */
   async function mount(fx, host, zoom) {
     const fontCss = await fontCssOf(fx), b = build(fx, fontCss);
-    const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
-    root.innerHTML = `<style>${b.css}\n:host{display:inline-block}${zoom && zoom !== 1 ? `.stage{zoom:${zoom}}` : ''}</style>${b.html}`;
-    const stage = root.querySelector('.stage'), fit = root.querySelector('.fit');
-    if (b.o.shrink && b.o.flow !== 'scroll' && fit) {   // 넘치면 줄이기
-      const aw = b.W - 2 * num(b.o.padX, 24), ah = b.H - 2 * num(b.o.padY, 16), k = Math.min(1, aw / Math.max(1, fit.offsetWidth), ah / Math.max(1, fit.offsetHeight));
-      if (k < 0.999) fit.style.transform = `scale(${r3(Math.max(0.05, k))})`;
-    }
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const anims = stage.getAnimations({ subtree: true });
-    anims.forEach(a => a.pause());
-    return { stage, anims, b, fontCss, seek(t) { const ms = t * 1000; anims.forEach(a => { try { a.currentTime = ms; } catch (_) { /* 무시 */ } }); } };
+    const m = await PDM.motion.mount({ html: b.html, css: b.css, W: b.W, H: b.H, prepare: root => {
+      const fit = root.querySelector('.fit');
+      if (b.o.shrink && b.o.flow !== 'scroll' && fit) {   // 넘치면 줄이기
+        const aw = b.W - 2 * num(b.o.padX, 24), ah = b.H - 2 * num(b.o.padY, 16), k = Math.min(1, aw / Math.max(1, fit.offsetWidth), ah / Math.max(1, fit.offsetHeight));
+        if (k < 0.999) fit.style.transform = `scale(${r3(Math.max(0.05, k))})`;
+      } } }, host, zoom);
+    return Object.assign(m, { b, fontCss });
   }
 
-  // ---------------- 프레임 찍기
-  const loadImg = src => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => no(new Error('그림을 만들지 못했습니다 (CSS 를 확인하세요)')); im.src = src; });
+  // ---------------- 프레임 찍기 (공용 모션 코어 PDM.motion.shoot)
   /** times(초 목록)의 프레임을 캔버스 배열로. onProgress(0~1) */
   async function shoot(fx, times, onProgress, cancel) {
-    const host = h('div', { style: { position: 'fixed', left: '-100000px', top: '0', pointerEvents: 'none' } });
-    document.body.append(host);
-    const frames = [];
-    try {
-      const m = await mount(fx, host), { stage, anims, b } = m;
-      // 애니메이션이 바꾸는 속성만 골라 프레임마다 계산된 값을 박아 넣음 (가상 요소 ::before/::after 포함)
-      [stage, ...stage.querySelectorAll('*')].forEach((e, i) => e.setAttribute('data-k', i));
-      const targets = new Map();
-      anims.forEach(a => { const ef = a.effect; if (!ef || !ef.target) return; const key = ef.target.getAttribute('data-k') + '|' + (ef.pseudoElement || '');
-        const t = targets.get(key) || { el: ef.target, pseudo: ef.pseudoElement || null, props: new Set() }; targets.set(key, t);
-        ef.getKeyframes().forEach(kf => Object.keys(kf).forEach(p => { if (!['offset', 'easing', 'composite', 'computedOffset'].includes(p)) t.props.add(p === 'cssFloat' ? 'float' : p === 'cssOffset' ? 'offset' : p.startsWith('--') ? p : p.replace(/[A-Z]/g, c => '-' + c.toLowerCase())); })); });
-      const xml = new XMLSerializer();
-      for (let i = 0; i < times.length; i++) {
-        if (cancel && cancel()) throw new Error('중지했습니다');
-        m.seek(times[i]);
-        let rules = '';
-        targets.forEach(tg => { const cs = getComputedStyle(tg.el, tg.pseudo); rules += `[data-k="${tg.el.getAttribute('data-k')}"]${tg.pseudo || ''}{${[...tg.props].map(p => `${p}:${cs.getPropertyValue(p)}!important`).join(';')}}\n`; });
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${b.W}" height="${b.H}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${esc(b.css)}\n*,*::before,*::after{animation:none!important;transition:none!important}\n${esc(rules)}</style>${xml.serializeToString(stage)}</div></foreignObject></svg>`;
-        const im = await loadImg('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
-        const cv = h('canvas', { width: b.W, height: b.H });
-        cv.getContext('2d').drawImage(im, 0, 0);
-        frames.push(cv);
-        onProgress && onProgress((i + 1) / times.length * 0.7);
-        if (i % 8 === 7) await new Promise(r => setTimeout(r, 0));
-      }
-      return { frames, b };
-    } finally { host.remove(); }
+    const fontCss = await fontCssOf(fx), b = build(fx, fontCss);
+    const prepare = root => {
+      const fit = root.querySelector('.fit');
+      if (b.o.shrink && b.o.flow !== 'scroll' && fit) {
+        const aw = b.W - 2 * num(b.o.padX, 24), ah = b.H - 2 * num(b.o.padY, 16), k = Math.min(1, aw / Math.max(1, fit.offsetWidth), ah / Math.max(1, fit.offsetHeight));
+        if (k < 0.999) fit.style.transform = `scale(${r3(Math.max(0.05, k))})`;
+      } };
+    const frames = await PDM.motion.shoot({ html: b.html, css: b.css, W: b.W, H: b.H, prepare }, times, onProgress, cancel);
+    return { frames, b };
   }
   async function capture(fx, onProgress, cancel) {
     const b0 = build(fx, ''), fps = Math.max(1, Math.min(60, num(fx.fps, 20))), count = Math.max(1, Math.min(900, Math.round(b0.total * fps)));
@@ -343,45 +320,8 @@ ${o.css || ''}`;
     return frames.map(cv => { const c = h('canvas', { width: x1 - x0 + 1, height: y1 - y0 + 1 }); c.getContext('2d').drawImage(cv, -x0, -y0); return c; });
   }
 
-  // ---------------- APNG 만들기 (PNG 청크 직접 조립, 압축은 브라우저 CompressionStream)
-  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-  const crc32 = (a) => { let c = 0xFFFFFFFF; for (let i = 0; i < a.length; i++) c = CRC[(c ^ a[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
-  function chunk(type, data) {
-    const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer);
-    dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i); out.set(data, 8);
-    dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
-    return out;
-  }
-  async function deflate(bytes) {
-    const cs = new CompressionStream('deflate'); const w = cs.writable.getWriter(); w.write(bytes); w.close();
-    return new Uint8Array(await new Response(cs.readable).arrayBuffer());
-  }
-  async function frameData(cv) {
-    const w = cv.width, hh = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, hh).data;
-    const raw = new Uint8Array((w * 4 + 1) * hh);
-    for (let y = 0; y < hh; y++) raw.set(d.subarray(y * w * 4, (y + 1) * w * 4), y * (w * 4 + 1) + 1);   // 줄마다 필터 0
-    return deflate(raw);
-  }
-  /** frames(캔버스들) → APNG Uint8Array. loop: 0 = 무한 */
-  async function encodeApng(frames, fps, loop, onProgress) {
-    const w = frames[0].width, hh = frames[0].height, parts = [new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])];
-    const u32 = (...v) => { const a = new Uint8Array(v.length * 4), dv = new DataView(a.buffer); v.forEach((x, i) => dv.setUint32(i * 4, x)); return a; };
-    const ihdr = new Uint8Array(13); ihdr.set(u32(w, hh)); ihdr.set([8, 6, 0, 0, 0], 8);
-    parts.push(chunk('IHDR', ihdr), chunk('acTL', u32(frames.length, Math.max(0, loop | 0))));
-    let seq = 0;
-    for (let i = 0; i < frames.length; i++) {
-      const fc = new Uint8Array(26), dv = new DataView(fc.buffer);
-      dv.setUint32(0, seq++); dv.setUint32(4, w); dv.setUint32(8, hh); dv.setUint16(20, 1); dv.setUint16(22, fps);   // 프레임 길이 1/fps 초, dispose 0 · blend 0(덮어쓰기)
-      parts.push(chunk('fcTL', fc));
-      const z = await frameData(frames[i]);
-      if (i === 0) parts.push(chunk('IDAT', z));
-      else { const fd = new Uint8Array(4 + z.length); new DataView(fd.buffer).setUint32(0, seq++); fd.set(z, 4); parts.push(chunk('fdAT', fd)); }
-      onProgress && onProgress(0.7 + (i + 1) / frames.length * 0.3);
-    }
-    parts.push(chunk('IEND', new Uint8Array(0)));
-    const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0)); let o = 0; parts.forEach(p => { out.set(p, o); o += p.length; });
-    return out;
-  }
+  // ---------------- APNG 만들기 — 공용 모션 코어 (PDM.motion.encodeApng)
+  const { encodeApng, crc32 } = PDM.motion;
   const toDataURL = bytes => new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(new Blob([bytes], { type: 'image/png' })); });
   /** ZIP (압축 없이 묶기) — files: [{ name, bytes(Uint8Array) }] */
   function zipStore(files) {

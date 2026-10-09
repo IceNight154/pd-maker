@@ -77,7 +77,7 @@ public class MakerAudio {
 			float vol = (Float) get(Music.INSTANCE, "volume");
 			m.setVolume(Math.min(1f, vol * r.volume));
 			set(Music.INSTANCE, "player", m);
-			if (!Music.INSTANCE.paused()) m.play();
+			if (!Boolean.TRUE.equals(get(Music.INSTANCE, "paused"))) m.play();   // paused() 는 SPD 3.x 부터 — 필드로 (예전 판도)
 			current = ref; tag = "pdm";
 		} catch (Exception e) {
 			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e);
