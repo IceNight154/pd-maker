@@ -51,10 +51,12 @@
     addEntry({ id, name: name.replace(/\.[^.]+$/, ''), kind, file: rel, volume: 1, pitch: 1, loop: kind === 'bgm', note: '' }, '소리 가져오기');
     st.sel = id; toast(`「${id}」 가져옴 (${KIND[kind]})`);
   }
+  /** 프로젝트 폴더 안의 WAV 경로인지 (assets/ 밖 — 예: audio/x.wav — 도 게임이 읽음; game: · 절대 경로 · 상위 폴더는 아님) */
+  const projWav = f => typeof f === 'string' && /\.wav$/i.test(f) && !/^(game|builtin|sound):/.test(f) && !/^([A-Za-z]:|\/|\\|\.\.)/.test(f) && f.length < 400;
   /** 이 소리 파일이 게임이 못 읽는 WAV 면 경고 + 16비트로 바꾸기 버튼 */
   function wavCheck(e) {
     const box = h('div', {});
-    if (!/^assets\/.*\.wav$/i.test(e.file || '')) return box;
+    if (!projWav(e.file)) return box;
     pdm.readDataURL(store.abs(e.file)).then(d => {
       const info = PDM.audio.wavInfo(d);
       if (PDM.audio.wavOk(info)) return;
@@ -67,8 +69,8 @@
   /** 프로젝트가 쓰는 WAV(소리 목록 + 칸에 직접 넣은 assets/….wav) 중 게임이 못 읽는 것을 16비트로 — 테스트 플레이 · 내보내기 전에. → 바꾼 수 */
   async function fixProjectWavs() {
     const files = new Set();
-    for (const x of ((store.get('sounds') || {}).sounds || [])) if (/^assets\/.*\.wav$/i.test(x.file || '')) files.add(x.file);
-    const walk = v => { if (typeof v === 'string') { if (/^assets\/[^"]*\.wav$/i.test(v)) files.add(v); } else if (v && typeof v === 'object') for (const k in v) walk(v[k]); };
+    for (const x of ((store.get('sounds') || {}).sounds || [])) if (projWav(x.file)) files.add(x.file);
+    const walk = v => { if (typeof v === 'string') { if (projWav(v)) files.add(v); } else if (v && typeof v === 'object') for (const k in v) walk(v[k]); };
     for (const k of store.keys()) walk(store.get(k));
     let n = 0;
     for (const f of files) {

@@ -155,7 +155,10 @@ PDM.audio = (function () {
     if (wavOk(info)) return { changed: false, info };
     const buf = await dataToBuffer(d);
     let ch = channelsOf(buf);
-    if (ch.length > 2) { const L = ch[0].map((v, i) => (v + (ch[2] ? ch[2][i] * 0.7 : 0))), R = ch[1].map((v, i) => (v + (ch[2] ? ch[2][i] * 0.7 : 0))); ch = [L, R]; }   // 여러 채널 → 스테레오
+    if (ch.length > 2) {   // 여러 채널(5.1: FL FR FC LFE BL BR) → 스테레오 (가운데 · 뒤 0.707, LFE 뺌) — 런타임 MakerWav 와 같은 계산
+      const z = new Float32Array(ch[0].length), C = ch[2] || z, BL = ch[4] || z, BR = ch[5] || z;
+      ch = [ch[0].map((v, i) => (v + C[i] * 0.707 + BL[i] * 0.707) / 2.414), ch[1].map((v, i) => (v + C[i] * 0.707 + BR[i] * 0.707) / 2.414)];
+    }
     await pdm.writeDataURL(absPath, encodeWav(ch, buf.sampleRate));
     invalidate(absPath);
     return { changed: true, from: wavDesc(info) };

@@ -72,7 +72,7 @@ public class MakerAudio {
 			set(Music.INSTANCE, "trackList", null);
 			set(Music.INSTANCE, "looping", r.loop);
 			if (!Music.INSTANCE.isEnabled()) { current = ref; return; }
-			com.badlogic.gdx.audio.Music m = Gdx.audio.newMusic(MakerRuntime.root().child(r.file));
+			com.badlogic.gdx.audio.Music m = Gdx.audio.newMusic(MakerWav.playable(MakerRuntime.root().child(r.file)));
 			m.setLooping(r.loop);
 			float vol = (Float) get(Music.INSTANCE, "volume");
 			m.setVolume(Math.min(1f, vol * r.volume));
@@ -80,7 +80,7 @@ public class MakerAudio {
 			if (!Boolean.TRUE.equals(get(Music.INSTANCE, "paused"))) m.play();   // paused() 는 SPD 3.x 부터 — 필드로 (예전 판도)
 			current = ref; tag = "pdm";
 		} catch (Exception e) {
-			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e + (r.file.toLowerCase().endsWith(".wav") ? " — 게임은 16비트(또는 8비트) PCM WAV 만 읽습니다 (24비트 · float 는 편집기의 소리 화면에서 \"16비트로 바꾸기\", 테스트 플레이 때 자동)" : ""));
+			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e + (r.file.toLowerCase().endsWith(".wav") ? " — 게임은 16비트(또는 8비트) PCM WAV 만 읽고, 24비트 · float · 여러 채널은 자동으로 바꿔 쓰는데 그것도 실패함 (편집기 소리 화면의 \"16비트로 바꾸기\" 또는 ogg 로 저장해 보세요)" : ""));
 		}
 	}
 	private static String tag = "";
@@ -322,7 +322,7 @@ public class MakerAudio {
 		try {
 			Map<Object, Sound> ids = (Map<Object, Sound>) get(Sample.INSTANCE, "ids");
 			synchronized (Sample.INSTANCE) {
-				if (!ids.containsKey(key)) ids.put(key, Gdx.audio.newSound(MakerRuntime.root().child(r.file)));
+				if (!ids.containsKey(key)) ids.put(key, Gdx.audio.newSound(MakerWav.playable(MakerRuntime.root().child(r.file))));
 			}
 			Sample.INSTANCE.play(key, r.volume, r.volume, r.pitch);
 		} catch (Exception e) {
