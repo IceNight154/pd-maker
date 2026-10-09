@@ -134,6 +134,32 @@ PDM.audio = (function () {
     for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
     return 'data:audio/wav;base64,' + btoa(bin);
   }
+  /** WAV 머리 읽기 → { format(1 = PCM · 3 = float · 0xFFFE = 확장), channels, rate, bits } (WAV 가 아니면 null) */
+  function wavInfo(dataURL) {
+    const bin = atob(String(dataURL).split(',')[1] || '').slice(0, 4096); if (bin.slice(0, 4) !== 'RIFF' || bin.slice(8, 12) !== 'WAVE') return null;
+    const u16 = o => bin.charCodeAt(o) | (bin.charCodeAt(o + 1) << 8), u32 = o => (u16(o) | (u16(o + 2) << 16)) >>> 0;
+    for (let o = 12; o + 8 <= bin.length;) {
+      const id = bin.slice(o, o + 4), size = u32(o + 4);
+      if (id === 'fmt ') return { format: u16(o + 8), channels: u16(o + 10), rate: u32(o + 12), bits: u16(o + 22) };
+      o += 8 + size + (size & 1);
+    }
+    return null;
+  }
+  /** 게임(libGDX)이 읽을 수 있는 WAV 인지: PCM 8 · 16비트, 1 · 2채널만 (24비트 · 32비트 float · 확장 형식은 "Error reading WAV file" 로 재생 안 됨) */
+  const wavOk = i => !i || (i.format === 1 && (i.bits === 8 || i.bits === 16) && i.channels >= 1 && i.channels <= 2);
+  const wavDesc = i => i ? `${i.format === 3 ? '32비트 float' : i.format === 0xFFFE ? '확장 형식 ' + i.bits + '비트' : i.bits + '비트'} · ${i.channels}채널 · ${i.rate}Hz` : '';
+  /** WAV 파일을 게임이 읽는 16비트 PCM 으로 (그 자리에 덮어씀). → { changed, from } */
+  async function fixWav(absPath) {
+    if (!/\.wav$/i.test(absPath)) return { changed: false };
+    const d = await pdm.readDataURL(absPath), info = wavInfo(d);
+    if (wavOk(info)) return { changed: false, info };
+    const buf = await dataToBuffer(d);
+    let ch = channelsOf(buf);
+    if (ch.length > 2) { const L = ch[0].map((v, i) => (v + (ch[2] ? ch[2][i] * 0.7 : 0))), R = ch[1].map((v, i) => (v + (ch[2] ? ch[2][i] * 0.7 : 0))); ch = [L, R]; }   // 여러 채널 → 스테레오
+    await pdm.writeDataURL(absPath, encodeWav(ch, buf.sampleRate));
+    invalidate(absPath);
+    return { changed: true, from: wavDesc(info) };
+  }
   function bufferFrom(channels, rate) {
     const b = ac().createBuffer(channels.length, channels[0].length, rate);
     channels.forEach((d, i) => b.copyToChannel(d, i));
@@ -330,6 +356,6 @@ PDM.audio = (function () {
     return g;
   }
 
-  return { entry, resolve, label, bufferOfPath, dataToBuffer, invalidate, play, playBuffer, stop, position, encodeWav, bufferFrom, channelsOf, drawWave,
+  return { entry, resolve, label, bufferOfPath, dataToBuffer, invalidate, play, playBuffer, stop, position, encodeWav, bufferFrom, channelsOf, drawWave, wavInfo, wavOk, wavDesc, fixWav,
     RATE, LAYER_DEFAULT, SYNTH_DEFAULT, SYNTH_PRESETS, SYNTH_NAMES, makeSynth, synth, vary, ac, get playing() { return playing; } };
 })();

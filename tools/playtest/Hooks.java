@@ -181,6 +181,13 @@ public class Hooks {
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
 				}
+				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
+					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
+					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
+					Object pl = fpl.get(com.watabou.noosa.audio.Music.INSTANCE);
+					System.out.println("[TEST] bgmtest " + (p.length > 1 ? p[1] : "") + " player=" + (pl == null ? "null" : pl.getClass().getSimpleName()) + " playing=" + (pl != null && ((com.badlogic.gdx.audio.Music) pl).isPlaying()) + " enabled=" + com.watabou.noosa.audio.Music.INSTANCE.isEnabled() + " current=" + ((java.util.function.Supplier<Object>) () -> { try { java.lang.reflect.Field fc = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.class.getDeclaredField("current"); fc.setAccessible(true); return fc.get(null); } catch (Exception e) { return e; } }).get());
+					break;
+				}
 				case "paneavatar": { // 상태 창 초상화의 실제 자리 — 가운데가 칸 가운데(bg.x+15, bg.y+16)와 같아야 함
 					java.lang.reflect.Field fp = com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.class.getDeclaredField("status"); fp.setAccessible(true);
 					Object pane = fp.get(com.watabou.noosa.Game.scene());

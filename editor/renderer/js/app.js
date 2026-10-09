@@ -877,6 +877,7 @@
     try {
       showBottom('log');
       PDM.log(`게임 파일 내보내기 시작: ${name} (${(KINDS.find(x => x[0] === kind) || [, kind])[1]}) → ${outDir}`, 'ok');
+      if (PDM.sounds && PDM.sounds.fixProjectWavs) await PDM.sounds.fixProjectWavs();
       const r = await pdm.exportGame({ repo: await resolveRepo(), project: store.root, outDir, kind, name, signing });
       setRunning(true);
       PDM.log(`빌드 중… (${r.task}) 끝나면 ${r.dest} 에 만들어집니다`, 'dim');
@@ -919,6 +920,7 @@
     const errs = runCheck().filter(r => r.level === 'error');
     if (errs.length && !(await PDM.ui.confirm(`오류 ${errs.length}개가 있습니다. 그래도 실행할까요?`))) return;
     await saveAll();
+    if (PDM.sounds && PDM.sounds.fixProjectWavs) await PDM.sounds.fixProjectWavs();   // 게임이 못 읽는 WAV(24비트 · float …) → 16비트
     runGame('play', typeof mode === 'string' ? mode : undefined);
   }
   function stopGame() { pdm.stopGame().then(() => { PDM.log('중지 요청', 'dim'); setRunning(false); }); }

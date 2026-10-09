@@ -35,11 +35,47 @@
     if (!['ogg', 'mp3', 'wav'].includes(ext)) { toast('ogg, mp3, wav 만 게임에서 재생됩니다', 'bad'); return; }
     let rel = pdm.relative(store.root, src).replace(/\\/g, '/');
     if (rel.startsWith('..') || /^[A-Za-z]:/.test(rel)) { rel = await uniquePath(`assets/audio/${name}`); await pdm.copy(src, store.abs(rel)); }
+    if (ext === 'wav') {   // 게임은 16비트(또는 8비트) PCM WAV 만 읽음 — 24비트 · float 등은 16비트로 바꿔 둠
+      try {
+        const info = PDM.audio.wavInfo(await pdm.readDataURL(store.abs(rel)));
+        if (!PDM.audio.wavOk(info)) {
+          if (!rel.startsWith('assets/audio/')) { const own = await uniquePath(`assets/audio/${name}`); await pdm.copy(store.abs(rel), store.abs(own)); rel = own; }   // 원본은 그대로 두고 사본을 바꿈
+          const r = await PDM.audio.fixWav(store.abs(rel));
+          if (r.changed) toast(`WAV(${r.from})는 게임에서 재생되지 않아 16비트로 바꿨습니다`, 'ok');
+        }
+      } catch (e) { toast('WAV 확인 실패: ' + (e.message || e), 'bad'); }
+    }
     let kind = 'se';
     try { const b = await PDM.audio.bufferOfPath(store.abs(rel)); kind = b.duration > 12 ? 'bgm' : 'se'; } catch (_) { /* 길이 모름 */ }
     const id = uniqueId(name.replace(/\.[^.]+$/, ''));
     addEntry({ id, name: name.replace(/\.[^.]+$/, ''), kind, file: rel, volume: 1, pitch: 1, loop: kind === 'bgm', note: '' }, '소리 가져오기');
     st.sel = id; toast(`「${id}」 가져옴 (${KIND[kind]})`);
+  }
+  /** 이 소리 파일이 게임이 못 읽는 WAV 면 경고 + 16비트로 바꾸기 버튼 */
+  function wavCheck(e) {
+    const box = h('div', {});
+    if (!/^assets\/.*\.wav$/i.test(e.file || '')) return box;
+    pdm.readDataURL(store.abs(e.file)).then(d => {
+      const info = PDM.audio.wavInfo(d);
+      if (PDM.audio.wavOk(info)) return;
+      box.append(h('div', { style: { margin: '6px 0', padding: '8px 10px', border: '1px solid var(--warn, #c9a227)', borderRadius: '6px' } },
+        h('b', {}, '⚠ 게임에서 재생되지 않는 WAV'), ' ', h('span', { class: 'hint' }, `${PDM.audio.wavDesc(info)} — 게임은 16비트(또는 8비트) PCM · 1~2채널 WAV 만 읽습니다 (ogg · mp3 는 상관없음). 테스트 플레이 · 내보내기 때도 자동으로 바꿉니다.`), ' ',
+        h('button', { class: 'btn xs pri', onclick: async () => { try { const r = await PDM.audio.fixWav(store.abs(e.file)); if (r.changed) { toast(`16비트 WAV 로 바꿨습니다 (${r.from} →)`, 'ok'); PDM.tabs.refresh && PDM.tabs.refresh(); } } catch (err) { toast('변환 실패: ' + (err.message || err), 'bad'); } } }, '16비트로 바꾸기')));
+    }).catch(() => {});
+    return box;
+  }
+  /** 프로젝트가 쓰는 WAV(소리 목록 + 칸에 직접 넣은 assets/….wav) 중 게임이 못 읽는 것을 16비트로 — 테스트 플레이 · 내보내기 전에. → 바꾼 수 */
+  async function fixProjectWavs() {
+    const files = new Set();
+    for (const x of ((store.get('sounds') || {}).sounds || [])) if (/^assets\/.*\.wav$/i.test(x.file || '')) files.add(x.file);
+    const walk = v => { if (typeof v === 'string') { if (/^assets\/[^"]*\.wav$/i.test(v)) files.add(v); } else if (v && typeof v === 'object') for (const k in v) walk(v[k]); };
+    for (const k of store.keys()) walk(store.get(k));
+    let n = 0;
+    for (const f of files) {
+      try { const r = await PDM.audio.fixWav(store.abs(f)); if (r.changed) { n++; PDM.log && PDM.log(`WAV 를 16비트로 바꿈 (게임은 ${r.from} 를 못 읽음): ${f}`, 'ok'); } }
+      catch (e) { PDM.log && PDM.log(`WAV 확인 실패 ${f}: ${e.message || e}`, 'warn'); }
+    }
+    return n;
   }
   /** 게임 소리를 프로젝트로 복사 (편집하려면) */
   async function copyGame() {
@@ -307,7 +343,7 @@
   const st = { sel: null, filter: '' };
   /** 사운드 편집기를 열고 그 소리를 고른 상태로 */
   function select(id) { if (id) st.sel = id; PDM.tabs.open(K); PDM.tabs.refresh && PDM.tabs.refresh(K); }
-  PDM.sounds = { importFile, copyGame, copyGameRef, waveEditor, sfxMaker, usages, select };
+  PDM.sounds = { fixProjectWavs, importFile, copyGame, copyGameRef, waveEditor, sfxMaker, usages, select };
 
   PDM.registerEditor({
     id: 'sound', icon: () => '🎵', title: () => '사운드',
@@ -349,6 +385,7 @@
               h('button', { class: 'btn sm', onclick: () => PDM.audio.stop() }, '■'),
               h('button', { class: 'btn sm pri', onclick: () => waveEditor(e.id) }, '파형 편집…'),
               e.synth ? h('button', { class: 'btn sm', onclick: () => sfxMaker(e.id) }, '다시 만들기…') : null))),
+          wavCheck(e),
           F.textarea(K, [...p, 'note'], { label: '메모', rows: 2 }),
           h('div', { class: 'fl mt-3' }, `쓰는 곳 (${used.length})`),
           used.length ? h('div', {}, used.map(([t, k]) => h('button', { class: 'chip', onclick: () => PDM.tabs.open(k) }, t))) : h('p', { class: 'hint' }, '아직 쓰는 곳이 없습니다. 맵 그래프의 배경음, 이벤트 명령 "효과음/음악", 아이템·캐릭터·게임 아이템의 "소리", 대사창·마음 시스템의 소리에서 고르세요.'),

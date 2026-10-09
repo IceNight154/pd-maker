@@ -80,7 +80,7 @@ public class MakerAudio {
 			if (!Boolean.TRUE.equals(get(Music.INSTANCE, "paused"))) m.play();   // paused() 는 SPD 3.x 부터 — 필드로 (예전 판도)
 			current = ref; tag = "pdm";
 		} catch (Exception e) {
-			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e);
+			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e + (r.file.toLowerCase().endsWith(".wav") ? " — 게임은 16비트(또는 8비트) PCM WAV 만 읽습니다 (24비트 · float 는 편집기의 소리 화면에서 \"16비트로 바꾸기\", 테스트 플레이 때 자동)" : ""));
 		}
 	}
 	private static String tag = "";

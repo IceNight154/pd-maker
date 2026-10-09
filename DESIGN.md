@@ -596,7 +596,7 @@ CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부�
   "gameItems": { "spd:weapon.melee.Mace": { "use": "", "throw": "", "land": "", "pickup": "", "equip": "" } } }
 ```
 
-- 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav. 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
+- 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav — **WAV 는 16비트(또는 8비트) PCM · 1~2채널만**(libGDX: 24비트 · 32비트 float · 확장 형식은 "Error reading WAV file"). 편집기가 가져올 때 · 테스트 플레이 · 내보내기 전에 16비트로 바꾸고(`PDM.audio.fixWav` · `PDM.sounds.fixProjectWavs`, 소리 화면에 경고 + "16비트로 바꾸기"), 런타임은 실패 이유를 로그에 남김. 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
 - `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 에 끼워 넣어 게임 설정의 음량 · 음소거를 그대로 따름. 게임 소리는 처음 재생 때 바로 불러옴(원래 `Sample.load` 는 다음 프레임이라 첫 소리가 빠졌음).
 - **배경음 우선순위**: 노드 `bgm` → 그룹(`bgm` + `bgmExtra[]` 층마다 무작위 — 전부 게임 곡이면 `Music.playTracks` 로 이어 재생, `bgmTense` + `bgmTenseWhen`, `bgmBoss`) → 사용자 테마 `music` → 게임 기본 테마 음악. "테마 기본 음악으로 채워서 고치기"(`PDM.THEME_MUSIC`).
 - **소리는 각 세부 설정에서**: 아이템(§8.5) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
