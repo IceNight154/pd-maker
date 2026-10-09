@@ -230,10 +230,10 @@ for (let i = 0; i < 6; i++) {
       if (!all.some(x => x.id === st.id)) st.id = (all[0] || {}).id;
       const idx = all.findIndex(x => x.id === st.id), f = all[idx];
       const intro = h('p', { class: 'hint' }, '화면 전체에 덮는 연출을 층(레이어)으로 쌓아 만듭니다 — 날씨(비 · 눈 · 안개), 밤 · 노을, 노이즈 · 주사선 · 글리치, 번개 등. 쓰는 곳: ① 맵 편집기 속성의 "화면 필터"(맵 노드 · 방 템플릿) ② 맵 그래프의 그룹 속성 ③ 이벤트 명령 "화면 필터". 여러 곳에 정했으면 이벤트 → 방 → 맵 → 그룹 순서로 앞의 것이 보입니다.');
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      const head = h('div', { class: 'hstack wrap mb-4' },
         all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; ctx.refresh(); } }, x.name || x.id)));
       if (!f) return h('div', { class: 'editor' }, h('h2', {}, '🌧 화면 필터'), intro, ops.bar(null),
-        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn', onclick: () => ops.add(k) }, v.name))));
+        h('div', { class: 'flex gap-3 wrap' }, Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn', onclick: () => ops.add(k) }, v.name))));
       const lp = i => ['list', idx, 'layers', i];
       const edit = (label, fn) => store.edit(K, label, r => fn(r.list[idx]));
       const cv = h('canvas', { width: 480, height: 288, style: { imageRendering: 'pixelated', border: '1px solid var(--line)', borderRadius: '6px', display: 'block' } });
@@ -243,15 +243,15 @@ for (let i = 0; i < 6; i++) {
         const setPng = (png, extra) => edit('필터 그림', x => { Object.assign(x.layers[i], { png }, extra || {}); });
         const txt = h('input', { type: 'text', value: l.png || '', placeholder: 'assets/… (64×64 처럼 2의 거듭제곱 크기 권장)', style: { flex: 1, minWidth: '160px' } });
         txt.addEventListener('change', () => setPng(txt.value.trim()));
-        const warn = h('div', { class: 'hint', style: { color: 'var(--gold)' } });
+        const warn = h('div', { class: 'hint c-gold' });
         if (l.png) PDM.assets.load(l.png).then(im => { if (!im) { warn.textContent = '그림을 찾을 수 없습니다.'; return; } const n = Math.max(1, num(l.frames, 1) | 0), fw = n > 1 && num(l.fw, 0) > 0 ? l.fw : im.width, cols = Math.max(1, Math.floor(im.width / fw)), fh = n > 1 ? Math.floor(im.height / Math.ceil(n / cols)) : im.height;
           if (!isPot(fw) || !isPot(fh)) warn.textContent = `한 칸이 ${fw}×${fh} — 16 · 32 · 64 · 128 처럼 2의 거듭제곱 크기가 아니면 일부 기기(모바일)에서 반복이 깨질 수 있습니다.`; }).catch(() => { });
         return h('div', {},
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, txt,
+          h('div', { class: 'hstack wrap' }, txt,
             h('button', { class: 'btn sm', onclick: async () => { const r = await PDM.ui.pickImage('filters'); if (r) { delete imgCache[r]; setPng(r, { fw: 0, frames: 1 }); } } }, '찾기…'),
             h('button', { class: 'btn sm', onclick: async () => { const rel = l.png && !l.png.startsWith('game:') ? l.png : `assets/filters/${f.id}_${i + 1}.png`; const out = await PDM.editPixelsModal('필터 그림 — ' + f.name, rel, 64, 64); if (out) { delete imgCache[out]; PDM.assets.invalidate(out); setPng(out); } } }, l.png ? '그림 편집…' : '직접 그리기…'),
             PDM.compose && PDM.compose.forFilter ? h('button', { class: 'btn sm', title: '노드 합성기에서 이 층의 그림(무늬 · 노이즈 · 움직이는 시트)을 만들거나 고칩니다. 합성기에서 저장하면 바로 반영됩니다', onclick: () => PDM.compose.forFilter(f, i) }, '🧩 노드 합성기로…') : null),
-          h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', margin: '6px 0' } }, h('span', { class: 'hint' }, '기본 그림:'),
+          h('div', { class: 'hstack gap-2 wrap my-3' }, h('span', { class: 'hint' }, '기본 그림:'),
             Object.entries(TEX).map(([k, v]) => h('button', { class: 'btn xs', onclick: async () => { try { setPng(await makeTex(k), { fw: 0, frames: 1 }); } catch (er) { toast(er.message, 'bad'); } } }, v[0]))),
           warn,
           row(F.num(K, [...lp(i), 'alpha'], { label: '진하기 (0~100)', min: 0, max: 100, def: 50 }), F.select(K, [...lp(i), 'blend'], { normal: '보통', add: '더하기 (밝게)' }, { label: '겹치는 방식' }), F.num(K, [...lp(i), 'scale'], { label: '배율', min: 0.25, max: 16, step: 0.25, def: 1 })),
@@ -274,26 +274,26 @@ for (let i = 0; i < 6; i++) {
           row(h('div', { class: 'field' }, h('span', { class: 'fl' }, '🎞 모션 랩 항목으로 그리기 (비우면 아래 코드)'),
               h('select', { onchange: e => { store.edit(K, '모션 랩 항목', x => { const ly = x.list[idx].layers[i]; if (e.target.value) ly.motion = e.target.value; else delete ly.motion; }); reRun(); } },
                 h('option', { value: '' }, '(이 층의 코드)'), ml.map(m => h('option', { value: m.id, selected: m.id === l.motion }, `${m.name || m.id} (${m.id})`)))),
-            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('div', { style: { display: 'flex', gap: '4px' } },
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('div', { class: 'flex gap-2' },
               linked ? h('button', { class: 'btn sm', onclick: () => PDM.motion.lab.show(l.motion) }, '모션 랩에서 열기') : null,
               !linked && (l.code || '').trim() ? h('button', { class: 'btn sm', title: '이 층의 코드를 모션 랩 항목으로 옮기고, 이 층은 그 항목을 쓰게 합니다 (다른 필터 · 오브젝트 · 이펙트에서도 같은 움직임을 쓸 수 있음)', onclick: async () => { const id = await PDM.motion.lab.fromFilterLayer(f, i); if (id) { store.edit(K, '모션 랩 항목', x => { x.list[idx].layers[i].motion = id; }); reRun(); } } }, '모션 랩으로 옮기기') : null))),
           linked ? h('div', { class: 'hint' }, `모션 랩 「${linked.name || linked.id}」 의 코드 · 크기(${linked.w}×${linked.h}) · 프레임(${linked.frames || 1}장 · 초당 ${linked.fps || 8}) · 픽셀 설정으로 굽습니다. 고치는 곳은 모션 랩 — 거기서 굽으면 이 층도 다시 구우세요(▶ 코드 적용).`) : null) : null;
         if (linked) return h('div', {}, motionRow,
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '4px 0' } }, h('button', { class: 'btn sm pri', onclick: run }, '▶ 다시 굽기'), msg),
+          h('div', { class: 'hstack my-2' }, h('button', { class: 'btn sm pri', onclick: run }, '▶ 다시 굽기'), msg),
           row(F.num(K, [...lp(i), 'alpha'], { label: '진하기 (0~100)', min: 0, max: 100, def: 100 }), F.select(K, [...lp(i), 'blend'], { normal: '보통', add: '더하기 (밝게)' }, { label: '겹치는 방식' }),
             F.select(K, [...lp(i), 'fit'], { stretch: '화면에 맞게 늘리기', tile: '반복해서 깔기' }, { label: '놓는 방식', def: 'stretch', rerender: true })),
           (l.fit || 'stretch') === 'tile' ? row(F.num(K, [...lp(i), 'scale'], { label: '배율', min: 0.25, max: 16, step: 0.25, def: 1 }), F.num(K, [...lp(i), 'vx'], { label: '흐름 → (px/초)', def: 0 }), F.num(K, [...lp(i), 'vy'], { label: '흐름 ↓ (px/초)', def: 0 }), F.num(K, [...lp(i), 'jitter'], { label: '튐 (초당)', min: 0, max: 60, def: 0 })) : null);
         return h('div', {}, motionRow,
           row(F.select(K, [...lp(i), 'lang'], { js: 'JavaScript (캔버스에 그리기)', css: 'CSS (.fx 꾸미기)' }, { label: '코드 종류', rerender: true }),
-            h('div', { class: 'field' }, h('span', { class: 'fl' }, '예시 코드 넣기'), h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, '예시 코드 넣기'), h('div', { class: 'flex gap-2 wrap' },
               [['crack', '깨진 화면', 'js'], ['tear', '찢김', 'js'], ['scanbar', '훑는 빛 (CSS)', 'css']].map(([k, n, lang]) => h('button', { class: 'btn xs', onclick: () => { store.edit(K, '예시 코드', x => { Object.assign(x.list[idx].layers[i], { lang, code: CODE[k] }); }); reRun(); } }, n))))),
           ta,
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '4px 0' } }, h('button', { class: 'btn sm pri', onclick: run }, '▶ 코드 적용 (그림으로 굽기)'),
+          h('div', { class: 'hstack my-2' }, h('button', { class: 'btn sm pri', onclick: run }, '▶ 코드 적용 (그림으로 굽기)'),
             h('button', { class: 'btn sm', title: '움직이는 그림 한 장(APNG)으로 내보냅니다 — 미리 보기 · 공유용. 게임은 격자 시트를 씁니다', onclick: async () => { const cur = ((store.get(K) || {}).list || [])[idx].layers[i];
               try { const out = await exportApng(cur, `${f.id}_${i + 1}.png`); if (out) toast('APNG 로 내보냈습니다: ' + out, 'ok'); } catch (er) { toast('내보내기 실패: ' + (er.message || er), 'bad'); } } }, '⤓ APNG 로 내보내기'), msg),
           h('div', { class: 'hint' }, l.lang === 'css' ? 'CSS: 화면 전체가 .fx 요소입니다. background · gradient · box-shadow · ::before/::after · @keyframes 애니메이션을 쓸 수 있습니다. 바깥 그림(url)과 글꼴은 쓸 수 없습니다. 애니메이션은 "프레임 수 ÷ 초당 프레임" 초 길이로 구워지므로 그 길이에 맞춰 반복되게 만드세요.'
             : 'JS: 이 코드가 프레임마다 한 번 실행됩니다. 쓸 수 있는 값 — g(캔버스 2D), w, h, t(0~1 한 바퀴), frame, frames, rand()(씨앗 난수: 프레임마다 같은 순서 → 움직이지 않는 무늬), Math.random()(프레임마다 다름).'),
-          h('div', { class: 'hint', style: { marginBottom: '6px' } }, '코드는 편집기에서 그림(격자 시트 PNG)으로 구워져 게임에 들어갑니다 — 게임 안에서 코드가 실행되는 것은 아닙니다. 여러 프레임이면 같은 폴더에 APNG(…_anim.png)도 함께 저장됩니다 (미리 보기 · 공유용). 코드를 고친 뒤 칸 밖을 누르면 자동으로 다시 굽습니다.'),
+          h('div', { class: 'hint mb-3' }, '코드는 편집기에서 그림(격자 시트 PNG)으로 구워져 게임에 들어갑니다 — 게임 안에서 코드가 실행되는 것은 아닙니다. 여러 프레임이면 같은 폴더에 APNG(…_anim.png)도 함께 저장됩니다 (미리 보기 · 공유용). 코드를 고친 뒤 칸 밖을 누르면 자동으로 다시 굽습니다.'),
           row(F.num(K, [...lp(i), 'w'], { label: '그림 가로 (px)', int: true, min: 8, max: 512, def: 160, onchange: reRun }), F.num(K, [...lp(i), 'h'], { label: '그림 세로 (px)', int: true, min: 8, max: 512, def: 96, onchange: reRun }),
             F.num(K, [...lp(i), 'frames'], { label: `프레임 수 (1~${MAXF})`, int: true, min: 1, max: MAXF, def: 1, onchange: reRun }), F.num(K, [...lp(i), 'fps'], { label: '초당 프레임', int: true, min: 1, max: 60, def: 8, onchange: reRun })),
           row(F.num(K, [...lp(i), 'alpha'], { label: '진하기 (0~100)', min: 0, max: 100, def: 100 }), F.select(K, [...lp(i), 'blend'], { normal: '보통', add: '더하기 (밝게)' }, { label: '겹치는 방식' }),
@@ -314,7 +314,7 @@ for (let i = 0; i < 6; i++) {
           : l.type === 'flash' ? row(colorF([...lp(i), 'color'], l.color), F.num(K, [...lp(i), 'alpha'], { label: '밝기 (0~100)', min: 0, max: 100, def: 60 }), F.num(K, [...lp(i), 'every'], { label: '평균 간격 (초)', min: 0.05, step: 0.5, def: 6 }), F.num(K, [...lp(i), 'dur'], { label: '길이 (초)', min: 0.02, step: 0.05, def: 0.15 }))
           : row(F.num(K, [...lp(i), 'power'], { label: '세기 (px)', min: 0, max: 20, def: 1 }), F.num(K, [...lp(i), 'every'], { label: '평균 간격 (초)', min: 0.1, step: 0.5, def: 4 }), F.num(K, [...lp(i), 'time'], { label: '길이 (초)', min: 0.05, step: 0.05, def: 0.2 }));
         return h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', opacity: l.on === false ? 0.55 : 1 } },
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' } }, h('label', { class: 'check', style: { flex: 1 } }, on, h('b', {}, `${i + 1}. ${TYPES[l.type] || l.type}`)),
+          h('div', { class: 'hstack mb-3' }, h('label', { class: 'check grow' }, on, h('b', {}, `${i + 1}. ${TYPES[l.type] || l.type}`)),
             h('button', { class: 'ib', title: '아래 층으로 (먼저 그림)', disabled: i === 0, onclick: () => edit('층 순서', x => { [x.layers[i - 1], x.layers[i]] = [x.layers[i], x.layers[i - 1]]; }) }, '↑'),
             h('button', { class: 'ib', title: '위 층으로 (나중에 그림)', disabled: i === f.layers.length - 1, onclick: () => edit('층 순서', x => { [x.layers[i + 1], x.layers[i]] = [x.layers[i], x.layers[i + 1]]; }) }, '↓'),
             h('button', { class: 'ib', title: '복제', onclick: () => edit('층 복제', x => { x.layers.splice(i + 1, 0, PDM.clone(x.layers[i])); }) }, '⧉'),
@@ -326,18 +326,18 @@ for (let i = 0; i < 6; i++) {
       ((store.get('world') || {}).groups || []).forEach(g => { if (g.filter === f.id) uses.push('그룹 ' + (g.name || g.id)); });
       return h('div', { class: 'editor' }, h('h2', {}, '🌧 화면 필터'), intro, head, ops.bar(f),
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' } },
-          h('div', { style: { flex: 'none' } }, cv,
+          h('div', { class: 'flex-none' }, cv,
             h('div', { class: 'hint', style: { marginTop: '4px', maxWidth: '480px' } }, '미리보기 (게임 화면 흉내). 왼쪽 위 · 오른쪽 위의 어두운 막대는 UI 자리입니다.'),
             h('div', { class: 'hint', style: { marginTop: '6px', maxWidth: '480px' } }, uses.length ? '쓰는 곳: ' + uses.join(' · ') : '아직 맵 · 방 · 그룹에 정해 두지 않았습니다 (이벤트 명령으로만 쓸 수도 있습니다).')),
           h('div', { style: { flex: 1, minWidth: '380px' } },
             row(F.text(K, ['list', idx, 'name'], { label: '이름', rerender: true }), F.bool(K, ['list', idx, 'overUI'], { label: 'UI(상태창 · 버튼) 위까지 덮기' })),
             row(F.select(K, ['list', idx, 'inType'], TRANS, { label: '나타날 때' }), F.num(K, ['list', idx, 'inSec'], { label: '걸리는 시간 (초)', min: 0, max: 30, step: 0.1, def: 0.5 }),
               F.select(K, ['list', idx, 'outType'], TRANS, { label: '사라질 때' }), F.num(K, ['list', idx, 'outSec'], { label: '걸리는 시간 (초)', min: 0, max: 30, step: 0.1, def: 0.5 })),
-            h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', margin: '2px 0 4px' } }, h('button', { class: 'btn sm', onclick: () => { st.demo = performance.now(); } }, '▶ 나타남 · 사라짐 미리보기'),
+            h('div', { class: 'hstack gap-4 m-0 mt-1 mb-2' }, h('button', { class: 'btn sm', onclick: () => { st.demo = performance.now(); } }, '▶ 나타남 · 사라짐 미리보기'),
               h('span', { class: 'hint' }, '필터가 바뀔 때(맵 · 방 이동, 이벤트 명령) 앞의 필터는 사라지고 새 필터가 나타납니다. 디졸브는 색 덮기 · 레터박스에, 슬라이드는 레터박스에 적용되고 나머지 층은 페이드됩니다.')),
-            h('div', { class: 'fl', style: { margin: '8px 0 4px' } }, '층 (위에서부터 차례로 그려져, 아래쪽 층이 화면에서 더 위에 보입니다)'),
+            h('div', { class: 'fl m-0 mt-4 mb-2' }, '층 (위에서부터 차례로 그려져, 아래쪽 층이 화면에서 더 위에 보입니다)'),
             (f.layers || []).length ? f.layers.map(layerEl) : h('p', { class: 'hint' }, '층이 없습니다. 아래에서 추가하세요.'),
-            h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, Object.entries(TYPES).map(([t, n]) => h('button', { class: 'btn sm', onclick: () => addLayer(t) }, '+ ' + n))))));
+            h('div', { class: 'flex gap-3 wrap' }, Object.entries(TYPES).map(([t, n]) => h('button', { class: 'btn sm', onclick: () => addLayer(t) }, '+ ' + n))))));
     }
   });
 })();

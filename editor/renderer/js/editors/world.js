@@ -635,7 +635,7 @@
               hint: cur ? `지금: ${exit ? '출구' : '입구'} ${cur.i + 1} 번 타일` : extra ? `타일이 모자라 ${exit ? '출구' : '입구'} 근처에 계단을 새로 놓습니다 (맵 편집기에서 ${exit ? '출구(>)' : '입구(<)'} 타일을 더 그리면 그것을 씀)` : '' });
           };
           PDM.inspector.show('연결', h('div', {},
-            h('p', {}, h('b', {}, W_.fullName(ed.from)), ' → ', h('b', {}, W_.fullName(ed.to)), siblings.length > 1 ? h('span', { class: 'badge', style: { marginLeft: '6px' } }, `같은 방향 ${siblings.findIndex(x => x.id === ed.id) + 1}/${siblings.length}`) : null),
+            h('p', {}, h('b', {}, W_.fullName(ed.from)), ' → ', h('b', {}, W_.fullName(ed.to)), siblings.length > 1 ? h('span', { class: 'badge ml-3' }, `같은 방향 ${siblings.findIndex(x => x.id === ed.id) + 1}/${siblings.length}`) : null),
             (() => { const sel2 = h('select', {}, h('option', { value: 'ab', selected: true }, `${W_.fullName(ed.from)} → ${W_.fullName(ed.to)}`), h('option', { value: 'ba' }, `${W_.fullName(ed.to)} → ${W_.fullName(ed.from)}`));
               sel2.onchange = () => { if (sel2.value === 'ba') store.edit('world', '연결 방향', r => { const x = r.edges[i]; [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; [x.fromSide, x.toSide] = [x.toSide, x.fromSide]; }); };
               return PDM.ui.field('방향 (화살표 쪽으로 넘어감)', sel2); })(),
@@ -650,7 +650,7 @@
               ed.place === 'xy' ? F.num('world', [...p, 'at', 'x'], { label: 'x', int: true }) : null, ed.place === 'xy' ? F.num('world', [...p, 'at', 'y'], { label: 'y', int: true }) : null) : null,
             kind !== 'main' ? F.text('world', [...p, 'message'], { label: '계단이 생길 때 문구 (선택)' }) : null,
             F.text('world', [...p, 'label'], { label: '메모 (그래프에 표시)' }),
-            h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap' } },
+            h('div', { class: 'flex gap-3 wrap mt-4' },
               h('button', { class: 'btn sm', onclick: () => connect(ed.from, ed.to, 'door') }, '＋ 같은 방향 통로 하나 더'),
               h('button', { class: 'btn sm', onclick: () => store.edit('world', '연결 뒤집기', r => { const x = r.edges[i]; [x.from, x.to] = [x.to, x.from]; [x.exit, x.entrance] = [x.entrance, x.exit]; [x.fromSide, x.toSide] = [x.toSide, x.fromSide]; }) }, '방향 뒤집기'),
               h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('node:' + ed.from) }, '출발 맵 열기'),
@@ -662,7 +662,7 @@
         if (sel.group && ids.length !== 1) {
           const gi = wd.groups.findIndex(x => x.id === sel.group); const g = wd.groups[gi]; const p = ['groups', gi];
           PDM.inspector.show('그룹: ' + g.name, h('div', {},
-            h('button', { class: 'btn sm pri', style: { marginBottom: '8px' }, title: '그룹 제목 더블클릭', onclick: () => bulkGroup(g.id) }, `노드 ${wd.nodes.filter(n => n.group === g.id).length}개 한꺼번에 설정…`),
+            h('button', { class: 'btn sm pri mb-4', title: '그룹 제목 더블클릭', onclick: () => bulkGroup(g.id) }, `노드 ${wd.nodes.filter(n => n.group === g.id).length}개 한꺼번에 설정…`),
             F.text('world', [...p, 'name'], { label: '이름' }),
             PDM.filters ? PDM.filters.field('world', [...p, 'filter'], '화면 필터 (이 그룹의 모든 맵)', '(없음)') : null,
             row(F.ref('world', [...p, 'theme'], 'theme', { label: '테마', empty: '(깊이 기본)' }),
@@ -679,7 +679,7 @@
         if (ids.length === 1) {
           const id = ids[0], d = store.get('node:' + id), k = 'node:' + id, wi = wd.nodes.findIndex(n => n.id === id);
           PDM.inspector.show(W_.fullName(id), h('div', {},
-            h('div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },
+            h('div', { class: 'flex gap-3 mb-4' },
               h('button', { class: 'btn sm pri', onclick: () => PDM.tabs.open(k) }, '맵 열기'),
               id !== wd.start ? h('button', { class: 'btn sm', onclick: () => store.edit('world', '시작 노드', r => { r.start = id; }) }, '★ 시작 노드로') : h('span', { class: 'badge good' }, '★ 시작 노드')),
             F.text(k, ['name'], { label: '맵 이름' }),
@@ -752,8 +752,8 @@
             h('p', { class: 'hint' }, '자동 생성 노드에 끼워 넣을 직접 그린 방. 그룹이나 노드 속성의 "추가 방"에서 고릅니다.'),
             ...store.all('room').map(r => h('div', {}, h('a', { href: '#', onclick: ev => { ev.preventDefault(); PDM.tabs.open('room:' + r.id); } }, `▣ ${r.name}`), h('span', { class: 'hint' }, `  ${r.size.w}×${r.size.h} · 쓰는 곳 ${PDM.mapUtil.roomUsage(r.id).length}`))),
             h('button', { class: 'btn sm add', onclick: PDM.mapUtil.newRoom }, '+ 방 템플릿 만들기'),
-            h('button', { class: 'btn sm', style: { marginLeft: '6px' }, onclick: PDM.mapUtil.showRoomGallery }, '▦ 방 미리보기'),
-            h('p', { class: 'hint', style: { marginTop: '10px' } }, `게임 기본 방 ${(PDM.SPD_ROOMS || []).length}개 — ▪ 는 "추가 방"으로 쓸 수 있고, ▫ 는 전용 층·자동 배치라 볼 수만 있습니다. 누르면 설명과 코드 파일.`),
+            h('button', { class: 'btn sm ml-3', onclick: PDM.mapUtil.showRoomGallery }, '▦ 방 미리보기'),
+            h('p', { class: 'hint mt-5' }, `게임 기본 방 ${(PDM.SPD_ROOMS || []).length}개 — ▪ 는 "추가 방"으로 쓸 수 있고, ▫ 는 전용 층·자동 배치라 볼 수만 있습니다. 누르면 설명과 코드 파일.`),
             ...PDM.mapUtil.gameRoomGroups().map(g => h('details', {}, h('summary', {}, `▤ ${g.name} (${g.rooms.length})`),
               h('div', { style: { padding: '2px 0 6px 14px' } }, g.rooms.map(r => h('div', {},
                 h('a', { href: '#', title: r.desc || '', onclick: ev => { ev.preventDefault(); PDM.mapUtil.showGameRoom(r); } }, `${r.noUse ? '▫' : '▪'} ${r.name}`),

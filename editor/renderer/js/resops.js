@@ -122,7 +122,7 @@
       h('button', { class: 'btn sm', title: '복사 — 다른 프로젝트에도 붙여 넣을 수 있음 (' + PDM.keys.label('copy') + ')', onclick: () => copy(kind, id) }, '복사'),
       h('button', { class: 'btn sm', title: '이 리소스를 쓰는 곳', onclick: () => showUsage(kind, id) }, '쓰는 곳'),
       ...(extra || []),
-      h('button', { class: 'btn sm danger', style: { marginLeft: 'auto' }, onclick: () => remove(kind, id) }, '삭제'));
+      h('button', { class: 'btn sm danger ml-auto', onclick: () => remove(kind, id) }, '삭제'));
   }
   function showUsage(kind, id) {
     const u = usage(kind, id);

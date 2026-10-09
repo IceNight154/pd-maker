@@ -323,8 +323,8 @@ PDM.ui = (function () {
     const other = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const f = await pickImage('icons'); if (!f) return; const i2 = await PDM.assets.load(f); if (!i2) return; file = f; img = i2; fileLbl.textContent = f; chosen = -1; draw(); } }, '다른 파일…');
     draw();
     return modal('아이콘 파일 지정', h('div', {},
-      h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' } }, '파일', fileLbl, other),
-      h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '6px' } },
+      h('div', { class: 'hstack gap-4 wrap mb-3' }, '파일', fileLbl, other),
+      h('div', { class: 'hstack gap-6 wrap mb-3' },
         h('label', { class: 'check' }, wholeIn, h('span', {}, '그림 전체를 한 아이콘으로')), '시트 칸 크기(px)', sizeIn),
       h('div', { class: 'sheet-view', style: { maxHeight: '55vh' } }, cv), info),
       [['취소', null], ['고르기', () => whole ? file : (chosen >= 0 ? { file, size, index: chosen } : null), 'pri']]);
@@ -361,7 +361,7 @@ PDM.ui = (function () {
       const out = await PDM.editPixelsModal('아이콘 그리기', rel, 16, 16);
       if (out) { PDM.assets.invalidate(out); commit(key, path, out, o.label || '아이콘 그림', true); }
     } }, typeof cur === 'string' ? '그림 편집…' : '그리기…') : null;
-    const el = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, cv, btn, fileBtn, drawBtn,
+    const el = h('div', { class: 'hstack wrap' }, cv, btn, fileBtn, drawBtn,
       custom ? h('span', { class: 'hint mono', title: JSON.stringify(cur) }, typeof cur === 'string' ? cur.split('/').pop() : `${String(cur.file).split('/').pop()} #${cur.index}`) : cur == null && o.def != null ? h('span', { class: 'hint' }, '(기본)') : null);
     return o.label ? field(o.label, el, o.hint) : el;
   };
@@ -554,7 +554,7 @@ PDM.ui = (function () {
     } }, '조각 넣기 ▾');
     const head = h('div', { class: 'code-head' },
       o.sig ? h('span', { class: 'mono code-sig' }, o.sig) : h('span', {}, o.label || ''),
-      h('span', { style: { flex: 1 } }), snip);
+      h('span', { class: 'grow' }), snip);
     return h('div', { class: 'code-field' + (ta.value.trim() ? ' used' : '') }, head, o.doc ? h('small', { class: 'hint' }, o.doc) : null,
       h('div', { class: 'code-wrap' }, nums, ta), msg, o.sig ? h('div', { class: 'mono code-sig end' }, '}') : null);
   };

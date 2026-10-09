@@ -46,7 +46,7 @@
       h('p', { class: 'hint' }, '이 몬스터가 죽을 때 떨어뜨리는 아이템. 줄마다 따로 확률을 굴립니다 (100% = 항상). 개수는 겹쳐지는 아이템에만 적용됩니다.'),
       PDM.lootRows(key, ['drops'], { emptyText: '드랍 없음 — 게임 코드의 전리품만 떨어뜨립니다 (캐릭터 화면의 "게임 코드의 실제 값" 참고)' }),
       fromItems.length ? h('div', { class: 'hint' }, '아이템 쪽 드랍 테이블에서 이 몬스터를 고른 것 (함께 적용): ',
-        fromItems.map(([k, t]) => h('a', { href: '#', style: { marginRight: '8px' }, onclick: e => { e.preventDefault(); PDM.tabs.open(k); } }, t))) : null);
+        fromItems.map(([k, t]) => h('a', { href: '#', class: 'mr-4', onclick: e => { e.preventDefault(); PDM.tabs.open(k); } }, t))) : null);
   };
 
   const summary = rows => (rows || []).filter(r => r.item).map(r => `${itemName(r.item)} ${r.chance}%`).join(', ');
@@ -92,8 +92,8 @@
 
       function mobPage() {
         return section('몬스터 (그 몬스터가 죽을 때 떨어뜨리는 것)',
-          mobs.length ? h('table', { class: 'tbl', style: { width: '100%' } },
-            h('tr', {}, h('th', { style: { textAlign: 'left' } }, '몬스터'), h('th', { style: { textAlign: 'left' } }, '드랍'), h('th', {}, '')),
+          mobs.length ? h('table', { class: 'tbl w-full' },
+            h('tr', {}, h('th', { class: 'ta-left' }, '몬스터'), h('th', { class: 'ta-left' }, '드랍'), h('th', {}, '')),
             mobs.map(c => {
               const mine = summary(c.drops), other = (PDM.dropsFrom ? PDM.dropsFrom(c.id) : []).map(x => x[1]).join(', ');
               const open = st.mob === c.id;
@@ -102,7 +102,7 @@
                 (() => { const td = h('td', { class: 'hint' }, [mine, other].filter(Boolean).join(', ') || (c.noGameLoot ? '없음' : ''), c.noGameLoot && (mine || other) ? ' · 게임 전리품 없음' : '');
                   if (!c.noGameLoot) { const g = h('span', {}, (mine || other ? ' + ' : '') + (c.game ? '게임: …' : '')); td.append(g); if (c.game) PDM.gameMobLoot(c.game).then(t => { g.textContent = (mine || other ? ' + ' : '') + '게임: ' + (t || '없음'); }); else if (!(mine || other)) g.textContent = '없음'; }
                   return td; })(),
-                h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } },
+                h('td', { class: 'ta-right nowrap' },
                   h('button', { class: 'btn sm' + (open ? ' pri' : ''), onclick: () => { st.mob = open ? null : c.id; ctx.refresh(); } }, open ? '접기' : '편집'),
                   h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('char:' + c.id) }, '캐릭터 열기'))),
               open ? h('tr', {}, h('td', { colspan: 3 },
@@ -133,16 +133,16 @@
         return section('아이템 (그 아이템이 어디서 나오는지 — 몬스터가 죽을 때 · 층 바닥)',
           h('p', { class: 'hint' }, '프로젝트 아이템은 모두 나오고, 게임 아이템은 드랍 테이블을 만든 것만 나옵니다. 몬스터 쪽에서 정한 드랍과 함께 적용됩니다.'),
           h('div', { class: 'btnbar' }, search,
-            h('label', { class: 'check', style: { margin: 0 } }, h('input', { type: 'checkbox', checked: !!st.itemOnly, onchange: e => { st.itemOnly = e.target.checked; ctx.refresh(); } }), '드랍이 있는 것만')),
+            h('label', { class: 'check m-0' }, h('input', { type: 'checkbox', checked: !!st.itemOnly, onchange: e => { st.itemOnly = e.target.checked; ctx.refresh(); } }), '드랍이 있는 것만')),
           h('div', { class: 'btnbar' }, h('span', { class: 'hint' }, '게임 아이템 추가:'), h('div', { style: { flex: '1 1 260px', maxWidth: '360px' } }, PDM.ui.combo(addInp, PDM.ui.itemOptions)), addBtn),
-          shown.length ? h('table', { class: 'tbl', style: { width: '100%' } },
-            h('tr', {}, h('th', { style: { textAlign: 'left' } }, '아이템'), h('th', { style: { textAlign: 'left' } }, '나오는 곳'), h('th', {}, '')),
+          shown.length ? h('table', { class: 'tbl w-full' },
+            h('tr', {}, h('th', { class: 'ta-left' }, '아이템'), h('th', { class: 'ta-left' }, '나오는 곳'), h('th', {}, '')),
             shown.map(r => {
               const open = st.itemOpen === r.ref;
               return [h('tr', {},
                 h('td', {}, r.name),
                 h('td', { class: 'hint' }, dsum(r.drops) || '없음'),
-                h('td', { style: { textAlign: 'right', whiteSpace: 'nowrap' } },
+                h('td', { class: 'ta-right nowrap' },
                   h('button', { class: 'btn sm' + (open ? ' pri' : ''), onclick: () => { st.itemOpen = open ? null : r.ref; ctx.refresh(); } }, open ? '접기' : '편집'),
                   h('button', { class: 'btn sm', onclick: () => PDM.tabs.open(r.game ? 'spditem:' + r.ref.slice(4) : 'item:' + r.ref) }, '아이템 열기'))),
               open ? h('tr', {}, h('td', { colspan: 3 }, PDM.itemDropsEditor(r.skey, r.path))) : null];
@@ -181,7 +181,7 @@
                 make: () => ({ ref: (opts[0] || [''])[0], weight: 1 }),
                 render: (it, i, ip) => row(F.select('project', [...ip, 'ref'], opts.some(o => o[0] === it.ref) ? opts : [[it.ref, it.ref + ' (목록에 없음)'], ...opts], { label: '몬스터', rerender: true }),
                   F.num('project', [...ip, 'weight'], { label: '무게', int: true, min: 0, def: 1, rerender: true })) }),
-              h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' } },
+              h('div', { class: 'flex gap-3 wrap mt-3' },
                 f ? h('button', { class: 'btn sm', title: `깊이 ${f[0]}~${f[1] - 1} 의 게임 몬스터 목록(MobSpawner)을 합쳐 채웁니다`, onclick: async () => { if (n && !(await PDM.ui.confirm('지금 목록을 게임 목록으로 바꿀까요?'))) return; fromGame(th); } }, '게임 목록 가져오기') : null,
                 h('button', { class: 'btn sm danger', onclick: () => store.edit('project', '테마별 몬스터 지우기', o => { delete o.themeMobs[th]; st.theme = null; }) }, '이 테마 설정 지우기 (게임 기본으로)')),
               f ? PDM.gameSpawnBox(f[0]) : h('p', { class: 'hint' }, '사용자 테마 — 비워 두면 바탕 테마의 목록 (바탕 테마에도 없으면 게임 기본).'));

@@ -168,16 +168,16 @@
     return h('pre', { class: 'code-view', style: { maxHeight: '340px' } }, ...String(code).replace(/\t/g, '    ').split(/\r?\n/).map((l, i) =>
       h('div', { class: (first || 1) + i === mark ? 'mark' : '' }, h('i', {}, String((first || 1) + i)), l || ' ')));
   }
-  const fold = (label, make) => { let done = false; const body = h('div', { style: { margin: '4px 0 6px' } });
+  const fold = (label, make) => { let done = false; const body = h('div', { class: 'm-0 mt-2 mb-3' });
     return h('details', { ontoggle: async e => { if (!e.target.open || done) return; done = true; body.textContent = '읽는 중…';
       try { const r = await make(); body.textContent = ''; [].concat(r).forEach(x => x && body.appendChild(x)); } catch (er) { body.textContent = '읽지 못했습니다: ' + er; } } },
-      h('summary', { style: { cursor: 'pointer', color: 'var(--accent)' } }, label), body); };
+      h('summary', { class: 'pointer c-accent' }, label), body); };
   const kv = (k, v) => v === null || v === undefined || v === '' ? null : h('div', { style: { display: 'flex', gap: '8px', margin: '1px 0' } }, h('span', { class: 'hint', style: { minWidth: '92px', flex: 'none' } }, k), h('span', { style: { whiteSpace: 'pre-wrap', userSelect: 'text' } }, String(v)));
   const mono = s => h('code', { style: { fontFamily: 'var(--mono)', fontSize: '12px', userSelect: 'text' } }, s);
   function usageFold(token, skip) {
     return fold('코드에서 쓰이는 곳 (' + token + ')', async () => { const u = await PDM.gameUsages(token, skip);
       if (!u.length) return h('div', { class: 'hint' }, '쓰이는 곳을 찾지 못했습니다.');
-      return [h('div', { class: 'hint' }, u.length + '곳' + (u.length > 30 ? ' (앞의 30곳만 보여 줌)' : '')), ...u.slice(0, 30).map(x => h('div', { style: { margin: '4px 0' } }, mono(x.file + ' : ' + x.line), codeView(x.text, x.from, x.line)))]; });
+      return [h('div', { class: 'hint' }, u.length + '곳' + (u.length > 30 ? ' (앞의 30곳만 보여 줌)' : '')), ...u.slice(0, 30).map(x => h('div', { class: 'my-2' }, mono(x.file + ' : ' + x.line), codeView(x.text, x.from, x.line)))]; });
   }
   function itemName(cls) {
     const g = Object.values(PDM.SPD_ITEM_GROUPS || {}).flat().find(x => x.p === cls || String(x.p).endsWith('.' + cls));
@@ -191,11 +191,11 @@
     if (it.count > 1) tags.push('× ' + it.count); if (it.level) tags.push('+' + it.level); if (it.quickslot) tags.push('퀵슬롯 ' + it.quickslot);
     const cv = g.img ? h('canvas', { width: 16, height: 16, style: { imageRendering: 'pixelated', verticalAlign: 'middle', marginRight: '4px' } }) : null;
     if (cv && PDM.assets && PDM.assets.drawItemSprite) Promise.resolve(PDM.assets.drawItemSprite(cv, { sheet: 'builtin:items', name: g.img }, 1)).catch(() => {});
-    return h('div', { style: { margin: '2px 0' } }, cv, h('b', {}, g.name), ' ', mono(g.path ? 'spd:' + g.path : it.cls), tags.length ? h('span', { class: 'hint' }, '  ' + tags.join(' · ')) : null);
+    return h('div', { class: 'my-1' }, cv, h('b', {}, g.name), ' ', mono(g.path ? 'spd:' + g.path : it.cls), tags.length ? h('span', { class: 'hint' }, '  ' + tags.join(' · ')) : null);
   }
   function talentRow(t, skip) {
     return h('details', { style: { margin: '2px 0 2px 8px' } },
-      h('summary', { style: { cursor: 'pointer' } }, h('b', {}, t.name), ' ', mono(t.id), h('span', { class: 'hint' }, t.max ? `  최대 ${t.max} 포인트 · 아이콘 ${t.icon}` : '')),
+      h('summary', { class: 'pointer' }, h('b', {}, t.name), ' ', mono(t.id), h('span', { class: 'hint' }, t.max ? `  최대 ${t.max} 포인트 · 아이콘 ${t.icon}` : '')),
       h('div', { style: { margin: '4px 0 6px 12px' } }, kv('설명', t.desc || '(글자 없음)'), kv('선언', t.def), kv('글자 키', 'actors.hero.talent.' + lc(t.id) + '.title / .desc'), usageFold(t.id)));
   }
   const TIER = ['1단계 (레벨 2~)', '2단계 (레벨 7~)', '3단계 (레벨 13~ · 전직 뒤)', '4단계 (레벨 21~ · 직업 능력 뒤)'];
@@ -205,31 +205,31 @@
     if (kind === 'inv') {
       const iv = d.inv; if (!iv) return [h('div', { class: 'hint' }, 'HeroClass.initHero 를 찾지 못했습니다.')];
       out.push(h('div', { class: 'fl' }, `이 직업만 받는 것 — ${iv.fn || '(전용 메서드 없음)'}()`), ...(iv.own.length ? iv.own.map(itemRow) : [h('div', { class: 'hint' }, '없음')]),
-        h('div', { class: 'fl', style: { marginTop: '6px' } }, '모든 직업이 받는 것 — initHero()'), ...iv.common.map(itemRow));
-      if (iv.debug.length) out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '디버그 빌드 · "test" 시드에서만 더 받는 것'), ...iv.debug.map(itemRow));
+        h('div', { class: 'fl mt-3' }, '모든 직업이 받는 것 — initHero()'), ...iv.common.map(itemRow));
+      if (iv.debug.length) out.push(h('div', { class: 'fl mt-3' }, '디버그 빌드 · "test" 시드에서만 더 받는 것'), ...iv.debug.map(itemRow));
       if (iv.code) out.push(fold(`코드 보기 — ${iv.fn}() (${d.files.hero} : ${iv.line})`, () => codeView(iv.code, iv.line)));
       if (iv.commonCode) out.push(fold(`코드 보기 — initHero() (${d.files.hero} : ${iv.commonLine})`, () => codeView(iv.commonCode, iv.commonLine)));
     } else if (kind === 'subs') {
       if (!d.subs.length) return [h('div', { class: 'hint' }, '이 직업의 전직을 찾지 못했습니다.')];
       out.push(kv('선언', d.enumDef + '   — ' + d.files.hero));
-      d.subs.forEach(s => out.push(h('details', { style: { margin: '4px 0' } },
-        h('summary', { style: { cursor: 'pointer' } }, h('b', {}, s.name), ' ', mono('HeroSubClass.' + s.id), h('span', { class: 'hint' }, '  ' + (s.short || '').split('\n')[0].slice(0, 60))),
+      d.subs.forEach(s => out.push(h('details', { class: 'my-2' },
+        h('summary', { class: 'pointer' }, h('b', {}, s.name), ' ', mono('HeroSubClass.' + s.id), h('span', { class: 'hint' }, '  ' + (s.short || '').split('\n')[0].slice(0, 60))),
         h('div', { style: { margin: '4px 0 8px 12px' } }, kv('한 줄 설명', s.short), kv('설명', s.desc), kv('아이콘', s.icon), kv('선언', s.def + '   — ' + d.files.sub),
           kv('글자 키', 'actors.hero.herosubclass.' + lc(s.id) + ' / _short_desc / _desc'),
-          h('div', { class: 'fl', style: { marginTop: '4px' } }, '전직 특성 (3단계)'), ...(s.talents.length ? s.talents.map(t => talentRow(t, [d.files.talent])) : [h('div', { class: 'hint' }, '없음')]),
+          h('div', { class: 'fl mt-2' }, '전직 특성 (3단계)'), ...(s.talents.length ? s.talents.map(t => talentRow(t, [d.files.talent])) : [h('div', { class: 'hint' }, '없음')]),
           usageFold(s.id, [d.files.hero, d.files.sub])))));
     } else if (kind === 'abilities') {
       if (!d.abilities.length) return [h('div', { class: 'hint' }, '이 직업의 직업 능력을 찾지 못했습니다 (HeroClass.armorAbilities).')];
-      d.abilities.forEach(a => out.push(h('details', { style: { margin: '4px 0' } },
-        h('summary', { style: { cursor: 'pointer' } }, h('b', {}, a.name), ' ', mono(a.cls), h('span', { class: 'hint' }, '  ' + (a.charge !== null ? '충전 ' + a.charge + '% · ' : '') + (a.target ? '대상 지정' : '즉시 발동'))),
+      d.abilities.forEach(a => out.push(h('details', { class: 'my-2' },
+        h('summary', { class: 'pointer' }, h('b', {}, a.name), ' ', mono(a.cls), h('span', { class: 'hint' }, '  ' + (a.charge !== null ? '충전 ' + a.charge + '% · ' : '') + (a.target ? '대상 지정' : '즉시 발동'))),
         h('div', { style: { margin: '4px 0 8px 12px' } }, kv('한 줄 설명', a.short), kv('설명', a.desc), kv('충전 소모', a.charge !== null ? a.charge + '% (baseChargeUse)' : '(기본값)'), kv('아이콘', a.icon), kv('파일', a.file),
-          h('div', { class: 'fl', style: { marginTop: '4px' } }, '능력 특성 (4단계)'), ...(a.talents.length ? a.talents.map(t => talentRow(t, [d.files.talent])) : [h('div', { class: 'hint' }, '없음')]),
+          h('div', { class: 'fl mt-2' }, '능력 특성 (4단계)'), ...(a.talents.length ? a.talents.map(t => talentRow(t, [d.files.talent])) : [h('div', { class: 'hint' }, '없음')]),
           a.code ? fold('코드 보기 — ' + a.cls + '.java (' + a.code.split('\n').length + '줄)', () => codeView(a.code, 1)) : null))));
     } else {
       if (!d.tiers.length) out.push(h('div', { class: 'hint' }, 'Talent.initClassTalents 에서 이 직업을 찾지 못했습니다.'));
       d.tiers.forEach((t, i) => out.push(h('div', { class: 'fl', style: { marginTop: i ? '6px' : 0 } }, TIER[i] || (i + 1) + '단계'), ...t.map(x => talentRow(x, [d.files.talent]))));
-      d.subs.forEach(s => { if (s.talents.length) out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '3단계 — 전직 「' + s.name + '」'), ...s.talents.map(x => talentRow(x, [d.files.talent]))); });
-      d.abilities.forEach(a => { if (a.talents.length) out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '4단계 — 직업 능력 「' + a.name + '」'), ...a.talents.map(x => talentRow(x, [d.files.talent]))); });
+      d.subs.forEach(s => { if (s.talents.length) out.push(h('div', { class: 'fl mt-3' }, '3단계 — 전직 「' + s.name + '」'), ...s.talents.map(x => talentRow(x, [d.files.talent]))); });
+      d.abilities.forEach(a => { if (a.talents.length) out.push(h('div', { class: 'fl mt-3' }, '4단계 — 직업 능력 「' + a.name + '」'), ...a.talents.map(x => talentRow(x, [d.files.talent]))); });
     }
     return out.filter(Boolean);
   }
@@ -238,10 +238,10 @@
   /** 영웅 편집기에 넣는 상자. used = 지금 게임이 이것을 그대로 쓰는지 (false 면 프로젝트 설정이 대신함) */
   PDM.gameHeroBox = function (c, kind, used, st) {
     const cls = String(c.baseClass || '').trim().toUpperCase(); if (!cls) return null;
-    const body = h('div', { style: { marginTop: '6px' } }, h('div', { class: 'hint' }, '저장소에서 읽는 중…'));
+    const body = h('div', { class: 'mt-3' }, h('div', { class: 'hint' }, '저장소에서 읽는 중…'));
     const sk = 'gh_' + kind, open = st ? st[sk] !== false : true;
     const box = h('details', { open, ontoggle: e => { if (st) st[sk] = e.target.open; }, style: { border: '1px solid var(--line, #444)', borderRadius: '6px', padding: '6px 10px', margin: '0 0 8px', background: 'rgba(127,127,127,.06)' } },
-      h('summary', { style: { cursor: 'pointer' } }, h('b', {}, TITLE[kind] + ' — ' + cls), ' ',
+      h('summary', { class: 'pointer' }, h('b', {}, TITLE[kind] + ' — ' + cls), ' ',
         h('span', { class: 'badge' }, used ? '지금 게임에서 쓰임' : '프로젝트 설정이 대신함 (참고용)'), h('span', { class: 'hint' }, '  게임 저장소 소스에서 읽은 값 (읽기 전용)')), body);
     PDM.gameHero(cls).then(d => { body.textContent = '';
       if (!d) { body.appendChild(h('div', { class: 'hint' }, repoOf() ? `게임 저장소의 HeroClass.java 에 ${cls} 직업이 없습니다.` : '게임 저장소를 찾지 못해 읽을 수 없습니다 (프로젝트 설정 → 게임 저장소).')); return; }

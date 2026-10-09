@@ -396,7 +396,7 @@ PDM.pixelEditor = function (o) {
   lyBg.onchange = () => { darkBg = lyBg.checked; draw(); }; lyShow.onchange = () => { showLight = lyShow.checked; draw(); };
   function layerState() { lyB.classList.toggle('pri', layer === 'base'); lyL.classList.toggle('pri', layer === 'light'); }
   const layerBar = !hasLight ? null : h('div', { class: 'px-layers', style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '4px 8px', display: 'grid', gap: '4px' } },
-    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '레이어'), lyB, lyL,
+    h('div', { class: 'hstack wrap' }, h('span', { class: 'fl' }, '레이어'), lyB, lyL,
       h('span', { class: 'fl' }, '합성'), (() => { const sl = h('select', { title: '효과 레이어를 그림 위에 겹치는 방식 (게임에서도 같은 방식으로 겹칩니다)' },
         ...[['add', '발광 (더하기)'], ['screen', '스크린'], ['overlay', '오버레이'], ['dodge', '닷지 (색상 닷지)']].map(([k, v]) => h('option', { value: k, selected: k === lightMode }, v)));
         sl.onchange = () => { lightMode = sl.value; if (o.light && o.light.onMode) o.light.onMode(lightMode); draw(); }; return sl; })(),
@@ -414,9 +414,9 @@ PDM.pixelEditor = function (o) {
   brushIn.addEventListener('change', () => setBrush(+brushIn.value));
   const side = h('div', { class: 'px-side-col', style: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '260px', flex: '1 1 300px' } },
     layerBar,
-    h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, toolBtn('pen', '✎ 브러쉬', 'B'), toolBtn('erase', '⌫ 지우개', 'E'), toolBtn('fill', '▣ 채우기', 'G'), toolBtn('pick', '⊙ 스포이드', 'I'),
+    h('div', { class: 'flex gap-2 wrap' }, toolBtn('pen', '✎ 브러쉬', 'B'), toolBtn('erase', '⌫ 지우개', 'E'), toolBtn('fill', '▣ 채우기', 'G'), toolBtn('pick', '⊙ 스포이드', 'I'),
       toolBtn('select', '⬚ 사각 선택', 'M'), toolBtn('lasso', '➰ 올가미', 'L — 끌어서 그린 모양 안쪽을 선택'), toolBtn('wand', '✦ 마법봉', 'W — 누른 칸과 이어진 같은 색을 선택')),
-    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, brushLbl, brushIn,
+    h('div', { class: 'hstack wrap' }, brushLbl, brushIn,
       h('button', { class: 'btn xs', title: '[', onclick: e => { e.preventDefault(); setBrush(brush - 1); } }, '[ 작게'), h('button', { class: 'btn xs', title: ']', onclick: e => { e.preventDefault(); setBrush(brush + 1); } }, '크게 ]')),
     (() => { const ms = h('select', { title: '칠하는 색을 밑그림과 섞는 방식' }, ...Object.entries(BRUSH_MODES).map(([k, v]) => h('option', { value: k }, v)));
       const note = h('small', { class: 'hint' });
@@ -426,11 +426,11 @@ PDM.pixelEditor = function (o) {
       const sf = h('input', { type: 'checkbox' }), la = h('input', { type: 'checkbox' });
       sf.onchange = () => { brushSoft = sf.checked; }; la.onchange = () => { lockAlpha = la.checked; };
       return h('div', { class: 'px-brushmode', style: { display: 'grid', gap: '3px' } },
-        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '브러쉬 합성'), ms,
+        h('div', { class: 'hstack wrap' }, h('span', { class: 'fl' }, '브러쉬 합성'), ms,
           h('label', { class: 'check', title: '브러쉬 가장자리로 갈수록 옅어집니다 (브러쉬 크기 2 이상)' }, sf, '부드럽게'),
           h('label', { class: 'check', title: '이미 그려진 칸에만 칠합니다 (투명한 칸과 윤곽은 그대로)' }, la, '그려진 칸에만')), note); })(),
     h('small', { class: 'hint' }, '선택 도구: Shift+조작 = 선택에 더하기 · Alt+조작 = 선택에서 빼기. Ctrl+Z 되돌리기 · Ctrl+Shift+Z 다시 실행 · Space+끌기 = 이동 · Z+끌기 = 확대(바깥으로)/축소(안쪽으로)'),
-    h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' } },
+    h('div', { class: 'hstack gap-2 wrap' },
       h('button', { class: 'btn xs', title: 'Ctrl+C — 선택한 영역 복사 (선택이 없으면 그림 전체)', onclick: e => { e.preventDefault(); copySel(false); } }, '복사'),
       h('button', { class: 'btn xs', title: 'Ctrl+X', onclick: e => { e.preventDefault(); copySel(true); } }, '잘라내기'),
       h('button', { class: 'btn xs', title: 'Ctrl+V — 선택한 자리(없으면 왼쪽 위)에 붙이고, 끌어서 옮긴 뒤 Enter', onclick: e => { e.preventDefault(); pasteClip(); } }, '붙여넣기'),
@@ -439,11 +439,11 @@ PDM.pixelEditor = function (o) {
     selInfo,
     h('div', {}, h('span', { class: 'fl' }, '최근 사용 색'), recEl),
     pal, h('label', { class: 'field' }, h('span', { class: 'fl' }, '직접 색 고르기'), colorIn),
-    h('div', { class: 'field' }, h('span', { class: 'fl' }, '불투명도 (%)'), h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, alphaIn, alphaNum)),
-    h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'fl' }, '표시 배율 ×'), zoomIn,
+    h('div', { class: 'field' }, h('span', { class: 'fl' }, '불투명도 (%)'), h('div', { class: 'hstack' }, alphaIn, alphaNum)),
+    h('div', { class: 'hstack wrap' }, h('span', { class: 'fl' }, '표시 배율 ×'), zoomIn,
       gridStep ? h('button', { class: 'btn xs', title: '한 프레임이 창에 꽉 차게', onclick: e => { e.preventDefault(); fitFrame(); } }, '프레임 하나에 맞춤') : null,
       h('button', { class: 'btn xs', title: '그림 전체가 창에 들어오게', onclick: e => { e.preventDefault(); const pane = view.parentNode; const r = pane.getBoundingClientRect(); scale = Math.max(1, Math.min(48, Math.floor(Math.min(r.width / W, r.height / H)))); draw(); } }, '전체 맞춤')),
-    h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+    h('div', { class: 'flex gap-2 wrap' },
       h('button', { class: 'btn sm', title: 'Ctrl+Z', onclick: e => { e.preventDefault(); undo(); } }, '↶ 되돌리기'),
       h('button', { class: 'btn sm', title: 'Ctrl+Shift+Z', onclick: e => { e.preventDefault(); redo(); } }, '↷'),
       h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); scale = Math.min(48, scale + 2); draw(); } }, '+'),
@@ -458,10 +458,10 @@ PDM.pixelEditor = function (o) {
       const step = gridStep || 0;
       return h('div', { class: 'px-size' },
         h('div', { class: 'fl' }, '작업 영역 크기'),
-        h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' } }, '가로', wIn, '세로', hIn),
-        h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' } }, '그림 위치', anc,
+        h('div', { class: 'hstack gap-2 wrap' }, '가로', wIn, '세로', hIn),
+        h('div', { class: 'hstack gap-2 wrap mt-2' }, '그림 위치', anc,
           h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); resizeCanvas(+wIn.value, +hIn.value, anc.value); } }, '적용')),
-        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '4px' } },
+        h('div', { class: 'flex gap-2 wrap mt-2' },
           ...[16, 32, 48, 64].map(n => h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); resizeCanvas(n, n, anc.value); } }, `${n}×${n}`)),
           h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); resizeCanvas(W * 2, H * 2, anc.value); } }, '×2'),
           step ? h('button', { class: 'btn xs', title: '오른쪽에 프레임 한 칸 더', onclick: e => { e.preventDefault(); resizeCanvas(W + step, H, 'w'); } }, '+1 프레임') : null,
@@ -551,7 +551,7 @@ PDM.editPixelsModal = async function (title, relPath, w, h_, gridStep, saveAsPat
     PDM.assets.load('game:' + (tp.kind === 'tiles' ? T.water : T.tiles)).then(im => { other = im; if (pv) pv.redraw(); }).catch(() => {});
     pv = PDM.levelPreview.panel({ theme: tp.theme, tiles: () => tp.kind === 'tiles' ? ed.dataCanvas : other, water: () => tp.kind === 'tiles' ? other : ed.dataCanvas,
       light: () => tp.kind === 'tiles' ? ed.lightCanvas : null, lightState: () => ed.lightState() });
-    body = PDM.h('div', { class: 'px-preview', style: { display: 'flex', gap: '12px', alignItems: 'flex-start' } }, ed, pv.el);
+    body = PDM.h('div', { class: 'px-preview flex gap-6 items-start' }, ed, pv.el);
   }
   // 노드 합성기(확장 기능)가 켜져 있으면: 이 그림을 노드 합성기로 보내기 (저장하면 이 파일이 바뀜)
   const canCompose = PDM.compose && PDM.compose.fromImage && PDM.extensions && PDM.extensions.on('compose') && src;

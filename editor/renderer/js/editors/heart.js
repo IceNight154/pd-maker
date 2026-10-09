@@ -34,7 +34,7 @@
       const maxF = Math.max(100, ((sys.stages || []).slice(-1)[0] || {}).favor * 1.2 || 100);
       const lvls = (PDM.Heart.ACCEPT_DEFAULTS.levels && (sys.acceptance || {}).levels) || PDM.Heart.ACCEPT_DEFAULTS.levels;
       wrap.append(
-        h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' } },
+        h('div', { class: 'hstack gap-4 wrap mb-4' },
           '캐릭터', chars.length ? sel : h('span', { class: 'hint' }, '마음 시스템을 켠 캐릭터가 없습니다 (성격 없이 계산)'),
           '곁에서 보는 캐릭터', osel,
           h('span', { class: 'badge gold' }, (sys.stages[stg] || {}).name || ''), h('span', { class: 'badge' }, PDM.T(att)),
@@ -51,16 +51,16 @@
         bar(PDM.T('rel.fatigue'), rec.fatigue, R.fatigueMax, '#8aa0c8', `${rec.fatigue}/${R.fatigueMax}`),
         bar(PDM.T('rel.stress'), rec.stress, R.stressTiers[R.stressTiers.length - 1], '#7c6f9a', `${rec.stress} (${PDM.Heart.stressTier(sys, rec)}단계)`),
         orec ? bar(st.other.name + ' ' + PDM.T('rel.anger'), orec.anger, R.angerMax, 'var(--gold)', `${orec.anger}${orec.sulk ? ' ' + PDM.T('rel.sulk') : ''} · ${PDM.T('rel.jealousy')} ${orec.jealousy}`) : null,
-        h('div', { class: 'cols2', style: { marginTop: '8px' } },
+        h('div', { class: 'cols2 mt-4' },
           h('div', {}, h('div', { class: 'fl' }, PDM.T('sys.gauge') + ' (이번 층)'), ...(sys.gauges || []).map(g => bar(PDM.T(g.key), rec.gauges[g.key] || 0, Math.max(500, ...Object.values(rec.gauges)), '#a58bff'))),
           h('div', {}, h('div', { class: 'fl' }, PDM.T('sys.crystal')),
             h('div', { class: 'kv' }, ...(sys.crystals || []).flatMap(g => rec.crystals[g] ? [h('b', {}, PDM.T(g)), h('span', {}, rec.crystals[g])] : [])),
-            h('div', { class: 'fl', style: { marginTop: '6px' } }, PDM.T('sys.ability')),
+            h('div', { class: 'fl mt-3' }, PDM.T('sys.ability')),
             h('div', { class: 'kv' }, ...(sys.abilities || []).flatMap(a => [h('b', {}, PDM.T(a.key)), h('span', {}, `Lv ${rec.abl[a.key] || 0}  (다음: ${PDM.T(a.crystal)} ${PDM.Heart.ablCost(a, rec.abl[a.key] || 0)})`)])),
-            h('div', { class: 'fl', style: { marginTop: '6px' } }, PDM.T('sys.mark')),
+            h('div', { class: 'fl mt-3' }, PDM.T('sys.mark')),
             h('div', { class: 'kv' }, ...(sys.marks || []).flatMap(m => rec.marks[m.key] ? [h('b', {}, PDM.T(m.key)), h('span', {}, '★'.repeat(rec.marks[m.key]))] : [])))),
-        h('div', { class: 'fl', style: { marginTop: '10px' } }, '행동'),
-        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+        h('div', { class: 'fl mt-5' }, '행동'),
+        h('div', { class: 'flex gap-2 wrap' },
           (sys.actions || []).map(a => h('button', { class: 'btn sm' + (a.favor < 0 || a.anger > 0 ? ' danger' : '') + (a.menu ? ' pri' : ''), title: a.menu ? '말 걸기 메뉴에 나오는 행동' : '', onclick: () => {
             const onlookers = orec ? [{ id: st.other.id, rec: orec, traits: traits(st.other) }] : [];
             const r = PDM.Heart.applyAction(sys, rec, a, traits(st.char), { crowd: !!orec, onlookers });
@@ -71,8 +71,8 @@
             PDM.Heart.checkMilestones(sys, rec).forEach(m => st.log.unshift(`💞 이정표 「${PDM.T(m.key)}」 획득${m.event ? ' → 이벤트 ' + m.event : ''}${m.replaces ? ' (「' + PDM.T(m.replaces) + '」 대신)' : ''}`));
             draw();
           } }, a.name))),
-        (sys.requests || []).length ? h('div', { class: 'fl', style: { marginTop: '6px' } }, '부탁 (마음 열림 > 필요치)') : null,
-        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+        (sys.requests || []).length ? h('div', { class: 'fl mt-3' }, '부탁 (마음 열림 > 필요치)') : null,
+        h('div', { class: 'flex gap-2 wrap' },
           (sys.requests || []).map(q => h('button', { class: 'btn sm', onclick: () => {
             const r = PDM.Heart.request(sys, rec, q);
             const why = { mood: `${PDM.T('rel.mood')} 부족`, sulk: PDM.T('rel.sulk'), cond: '조건 불만족', score: '점수 부족' }[r.reason] || '';
@@ -82,8 +82,8 @@
             say(r.ok ? 'request_ok' : 'request_no');
             draw();
           } }, `${q.name} (${q.need})`))),
-        h('div', { class: 'fl', style: { marginTop: '6px' } }, '시간'),
-        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+        h('div', { class: 'fl mt-3' }, '시간'),
+        h('div', { class: 'flex gap-2 wrap' },
           h('button', { class: 'btn sm', onclick: () => { PDM.Heart.decay(sys, rec); if (orec) PDM.Heart.decay(sys, orec); st.log.unshift(`${R.decayTurns}턴 경과: ${PDM.T('rel.anger')} -${rec.displeased ? 0 : R.angerDecay}${rec.displeased ? ' (' + PDM.T('rel.displeased') + ' — 안 풀림)' : ''}`); draw(); } }, `${R.decayTurns}턴 지나기`),
           h('button', { class: 'btn sm pri', onclick: () => {
             say('diary');   // 일기는 게이지가 남아 있을 때 고름 (조건에 gauge.* 사용 가능)
@@ -144,7 +144,7 @@
       });
       const vec = (p, label) => h('div', { class: 'field' }, h('span', { class: 'fl' }, label),
         h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' } },
-          gaugeKeys.map(g => h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center', fontSize: '11px' } }, h('span', { style: { width: '42px', color: 'var(--mute)' } }, PDM.T(g)), F.num(key, [...p, g], { step: p.includes('gaugeMul') ? 0.1 : 10 })))));
+          gaugeKeys.map(g => h('label', { class: 'hstack gap-2 fs-xs' }, h('span', { style: { width: '42px', color: 'var(--mute)' } }, PDM.T(g)), F.num(key, [...p, g], { step: p.includes('gaugeMul') ? 0.1 : 10 })))));
       return h('div', { class: 'page' },
         h('h1', {}, PDM.T('sys.heart')),
         h('p', { class: 'lead' }, 'era(eraTW) 의 SOURCE→PALAM→JUEL→ABL 흐름과 호감·신뢰·무드·분노 처리를 옮긴 관계 시스템입니다. ',
@@ -155,25 +155,25 @@
           PDM.ui.row(PDM.ui.F.sysSound(key, ['sounds', 'up'], 'heart.up', { label: '호감이 오를 때' }), PDM.ui.F.sysSound(key, ['sounds', 'down'], 'heart.down', { label: '호감이 내릴 때' }),
             PDM.ui.F.sysSound(key, ['sounds', 'bond'], 'heart.bond', { label: '이정표를 얻을 때' }), PDM.ui.F.sysSound(key, ['sounds', 'crystal'], 'heart.crystal', { label: PDM.T('sys.crystal') + '이 생길 때' }))),
         section('기본 규칙 (era 호감도·신뢰도 처리)',
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' } },
+          h('div', { class: 'hstack mb-3' },
             h('button', { class: 'btn sm', onclick: () => importDefaults() }, '새 규칙·행동·토픽 가져오기'),
             h('span', { class: 'hint' }, '예전에 만든 프로젝트에 없는 기본 항목(무드·부탁·사과 행동·새 성격·토픽 등)만 추가합니다. 이미 있는 건 그대로 둡니다.')),
           row(F.num(key, ['rules', 'maxValue'], { label: '최대치', int: true }), F.num(key, ['rules', 'trustRatio'], { label: '신뢰도 비율', hint: '호감도 > 신뢰도×이 값이면 상승 감소', min: 1 }), F.num(key, ['rules', 'capStart'], { label: '감소 시작 호감도', int: true }),
             F.num(key, ['rules', 'trustK'], { label: '감소 곡선 K', int: true, def: 20, hint: '상승 × 신뢰×K / (호감 + 신뢰×K)' })),
           row(...['bond.admire', 'bond.close', 'bond.partner'].map(b => F.num(key, ['rules', 'bondTrustK', b], { label: PDM.T(b) + ' 일 때 K', int: true, def: PDM.Heart.RULE_DEFAULTS.bondTrustK[b] }))),
-          h('div', { class: 'fl', style: { marginTop: '8px' } }, PDM.T('rel.anger') + ' · ' + PDM.T('rel.sulk') + ' · ' + PDM.T('rel.displeased') + ' (era GET_ANGRY)'),
+          h('div', { class: 'fl mt-4' }, PDM.T('rel.anger') + ' · ' + PDM.T('rel.sulk') + ' · ' + PDM.T('rel.displeased') + ' (era GET_ANGRY)'),
           row(F.num(key, ['rules', 'angerMax'], { label: PDM.T('rel.anger') + ' 최대 (' + PDM.T('rel.sulk') + ')', int: true }), F.num(key, ['rules', 'angerDecay'], { label: '감소량', int: true }), F.num(key, ['rules', 'decayTurns'], { label: '감소 간격(턴)', int: true }),
             F.num(key, ['rules', 'angerFloorKeep'], { label: '새 층에서 남는 비율', step: 0.1, min: 0, max: 1, def: 0.5 })),
           row(F.num(key, ['rules', 'displeasedFloors'], { label: PDM.T('rel.displeased') + ' 층 수', int: true, min: 0, def: 1, hint: '삐지면 이만큼의 층 동안 분노가 안 풀림' }),
             F.num(key, ['rules', 'resentLock'], { label: '풀리지 않는 반발 단계', int: true, min: 1, max: 4, def: 3, hint: PDM.T('mark.resent') + '이 이 단계면 ' + PDM.T('rel.displeased') + '이 계속됨' }),
             F.num(key, ['rules', 'sulkMark'], { label: '삐질 때 ' + PDM.T('mark.resent') + ' +', int: true, min: 0, max: 3, def: 0 })),
-          h('div', { class: 'fl', style: { marginTop: '8px' } }, PDM.T('rel.mood') + ' · ' + PDM.T('rel.temper') + ' (era BASE:무드, TALENT:기분)'),
+          h('div', { class: 'fl mt-4' }, PDM.T('rel.mood') + ' · ' + PDM.T('rel.temper') + ' (era BASE:무드, TALENT:기분)'),
           row(F.num(key, ['rules', 'moodMax'], { label: PDM.T('rel.mood') + ' 최대', int: true, def: 500 }), F.num(key, ['rules', 'moodPerAction'], { label: '행동 1번 최대', int: true, def: 200 }),
             F.num(key, ['rules', 'moodSoft', 0], { label: '완만해지는 기준 1', int: true, def: 50 }), F.num(key, ['rules', 'moodSoft', 1], { label: '기준 2', int: true, def: 100 }), F.num(key, ['rules', 'moodSoft', 2], { label: '기준 3', int: true, def: 200 })),
           row(F.bool(key, ['rules', 'crowdHalf'], { label: '다른 캐릭터가 보고 있으면 ' + PDM.T('rel.mood') + ' 절반' }),
             F.num(key, ['rules', 'temperChance'], { label: PDM.T('rel.temper') + ' 바뀔 확률(%/층)', int: true, min: 0, max: 100, def: 10 }),
             F.num(key, ['rules', 'curveK'], { label: '자극 곡선 k', int: true, def: 200, hint: '호감 += cap×v/(v+k) 합 /10' }), F.num(key, ['rules', 'curveCap'], { label: '자극 곡선 cap', int: true, def: 50 })),
-          h('div', { class: 'fl', style: { marginTop: '8px' } }, PDM.T('rel.fatigue') + ' · ' + PDM.T('rel.stress') + ' · ' + PDM.T('rel.jealousy')),
+          h('div', { class: 'fl mt-4' }, PDM.T('rel.fatigue') + ' · ' + PDM.T('rel.stress') + ' · ' + PDM.T('rel.jealousy')),
           row(F.num(key, ['rules', 'fatigueMax'], { label: PDM.T('rel.fatigue') + ' 한도(층)', int: true, def: 300, hint: '행동의 "피로"가 쌓여 넘으면 실패 (' + PDM.T('bond.partner') + '은 무시)' }),
             F.num(key, ['rules', 'stressRecover'], { label: PDM.T('rel.stress') + ' 층마다 회복', int: true, def: 30 }), F.num(key, ['rules', 'stressRecoverSafe'], { label: '쉬는 곳에서 회복', int: true, def: 200 })),
           row(...(sys.gauges || []).filter(g => ['gauge.fear', 'gauge.sorrow', 'gauge.tension', 'gauge.anger'].includes(g.key)).map(g => F.num(key, ['rules', 'stressFrom', g.key], { label: PDM.T(g.key) + ' → ' + PDM.T('rel.stress') + ' 비율', step: 0.05, def: 0 }))),

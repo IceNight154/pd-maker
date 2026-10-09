@@ -254,10 +254,10 @@
       P.layers.forEach((l, i) => {
         const tone = l.wave !== 'noise';
         const box = h('details', { class: 'sec', open: i === 0 },
-          h('summary', { class: 'sec-head', style: { cursor: 'pointer' } },
+          h('summary', { class: 'sec-head pointer' },
             `층 ${i + 1} · ${WAVES[l.wave].split(' ')[0]}${tone ? ` ${Math.round(l.freq)}Hz` : ''}${l.filter !== 'none' ? ' · ' + FILTERS[l.filter].split(' ')[0] : ''}`,
-            h('span', { style: { flex: 1 } }),
-            h('label', { style: { fontSize: '11px' }, onclick: e => e.stopPropagation() }, (() => { const c = h('input', { type: 'checkbox', checked: l.on !== false }); c.addEventListener('change', () => { l.on = c.checked; playNow(); }); return c; })(), ' 켜기'),
+            h('span', { class: 'grow' }),
+            h('label', { class: 'fs-xs', onclick: e => e.stopPropagation() }, (() => { const c = h('input', { type: 'checkbox', checked: l.on !== false }); c.addEventListener('change', () => { l.on = c.checked; playNow(); }); return c; })(), ' 켜기'),
             h('button', { class: 'ib', title: '복제', onclick: e => { e.preventDefault(); P.layers.splice(i + 1, 0, JSON.parse(JSON.stringify(l))); drawLayers(); playNow(); } }, '⧉'),
             h('button', { class: 'ib danger', title: '삭제', onclick: e => { e.preventDefault(); P.layers.splice(i, 1); drawLayers(); playNow(); } }, '✕')),
           h('div', { class: 'sfx-grid', style: { padding: '6px 8px' } },
@@ -283,7 +283,7 @@
       h('p', { class: 'hint' }, '시작할 소리를 고르고 다듬으세요. 층(파형·음높이·FM·필터·엔벨로프)을 겹쳐 만들고, 전체에 잔향·메아리를 씌웁니다. 슬라이더에서 손을 떼면 다시 들려줍니다. 저장하면 WAV 파일이 되고 설정도 함께 저장돼 "다시 만들기"로 고칠 수 있습니다.'),
       presets, cv,
       h('div', { class: 'tools' }, h('button', { class: 'btn sm pri', onclick: ev => { ev.preventDefault(); playNow(); } }, '▶ 들어보기'), h('button', { class: 'btn sm', onclick: ev => { ev.preventDefault(); A.stop(); } }, '■')),
-      h('div', { class: 'fl' }, '전체'), globalBox, h('div', { class: 'fl', style: { marginTop: '8px' } }, '층'), layerBox);
+      h('div', { class: 'fl' }, '전체'), globalBox, h('div', { class: 'fl mt-4' }, '층'), layerBox);
     drawGlobal(); drawLayers(); setTimeout(redraw, 0);
     const res = await PDM.ui.modal(old ? `효과음 다시 만들기 — ${old.name}` : '효과음 만들기', body, [['취소', null], [old ? '덮어쓰기' : '저장', 'save', 'pri']]);
     A.stop();
@@ -344,15 +344,15 @@
             F.num(K, [...p, 'pitch'], { label: '음높이 (효과음)', step: 0.05, min: 0.5, max: 2, def: 1 }),
             (e.kind || 'se') === 'bgm' ? F.bool(K, [...p, 'loop'], { label: '반복' }) : h('span')),
           row(F.text(K, [...p, 'file'], { label: '파일', rerender: true }),
-            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('div', { style: { display: 'flex', gap: '4px' } },
+            h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('div', { class: 'flex gap-2' },
               h('button', { class: 'btn sm', onclick: () => PDM.audio.play('sound:' + e.id) }, '▶ 듣기'),
               h('button', { class: 'btn sm', onclick: () => PDM.audio.stop() }, '■'),
               h('button', { class: 'btn sm pri', onclick: () => waveEditor(e.id) }, '파형 편집…'),
               e.synth ? h('button', { class: 'btn sm', onclick: () => sfxMaker(e.id) }, '다시 만들기…') : null))),
           F.textarea(K, [...p, 'note'], { label: '메모', rows: 2 }),
-          h('div', { class: 'fl', style: { marginTop: '6px' } }, `쓰는 곳 (${used.length})`),
+          h('div', { class: 'fl mt-3' }, `쓰는 곳 (${used.length})`),
           used.length ? h('div', {}, used.map(([t, k]) => h('button', { class: 'chip', onclick: () => PDM.tabs.open(k) }, t))) : h('p', { class: 'hint' }, '아직 쓰는 곳이 없습니다. 맵 그래프의 배경음, 이벤트 명령 "효과음/음악", 아이템·캐릭터·게임 아이템의 "소리", 대사창·마음 시스템의 소리에서 고르세요.'),
-          h('div', { style: { display: 'flex', gap: '6px', marginTop: '10px' } },
+          h('div', { class: 'flex gap-3 mt-5' },
             h('button', { class: 'btn sm', title: 'id 를 바꾸고 쓰는 곳의 "sound:<id>" 도 함께 고칩니다', onclick: () => renameSound(e.id) }, 'id 바꾸기…'),
             h('button', { class: 'btn sm', onclick: () => { const c = PDM.clone(e); c.id = uniqueId(e.id + '_copy'); c.name = (e.name || e.id) + ' 사본'; addEntry(c, '소리 복제'); st.sel = c.id; } }, '복제 (같은 파일)'),
             h('button', { class: 'btn sm danger', onclick: async () => {
@@ -363,7 +363,7 @@
       return h('div', { class: 'page' },
         h('h1', {}, '🎵 사운드'),
         h('p', { class: 'lead' }, '프로젝트의 배경음과 효과음을 모아 두는 곳입니다. 여기 등록한 소리는 sound:<id> 로 불리고, 맵 그래프의 그룹·노드 배경음, 사용자 테마 음악, 이벤트 명령 "효과음/음악"에서 고를 수 있습니다. 게임 소리는 등록하지 않고 바로 골라도 됩니다.'),
-        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' } },
+        h('div', { class: 'flex gap-3 wrap mb-5' },
           h('button', { class: 'btn pri', onclick: importFile }, '파일 가져오기 (ogg·mp3·wav)'),
           h('button', { class: 'btn', onclick: () => sfxMaker() }, '효과음 만들기'),
           h('button', { class: 'btn', onclick: copyGame }, '게임 소리 복사해 오기'),

@@ -259,7 +259,7 @@
       const count = d => files.filter(f => under(f, d)).length;
       const others = [...new Set(files.map(dirOf).filter(d => d !== 'game' && !d.startsWith('game/') && !FOLDERS.some(([f]) => d === f || d.startsWith(f + '/'))))].sort();
       const item = (d, label, icon, n) => h('div', { class: 'spr-f' + (st.dir === d ? ' on' : ''), onclick: () => { st.dir = d; ctx.refresh(); } },
-        h('span', { class: 'ti' }, icon || '📁'), h('span', { class: 'tl' }, label), n != null ? h('span', { class: 'tc' }, n) : null);
+        h('span', { class: 'ti' }, PDM.iconFor(icon || '📁')), h('span', { class: 'tl' }, label), n != null ? h('span', { class: 'tc' }, n) : null);
       side.append(item('', '모든 그림', '▤', files.filter(f => !f.startsWith('assets/game/')).length));
       side.append(h('div', { class: 'spr-sep' }, '표준 폴더'));
       FOLDERS.forEach(([d, label, icon]) => side.append(item(d, label, icon, count(d))));
@@ -291,7 +291,7 @@
       main.append(h('div', { class: 'spr-head' },
         h('b', {}, st.dir === '' ? '모든 그림' : st.dir === '@unused' ? '쓰는 곳 없는 그림' : 'assets/' + st.dir),
         st.dir && !st.dir.startsWith('@') ? h('span', { class: 'hint' }, folderLabel(st.dir)) : null,
-        h('span', { style: { flex: 1 } }), q,
+        h('span', { class: 'grow' }), q,
         h('button', { class: 'btn sm', onclick: add }, '+ 가져오기'),
         h('button', { class: 'btn sm', onclick: draw }, '✎ 새 그림')));
       const grid = h('div', {});
@@ -316,7 +316,7 @@
   function gamePage(st, ctx) {
     const wrap = h('div', {});
     wrap.append(h('div', { class: 'spr-head' }, h('b', {}, '게임 그림 바꾸기'),
-      h('span', { style: { flex: 1 } }),
+      h('span', { class: 'grow' }),
       h('select', { onchange: e => { st.gameDir = e.target.value; ctx.refresh(); } }, GAME_DIRS.map(([d, l]) => h('option', { value: d, selected: st.gameDir === d }, `${d}/ — ${l}`)), h('option', { value: '@over', selected: st.gameDir === '@over' }, '바꾼 그림만')),
       (() => { const q = h('input', { type: 'search', placeholder: '이름으로 찾기', value: st.q, oninput: () => { st.q = q.value; clearTimeout(q._t); q._t = setTimeout(() => ctx.refresh(), 300); } }); return q; })()));
     wrap.append(h('p', { class: 'hint' }, '게임 그림을 "고치기" 하면 프로젝트의 assets/game/<같은 경로> 로 복사되어 편집됩니다. 테스트 플레이 때 게임이 원본 대신 이 그림을 씁니다 (타이틀 배경 interfaces/title0~9.png, 아이템 시트 sprites/items.png 등). "원래대로" 는 복사본을 지웁니다.'));

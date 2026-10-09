@@ -148,14 +148,14 @@
     const srcTile = c.waterTile && userTiles().find(t => t.id === c.waterTile);
     const { F, row } = PDM.ui;
     const used = themeUsage(c.id);
-    return h('div', { class: 'li', style: { alignItems: 'flex-start', marginBottom: '8px' } }, cv,
+    return h('div', { class: 'li items-start mb-4' }, cv,
       h('div', { class: 'li-body' },
         row(F.text('world', ['customThemes', i, 'name'], { label: '이름' }), F.select('world', ['customThemes', i, 'base'], Object.fromEntries(Object.entries(PDM.THEMES).map(([k, t]) => [k, t.name])), { label: '바탕 테마 (물 · 장식 · 음악 기본)' })),
         row(F.image('world', ['customThemes', i, 'tiles'], { label: '타일셋 PNG (16×16칸 — 기본 256×256, 배율을 키우면 512 · 768 …)', sub: 'tiles', rerender: true })),
-        h('div', { class: 'fl', style: { marginTop: '4px' } }, '물 그림'),
-        h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start', margin: '2px 0 8px' } }, wcv,
-          h('div', { style: { flex: '1', minWidth: 0 } },
-            h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+        h('div', { class: 'fl mt-2' }, '물 그림'),
+        h('div', { class: 'flex gap-5 items-start m-0 mt-1 mb-4' }, wcv,
+          h('div', { class: 'grow min-0' },
+            h('div', { class: 'hstack wrap' },
               h('button', { class: 'btn sm', onclick: editWater }, c.water ? '✎ 물 그림 편집…' : '✎ 물 그림 만들기 (바탕 테마 물 복사)…'),
               h('button', { class: 'btn sm', onclick: async () => { const f = await PDM.ui.pickImage('tiles'); if (!f) return; store.edit('world', '물 그림 불러오기', w => { w.customThemes[i].water = f; }); PDM.assets.clear(); ctx.refresh(); } }, '⤓ PNG 불러오기'),
               PDM.ui.dropBtn('▦ 사용자 타일에서…', () => tileChoices().length ? tileChoices().map(t => ({ label: `${t.name || t.id}${t.flow ? ' (흐르는 그림 — 전체)' : ` (${t.x || 0}, ${t.y || 0} 칸)`}`, run: () => waterFromTile(t) }))
@@ -166,7 +166,7 @@
             srcTile ? h('div', { class: 'card', style: { padding: '6px 10px', marginTop: '4px' } },
               h('div', { class: 'hint' }, `이 테마의 물 = 사용자 타일 「${srcTile.name || srcTile.id}」 — 그림${srcTile.flow ? ` · 흐름(가로 ${srcTile.flowX || 0}, 세로 ${srcTile.flowY ?? -5} px/초)` : '(칸을 이어 붙임)'}${srcTile.gameFx ? ' · ✦ ' + (PDM.GAME_TILE_FX[srcTile.gameFx] || srcTile.gameFx) : ''}${srcTile.fx ? ' · ✦ 이펙트 ' + srcTile.fx : ''}${srcTile.title || srcTile.desc ? ' · 살펴보기 「' + (srcTile.title || '물') + '」' : ''} 가 이 테마를 쓰는 맵의 모든 물 칸에 적용됩니다. 그 사용자 타일을 고치면 게임에도 그대로 (위 미리보기 그림은 "다시 가져오기"로 갱신).`),
               (srcTile.fx || srcTile.gameFx) ? F.num('world', ['customThemes', i, 'waterFxEvery'], { label: '효과는 몇 칸마다 (1 = 모든 물 칸 — 넓은 물에서 무거우면 늘리세요)', int: true, min: 1, max: 20, def: 1 }) : null) : null)),
-        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+        h('div', { class: 'hstack wrap' },
           h('button', { class: 'btn sm pri', onclick: edit }, '✎ 타일셋 편집…'),
           h('span', { style: { display: 'inline-flex', gap: '4px', alignItems: 'center' }, title: '한 칸을 더 많은 픽셀로 그려 세밀하게 (게임에서도 적용 — 화면의 타일 크기는 그대로)' }, scaleSel, h('button', { class: 'btn sm', onclick: rescale }, '배율 적용'), scaleInfo),
           h('button', { class: 'btn sm', onclick: async () => { const f = await PDM.ui.pickImage('tiles'); if (!f) return; store.edit('world', '타일셋 불러오기', w => { w.customThemes[i].tiles = f; }); PDM.assets.clear(); ctx.refresh(); } }, '⤓ PNG 불러오기'),
@@ -241,7 +241,7 @@
           const used = userTileUsage(t.id);
           const open = !!st['ut' + i];
           return h('details', { open, ontoggle: e => { st['ut' + i] = e.target.open; } },
-            h('summary', { style: { cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center' } }, prev,
+            h('summary', { class: 'hstack gap-4 pointer' }, prev,
               h('b', {}, t.name || t.id), h('span', { class: 'hint' }, ` ${t.id} · (${t.x || 0}, ${t.y || 0}) · ${t.terrain >= 0 ? '칠하면 ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형 그대로'}${t.over ? ' · 캐릭터 위' : ''}${t.gameFx ? ' · ✦ ' + (PDM.GAME_TILE_FX[t.gameFx] || t.gameFx) : ''}${t.fx ? ' · ✦ 이펙트 ' + t.fx : ''}${t.image ? '' : ' · 그림 없음 (지형 그림)'} · ${used.length ? '쓰는 곳 ' + used.length + '군데' : '아직 안 씀'}`)),
             row(F.text('world', [...p, 'name'], { label: '이름', rerender: true }),
               F.select('world', [...p, 'terrain'], [[-2, '칠한 칸의 지형 그대로 (그림만 덮음)'], ...PDM.TERRAIN.map(x => [x.id, `${x.name} (${x.id})`])], { label: '칠할 때 지형 (판정)', number: true, rerender: true }),
@@ -258,9 +258,9 @@
               h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('effects') }, '이펙트 편집…'))),
             row(F.text('world', [...p, 'title'], { label: '살펴보기 이름 (비우면 지형 이름)', rerender: true }), F.text('world', [...p, 'desc'], { label: '살펴보기 설명 (비우면 지형 설명)' })),
             t.image && t.flow ? h('p', { class: 'hint' }, '흐르는 그림 — 그림 전체가 칸들에 이음매 없이 이어져 흐릅니다 (가로 · 세로 크기는 16 · 32 · 64 처럼 2의 거듭제곱이 안전 — 게임 물은 32×32). 효과 · 살펴보기 이름도 함께 쓸 수 있습니다.')
-              : t.image ? h('div', {}, h('div', { class: 'fl', style: { marginTop: '4px' } }, '칸 고르기 — 그림을 누르세요'), pick)
+              : t.image ? h('div', {}, h('div', { class: 'fl mt-2' }, '칸 고르기 — 그림을 누르세요'), pick)
               : h('p', { class: 'hint' }, '그림 없음 — 게임이 지형(칠할 때 지형)의 원래 그림을 그리고 효과만 더합니다. 위 "그림"에 타일셋 · PNG 를 넣으면 그 칸 그림을 덮습니다.'),
-            h('div', { class: 'btnbar', style: { marginTop: '6px' } },
+            h('div', { class: 'btnbar mt-3' },
               h('button', { class: 'btn sm', onclick: async () => { const img = await PDM.assets.load(t.image); if (!img) { toast('그림을 먼저 정하세요', 'bad'); return; }
                 if (String(t.image).startsWith('game:')) { toast('게임 그림은 여기서 직접 고칠 수 없습니다 — 사용자 테마의 타일셋을 고르거나 PNG 를 만들어 쓰세요', 'bad'); return; }
                 const out = await PDM.editPixelsModal('사용자 타일 그림 — ' + (t.name || t.id), t.image, img.width, img.height, z, null, {}); if (out && out !== t.image) store.edit('world', '사용자 타일 그림', w => { w.userTiles[i].image = out; }); PDM.assets.clear(); ctx.refresh(); } }, '✎ 그림 고치기…'),

@@ -96,6 +96,7 @@
 편집기: world(맵 그래프) · nodebulk(노드 한꺼번에 설정) · map(맵 · 방 템플릿) · prop(맵 오브젝트) · gameart(UI 그림 · 맵 그림) · hero · character · item · loot(드랍 테이블) · sound · title · dialogue · texts(게임 텍스트) · badges · sprites(그림 관리) · story · event · quests · effect · filter · textfx · trailer · compose(노드 합성기) · heart · terms · plugins · legacy(Java 코드 생성기) · project.
 
 ### 2.2 화면 동작
+- **디자인 시스템** (`docs/UI-DESIGN-SYSTEM.md` · 견본 `editor/renderer/styleguide.html`): `css/app.css` 의 토큰(색 · 간격 `--sp-*` · 글자 `--fs-*` · 모서리 `--r-*` · 컨트롤 높이 `--ctl-h*` · 그림자 `--e-*` · 모션) → 컴포넌트(.btn · 입력 칸 · .sec · .badge · 메뉴 · 창) → 유틸리티(.hstack · .gap-4 · .mt-3 …, 예전 인라인 style 459개를 옮김). 아이콘은 `js/icons.js` 한 벌(`PDM.icon` · 편집기의 이모지 아이콘은 `PDM.iconFor` 가 같은 SVG 로). 선택 표시 = 강조색 2px 줄 + `--accent-soft`, 키보드 포커스 고리, 줄임 모션 대응.
 - **테마** (`theme.js`): system / light / dark → `html[data-theme]`, 색은 모두 CSS 변수. system 은 `prefers-color-scheme` + Electron `nativeTheme.themeSource`(제목 표시줄 · 대화상자). 강조색 = OS 강조색(`systemPreferences.getAccentColor`) · 기본 보라 · 직접, 배경과 구분되도록 밝기 보정. 게임 그림 미리보기 바탕은 테마와 상관없이 어두움(`--stage`).
 - **다시 그릴 때 위치 유지**: 편집할 때마다 탭을 다시 그리므로 — 섹션 접힘을 기억(탭 + 제목, `ui.js closedSecs`), 인스펙터는 같은 제목이면 스크롤 유지, 탭 본문은 누르거나 입력 중인 칸(자식 순서 경로)을 기준으로 위치를 맞춤(0 · 30 · 120 · 400ms, 휠을 굴리면 멈춤), 안쪽 스크롤 칸(.sheet-view 등)도 되돌림.
 - **리소스 목록** (`app.js drawTree`): 처음엔 모두 접힘(펼친 분류는 `localStorage pdmaker_tree_expanded`). 검색 = 항목 · 분류 이름(분류가 맞으면 그 아래 전부), ☰ 세부 검색(분류 · 세부 종류), "전체"(접힌 분류까지). 끌어 놓기: 노드의 `drag` · `canDrop(끈 것) → ['before','after','into']` · `drop`. 줄의 ▲▼(마우스를 올리면) · 오른쪽 클릭 메뉴.
