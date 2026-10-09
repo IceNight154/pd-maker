@@ -82,7 +82,7 @@ public abstract class MakerBow extends MeleeWeapon implements GenSupport.Coded {
 	/** 활이 쏘는 발사체 (영혼의 활의 SpiritArrow 처럼 가방에 들어가지 않고, 땅에 떨어지지 않음) */
 	public static class Arrow extends MissileWeapon {
 		public MakerBow bow;
-		{ setID = 0; sticky = false; }
+		{ sticky = false; MakerCompat.setField(this, "setID", 0L); }   // setID 는 SPD 3.1 부터 (없으면 건너뜀)
 
 		void applyCfg() {
 			JsonValue p = bow.pcfg();
@@ -95,7 +95,7 @@ public abstract class MakerBow extends MeleeWeapon implements GenSupport.Coded {
 		@Override public String name() { String n = p().getString("name", ""); return n.isEmpty() ? super.name() : n; }
 		@Override public ArrayList<String> actions(Hero hero) { return new ArrayList<>(); }
 		@Override public String defaultAction() { return null; }
-		@Override public int defaultQuantity() { return 1; }
+		public int defaultQuantity() { return 1; }   // (@Override 없이 — 이 함수가 없는 예전 판에서도 컴파일)
 		@Override public Item split(int amount) { return null; }
 
 		@Override public int damageRoll(Char owner) {

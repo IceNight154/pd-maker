@@ -16,6 +16,7 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 ## 1. 준비 · 실행
 
 PDMaker 폴더 하나에 필요한 것이 모두 들어 있습니다. 기준 게임 저장소는 `game/shattered-pixel-dungeon-master` (SPD 4.0.0)입니다.
+다른 게임 저장소도 쓸 수 있습니다: Shattered Pixel Dungeon 2.5 ~ 4.0 과 그 패키지(`com.shatteredpixel.shatteredpixeldungeon`)를 그대로 쓰는 모드 (확인: 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2). 원작 Pixel Dungeon · 패키지를 바꾼 파생작(RKPD2 등) · 체력이 long 인 파생작(Experienced PD)은 지원하지 않으며, 프로젝트 설정 › 게임 런타임에 이유가 표시됩니다.
 
 1. **Node.js LTS** 설치 (한 번만) — `make-release.bat` 로 만든 배포 zip 에는 Electron 이 들어 있어 필요 없습니다.
 2. `start-editor.bat` 더블클릭 → 처음에는 `npm install` 로 Electron 을 받습니다 (1~2분).

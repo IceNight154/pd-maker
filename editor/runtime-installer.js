@@ -1,5 +1,7 @@
 // ================================================================
-//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드 21개 파일에 연결 줄 43개를 추가합니다.
+//  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드에 연결 줄을 추가합니다 (목록: 아래 PATCHES · DESIGN.md §17.2).
+//  · 지원하는 게임: Shattered Pixel Dungeon 계열 (패키지 com.shatteredpixel.shatteredpixeldungeon) — 확인한 판 SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2.
+//    compat() 가 설치 전에 저장소를 살펴서 지원하지 않는 게임(원작 Pixel Dungeon · 패키지를 바꾼 파생작 · 체력이 long 인 파생작 …)은 이유와 함께 알려 줌.
 //  · 추가한 줄에는 모두 "// >>> pdmaker" 표시가 붙어 있어서, 제거(uninstall)하면 깨끗이 되돌아갑니다.
 //  · 원본 줄은 고치거나 지우지 않습니다 (줄을 "추가"만 함).
 //  사용: node runtime-installer.js <게임저장소> [--uninstall]   또는 main.js 에서 require
@@ -280,9 +282,57 @@ function generate(repo, projectDir, log = console.log) {
   return Object.keys(files).length;
 }
 
+/** 게임 저장소 살펴보기 — { ok, game, version, pkg, problems[], warnings[], missing[] }. problems 가 있으면 설치하지 않음 */
+function compat(repo) {
+  const out = { ok: false, game: '', version: '', pkg: '', problems: [], warnings: [], missing: [] };
+  if (!repo || !fs.existsSync(repo)) { out.problems.push('폴더가 없습니다: ' + repo); return out; }
+  try {   // 이름 · 판: build.gradle 의 appName · appVersionName
+    const g = fs.readFileSync(path.join(repo, 'build.gradle'), 'utf8');
+    out.game = (/appName\s*=\s*['"]([^'"]*)['"]/.exec(g) || [])[1] || '';
+    out.version = (/appVersionName\s*=\s*['"]([^'"]*)['"]/.exec(g) || [])[1] || '';
+  } catch (_) { /* 없음 */ }
+  const jd = javaDir(repo);
+  if (!fs.existsSync(path.join(jd, 'Dungeon.java'))) {
+    // 다른 패키지의 Dungeon.java 를 찾아 어떤 게임인지 알려 줌
+    let found = null;
+    const walk = (d, depth) => { if (found || depth > 9) return; let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { return; }
+      for (const e of es) { if (found) return; if (e.isDirectory()) { if (!/^(\.git|build|\.gradle|node_modules|assets|res)$/.test(e.name)) walk(path.join(d, e.name), depth + 1); } else if (e.name === 'Dungeon.java') found = path.join(d, e.name); } };
+    walk(repo, 0);
+    if (found) {
+      const pk = (/^\s*package\s+([\w.]+)\s*;/m.exec(fs.readFileSync(found, 'utf8')) || [])[1] || '?';
+      out.pkg = pk;
+      out.problems.push(`이 게임의 패키지는 ${pk} 입니다. PDMaker 는 Shattered Pixel Dungeon 계열(패키지 com.shatteredpixel.shatteredpixeldungeon — SPD 와 그 패키지를 그대로 쓰는 모드)만 지원합니다.` +
+        (/^com\.watabou\.pixeldungeon/.test(pk) ? ' (원작 Pixel Dungeon 은 구조가 달라 지원하지 않습니다)' : ' (패키지 이름을 바꾼 파생작은 지원하지 않습니다)'));
+    } else out.problems.push('게임 저장소가 아닙니다 (Dungeon.java 를 찾지 못함): ' + repo);
+    return out;
+  }
+  out.pkg = 'com.shatteredpixel.shatteredpixeldungeon';
+  const read = rel => { try { return fs.readFileSync(path.join(jd, rel), 'utf8'); } catch (_) { return ''; } };
+  // 런타임이 기대하는 게임 구조 (없으면 컴파일이 안 됨)
+  const ch = read('actors/Char.java');
+  if (/public\s+long\s+HP\b/.test(ch)) out.problems.push('이 게임은 체력(HP)이 long 형입니다 (Experienced Pixel Dungeon 계열). PDMaker 런타임은 int 체력(원작 SPD)에 맞춰져 있어 컴파일되지 않습니다.');
+  if (!/BRANCH_EXIT/.test(read('levels/features/LevelTransition.java'))) out.problems.push('층 이동 · 갈림길(LevelTransition.BRANCH_EXIT)이 없는 예전 판입니다' + (out.version ? ' (' + out.version + ')' : '') + ' — SPD 2.5 이상이 필요합니다.');
+  if (!fs.existsSync(path.join(repo, 'SPD-classes'))) out.warnings.push('SPD-classes 모듈이 없습니다 — 빌드 구조가 원작과 다를 수 있습니다.');
+  // 연결 줄: 파일은 있는데 넣을 위치를 못 찾는 것 (그 기능만 동작하지 않음)
+  for (const p of PATCHES) {
+    const fp = patchFile(repo, p.file);
+    if (!fs.existsSync(fp)) { if (!p.optional) out.missing.push(`${p.file} (파일 없음) — ${p.name}`); continue; }
+    const src = fs.readFileSync(fp, 'utf8');
+    if (src.includes(p.line)) continue;
+    const clean = src.split('\n').filter(l => !l.includes(MARK)).join('\n');
+    if (![].concat(p.anchor).some(a => { a.lastIndex = 0; return a.test(clean); })) out.missing.push(`${p.file} — ${p.name}`);
+  }
+  if (out.missing.length) out.warnings.push(`연결 줄 ${out.missing.length}개의 위치를 찾지 못했습니다 — 그 기능만 동작하지 않습니다 (runtime/INTEGRATION.md 를 보고 직접 넣을 수 있음).`);
+  out.ok = !out.problems.length;
+  return out;
+}
+
 function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   const jd = javaDir(repo);
-  if (!fs.existsSync(path.join(jd, 'Dungeon.java'))) throw new Error('게임 저장소가 아닙니다 (Dungeon.java 없음): ' + repo);
+  const cp = compat(repo);
+  log(`게임 저장소: ${cp.game || '(이름 없음)'}${cp.version ? ' ' + cp.version : ''} — ${cp.pkg || '?'}`);
+  if (!cp.ok) throw new Error('이 게임 저장소에는 설치할 수 없습니다:\n· ' + cp.problems.join('\n· '));
+  cp.warnings.forEach(w => log('⚠ ' + w));
   // 1) 패키지 복사 (항상 최신으로 덮어씀)
   const from = path.join(runtimeSrc, 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
   const to = path.join(jd, 'pdmaker');
@@ -352,7 +402,7 @@ function applyGameId(repo, projectDir, log = console.log) {
   return { appName: name || cur.appName, appPackageName: want.appPackageName || cur.appPackageName };
 }
 
-module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId };
+module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat };
 
 if (require.main === module) {
   const [repo, flag] = process.argv.slice(2);

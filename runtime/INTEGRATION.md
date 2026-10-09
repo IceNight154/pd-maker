@@ -1,7 +1,14 @@
 # 게임 런타임 연결 방법
 
 `runtime/src/.../pdmaker/` 패키지를 게임 저장소(기준: `pd-maker/game/shattered-pixel-dungeon-master`, SPD 4.0.0)에 넣고,
-원본 코드 29개 파일에 **연결 줄 62개를 추가**하면 에디터에서 만든 프로젝트가 게임에 반영됩니다 (서비스 모듈 5개는 파일이 있을 때만).
+원본 코드 36개 파일에 **연결 줄 84개를 추가**하면 에디터에서 만든 프로젝트가 게임에 반영됩니다 (서비스 모듈은 파일이 있을 때만).
+
+**지원하는 게임 저장소**: Shattered Pixel Dungeon 계열 — 패키지 `com.shatteredpixel.shatteredpixeldungeon` 을 그대로 쓰는 SPD 와 그 모드. 확인한 판: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · 컴파일 · 테스트 플레이). 판마다 다른 부분은 런타임 `MakerCompat` 이 반사로 메움.
+설치 전에 `compat()` 이 저장소를 살펴서 지원하지 않는 것은 이유와 함께 알려 줍니다 (프로젝트 설정 › 게임 런타임에도 표시):
+- 원작 Pixel Dungeon(`com.watabou.pixeldungeon`) · 패키지 이름을 바꾼 파생작(예: RKPD2 `com.zrp200.rkpd2`) — 지원 안 함
+- 체력이 long 인 파생작(예: Experienced Pixel Dungeon) — 런타임이 int 체력에 맞춰져 있어 지원 안 함
+- SPD 2.5 이전(층 이동 · 갈림길 `LevelTransition.BRANCH_EXIT` 이 없음) — 지원 안 함
+- 연결 줄 위치를 못 찾는 모드는 설치는 되고 그 기능만 동작하지 않음 (예: SPD 2.5.4 는 시작 화면 저장 슬롯 초상화 1개)
 연결 줄 전체 목록은 [DESIGN.md §17.2](../DESIGN.md#172-원본-코드-연결점-editorruntime-installerjs-patches) — 이 문서의 아래 목록은 처음 판 기준이라 일부만 있습니다.
 
 ## 자동 설치 (권장)

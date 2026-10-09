@@ -61,7 +61,7 @@ public class MakerWand {
 					String he = c.getString("hitEffect", ""); if (!he.isEmpty()) MakerEffect.playAt(he, to);
 				} catch (Throwable t) { MakerRuntime.log("마법봉 맞은 효과 오류: " + t); }
 				w.onZap(shot);
-				w.wandUsed();
+				MakerCompat.call(w, "wandUsed");   // 예전 판(SPD 2.x)은 protected
 			}
 		};
 		String snd = c.getString("sound", "");

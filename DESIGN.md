@@ -862,6 +862,8 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 총 **84개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
+**지원 저장소 · 판 차이** (`runtime-installer.js` `compat()` · 런타임 `MakerCompat`): 설치 전에 패키지(`com.shatteredpixel.shatteredpixeldungeon`) · 체력 형(int) · `LevelTransition.BRANCH_EXIT`(SPD 2.5+) · 연결 줄 위치를 살핌 → 안 되는 것은 설치하지 않고 이유를 알림, 위치를 못 찾은 줄은 경고(그 기능만 꺼짐 · 런타임 상태의 "필요한 줄 수"에서 빼서 매번 다시 설치하지 않음). 판마다 다른 API(GreenFlame · MissileWeapon.setID/spawnedForEffect · BannerSprites 종류 · Music.paused · Wand.wandUsed 접근 · customTiles 목록 형 · Fireball 위치 · MagicMissile.LIGHT_MISSILE)는 `MakerCompat` 반사로. 확인: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · javac 컴파일 · 헤드리스 테스트 플레이).
+
 | 파일 | 연결점 |
 |---|---|
 | `Dungeon.java` | 새 게임 시작 시 스토리 초기화<br>영웅 편집기의 영웅 적용 (시작 아이템·주문서·능력치) · 시작 층<br>직접 그린 층 · 층 사이 맵으로 바꾸기<br>절차 생성 층에 오브젝트 넣기<br>저장<br>불러오기<br>플레이어 스폰 위치 (맵에 놓은 시작 위치 오브젝트)<br>저장 슬롯: 어떤 영웅인지 읽기 |

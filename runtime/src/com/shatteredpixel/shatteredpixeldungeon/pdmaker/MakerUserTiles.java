@@ -124,7 +124,7 @@ public class MakerUserTiles extends CustomTilemap {
 				for (int i = 0; i < a.size(); i++) { g.cells[i] = a.get(i)[0]; g.frames[i] = a.get(i)[1]; }
 				(g.over ? l.customWalls : l.customTiles).add(g);
 			}
-			for (FlowTiles ft : flows.values()) { ft.cells = new int[ft.cellList.size()]; for (int i = 0; i < ft.cells.length; i++) ft.cells[i] = ft.cellList.get(i); l.customTiles.add(0, ft); }   // 맨 아래 (다른 타일 · 효과 밑)
+			for (FlowTiles ft : flows.values()) { ft.cells = new int[ft.cellList.size()]; for (int i = 0; i < ft.cells.length; i++) ft.cells[i] = ft.cellList.get(i); MakerCompat.addFirst(l.customTiles, ft); }   // 맨 아래 (다른 타일 · 효과 밑 — 목록이 순서 없는 판에서는 그냥 넣음)
 		} catch (Throwable t) { MakerRuntime.log("사용자 타일 오류: " + t); }
 	}
 
@@ -249,7 +249,7 @@ public class MakerUserTiles extends CustomTilemap {
 			case "stream": return only(l, cell, com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER, com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel::addHallsVisuals);   // 전당 물 김
 			case "torch":  return new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel.Torch(cell);   // 감옥 횃불
 			case "smoke":  return new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel.Smoke(cell);     // 도시 연기
-			case "greenflame": return new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel.GreenFlame(cell);   // 도시 초록 불꽃
+			case "greenflame": { Object g = MakerCompat.make("com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel$GreenFlame", cell); return g instanceof com.watabou.noosa.Gizmo ? (com.watabou.noosa.Gizmo) g : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel.Smoke(cell); }   // GreenFlame 은 SPD 3.1 부터 — 없으면 연기   // 도시 초록 불꽃
 			case "alchemy": { CellEmitter e = new CellEmitter(cell); e.start(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.factory(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.BUBBLE), 0.33f, 0); return e; }   // 연금술 솥 거품
 			case "sacrificial": { CellEmitter e = new CellEmitter(cell); e.pour(com.shatteredpixel.shatteredpixeldungeon.effects.particles.SacrificialParticle.FACTORY, 0.04f); return e; }   // 희생의 불꽃
 			case "healing": { CellEmitter e = new CellEmitter(cell); e.start(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.factory(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.HEALING), 0.5f, 0); return e; }   // 치유의 샘

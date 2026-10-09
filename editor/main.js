@@ -644,7 +644,9 @@ function runtimeState(repo) {
   for (const f of [...new Set(installer.PATCHES.map(p => p.file))]) {
     const fp = installer.patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(installer.MARK).length - 1;
   }
-  const need = installer.PATCHES.filter(p => !p.optional || fs.existsSync(installer.patchFile(repo, p.file))).length;   // 선택 연결 줄은 그 파일이 있을 때만
+  // 선택 연결 줄은 그 파일이 있을 때만, 이 저장소에서 위치를 찾을 수 없는 줄(compat.missing)은 빼고 셈 — 안 그러면 테스트 플레이마다 다시 설치함
+  const cp = installer.compat(repo);
+  const need = installer.PATCHES.filter(p => !p.optional || fs.existsSync(installer.patchFile(repo, p.file))).length - cp.missing.length;
   if (hooks < need) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${need}` };
   return { pkg: true, upToDate: true };
 }
@@ -655,5 +657,6 @@ ipcMain.handle('runtime:status', wrap(repo => {
   for (const f of [...new Set(installer.PATCHES.map(p => p.file))]) {
     const fp = installer.patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(installer.MARK).length - 1;
   }
-  return { pkg, hooks, total: installer.PATCHES.length };
+  const cp = installer.compat(repo);
+  return { pkg, hooks, total: installer.PATCHES.length, compat: cp };
 }));
