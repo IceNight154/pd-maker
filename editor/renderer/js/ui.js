@@ -241,7 +241,7 @@ PDM.ui = (function () {
       if (v.startsWith('game:') && PDM.sounds.copyGameRef) { const r = await PDM.sounds.copyGameRef(v); if (r) set(r); return; }
       PDM.sounds.select(null);
     } }, '🎚');
-    return h('div', { class: 'sndpick' }, s, play, o.mini ? null : stop, browse, edit);
+    return h('div', { class: 'sndpick' }, s, play, stop, browse, edit);   // 멈춤은 작은 칸(목록)에도
   }
   /** 시스템별 소리: 비우면 기본 소리(sfxKey 의 기본값) · "(소리 없음)" 가능 */
   F.sysSound = (key, path, sfxKey, o = {}) => {

@@ -72,7 +72,9 @@ PDM.audio = (function () {
     let file = ref, e = null;
     if (ref.startsWith('sound:')) { e = entry(ref.slice(6)); if (!e) return null; file = e.file; }
     if (!file) return null;
-    const path = file.startsWith('game:') ? PDM.assets.resolvePath(file) : (file.startsWith('assets/') ? PDM.store.abs(file) : PDM.assets.resolvePath('game:' + file));
+    // game: → 게임 파일, 예전 형식 music/ · sounds/ → 게임 파일, 그 밖(assets/ · audio/ 등) → 프로젝트 파일 (런타임 MakerAudio.resolve 와 같은 순서)
+    const isGame = file.startsWith('game:') || /^(music|sounds)\//.test(file);
+    const path = isGame ? PDM.assets.resolvePath(file.startsWith('game:') ? file : 'game:' + file) : PDM.store.abs(file);
     return { path, file, entry: e, volume: e ? (e.volume ?? 1) : 1, pitch: e ? (e.pitch ?? 1) : 1, loop: e ? e.loop !== false : true };
   }
   function label(ref) {
@@ -82,9 +84,10 @@ PDM.audio = (function () {
     return ref.replace(/^game:/, '게임: ');
   }
   async function dataToBuffer(dataURL) {
-    const bin = atob(dataURL.split(',')[1]); const u = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    return ac().decodeAudioData(u.buffer);
+    let ab;
+    try { ab = await (await fetch(dataURL)).arrayBuffer(); }   // 큰 파일(수십 MB)도 빠르게 — 예전 atob 글자 반복은 2분짜리 WAV 에 수 초
+    catch (_) { const bin = atob(dataURL.split(',')[1]); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); ab = u.buffer; }
+    return ac().decodeAudioData(ab);
   }
   /** 파일 경로 → AudioBuffer (캐시) */
   function bufferOfPath(path) {
@@ -112,7 +115,8 @@ PDM.audio = (function () {
     const r = resolve(ref);
     if (!r || !r.path) { toast('소리를 찾지 못했습니다: ' + label(ref) + (ref && ref.startsWith('game:') ? ' (프로젝트 설정의 게임 저장소 경로 확인)' : ''), 'bad'); return null; }
     try {
-      const buf = await bufferOfPath(r.path);
+      const slow = setTimeout(() => toast('소리 불러오는 중… (긴 파일)'), 400);
+      const buf = await bufferOfPath(r.path).finally(() => clearTimeout(slow));
       return playBuffer(buf, { volume: r.volume * (o.volume ?? 1), pitch: r.pitch, loop: o.loop ?? false });
     } catch (e) { toast('재생 실패: ' + e.message, 'bad'); return null; }
   }
@@ -133,6 +137,42 @@ PDM.audio = (function () {
     let bin = ''; const u = new Uint8Array(b);
     for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
     return 'data:audio/wav;base64,' + btoa(bin);
+  }
+  /** WAV 머리 읽기 → { format(1 = PCM · 3 = float · 0xFFFE = 확장), channels, rate, bits } (WAV 가 아니면 null) */
+  function wavInfo(dataURL) {
+    const bin = atob(String(dataURL).split(',')[1] || '').slice(0, 4096); if (bin.slice(0, 4) !== 'RIFF' || bin.slice(8, 12) !== 'WAVE') return null;
+    const u16 = o => bin.charCodeAt(o) | (bin.charCodeAt(o + 1) << 8), u32 = o => (u16(o) | (u16(o + 2) << 16)) >>> 0;
+    for (let o = 12; o + 8 <= bin.length;) {
+      const id = bin.slice(o, o + 4), size = u32(o + 4);
+      if (id === 'fmt ') return { format: u16(o + 8), channels: u16(o + 10), rate: u32(o + 12), bits: u16(o + 22) };
+      o += 8 + size + (size & 1);
+    }
+    return null;
+  }
+  /** 게임(OpenAL)이 그대로 트는 채널 수: 모노 · 스테레오 · 4채널 · 5.1 · 6.1 · 7.1 (런타임 MakerWav.keepable 과 같음) */
+  const keepCh = n => [1, 2, 4, 6, 7, 8].includes(n);
+  /** 게임(libGDX)이 읽을 수 있는 WAV 인지: 보통 머리(형식 1)의 PCM 8 · 16비트 (24비트 · 32비트 float · 확장 머리는 "Error reading WAV file" 로 재생 안 됨) */
+  const wavOk = i => !i || (i.format === 1 && (i.bits === 8 || i.bits === 16) && keepCh(i.channels));
+  const wavDesc = i => i ? `${i.format === 3 ? '32비트 float' : i.format === 0xFFFE ? '확장 형식 ' + i.bits + '비트' : i.bits + '비트'} · ${i.channels}채널 · ${i.rate}Hz` : '';
+  /** WAV 파일을 게임이 읽는 16비트 PCM 으로 (그 자리에 덮어씀). → { changed, from } */
+  async function fixWav(absPath) {
+    if (!/\.wav$/i.test(absPath)) return { changed: false };
+    const d = await pdm.readDataURL(absPath), info = wavInfo(d);
+    if (wavOk(info)) return { changed: false, info };
+    // 원래 샘플레이트 그대로 풀기 (보통 AudioContext 는 장치 샘플레이트로 바꿔 버림)
+    let buf;
+    try { const bin = atob(d.split(',')[1]), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      buf = await new OfflineAudioContext(Math.max(1, info.channels), 1, info.rate).decodeAudioData(u.buffer); }
+    catch (_) { buf = await dataToBuffer(d); }
+    let ch = channelsOf(buf);
+    if (!keepCh(ch.length)) {   // OpenAL 이 못 트는 채널 수(3 · 5 …)만 스테레오로 — 5.1 · 7.1 등은 채널 그대로 16비트로
+      const n = ch.length, k = 1 / (1 + 0.707 * (n - 2) / 2 + 0.707), L = ch[0].slice(), R = ch[1].slice();
+      for (let c = 2; c < n; c++) for (let i = 0; i < L.length; i++) { const v = ch[c][i] * 0.707; if (c === 2) { L[i] += v; R[i] += v; } else if (c % 2 === 0) L[i] += v; else R[i] += v; }
+      ch = [L.map(v => v * k), R.map(v => v * k)];
+    }
+    await pdm.writeDataURL(absPath, encodeWav(ch, buf.sampleRate));
+    invalidate(absPath);
+    return { changed: true, from: wavDesc(info) };
   }
   function bufferFrom(channels, rate) {
     const b = ac().createBuffer(channels.length, channels[0].length, rate);
@@ -330,6 +370,6 @@ PDM.audio = (function () {
     return g;
   }
 
-  return { entry, resolve, label, bufferOfPath, dataToBuffer, invalidate, play, playBuffer, stop, position, encodeWav, bufferFrom, channelsOf, drawWave,
+  return { entry, resolve, label, bufferOfPath, dataToBuffer, invalidate, play, playBuffer, stop, position, encodeWav, bufferFrom, channelsOf, drawWave, wavInfo, wavOk, wavDesc, fixWav,
     RATE, LAYER_DEFAULT, SYNTH_DEFAULT, SYNTH_PRESETS, SYNTH_NAMES, makeSynth, synth, vary, ac, get playing() { return playing; } };
 })();

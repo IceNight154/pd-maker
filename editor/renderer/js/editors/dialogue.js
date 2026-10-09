@@ -29,7 +29,7 @@
   function cfg(over) {
     const d = PDM.defaults.dialogue(), c = over || store.get(K) || {};
     const out = { mode: c.mode || d.mode };
-    ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
+    ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'text', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
     return out;
   }
 
@@ -64,6 +64,23 @@
   /** 게임 글자처럼 검은 테두리 */
   const outline = k => { const o = Math.max(0.5, k * 0.33).toFixed(2); return `${o}px 0 #000,-${o}px 0 #000,0 ${o}px #000,0 -${o}px #000`; };
 
+  /** 글자 크기 배율 — 런타임 MakerDialogue.textScale 과 같은 계산 (W·H = 게임 화면 단위) */
+  function textScale(T, W, H) {
+    let k = 1;
+    if (T.autoScale !== false) { const land = W >= H, rw = land ? 300 : 150, rh = land ? 190 : 260; k = Math.max(1, Math.min(Math.max(1, +T.scaleMax || 2), Math.min(W / rw, H / rh))); }
+    return k * ((+T.scale || 0) > 0 ? +T.scale : 1);
+  }
+  /** PC 창 크기 → 그 창에서의 배율 (게임은 PC 에서 보통 3배 확대) */
+  const scaleAt = (T, w, h) => textScale(T, w / 3, h / 3);
+  /** 대사 글 꾸밈 (CSS) — 게임 글꼴의 검은 테두리 + 외곽선 + 그림자 */
+  function textDeco(T, k) {
+    const o = Math.max(0.5, k * 0.33), sh = [];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) sh.push(`${(dx * o).toFixed(2)}px ${(dy * o).toFixed(2)}px #000`);
+    if (T.outline) { const w = o + Math.max(1 / 3, +T.outlineWidth || 0.5) * k; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) sh.push(`${(dx * w).toFixed(2)}px ${(dy * w).toFixed(2)}px ${T.outlineColor || '#000'}`); }
+    if (T.shadow) sh.push(`${((+T.shadowX || 0) * k + o).toFixed(2)}px ${((+T.shadowY || 0) * k + o).toFixed(2)}px ${T.shadowColor || '#000'}`);
+    return sh.join(',');
+  }
+
   /** 글 → 글자별 span (_강조_ 는 노란색 — 게임과 같음) */
   function chars(text, color, hiColor) {
     const out = []; let hi = false;
@@ -89,7 +106,8 @@
     stage.append(el);   // 먼저 붙여야 이름표 너비를 잴 수 있음
     const px = v => (v * k) + 'px';
     const hasText = !!(l.text && l.text.length);
-    const margin = +B.margin || 0, pad = +B.padding || 0, fs = Math.max(5, Math.round(+B.fontSize || 8));
+    const T = c.text || {}, tk = textScale(T, W, H);   // 화면 크기에 맞춘 글자 배율 (미리보기 = 1080p 화면)
+    const margin = +B.margin || 0, pad = +B.padding || 0, fs = Math.max(5, Math.round((+B.fontSize || 8) * tk));
     let bh = Math.max(fs * 3 + pad * 2, H * (+B.height || 0.27));
     let bx = margin, bw = W - margin * 2, by = H - margin - bh;
     // 직접 그린 레이아웃 (layout.enabled — 좌표는 화면의 비율 0~1)
@@ -149,12 +167,12 @@
     if (hasText) {
       if (LR('text')) { const r = LR('text'); tx = r.x * W; tr = (r.x + r.w) * W; ty = r.y * H; }
       geo.text = { x: tx / W, y: ty / H, w: (tr - tx) / W, h: Math.max(fs + 4, (LR('text') ? LR('text').h * H : by + bh - pad - ty)) / H };
-      textEl = h('div', { class: 'dlg-text', style: { left: px(tx), top: px(ty), width: px(tr - tx), fontSize: px(fs), lineHeight: px(fs + 3), textShadow: outline(k) } }, chars(l.text, B.textColor, B.highlight));
+      textEl = h('div', { class: 'dlg-text', style: { left: px(tx), top: px(ty), width: px(tr - tx), fontSize: px(fs), lineHeight: px(fs + 3 + (+T.lineSpacing || 0)), textShadow: textDeco(T, k), fontWeight: T.bold ? '700' : '' } }, chars(l.text, B.textColor, B.highlight));
       if (B.align === 'center') textEl.style.textAlign = 'center';
       spans = [...textEl.querySelectorAll('span')];
       el.append(textEl);
       if (N.show && l.name) {
-        const nfs = Math.max(5, Math.round(+N.fontSize || 7));
+        const nfs = Math.max(5, Math.round((+N.fontSize || 7) * tk));
         const plate = h('div', { class: 'dlg-name', style: Object.assign({ fontSize: px(nfs), color: N.textColor, background: N.color, borderRadius: px(Math.max(2, Math.min(4, +B.radius || 0))), padding: `${px(2.5)} ${px(5)}`, textShadow: outline(k) },
           nameUrl ? Object.assign(sliceCss(nameUrl, +N.slice || 4), { padding: `${px(Math.max(0, 2.5 - (+N.slice || 4)))} ${px(Math.max(0, 5 - (+N.slice || 4)))}` }) : {}) }, l.name);
         let np = N.pos || 'auto'; if (np === 'auto') np = ill && side === 'right' ? 'left' : 'right';
@@ -185,7 +203,7 @@
       choiceEls.forEach((e, j) => { e.classList.toggle('on', j === sel); if (e.dataset.imgOn) e.style.borderImageSource = `url("${j === sel ? e.dataset.imgOn : e.dataset.img}")`; });
     };
     if (opts.choices && opts.choices.length) {
-      const cfs = +Ch.fontSize > 0 ? Math.round(+Ch.fontSize) : fs;
+      const cfs = +Ch.fontSize > 0 ? Math.max(5, Math.round(+Ch.fontSize * tk)) : fs;
       const ch = cfs + 8, gap = 2;
       const total = opts.choices.length * ch + (opts.choices.length - 1) * gap;
       const bottom = hasText ? by - (N.show && l.name ? 14 : 4) : H - margin;
@@ -348,6 +366,20 @@
             row(col('box', 'textColor', '글자색'), F.num(K, ['box', 'fontSize'], { label: '글자 크기', int: true, min: 5, max: 16, def: 8, rerender: true }),
               col('box', 'highlight', '_강조_ 글자색'), F.select(K, ['box', 'align'], ALIGNS, { label: '정렬', rerender: true })),
             h('p', { class: 'hint' }, '대사에서 _이렇게_ 밑줄로 감싼 부분은 강조색으로 나옵니다. 게임 글꼴은 글자마다 검은 테두리가 있어서, 밝은 상자에는 진한 글자색이 잘 보입니다.')),
+          section('글자 크기 · 스타일',
+            row(F.bool(K, ['text', 'autoScale'], { label: '화면 크기에 맞춰 글자 키우기', def: true, rerender: true, hint: '큰 창 · 고해상도 화면일수록 글자가 커집니다 (작은 화면 · 휴대폰 세로는 그대로)' }),
+              c.text.autoScale !== false ? F.num(K, ['text', 'scaleMax'], { label: '최대 배율', step: 0.1, min: 1, max: 4, def: 2, rerender: true }) : null,
+              F.num(K, ['text', 'scale'], { label: '글자 크기 배율 (전체)', step: 0.05, min: 0.5, max: 3, def: 1, rerender: true, hint: '대사 · 이름표 · 선택지 글자에 모두 곱함' })),
+            h('p', { class: 'hint' }, `지금 설정의 배율 — PC 창 1280×720: ×${scaleAt(c.text, 1280, 720).toFixed(2)} · 1920×1080: ×${scaleAt(c.text, 1920, 1080).toFixed(2)} · 2560×1440: ×${scaleAt(c.text, 2560, 1440).toFixed(2)} (대사 글자 ${Math.round((+c.box.fontSize || 8) * scaleAt(c.text, 1920, 1080))} — 1080p). 미리보기는 1080p 화면 비율.`),
+            row(F.num(K, ['text', 'lineSpacing'], { label: '줄 간격 더하기 (px)', step: 0.5, min: -2, max: 12, def: 0, rerender: true }), F.bool(K, ['text', 'bold'], { label: '굵게', rerender: true })),
+            row(F.bool(K, ['text', 'outline'], { label: '외곽선', rerender: true }),
+              c.text.outline ? col('text', 'outlineColor', '외곽선 색') : null,
+              c.text.outline ? F.num(K, ['text', 'outlineWidth'], { label: '외곽선 두께 (px)', step: 0.25, min: 0.25, max: 3, def: 0.5, rerender: true }) : null),
+            row(F.bool(K, ['text', 'shadow'], { label: '그림자', rerender: true }),
+              c.text.shadow ? col('text', 'shadowColor', '그림자 색') : null,
+              c.text.shadow ? F.num(K, ['text', 'shadowX'], { label: '그림자 가로 (px)', step: 0.25, min: -4, max: 4, def: 0.5, rerender: true }) : null,
+              c.text.shadow ? F.num(K, ['text', 'shadowY'], { label: '그림자 세로 (px)', step: 0.25, min: -4, max: 4, def: 0.5, rerender: true }) : null),
+            h('p', { class: 'hint' }, '외곽선 · 그림자는 게임 글꼴의 검은 테두리 바깥에 그려집니다. px 는 게임 화면 픽셀(PC 에서 실제 화면 약 3픽셀).')),
           section('이름표',
             row(F.bool(K, ['name', 'show'], { label: '이름 보이기', def: true, rerender: true }),
               F.select(K, ['name', 'pos'], NAME_POS, { label: '위치', rerender: true }),

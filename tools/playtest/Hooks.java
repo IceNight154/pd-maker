@@ -181,7 +181,35 @@ public class Hooks {
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
 				}
-				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
+				case "rawmusic": { // rawmusic,<프로젝트 파일> — PDMaker 변환 없이 libGDX 로 바로 틀어 봄 (libGDX 자체 동작 확인)
+					com.badlogic.gdx.audio.Music rm = com.badlogic.gdx.Gdx.audio.newMusic(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.root().child(p[1]));
+					rm.play(); System.out.println("[TEST] rawmusic " + p[1] + " playing=" + rm.isPlaying());
+					break;
+				}
+				case "dlgtest": { // dlgtest,<글 — | 는 줄바꿈> — 대사창을 바로 띄움 (글자 크기 · 스타일 확인)
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Line dl = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.line("", "", "", code.substring(8).replace("|", "\n"));
+					dl.name = "테스트";
+					com.watabou.noosa.Game.scene().addToFront(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd(dl, null, null));   // 게임 화면 밖(타이틀)에서도
+					break;
+				}
+				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
+					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
+					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
+					Object pl = fpl.get(com.watabou.noosa.audio.Music.INSTANCE);
+					System.out.println("[TEST] bgmtest " + (p.length > 1 ? p[1] : "") + " player=" + (pl == null ? "null" : pl.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(pl)) + " pos=" + ((com.badlogic.gdx.audio.Music) pl).getPosition()) + " playing=" + (pl != null && ((com.badlogic.gdx.audio.Music) pl).isPlaying()) + " enabled=" + com.watabou.noosa.audio.Music.INSTANCE.isEnabled() + " alFormat=" + (pl == null ? "-" : String.valueOf(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(pl, "format"))) + " current=" + ((java.util.function.Supplier<Object>) () -> { try { java.lang.reflect.Field fc = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.class.getDeclaredField("current"); fc.setAccessible(true); return fc.get(null); } catch (Exception e) { return e; } }).get());
+					break;
+				}
+				case "paneavatar": { // 상태 창 초상화의 실제 자리 — 가운데가 칸 가운데(bg.x+15, bg.y+16)와 같아야 함
+					java.lang.reflect.Field fp = com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.class.getDeclaredField("status"); fp.setAccessible(true);
+					Object pane = fp.get(com.watabou.noosa.Game.scene());
+					java.lang.reflect.Field fa = pane.getClass().getDeclaredField("avatar"); fa.setAccessible(true);
+					java.lang.reflect.Field fb = pane.getClass().getDeclaredField("bg"); fb.setAccessible(true);
+					com.watabou.noosa.Image a = (com.watabou.noosa.Image) fa.get(pane); com.watabou.noosa.Visual bg = (com.watabou.noosa.Visual) fb.get(pane);
+					System.out.println("[TEST] paneavatar shown=" + a.width() + "x" + a.height() + " center=" + (a.x + a.width() / 2f) + "," + (a.y + a.height() / 2f) + " slot=" + (bg.x + 15) + "," + (bg.y + 16));
+					break;
+				}
+				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height + " scale=" + a.scale.x + " shown=" + a.width() + "x" + a.height()); break; }
 				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
 				case "throwtest": { // throwtest — 다트에 "던지는 순간" 소리를 정하고: 던지기 버튼(execute) 때는 조용, 실제로 던질 때(cast) 남
 					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
@@ -524,6 +552,13 @@ public class Hooks {
 						sw.killAndErase(); }
 					break; }
 				case "swingcount": System.out.println("[TEST] swingcount " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned + " blocking=" + com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.interfaceBlockingHero() + " wnds=" + PlayTest.windows() + " curAction=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.curAction + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready + " para=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.paralysed); break;
+				case "itemsprite": { // itemsprite,<아이템 id> — 그 아이템의 ItemSprite 가 어떤 그림(텍스처) · 크기로 그려지는지 (세밀한 아이템 그림)
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]);
+					com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite sp = new com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite(it);
+					System.out.println("[TEST] itemsprite " + p[1] + " image=" + it.image() + " tex=" + sp.texture.width + "x" + sp.texture.height + " size=" + sp.width + "x" + sp.height + " uv=" + sp.frame().left + "," + sp.frame().top + "-" + sp.frame().right + "," + sp.frame().bottom);
+					sp.view(new com.shatteredpixel.shatteredpixeldungeon.items.food.Food());   // 같은 그림 객체를 다른(보통) 아이템으로 다시 쓰면 아이템 시트로 돌아오는지
+					System.out.println("[TEST] itemsprite reuse→food tex=" + sp.texture.width + "x" + sp.texture.height + " size=" + sp.width + "x" + sp.height);
+					break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

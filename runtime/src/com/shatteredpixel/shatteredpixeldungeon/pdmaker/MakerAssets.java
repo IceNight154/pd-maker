@@ -93,6 +93,31 @@ public class MakerAssets {
 	static final String ITEMS = Assets.Sprites.ITEMS;
 	public static final int CUSTOM_BASE = 20000;
 	static final Map<String, Integer> itemPng = new HashMap<>();
+	// 세밀한(고해상도) 아이템 그림: 아이템 시트에는 한 칸(16px)으로 줄여 붙이지만, 그릴 때는 원래 PNG 를 같은 크기로 (배율 적용으로 키운 그림)
+	static final Map<Integer, String> hiresItem = new HashMap<>();
+	static final Map<Integer, int[]> hiresSize = new HashMap<>();
+	static final java.util.Set<Object> hiresTex = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+	private static java.lang.reflect.Method updVerts;
+	/** ItemSprite.frame(image) 맨 앞 연결 줄 — 세밀한 그림이면 그 PNG 를 한 칸 크기로 그리고 true. 아니면 (예전에 바꿔 둔 그림이면 아이템 시트로 되돌리고) false */
+	public static boolean hiresItem(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite s, int image) {
+		try {
+			String png = hiresItem.get(image);
+			if (png == null) {
+				if (s.texture != null && hiresTex.contains(s.texture)) s.texture(ITEMS);
+				return false;
+			}
+			Object tx = MakerRuntime.texture(png);
+			if (tx == null) return false;
+			s.texture(tx);
+			hiresTex.add(s.texture);
+			s.frame(new com.watabou.utils.RectF(0, 0, 1, 1));
+			int[] sz = hiresSize.get(image);
+			s.width = sz[0]; s.height = sz[1];
+			if (updVerts == null) { updVerts = com.watabou.noosa.Image.class.getDeclaredMethod("updateVertices"); updVerts.setAccessible(true); }
+			updVerts.invoke(s);
+			return true;
+		} catch (Throwable t) { MakerRuntime.log("세밀한 아이템 그림 오류: " + t); return false; }
+	}
 	static SmartTexture itemsTex;
 	static List<String> itemRefs;
 
@@ -127,6 +152,7 @@ public class MakerAssets {
 		SmartTexture cur = all.get(ITEMS);
 		if (cur != null && cur == itemsTex) return;
 		List<String> refs = customItemRefs();
+		hiresItem.clear(); hiresSize.clear();
 		FileHandle baseFile = overrides.containsKey(ITEMS) ? overrides.get(ITEMS) : com.badlogic.gdx.Gdx.files.internal(ITEMS);
 		Pixmap base = new Pixmap(baseFile);
 		final int S = com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.SIZE;   // 원작 16 · mod-2 32
@@ -151,6 +177,7 @@ public class MakerAssets {
 			px.drawPixmap(src, 0, 0, w, h, x, y, dw, dh);
 			src.dispose();
 			rects[k] = new int[]{x, y, dw, dh};
+			if (w > S || h > S) { hiresItem.put(CUSTOM_BASE + k, refs.get(k)); hiresSize.put(CUSTOM_BASE + k, new int[]{dw, dh}); }   // 칸보다 세밀한 그림 → 그릴 때는 원래 PNG 로 (hiresItem)
 		}
 		SmartTexture tx = new SmartTexture(px);
 		if (cur != null) { all.remove(ITEMS); cur.delete(); }
@@ -326,10 +353,11 @@ public class MakerAssets {
 		@SuppressWarnings("unchecked")
 		void apply() throws Exception {
 			JsonValue d = MakerRuntime.title;
-			if (d == null || !d.getBoolean("enabled", true)) return;
+			if (d == null) return;
 			JsonValue menus = d.get("menus") == null ? new JsonValue(JsonValue.ValueType.object) : d.get("menus");
-			// 음악: 타이틀과 같은 곡 (게임은 랭킹·일지 등에서 theme 곡으로 바꿈)
-			if (menus.getBoolean("music", true)) titleMusic(d);
+			// 음악: 타이틀과 같은 곡 (게임은 랭킹·일지 등에서 theme 곡으로 바꿈) — 원래 타이틀을 쓸 때도 정한 곡이 있으면
+			if (menus.getBoolean("music", true)) titleMusic(d, true);
+			if (!d.getBoolean("enabled", true)) return;
 			// 배경
 			if (!menus.getBoolean("background", true)) return;
 			if (!customBackground(d)) return;       // 게임 배경 그대로면 손댈 것 없음
@@ -346,11 +374,28 @@ public class MakerAssets {
 		}
 	}
 
-	/** 타이틀 화면에서 트는 곡과 같은 곡 */
-	static void titleMusic(JsonValue d) {
+	/** 메뉴 화면(타이틀 · 랭킹 · 일지 …)이 게임 곡을 틀기 직전 (연결 줄): 타이틀 음악으로 정한 프로젝트 곡이 이미 흐르고 있으면 true → 게임 곡을 틀지 않음
+	 *  (예전에는 게임이 theme 곡으로 바꿨다가 PDMaker 가 프로젝트 곡을 처음부터 다시 틀어서, 메뉴를 오갈 때마다 끊기고 처음으로 돌아감) */
+	public static boolean keepMenuMusic(Object scene) {
+		try {
+			JsonValue d = MakerRuntime.isActive() ? MakerRuntime.title : null;
+			if (d == null) return false;
+			boolean title = scene instanceof com.shatteredpixel.shatteredpixeldungeon.scenes.TitleScene;
+			if (!title) { JsonValue menus = d.get("menus"); if (menus != null && !menus.getBoolean("music", true)) return false; }
+			JsonValue m = d.get("music");
+			List<String> l = new ArrayList<>();
+			if (m != null && m.get("tracks") != null) for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
+			if (l.size() == 1 && l.get(0).equals("none")) return true;   // 무음 — 게임 곡도 틀지 않음
+			return MakerAudio.holds(l);
+		} catch (Throwable t) { return false; }
+	}
+
+	/** 타이틀 화면에서 트는 곡과 같은 곡. menu = 메뉴 화면에서 (곡을 정하지 않았으면 게임 타이틀 곡으로 되돌림 — 원래 타이틀을 쓰면 손대지 않음) */
+	static void titleMusic(JsonValue d, boolean menu) {
 		JsonValue m = d.get("music");
 		List<String> l = new ArrayList<>();
 		if (m != null && m.get("tracks") != null) for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
+		if (l.isEmpty() && (!menu || !d.getBoolean("enabled", true))) return;   // 타이틀: 게임이 튼 곡 그대로
 		if (!l.isEmpty()) {
 			if (l.size() == 1 && l.get(0).equals("none")) { Music.INSTANCE.end(); return; }
 			MakerAudio.playList(l);

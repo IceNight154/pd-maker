@@ -10,6 +10,7 @@
  *     name      + image slice (이름표 그림 9조각)
  *     indicator show color image(▼ 대신 그림) anim(bob·blink·none)
  *     choice    pos(middle=화면 가운데·right·center·left) width(화면 비율) fontSize textColor textOnColor image imageOn slice
+ *     text      autoScale(화면 크기에 맞춰 글자 키움) scaleMax scale(배율) lineSpacing(줄 간격 px) shadow shadowColor shadowX shadowY outline outlineColor outlineWidth bold
  *     소리: 사운드 편집기 → 게임 효과음 (dialogue.open · dialogue.type · dialogue.next · choice.move · choice.select)
  *   캐릭터별 (characters/<id>.json portrait): default · expressions[{key,image}] · scale · offsetX · offsetY(화면 높이 %) · side · flip
  *   EventInterpreter 의 text / topic / choice 명령이 씀. 이 창이 닫히면 이벤트가 이어서 실행됩니다.
@@ -55,7 +56,8 @@ public class MakerDialogue {
 			+ "indicator:{show:true,color:\"#8a82a8\",image:\"\",anim:bob},"
 			+ "layout:{enabled:false},"
 			+ "sounds:{open:\"\",type:\"\",next:\"\",move:\"\",select:\"\"},"
-			+ "choice:{pos:middle,width:0.42,fontSize:0,textColor:\"\",textOnColor:\"\",image:\"\",imageOn:\"\",slice:4}}";
+			+ "choice:{pos:middle,width:0.42,fontSize:0,textColor:\"\",textOnColor:\"\",image:\"\",imageOn:\"\",slice:4},"
+			+ "text:{autoScale:true,scaleMax:2,scale:1,lineSpacing:0,shadow:false,shadowColor:\"#000000\",shadowX:0.5,shadowY:0.5,outline:false,outlineColor:\"#000000\",outlineWidth:0.5,bold:false}}";
 	private static JsonValue defaults;
 
 	static JsonValue cfg(String group) {
@@ -265,16 +267,34 @@ public class MakerDialogue {
 		return new Image(st);
 	}
 
+	/** 글자 크기 배율: 화면(uiCamera)이 기준보다 크면 키움 (text.autoScale · scaleMax) × text.scale.
+	 *  게임은 PC 에서 보통 3배 확대라 큰 창일수록 화면 단위가 넓어져 글자가 상대적으로 작아 보였음.
+	 *  기준: 가로 화면 300×190 · 세로 화면 150×260 (화면 단위) — 그보다 작으면 ×1 (휴대폰 세로 등) */
+	static float textScale(int W, int H) {
+		float k = 1f;
+		if (b("text", "autoScale")) {
+			boolean land = W >= H;
+			float rw = land ? 300f : 150f, rh = land ? 190f : 260f;
+			k = Math.max(1f, Math.min(Math.max(1f, f("text", "scaleMax")), Math.min(W / rw, H / rh)));
+		}
+		float m = f("text", "scale");
+		return k * (m > 0 ? m : 1f);
+	}
+	/** 글자 꾸밈 거리(게임 화면 px) → 실제 화면 한 픽셀 단위로 맞춤 (최소 한 픽셀) */
+	static float px(float v) { float z = PixelScene.defaultZoom; return v == 0 ? 0 : Math.signum(v) * Math.max(1f, Math.round(Math.abs(v) * z)) / z; }
+
 	// ------------------------------------------------------------ 한 글자씩 나오는 글
 
 	static class TypeText extends RenderedTextBlock {
 		int total = 0;
+		float lineExtra = 0;   // 줄 간격 더하기 (text.lineSpacing)
 		TypeText(int size) { super(size); }
-		void set(String text, int maxW, int color, boolean perChar) {
+		void set(String text, int maxW, int color, boolean perChar) { set(text, maxW, color, col("box", "highlight"), perChar); }
+		void set(String text, int maxW, int color, int hiColor, boolean perChar) {
 			multiline = true;
 			maxWidth(maxW);
 			hardlight(color);
-			setHightlighting(true, col("box", "highlight"));
+			setHightlighting(true, hiColor);
 			if ("center".equals(s("box", "align"))) align(CENTER_ALIGN);
 			if (!perChar) { text(text); total = 0; for (RenderedText w : wordsOf()) total++; return; }
 			List<String> tk = new ArrayList<>();
@@ -297,6 +317,22 @@ public class MakerDialogue {
 		void reveal(int n) {
 			int k = 0;
 			for (RenderedText w : wordsOf()) w.visible = k++ < n;
+		}
+		/** 글자 전체(채움 + 게임 글꼴의 검은 테두리)를 한 색으로 — 그림자 · 외곽선 사본 (hardlight 는 곱하기라 검은 테두리가 그대로 남음) */
+		void silhouette(int color) {
+			float r = ((color >> 16) & 0xFF) / 255f, g = ((color >> 8) & 0xFF) / 255f, b = (color & 0xFF) / 255f;
+			for (RenderedText w : words) { if (w == null) continue; w.rm = w.gm = w.bm = 0; w.ra = r; w.ga = g; w.ba = b; }
+		}
+		/** 게임 줄 배치 뒤에 줄마다 lineExtra 씩 아래로 */
+		@Override protected synchronized void layout() {
+			super.layout();
+			if (lineExtra == 0 || words == null) return;
+			java.util.TreeSet<Integer> ys = new java.util.TreeSet<>();
+			for (RenderedText w : words) if (w.parent == this) ys.add(Math.round(w.y * 100));
+			if (ys.size() < 2) return;
+			java.util.List<Integer> order = new ArrayList<>(ys);
+			for (RenderedText w : words) if (w.parent == this) w.y += order.indexOf(Math.round(w.y * 100)) * lineExtra;
+			height += (order.size() - 1) * lineExtra;
 		}
 	}
 
@@ -371,7 +407,15 @@ public class MakerDialogue {
 		final int W, H;
 		NinePatch box;
 		TypeText text;
+		final List<TypeText> deco = new ArrayList<>();   // 그림자 · 외곽선 · 굵게 사본
 		Image arrow;
+		TypeText newText(int fs, float lineExtra) {
+			TypeText t = new TypeText(fs * PixelScene.defaultZoom);
+			t.zoom(1 / (float) PixelScene.defaultZoom);
+			t.lineExtra = lineExtra;
+			return t;
+		}
+		void revealAll(int n) { if (text != null) text.reveal(n); for (TypeText c : deco) c.reveal(n); }
 		float shown = 0, speed, arrowT = 0, arrowY;
 		boolean typing;
 		int soundEvery = 3, lastSound = 0;
@@ -395,7 +439,8 @@ public class MakerDialogue {
 
 			boolean hasText = !l.text.isEmpty();
 			float margin = f("box", "margin"), pad = f("box", "padding");
-			int fs = Math.max(5, Math.round(f("box", "fontSize")));
+			final float tk = textScale(W, H);   // 화면 크기에 맞춘 글자 배율
+			int fs = Math.max(5, Math.round(f("box", "fontSize") * tk));
 			float bh = Math.max(fs * 3 + pad * 2, H * f("box", "height"));
 			float bx = margin, bw = W - margin * 2, by = H - margin - bh;
 			JsonValue Lb = lay("box");
@@ -444,19 +489,38 @@ public class MakerDialogue {
 				sound = l.voice;                                        // 캐릭터 목소리 → 글자 소리 → 대사창 소리 → 게임 효과음
 				if (sound == null || sound.isEmpty()) sound = s("typing", "sound");
 				if (sound.isEmpty()) sound = sndRef("type");
-				text = new TypeText(fs * PixelScene.defaultZoom);
-				text.zoom(1 / (float) PixelScene.defaultZoom);
-				text.set(l.text, (int) (tr - tx), col("box", "textColor"), speed > 0);
+				// 꾸밈(그림자 · 외곽선 · 굵게) = 같은 글을 조금씩 옮겨 겹쳐 그림 (글자가 나오는 것도 함께)
+				float ow = px(f("text", "outlineWidth")), sx = px(f("text", "shadowX")), sy = px(f("text", "shadowY")), bd = px(0.34f);
+				List<float[]> offs = new ArrayList<>(); List<Integer> ocs = new ArrayList<>();   // 옮길 거리 {dx, dy} · 색 (null = 본문 색)
+				if (b("text", "shadow")) { offs.add(new float[]{sx, sy}); ocs.add(col("text", "shadowColor")); }
+				if (b("text", "outline")) { int oc = col("text", "outlineColor"); for (float[] d : new float[][]{{-ow, 0}, {ow, 0}, {0, -ow}, {0, ow}, {-ow, -ow}, {ow, -ow}, {-ow, ow}, {ow, ow}}) { offs.add(d); ocs.add(oc); } }
+				if (b("text", "bold")) { offs.add(new float[]{bd, 0}); ocs.add(null); }
+				int maxW = (int) (tr - tx - (b("text", "bold") ? bd : 0));
+				float lineExtra = f("text", "lineSpacing");
+				text = newText(fs, lineExtra);
+				text.set(l.text, maxW, col("box", "textColor"), speed > 0);
 				boolean centerText = "center".equals(s("box", "align"));
-				text.setPos(centerText ? tx + Math.max(0, (tr - tx) - text.width()) / 2f : tx, textY);
+				float textX = centerText ? tx + Math.max(0, (tr - tx) - text.width()) / 2f : tx;
+				for (int oi = 0; oi < offs.size(); oi++) {
+					float[] o = offs.get(oi); Integer occ = ocs.get(oi);
+					TypeText c = newText(fs, lineExtra);
+					int oc = occ == null ? col("box", "textColor") : occ;
+					c.set(l.text, maxW, oc, occ == null ? col("box", "highlight") : oc, speed > 0);
+					if (occ != null) c.silhouette(occ);
+					c.setPos(textX + o[0], textY + o[1]);
+					PixelScene.align(c);
+					add(c);
+					deco.add(c);
+				}
+				text.setPos(textX, textY);
 				PixelScene.align(text);
 				add(text);
 				typing = speed > 0;
-				if (typing) text.reveal(0);
+				if (typing) revealAll(0);
 
 				// 이름표
 				if (b("name", "show") && !l.name.isEmpty()) {
-					int nfs = Math.max(5, Math.round(f("name", "fontSize")));
+					int nfs = Math.max(5, Math.round(f("name", "fontSize") * tk));
 					RenderedTextBlock nt = PixelScene.renderTextBlock(l.name, nfs);
 					nt.hardlight(col("name", "textColor"));
 					NinePatch plate = namePatch();
@@ -491,7 +555,7 @@ public class MakerDialogue {
 			// 선택지 (대사가 다 나오면 보임 · 대사 없이 선택지만 있으면 바로)
 			if (l.choices != null && l.choices.length > 0) {
 				float cw = 0;
-				int cfs = f("choice", "fontSize") > 0 ? Math.round(f("choice", "fontSize")) : fs;
+				int cfs = f("choice", "fontSize") > 0 ? Math.max(5, Math.round(f("choice", "fontSize") * tk)) : fs;
 				String cp = s("choice", "pos");
 				List<RenderedTextBlock> labels = new ArrayList<>();
 				for (String c : l.choices) { RenderedTextBlock t = PixelScene.renderTextBlock(c, cfs); labels.add(t); cw = Math.max(cw, t.width()); }
@@ -552,7 +616,7 @@ public class MakerDialogue {
 		}
 		void finishTyping() {
 			typing = false;
-			if (text != null) text.reveal(Integer.MAX_VALUE);
+			if (text != null) revealAll(Integer.MAX_VALUE);
 			if (!choices.isEmpty()) openChoices();
 			else if (arrow != null) arrow.visible = true;
 		}
@@ -562,7 +626,7 @@ public class MakerDialogue {
 			if (typing && text != null) {
 				shown += speed * Game.elapsed;
 				int n = (int) shown;
-				text.reveal(n);
+				revealAll(n);
 				if (sound != null && !sound.isEmpty() && n >= lastSound + soundEvery) { lastSound = n; MakerAudio.playSe(sound); }
 				if (n >= text.total) finishTyping();
 			}

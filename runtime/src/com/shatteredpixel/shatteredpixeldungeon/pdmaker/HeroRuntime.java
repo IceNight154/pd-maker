@@ -113,6 +113,18 @@ public class HeroRuntime {
 		if (idle != null && idle.get("frames") != null && idle.get("frames").size > 0) f = Math.max(0, idle.get("frames").getInt(0));
 		int cell = sp.getBoolean("armorRows", true) ? rowFor(sp, tier, rows) * cols + Math.min(f, cols - 1) : f;
 		img.frame((cell % cols) * fw, (cell / cols) * fh, fw, fh);
+		// 큰 프레임(예: 24×30) 시트: 게임 그림과 같은 배율로 줄여 원작 초상화 칸(12×15)에 맞춤.
+		// scale 이 아니라 그림 크기(width · height) 자체를 줄임 — 게임 코드(상태 창 등)가 width · height 로 자리를 잡으므로 (scale 로 줄이면 왼쪽 위로 치우침)
+		float k = sp.getFloat("scale", 0f);
+		if (k <= 0f) k = fh > 24 ? 15f / fh : 1f;
+		k = Math.min(k, Math.min(20f / fh, 20f / fw));   // 그래도 칸 밖으로 나가지 않게 (20px 안)
+		if (k != 1f) {
+			img.width = fw * k; img.height = fh * k;
+			try {
+				java.lang.reflect.Method m = com.watabou.noosa.Image.class.getDeclaredMethod("updateVertices");
+				m.setAccessible(true); m.invoke(img);
+			} catch (Exception e) { img.scale.set(k); }   // 못 하면 예전처럼 배율로
+		}
 		return img;
 	}
 	/** 저장 슬롯 → 영웅 id · 전직 id (Dungeon.preview 에서 저장 파일을 읽을 때) */
