@@ -63,7 +63,7 @@
   /** 시트 크기와 프레임 크기 · 애니메이션 프레임 번호가 맞는지 → { fits, cols, rows, bad: {애니: [번호]}, cands: [[w,h]] } */
   PDM.sheetFit = function (sp, img, armorRows) {
     const fw = +(sp.frame || [])[0] || 1, fh = +(sp.frame || [])[1] || 1, W = img.width, H = img.height;
-    const fits = W % fw === 0 && H % fh === 0 && fw <= W && fh <= H;
+    const fits = fw <= W && fh <= H;   // 나누어떨어지지 않아도 됨 — 게임 시트는 2의 거듭제곱 크기로 여백을 둠 (예: 원작 warrior.png 256×128 · 12×15)
     const cols = Math.max(1, Math.floor(W / fw)), rows = Math.max(1, Math.floor(H / fh));
     const max = armorRows ? cols : cols * rows, bad = {};   // 영웅(갑옷 단계 행): 번호는 한 줄 안 — 게임은 줄 끝 프레임으로 바꿔 씀
     for (const [k, a] of Object.entries(sp.anims || {})) { const b = [...new Set((a.frames || []).filter(n => n < 0 || n >= max))]; if (b.length) bad[k] = b; }
@@ -94,8 +94,8 @@
       });
       box.append(h('div', { class: 'callout warn', style: { margin: '4px 0 8px', padding: '8px 10px', border: '1px solid var(--warn, #c9a227)', borderRadius: '6px' } },
         h('b', {}, '⚠ 시트와 설정이 맞지 않습니다'), ' ',
-        h('span', { class: 'hint' }, `시트 ${img.width}×${img.height}px · 프레임 ${fw}×${fh}px` + (r.fits ? ` → ${r.cols}열 × ${r.rows}행` : ' — 시트 크기가 프레임 크기로 나누어떨어지지 않음')),
-        !r.fits || r.cands.length ? h('div', { class: 'hstack wrap', style: { marginTop: '6px', gap: '4px' } }, h('span', { class: 'hint' }, '프레임 크기:'),
+        h('span', { class: 'hint' }, `시트 ${img.width}×${img.height}px · 프레임 ${fw}×${fh}px` + (r.fits ? ` → ${r.cols}열 × ${r.rows}행` : ' — 프레임이 시트보다 큼')),
+        !r.fits && r.cands.length ? h('div', { class: 'hstack wrap', style: { marginTop: '6px', gap: '4px' } }, h('span', { class: 'hint' }, '프레임 크기:'),
           ...r.cands.map(([w, hh]) => h('button', { class: 'btn xs', onclick: () => setFrame(w, hh) }, `${w}×${hh} (${img.width / w}열 × ${img.height / hh}행)`))) : null,
         badN ? h('div', { style: { marginTop: '6px' } },
           h('div', { class: 'hint' }, '시트에 없는 프레임 번호 (다른 시트에서 가져온 설정 — 게임에서는 ' + (armorRows ? '줄 끝 프레임' : '첫 프레임 근처') + '으로 바뀌어 보임): ' + Object.entries(r.bad).map(([k, b]) => `${k} ${b.join(',')}`).join(' · ')),

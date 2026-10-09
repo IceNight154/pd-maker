@@ -181,7 +181,7 @@ public class Hooks {
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
 				}
-				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height); break; }
+				case "avatar": { com.watabou.noosa.Image a = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); System.out.println("[TEST] avatar tex=" + a.texture.width + "x" + a.texture.height + " w=" + a.width + " h=" + a.height + " scale=" + a.scale.x + " shown=" + a.width() + "x" + a.height()); break; }
 				case "catalog": { for (com.shatteredpixel.shatteredpixeldungeon.journal.Catalog c : com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.values()) for (Class<?> k : c.items()) if (k.getName().contains(".pdmaker.gen.")) System.out.println("[TEST] catalog " + c + " " + k.getSimpleName() + " seen=" + com.shatteredpixel.shatteredpixeldungeon.journal.Catalog.isSeen(k)); break; }
 				case "throwtest": { // throwtest — 다트에 "던지는 순간" 소리를 정하고: 던지기 버튼(execute) 때는 조용, 실제로 던질 때(cast) 남
 					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;

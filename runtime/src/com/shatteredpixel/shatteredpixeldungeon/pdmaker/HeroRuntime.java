@@ -113,6 +113,11 @@ public class HeroRuntime {
 		if (idle != null && idle.get("frames") != null && idle.get("frames").size > 0) f = Math.max(0, idle.get("frames").getInt(0));
 		int cell = sp.getBoolean("armorRows", true) ? rowFor(sp, tier, rows) * cols + Math.min(f, cols - 1) : f;
 		img.frame((cell % cols) * fw, (cell / cols) * fh, fw, fh);
+		// 큰 프레임(예: 24×30) 시트: 게임 그림과 같은 배율로 줄여 원작 초상화 칸(12×15)에 맞춤 — 저장 슬롯 · 상태 창 · 영웅 창은 copy() 로 배율까지 가져감
+		float k = sp.getFloat("scale", 0f);
+		if (k <= 0f) k = fh > 24 ? 15f / fh : 1f;
+		k = Math.min(k, Math.min(20f / fh, 20f / fw));   // 그래도 칸 밖으로 나가지 않게 (20px 안)
+		if (k != 1f) img.scale.set(k);
 		return img;
 	}
 	/** 저장 슬롯 → 영웅 id · 전직 id (Dungeon.preview 에서 저장 파일을 읽을 때) */
