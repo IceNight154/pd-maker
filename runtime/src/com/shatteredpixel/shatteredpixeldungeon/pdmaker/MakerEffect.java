@@ -344,6 +344,7 @@ public class MakerEffect {
 			@Override public void destroy() { if (sys != null) sys.host.killAndErase(); super.destroy(); }
 		}
 		@Override public Tilemap create() { vis = new Vis(); vis.x = tileX * 16; vis.y = tileY * 16; return vis; }
+		@Override public com.watabou.noosa.Image image(int tx, int ty) { return null; }   // 살펴보기 창에 끼어들지 않음 (그림 데이터가 없어서 예전엔 오류)
 		@Override public void storeInBundle(Bundle b) { super.storeInBundle(b); b.put("pdm_fx", fxId); }
 		@Override public void restoreFromBundle(Bundle b) { super.restoreFromBundle(b); fxId = b.getString("pdm_fx"); }
 	}

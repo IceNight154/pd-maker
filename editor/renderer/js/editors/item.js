@@ -159,11 +159,22 @@
       subSel.disabled = !Object.keys(ss).length;
       if (keep !== undefined && ss[keep] !== undefined) subSel.value = keep;
     };
-    fillSubs(sub); catSel.addEventListener('change', () => fillSubs());
+    fillSubs(sub);
+    // 게임 동작이 있는 분류(마법봉 · 반지 · 아티팩트 · 장신구 · 가방)는 게임 아이템을 바탕으로 — 충전 · 쏘기 · 장착 등 그 분류의 성질을 그대로
+    const baseSel = h('select', {}), baseRow = h('label', { style: { display: 'none', marginTop: '10px' } }, h('div', { class: 'fl' }, '바탕 게임 아이템 (이 분류의 성질 — 효과는 코드 · 수치로 고침)'), baseSel);
+    const fillBase = () => {
+      const l = gameBases(catSel.value, subSel.disabled ? '' : subSel.value), bagNew = catSel.value === 'bag' && l.length;
+      baseRow.style.display = l.length ? '' : 'none';
+      baseSel.replaceChildren(...(bagNew ? [h('option', { value: '__newbag' }, '완전히 새 가방 (칸 수 · 넣을 수 있는 것을 직접)')] : []), ...l.map(g => h('option', { value: g.p }, `${g.n} (${g.p}) 상속`)));
+      if (l.length) baseSel.value = bagNew ? '__newbag' : (l.find(g => DEFAULT_BASE[catSel.value] === g.p) || l[0]).p;
+    };
+    fillBase(); catSel.addEventListener('change', () => { fillSubs(); fillBase(); }); subSel.addEventListener('change', fillBase);
+    const noSell = h('input', { type: 'checkbox' }), noDrop = h('input', { type: 'checkbox' });
+    const flagRow = h('div', { style: { display: 'flex', gap: '14px', marginTop: '10px' } }, h('label', { class: 'check' }, noSell, h('span', {}, '판매 불가')), h('label', { class: 'check' }, noDrop, h('span', {}, '버리기 금지')));
     const id = await PDM.ui.modal('새 아이템', h('div', {}, h('div', { class: 'fl' }, 'id (영문)'), inp, out,
       h('small', { class: 'hint' }, '대문자는 소문자로, 영문·숫자 말고는 밑줄(_)로 바뀝니다 — 예: TestWeapon → testweapon. 이름도 처음엔 이 id 와 같게 만들고, 만든 뒤 "이름" 칸에서 바꿀 수 있습니다.'),
       h('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } },
-        h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel))),
+        h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), baseRow, flagRow),
       [['취소', null], ['만들기', () => inp.value, 'pri']]);
     if (!id || !String(id).trim()) return;
     cat = catSel.value; sub = subSel.disabled ? undefined : subSel.value;
@@ -172,10 +183,38 @@
     const it = PDM.make.item(clean); it.name = clean; it.category = cat || 'misc';
     if (sub !== undefined) it.subtype = sub;
     if (cat === 'weapon' && (sub === 'melee' || sub === 'missile' || sub === 'dart')) { it.kind = sub === 'melee' ? 'melee' : 'missile'; it.weapon = PDM.make.weaponStats(it.kind, 1); it.stackable = it.kind === 'missile'; }
+    if (cat === 'weapon' && sub === 'ranged') { it.kind = 'ranged'; it.weapon = PDM.make.weaponStats('melee', 1); it.ranged = PDM.make.rangedStats(); it.stackable = false; }
     if (cat === 'armor') { it.kind = 'armor'; it.armor = PDM.make.armorStats(1); it.stackable = false; }
     if (cat === 'codex') { it.kind = 'codex'; it.codex = PDM.make.codexStats(sub || 'melee', 1); it.stackable = true; }
     if (cat === 'bag' && sub === 'grimoire') { it.kind = 'grimoire'; it.bag = { capacity: 19, holds: 'codex' }; it.stackable = false; }
+    if (noSell.checked) it.noSell = true; if (noDrop.checked) it.noDrop = true;
+    // 완전히 새 물약 · 폭탄 · 룬석 · 주문서 · 마법(연금): 그 분류답게 동작하는 기본 효과 (추가 기능 — 고쳐 쓰기)
+    if ((it.kind || 'misc') === 'misc') {
+      if (cat === 'potion') { it.useFx = Object.assign(PDM.make.useFx(), { effects: [{ type: 'heal', on: 'self', amount: 15 }] }); it.throwFx = Object.assign(PDM.make.throwFx(), { effects: [] }); }
+      if (cat === 'bomb') it.throwFx = Object.assign(PDM.make.throwFx(), { fuse: 2, effects: [{ type: 'damage', on: 'everyone', radius: 1, min: 8, max: 16 }] });
+      if (cat === 'stone') it.throwFx = Object.assign(PDM.make.throwFx(), { effects: [{ type: 'buff', on: 'area', radius: 1, buff: 'Paralysis', turns: 3 }] });
+      if (cat === 'scroll' || cat === 'spell') it.useFx = Object.assign(PDM.make.useFx(), { effects: [{ type: 'buff', on: 'self', buff: 'Haste', turns: 10 }] });
+    }
+    if (baseRow.style.display !== 'none' && baseSel.value === '__newbag') { it.kind = 'bag'; it.bag = PDM.make.bagStats(); it.stackable = false; it.sprite = { sheet: 'builtin:items', name: 'POUCH' }; }
+    const gb = baseRow.style.display !== 'none' && findGame(baseSel.value)[1];
+    if (gb) await asGameBased(it, gb);
     store.add('item:' + clean, it, '아이템 추가'); PDM.tabs.open('item:' + clean);
+  }
+
+  /** 게임 동작이 있는 분류 → 바탕으로 고를 게임 아이템 목록 (가방은 그리모어 말고) */
+  const GAME_BASED = ['wand', 'ring', 'artifact', 'trinket', 'bag'];
+  const DEFAULT_BASE = { wand: 'wands.WandOfMagicMissile' };
+  function gameBases(cat, sub) {
+    if (!GAME_BASED.includes(cat) || (cat === 'bag' && sub === 'grimoire')) return [];
+    return ((PDM.SPD_ITEM_GROUPS || {})[cat] || []).filter(g => !g.mod2 || PDM.isMod2());
+  }
+  /** 아이템을 게임 아이템 g 를 상속하는 아이템으로 (이름 · 설명은 그대로 두면 게임 것은 안 씀 — 이름은 지금 이름) */
+  async function asGameBased(it, g) {
+    Object.assign(it, { kind: 'game', base: g.p, baseName: g.n, subtype: g.sub || it.subtype || '', stackable: false });
+    if (!it.sprite || (!it.sprite.png && !it.sprite.name && !it.sprite.index)) it.sprite = { sheet: 'builtin:items', name: g.img };
+    try { const img = await PDM.assets.load('builtin:items'); if (it.sprite.name && !it.sprite.png) it.sprite.index = PDM.assets.itemIndex(it.sprite, img); } catch (_) { /* 이름만 */ }
+    if (/^wands\./.test(g.p) && !it.wand) it.wand = {};
+    return it;
   }
 
   /** 게임 아이템을 프로젝트 아이템으로 복사 (이름·설명·그림·분류·티어 수치) */
@@ -188,10 +227,12 @@
     Object.assign(it, { name: g.n, desc: g.d || '', category: cat, subtype: g.sub || '', sprite: { sheet: 'builtin:items', name: g.img, index: 0 }, note: '게임 아이템 spd:' + g.p + ' 에서 복사' });
     const img = await PDM.assets.load('builtin:items'); it.sprite.index = PDM.assets.itemIndex(it.sprite, img);
     if (cat === 'weapon' && (g.sub === 'melee')) { it.kind = 'melee'; it.weapon = PDM.make.weaponStats('melee', g.t || 1); it.stackable = false; }
+    else if (cat === 'weapon' && g.sub === 'ranged') { it.kind = 'ranged'; it.weapon = PDM.make.weaponStats('melee', g.t || 1); it.ranged = PDM.make.rangedStats(); it.stackable = false; }
     else if (cat === 'weapon' && (g.sub === 'missile' || g.sub === 'dart')) { it.kind = 'missile'; it.weapon = PDM.make.weaponStats('missile', g.t || 1); it.stackable = true; }
     else if (cat === 'armor' && g.sub !== 'class') { it.kind = 'armor'; it.armor = PDM.make.armorStats(g.t || 1); it.stackable = false; }
     else if (cat === 'codex') { it.kind = 'codex'; it.codex = PDM.make.codexStats(g.sub || 'melee', g.t || 1); it.stackable = true; }
     else if (cat === 'bag' && /grimoire/i.test(g.p)) { it.kind = 'grimoire'; it.bag = { capacity: 19, holds: 'codex' }; it.stackable = false; }
+    else if (gameBases(cat, g.sub || '').some(x => x.p === g.p)) await asGameBased(it, g);   // 마법봉 · 반지 · 아티팩트 · 장신구 · 가방: 게임 동작을 물려받음 (예전엔 데이터 아이템이 되어 성질이 없었음)
     else if (['artifact', 'ring', 'wand', 'bag', 'trinket'].includes(cat)) it.stackable = false;
     if (cat === 'food') it.stats = { energy: 300 };
     store.add('item:' + id, it, '게임 아이템 복사');
@@ -308,6 +349,122 @@
     return PDM.ui.field(o.label, wrap, o.hint);
   }
 
+  // ------------------------------------------------------------ 원거리 무기 (kind ranged → 런타임 MakerBow) · 마법봉 공격 이펙트 (wandFx → MakerWand)
+  const effOpts = () => PDM.ui.refOptions('effect');
+  /** 쏠 때 · 맞을 때 소리와 이펙트 (발사체 · 마법봉 같이 씀) */
+  function fxRow(key, P) {
+    const { F, row } = PDM.ui;
+    return [row(F.sound(key, [...P, 'sound'], { label: '쏠 때 소리', kind: 'se', empty: '(기본 소리)' }), F.sound(key, [...P, 'hitSound'], { label: '맞을 때 소리', kind: 'se', empty: '(없음 · 기본)' })),
+      row(F.select(key, [...P, 'castEffect'], effOpts(), { label: '쏠 때 이펙트 (영웅에게)', empty: '(없음)' }), F.select(key, [...P, 'hitEffect'], effOpts(), { label: '맞은 칸 이펙트', empty: '(없음)' }),
+        h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('effects') }, '이펙트 · 파티클 편집…')))];
+  }
+  /** 날아가는 그림 (게임 시트 칸 · PNG) */
+  function flyingSprite(key, path, label, fallbackName) {
+    const cur = PDM.deepGet(store.get(key), path) || null;
+    return h('div', {}, itemSpriteField(key, path, { label, hint: '비우면 ' + fallbackName }),
+      spriteTools(key, path, cur, 'proj_' + String(key).replace(/[^a-z0-9]/gi, '_'), { sheet: 'builtin:items', name: fallbackName }));
+  }
+  function rangedSection(key, it) {
+    const { F, row } = PDM.ui;
+    const R = p => ['ranged', p], P = p => ['ranged', 'proj', p];
+    const r = it.ranged || {}, pr = r.proj || {};
+    const ammoItems = store.all('item').filter(x => x.kind === 'missile').map(x => [x.id, x.name || x.id]);
+    return [
+      h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '쏘기 · 발사체'),
+      row(F.text(key, R('shootLabel'), { label: '행동 버튼 이름', placeholder: '쏘기' }),
+        F.bool(key, R('needEquip'), { label: '장착해야 쏠 수 있음', def: true }),
+        F.select(key, R('ammo'), { none: '발사체를 무한히 만들어 쏨 (영혼의 활처럼)', item: '가방의 투척 무기를 하나씩 소모 (화살 · 볼트)' }, { label: '탄환', rerender: true }),
+        r.ammo === 'item' ? F.select(key, R('projectile'), ammoItems, { label: '탄환 아이템 (투척 무기)', empty: '(고르세요)', rerender: true }) : null),
+      r.ammo === 'item' ? h('p', { class: 'hint' }, ammoItems.length ? '고른 투척 무기를 가방에서 하나씩 꺼내 쏩니다 — 피해 · 그림 · 소리는 그 아이템 것(아이템을 열어 고치기). 맞은 칸 이펙트 · 소리는 아래 것을 함께 씁니다.' : '투척 무기(종류 "투척 무기") 아이템이 없습니다 — 먼저 만드세요.') : null,
+      r.ammo === 'item' && r.projectile && store.has('item:' + r.projectile) ? h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('item:' + r.projectile) }, '탄환 아이템 열기') : null,
+      r.ammo !== 'item' ? h('div', {},
+        row(F.text(key, P('name'), { label: '발사체 이름', placeholder: '화살' }),
+          F.select(key, P('damage'), { bow: '활의 피해 그대로 (강화 · 마법 부여 포함)', own: '발사체 수치 (아래)' }, { label: '피해', rerender: true }),
+          F.num(key, P('accuracy'), { label: '명중 배율', min: 0, step: 0.05, def: 1 }),
+          F.bool(key, P('spin'), { label: '날아가며 빙글빙글 (끄면 날아가는 방향을 향함)' })),
+        pr.damage === 'own' ? row(F.num(key, P('min'), { label: '최소 피해', int: true, min: 0, def: 1 }), F.num(key, P('minPerLvl'), { label: '활 강화당 최소 +', int: true, min: 0, def: 0 }),
+          F.num(key, P('max'), { label: '최대 피해', int: true, min: 0, def: 5 }), F.num(key, P('maxPerLvl'), { label: '활 강화당 최대 +', int: true, min: 0, def: 1 })) : null,
+        flyingSprite(key, P('sprite'), '발사체 그림', 'SPIRIT_ARROW')) : null,
+      h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '소리 · 이펙트'),
+      ...fxRow(key, ['ranged', 'proj']),
+      h('p', { class: 'hint' }, '근접 수치(위)는 활을 들고 때릴 때와 "활의 피해 그대로"일 때 씁니다. 발사체는 영혼의 활 화살처럼 가방에 들어가지 않고 땅에 떨어지지 않습니다.')];
+  }
+  /** 마법봉 공격 이펙트 — key/base: 프로젝트 아이템(['wandFx']) 또는 gameitems(['items', 'spd:wands.X', 'wandFx']) */
+  PDM.wandFxEditor = function (key, base) {
+    const { F, row } = PDM.ui;
+    const W = p => [...base, p], cur = PDM.deepGet(store.get(key), base) || {};
+    const bolts = Object.assign({ game: '게임 원래 효과 (소리 · 이펙트만 더하기)', sprite: '그림이 날아감 (아래에서 고른 그림)', code: '코드로 직접 (Java)' }, Object.fromEntries(Object.entries(PDM.SKILL_VISUALS).map(([k, v]) => [k, k === 'none' ? '없음 (바로 맞음)' : '마법 화살: ' + v])));
+    return h('div', {},
+      F.bool(key, W('on'), { label: '이 마법봉의 공격 이펙트 바꾸기', rerender: true }),
+      cur.on ? h('div', {},
+        row(F.select(key, W('bolt'), bolts, { label: '날아가는 것', rerender: true }),
+          cur.bolt === 'sprite' ? F.bool(key, W('spin'), { label: '날아가며 빙글빙글' }) : null),
+        cur.bolt === 'sprite' ? flyingSprite(key, W('sprite'), '날아가는 그림', 'SPIRIT_ARROW') : null,
+        cur.bolt === 'code' ? h('div', {},
+          F.code(key, W('code'), { sig: 'void wandFx(Wand wand, Ballistica bolt, int cell, Hero hero, Callback done) {', doc: PDM.codegen.WANDFX_DOC + ' — 오류가 나면 게임 원래 효과로 대신하고 게임 안 경고로 알려 줍니다.', rows: 8, rerender: true }),
+          F.code(key, W('imports'), { label: 'import (한 줄에 하나 — 게임 effects · particles · sprites · mechanics 등은 이미 들어 있음)', rows: 2 }),
+          h('div', { class: 'btnbar' },
+            !String(cur.code || '').trim() ? h('button', { class: 'btn sm', onclick: () => store.edit(key, '마법봉 이펙트 코드 예시', r => { PDM.deepSet(r, W('code'), PDM.codegen.WANDFX_SNIPPET); }) }, '예시 넣기 (불 화살)') : null,
+            h('button', { class: 'btn sm', onclick: () => PDM.ui.codeView('GenWandFx.java', PDM.codegen.wandFxSource(store.all('item'), store.get('gameitems'))) }, '생성될 코드 보기'),
+            h('button', { class: 'btn sm', title: '게임 마법봉들의 fx() 함수를 참고하세요 (각 마법봉 파일)', onclick: () => PDM.showCodeFile('items/wands/Wand.java', '게임 코드 — Wand.fx (기본 마법 화살)') }, '게임 코드 참고 (Wand.java)'))) : null,
+        ...fxRow(key, base),
+        h('p', { class: 'hint' }, '"게임 원래 효과"는 게임이 그리는 광선 · 화살 위에 소리와 이펙트만 더합니다. 다른 것을 고르면 게임 효과 대신 그것이 날아가고, 닿으면 마법봉의 원래 효과(피해 · 불 · 얼음 …)가 그대로 일어납니다. 저주받은 마법봉의 무작위 효과는 바꾸지 않습니다.')) : null);
+  };
+
+  /** 가방 설정 (kind bag 의 bag · 추가 기능 bagFx 같이 씀) — 칸 수 · 넣을 수 있는 것(분류 · 아이템 · 태그) */
+  function bagUI(key, base, bg, isBag) {
+    const { F, row } = PDM.ui, out = [];
+      const B = p => [...base, p];
+      const CATS = Object.assign({}, Object.fromEntries(Object.entries(PDM.ITEM_CATEGORY_INFO).filter(([k]) => !['bag', 'codex'].includes(k)).map(([k, v]) => [k, v.name])), { missile: '투척 무기 (다트 포함)', seed: '씨앗' });
+      const cats = new Set(bg.categories || []);
+      out.push(row(F.num(key, B('capacity'), { label: '칸 수', int: true, min: 1, max: 60, def: 20, hint: '게임 가방은 20 · 배낭은 20' }),
+        F.select(key, B('holds'), { all: '무엇이든 (가방은 빼고)', filter: '정한 것만 (아래)' }, { label: '넣을 수 있는 것', rerender: true }),
+        isBag ? F.select(key, B('tabIcon'), { item: '가방 그림 그대로', backpack: '배낭 아이콘', pouch: '씨앗 주머니 아이콘', scroll: '주문서 통 아이콘', wand: '마법봉 꽂이 아이콘', potion: '물약 띠 아이콘' }, { label: '가방 창 탭 아이콘' })
+          : F.text(key, B('openLabel'), { label: '열기 버튼 이름', placeholder: '열기' }), isBag ? null : F.text(key, B('putLabel'), { label: '넣기 버튼 이름', placeholder: '넣기' })));
+      if (bg.holds === 'filter') {
+        out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
+          h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 12px', margin: '2px 0 8px' } }, Object.entries(CATS).map(([k, v]) => h('label', { class: 'check' },
+            h('input', { type: 'checkbox', checked: cats.has(k), onchange: e => store.edit(key, '가방 분류', o => { const bb = PDM.deepGet(o, base); const s2 = new Set(bb.categories || []); e.target.checked ? s2.add(k) : s2.delete(k); bb.categories = [...s2]; }) }), h('span', {}, v)))),
+          h('div', { class: 'fl' }, '아이템 하나하나 (프로젝트 아이템 · 게임 아이템 — 게임 아이템은 그것을 상속한 것도)'),
+          PDM.ui.listEditor(key, B('items'), { addLabel: '아이템', compact: true, emptyText: '없음', make: () => '', render: (x, i, ip) => { const inp = h('input', { type: 'text', value: x || '', placeholder: '아이템 id 또는 spd:경로' }); inp.addEventListener('change', () => PDM.ui.commit(key, ip, inp.value.trim(), '가방 아이템', true)); return PDM.ui.combo(inp, () => PDM.ui.itemOptions()); } }),
+          F.text(key, B('tagsText'), { label: '태그 (쉼표로 — 이 태그가 있는 프로젝트 아이템)', placeholder: 'herb, gift', onchange: v => store.edit(key, '가방 태그', o => { PDM.deepGet(o, base).tags = String(v).split(',').map(t => t.trim()).filter(Boolean); }) }),
+          h('p', { class: 'hint' }, `분류 ${cats.size}개 · 아이템 ${(bg.items || []).filter(Boolean).length}개 · 태그 ${(bg.tags || []).length}개 중 하나라도 맞으면 넣을 수 있습니다.`));
+      }
+      out.push(h('p', { class: 'hint' }, isBag ? '게임 가방과 같은 규칙: 이 가방을 가지고 있으면 넣을 수 있는 아이템을 주울 때 먼저 이 가방에 들어가고, 가방 창에 이 가방 탭이 생깁니다. 가방 안에 다른 가방은 넣지 않습니다.'
+        : '"넣기"로 가방(배낭)의 아이템을 이 아이템 안에 담고, "열기"에서 골라 꺼냅니다 (주울 때 저절로 들어가지는 않음 — 장착 · 퀵슬롯 등 이 아이템 원래 기능은 그대로). 안의 아이템은 저장됩니다.'));
+    return out;
+  }
+
+  /** 추가 기능 (한 아이템에 종류 여러 개 — 런타임 MakerFacets): 사용 효과 · 던지기 효과 · 가방 기능 */
+  function facetsSection(key, it) {
+    const { F, row } = PDM.ui;
+    const misc = (it.kind || 'misc') === 'misc', missile = it.kind === 'missile' || (it.kind === 'game' && /^weapon\.missiles\./.test(it.base || ''));
+    const u = it.useFx || {}, t = it.throwFx || {}, b = it.bagFx || {};
+    const turnOn = (k, def) => store.edit(key, '추가 기능', o => { const cur = o[k] || {}; o[k] = Object.assign(def(), cur, { on: !cur.on }); });
+    const head = (k, label, on, def, hint) => h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 4px' } },
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!on, onchange: () => turnOn(k, def) }), h('span', { style: { fontWeight: 600 } }, label)), h('span', { class: 'hint' }, hint));
+    return [
+      h('p', { class: 'hint' }, '이 아이템의 종류(위)에 기능을 더합니다 — 예: 근접 무기 + 가방 기능(장착하면 무기, 가방 창에서 "열기"로 가방), 물약 + 던지기 효과(마시면 회복, 던지면 깨져서 둘레에 효과). 게임 아이템을 상속한 아이템에도 됩니다.'),
+      head('useFx', '사용 효과', u.on, PDM.make.useFx, misc ? '"사용(마시기 · 읽기 …)" 버튼에 효과가 더해짐' : '"사용" 버튼이 생김'),
+      u.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
+        row(misc ? null : F.text(key, ['useFx', 'label'], { label: '버튼 이름', placeholder: '사용' }), misc ? null : F.bool(key, ['useFx', 'consume'], { label: '쓰면 1개 사라짐' }),
+          F.num(key, ['useFx', 'time'], { label: '걸리는 턴', min: 0, step: 0.5, def: 1 }), F.sound(key, ['useFx', 'sound'], { label: '소리', kind: 'se', empty: '(기본)' }),
+          F.select(key, ['useFx', 'fx'], PDM.ui.refOptions('effect'), { label: '영웅에게 이펙트', empty: '(없음)' })),
+        h('div', { class: 'fl' }, '효과 (대상 = 영웅이 서 있는 칸 — "자신" · "범위 안의 적" · "범위 안 모두")'),
+        PDM.castEffectsEditor(key, ['useFx', 'effects'], { emptyText: '효과 없음', make: () => ({ type: 'heal', on: 'self', amount: 10 }) })) : null,
+      head('throwFx', '던지기 효과', t.on, missile ? () => Object.assign(PDM.make.throwFx(), { when: 'always', effects: [{ type: 'damage', on: 'target', min: 3, max: 6 }] }) : PDM.make.throwFx, missile ? '던져서 맞히거나 떨어진 칸에서 효과가 더해짐 (원래 피해 · 박힘 · 내구는 그대로)' : '던져서 떨어진 칸에서 효과 (물약이 깨짐 · 폭탄 · 룬석)'),
+      t.on ? h('div', { class: 'card', style: { padding: '6px 10px' } },
+        row(missile ? F.select(key, ['throwFx', 'when'], [['always', '맞히든 빗나가든'], ['hit', '맞혔을 때만']], { label: '언제', def: 'always' }) : F.bool(key, ['throwFx', 'consume'], { label: '던지면 사라짐 (끄면 효과 뒤 바닥에 남음)', def: true }),
+          missile ? null : F.num(key, ['throwFx', 'fuse'], { label: '터지기까지 턴 (0 = 바로, 폭탄 2)', int: true, min: 0, max: 20, def: 0 }),
+          F.sound(key, ['throwFx', 'sound'], { label: missile ? '효과 소리' : '터질 때 소리', kind: 'se', empty: '(없음)' }),
+          F.select(key, ['throwFx', 'fx'], PDM.ui.refOptions('effect'), { label: missile ? '그 칸 이펙트' : '터질 때 이펙트', empty: '(없음)' })),
+        h('div', { class: 'fl' }, '효과 (대상 = 떨어진 칸 — "대상"은 그 칸의 캐릭터, 반경을 주면 둘레까지)'),
+        PDM.castEffectsEditor(key, ['throwFx', 'effects'], { emptyText: '효과 없음', make: () => missile ? ({ type: 'damage', on: 'target', min: 3, max: 6 }) : ({ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }) }),
+        h('p', { class: 'hint' }, missile ? '맞힐 때의 일은 "코드 › 적중 시"로도 쓸 수 있습니다.' : '터지기까지 턴을 주면 바닥에 놓였다가 그 턴 뒤 터집니다 (그 사이 주워 가면 터지지 않음 · 저장하고 불러와도 이어서 탐).')) : null,
+      it.kind === 'bag' ? null : head('bagFx', '가방 기능', b.on, PDM.make.bagFx, '"넣기" · "열기" 버튼 — 이 아이템 안에 다른 아이템을 담음'),
+      it.kind !== 'bag' && b.on ? h('div', { class: 'card', style: { padding: '6px 10px' } }, ...bagUI(key, ['bagFx'], b, false)) : null];
+  }
+
   const HOOK_LABEL = { proc: '적중 시', armorProc: '피격 시', min: '최소 피해', max: '최대 피해', drMin: '최소 방어', drMax: '최대 방어',
     onEquip: '장착', onUnequip: '해제', onPickUp: '주움', desc: '설명 글', members: '추가 멤버', imports: 'import' };
 
@@ -319,21 +476,34 @@
     kindSel.addEventListener('change', () => store.edit(key, '아이템 종류', o => {
       o.kind = kindSel.value;
       const tier = (o.stats && o.stats.tier) || 1;
-      if ((o.kind === 'melee' || o.kind === 'missile') && !o.weapon) o.weapon = PDM.make.weaponStats(o.kind, tier);
+      if ((o.kind === 'melee' || o.kind === 'missile' || o.kind === 'ranged') && !o.weapon) o.weapon = PDM.make.weaponStats(o.kind === 'ranged' ? 'melee' : o.kind, tier);
+      if (o.kind === 'ranged' && !o.ranged) o.ranged = PDM.make.rangedStats();
       if (o.kind === 'armor' && !o.armor) o.armor = PDM.make.armorStats(tier);
       if (o.kind === 'codex' && !o.codex) o.codex = PDM.make.codexStats('melee', tier);
       if (o.kind === 'grimoire' && !o.bag) o.bag = { capacity: 19, holds: 'codex' };
+      if (o.kind === 'bag') { o.bag = Object.assign(PDM.make.bagStats(), o.bag && o.bag.holds !== 'codex' ? o.bag : {}); o.category = 'bag'; o.stackable = false; }
       if (o.kind === 'game' && !o.base) o.base = 'Item';
       if (o.kind !== 'misc' && o.kind !== 'game') o.stackable = o.kind === 'missile' || o.kind === 'codex';
-      if (o.kind === 'melee' || o.kind === 'missile') o.category = 'weapon'; else if (o.kind === 'armor') o.category = 'armor';
+      if (o.kind === 'melee' || o.kind === 'missile' || o.kind === 'ranged') o.category = 'weapon'; else if (o.kind === 'armor') o.category = 'armor';
       else if (o.kind === 'codex') o.category = 'codex'; else if (o.kind === 'grimoire') o.category = 'bag';
     }));
     const kindHint = { misc: '일반 아이템: 사용 명령(이벤트)과 코드 행동 버튼으로 동작',
       codex: 'mod-2 코덱스(items/weapon/codices)처럼 겹쳐 쌓이고, "사용"하면 대상을 골라 공격·시전하며, 쓸 때마다 내구가 닳아 다 닳으면 하나가 사라집니다. 강화하면 피해와 사용 횟수(×1.5)가 늘어납니다. 원작·mod-2 모두에서 동작 (PDMaker MakerCodex)',
       grimoire: 'mod-2 그리모어(bags/grimoire)처럼 코덱스를 담는 가방입니다',
+      bag: '완전히 새 가방입니다 — 칸 수와 넣을 수 있는 것(분류 · 아이템 · 태그)을 정합니다. 게임 가방처럼 주운 아이템이 먼저 들어가고 가방 창에 탭이 생깁니다 (PDMaker MakerBag).',
       game: '게임의 아이템 클래스를 그대로 상속합니다 (효과·강화·감정 모두 게임 그대로). 이름·설명·그림·가격은 비워 두면 게임 것, 아래 "코드"의 훅·행동 버튼·추가 멤버로 동작을 고치거나 더합니다.' }[kind]
-      || `게임의 ${ {melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor'}[kind] } 을 상속한 클래스가 만들어집니다 (강화·마법 부여·저주 모두 원래대로)`;
+      || (kind === 'ranged' ? '활 · 석궁처럼 "쏘기" 버튼으로 발사체를 날리는 무기입니다 (게임의 영혼의 활과 같은 방식 — 강화 · 마법 부여 · 저주는 원래대로). 아래에서 발사체의 그림 · 피해 · 소리 · 이펙트나 탄환 아이템을 정합니다.'
+      : `게임의 ${ {melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor'}[kind] } 을 상속한 클래스가 만들어집니다 (강화·마법 부여·저주 모두 원래대로)`);
     const out = [field('종류 (게임 안에서의 동작)', kindSel, kindHint)];
+    const gl = kind === 'misc' ? gameBases(it.category, it.subtype) : [];
+    if (gl.length) {   // 예전에 "일반"으로 만든 마법봉 · 반지 등 — 그 분류의 게임 성질이 없음
+      const bs = h('select', {}, gl.map(g => h('option', { value: g.p, selected: g.p === DEFAULT_BASE[it.category] }, `${g.n} (${g.p})`)));
+      out.push(h('div', { class: 'card', style: { padding: '8px 10px', margin: '4px 0 10px', borderColor: 'var(--warn)' } },
+        h('div', { style: { color: 'var(--warn)', marginBottom: '6px' } }, `이 아이템은 "일반 데이터 아이템"이라 게임의 ${(PDM.ITEM_CATEGORY_INFO[it.category] || {}).name || it.category} 성질(충전 · 쏘기 · 장착 등)이 없습니다.`),
+        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, bs,
+          h('button', { class: 'btn sm pri', onclick: async () => { const g = findGame(bs.value)[1]; if (!g) return; const cur = PDM.clone(store.get(key)); await asGameBased(cur, g); store.edit(key, '게임 아이템 바탕으로', o => { Object.keys(o).forEach(k => delete o[k]); Object.assign(o, cur); }); } }, '이 게임 아이템을 바탕으로 바꾸기')),
+        h('p', { class: 'hint', style: { margin: '6px 0 0' } }, '이름 · 그림 · 가격은 그대로 두고, 게임 아이템의 동작(효과 · 강화 · 감정)을 물려받습니다. 효과는 아래 "코드"와 수치 · 이펙트로 고칩니다.')));
+    }
     if (kind === 'game') {
       const all = Object.values(PDM.SPD_ITEM_GROUPS || {}).flat();
       const dl = null;
@@ -344,7 +514,16 @@
         g ? h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('spditem:' + g.p) }, '게임 아이템 보기')) : null)));
     }
     const W = p => ['weapon', p], A = p => ['armor', p];
-    if (kind === 'melee' || kind === 'missile') {
+    if (kind === 'game' && /^wands\./.test(it.base || '')) {
+      const dmg = (PDM.codegen.DAMAGE_WANDS || []).includes(String(it.base).split('.').pop()), WD = p => ['wand', p];
+      out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '마법봉 수치 (비우면 게임 그대로)'),
+        row(F.num(key, WD('charges'), { label: '처음 충전 수 (0 = 게임 기본)', int: true, min: 0, max: 10, def: 0 }),
+          dmg ? F.num(key, WD('min'), { label: '최소 피해 (비우면 게임)', int: true, min: 0, def: '' }) : null, dmg ? F.num(key, WD('minPerLvl'), { label: '강화당 최소 +', int: true, min: 0, def: 1 }) : null,
+          dmg ? F.num(key, WD('max'), { label: '최대 피해 (비우면 게임)', int: true, min: 0, def: '' }) : null, dmg ? F.num(key, WD('maxPerLvl'), { label: '강화당 최대 +', int: true, min: 0, def: 1 }) : null),
+        h('p', { class: 'hint' }, (dmg ? '피해 칸을 비우면 게임 수치 그대로. ' : '이 마법봉은 피해를 주는 종류가 아니라 피해 수치가 없습니다 — 효과는 "코드"(onZap 은 추가 멤버에 @Override)로. ') + '충전은 강화마다 +1 (최대 10) — 게임과 같음.'));
+    }
+    if (kind === 'game' && /^wands\./.test(it.base || '')) out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '마법봉 공격 이펙트'), PDM.wandFxEditor(key, ['wandFx']));
+    if (kind === 'melee' || kind === 'missile' || kind === 'ranged') {
       out.push(row(F.num(key, W('tier'), { label: '티어', int: true, min: 1, max: 5, hint: '힘 요구치 기본값' }),
         F.num(key, W('min'), { label: '최소 피해', int: true, min: 0 }), F.num(key, W('minPerLvl'), { label: '강화당 최소 +', int: true, min: 0 }),
         F.num(key, W('max'), { label: '최대 피해', int: true, min: 0 }), F.num(key, W('maxPerLvl'), { label: '강화당 최대 +', int: true, min: 0 })));
@@ -355,7 +534,8 @@
         kind === 'missile' ? F.num(key, W('baseUses'), { label: '내구 (던지는 횟수)', min: 1, def: 8 }) : null,
         kind === 'missile' ? F.bool(key, W('sticky'), { label: '적에게 박힘' }) : null));
       const w = it.weapon || {};
-      out.push(h('p', { class: 'hint' }, `+0: ${w.min | 0}~${w.max | 0}  ·  +3: ${(w.min | 0) + 3 * (w.minPerLvl | 0)}~${(w.max | 0) + 3 * (w.maxPerLvl | 0)}  (원본 게임 ${kind === 'melee' ? '근접' : '투척'} 무기 티어 ${w.tier || 1} 기본: ${kind === 'melee' ? `${w.tier || 1}~${5 * ((w.tier || 1) + 1)}` : `${2 * (w.tier || 1)}~${5 * (w.tier || 1)}`})`));
+      out.push(h('p', { class: 'hint' }, `+0: ${w.min | 0}~${w.max | 0}  ·  +3: ${(w.min | 0) + 3 * (w.minPerLvl | 0)}~${(w.max | 0) + 3 * (w.maxPerLvl | 0)}  (원본 게임 ${kind !== 'missile' ? '근접' : '투척'} 무기 티어 ${w.tier || 1} 기본: ${kind !== 'missile' ? `${w.tier || 1}~${5 * ((w.tier || 1) + 1)}` : `${2 * (w.tier || 1)}~${5 * (w.tier || 1)}`})`));
+      if (kind === 'ranged') out.push(...rangedSection(key, it));
     } else if (kind === 'armor') {
       out.push(row(F.num(key, A('tier'), { label: '티어', int: true, min: 1, max: 5 }),
         F.num(key, A('drMin'), { label: '최소 방어', int: true, min: 0 }), F.num(key, A('drMinPerLvl'), { label: '강화당 최소 +', int: true, min: 0 }),
@@ -388,6 +568,8 @@
       out.push(h('p', { class: 'hint' }, `근접·원거리는 원작처럼 빗나갈 수 있습니다. 피해 × (1 + 코덱스 피해 %: 게이지 단계·원소·특성·전직). 힘이 모자라면 위력 −33%. +0: ${cx.min | 0}~${cx.max | 0} · +3: ${(cx.min | 0) + 3 * (cx.minPerLvl | 0)}~${(cx.max | 0) + 3 * (cx.maxPerLvl | 0)} · 사용 +0 ${Math.round(cx.baseUses || 10)}회, +3 ${Math.round((cx.baseUses || 10) * 3.375)}회`));
       out.push(h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '추가 효과 (피해 뒤에 차례로 — 상태 효과·밀치기 등)'));
       out.push(PDM.castEffectsEditor ? PDM.castEffectsEditor(key, C('effects'), { emptyText: '추가 효과 없음', make: () => ({ type: 'buff', on: 'target', buff: 'Burning', turns: 3 }) }) : h('span'));
+    } else if (kind === 'bag') {
+      out.push(...bagUI(key, ['bag'], it.bag || {}, true));
     } else if (kind === 'grimoire') {
       out.push(row(F.num(key, ['bag', 'capacity'], { label: '칸 수', int: true, min: 1, max: 40, def: 19 }),
         F.select(key, ['bag', 'holds'], { codex: '코덱스만', all: '무엇이든' }, { label: '담는 것' })));
@@ -570,6 +752,7 @@
           categoryBlock(key, it),
           F.textarea(key, ['desc'], { label: '설명', rows: 3 }),
           row((it.kind || 'misc') === 'misc' ? F.bool(key, ['stackable'], { label: '겹쳐 쌓임' }) : null, F.bool(key, ['unique'], { label: '유일 아이템' }), F.bool(key, ['cursed'], { label: '저주받음' }), F.num(key, ['level'], { label: '생성 시 강화', int: true, min: 0 })),
+          row(F.bool(key, ['noSell'], { label: '판매 불가 (상점에 팔 수 없음)' }), F.bool(key, ['noDrop'], { label: '버리기 금지 (버리기 · 던지기 버튼 없음 — 투척 무기는 던지기만 남음)' })),
           F.list(key, ['tags'], { label: '태그', hint: '선물 취향·조건에 씀 (예: herb, gift, undead)' })),
         section('스프라이트',
           h('div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },
@@ -595,6 +778,7 @@
           h('p', { class: 'hint' }, '몬스터가 죽을 때 떨어뜨리거나, 층을 만들 때 바닥에 놓이게 합니다. 여러 줄을 넣으면 줄마다 따로 확률을 굴립니다.'),
           dropsEditor(key, ['drops'])),
         section('종류와 수치', ...statsSection(key, it)),
+        section('추가 기능 (여러 종류 — 사용 · 던지기 · 가방)', ...facetsSection(key, it)),
         section('소리', ...itemSoundFields(key, it)),
         section('이펙트 (파티클)',
           PDM.ui.row(PDM.ui.F.ref(key, ['fxUse'], 'effect', { label: '쓸 때', empty: '(없음)' }), PDM.ui.F.ref(key, ['fxThrow'], 'effect', { label: '던질 때', empty: '(없음)' }), PDM.ui.F.ref(key, ['fxEquip'], 'effect', { label: '장착 · 해제할 때', empty: '(없음)' })),
@@ -674,8 +858,12 @@
             spriteTools('gameitems', ['items', gk, 'sprite'], cur, g.p.split('.').pop().toLowerCase(), { sheet: 'builtin:items', name: g.img }),
             cur && cur.png ? PDM.ui.F.image('gameitems', ['items', gk, 'sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true }) : null);
         })(),
+        /^wands\./.test(g.p) ? PDM.ui.section('마법봉 공격 이펙트',
+          h('p', { class: 'hint' }, '이 프로젝트에서 게임의 이 마법봉을 쏠 때 날아가는 것 · 소리 · 이펙트를 바꿉니다 (gameitems.json 에 저장 — 이 마법봉을 상속한 프로젝트 아이템도 따로 정하지 않으면 이것을 씀).'),
+          PDM.wandFxEditor('gameitems', ['items', 'spd:' + g.p, 'wandFx'])) : null,
         PDM.ui.section('등장 · 드랍 테이블',
           PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'banned'], { label: '게임에 나오지 않게 (등장 금지) — 게임의 무작위 아이템 생성(바닥·상자·전리품·상점 무작위 칸)에서 뺍니다', rerender: true }),
+          PDM.ui.row(PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'noSell'], { label: '판매 불가 (상점에 팔 수 없음)' }), PDM.ui.F.bool('gameitems', ['items', 'spd:' + g.p, 'noDrop'], { label: '버리기 금지' })),
           h('p', { class: 'hint' }, '등장 금지는 "무작위로 뽑는 곳"에만 적용됩니다. 직업의 시작 아이템, 퀘스트 보상처럼 게임 코드가 정해 놓고 주는 것은 그대로 나옵니다. 아래 드랍은 게임의 무작위 생성(Generator 확률표)에 더해집니다.'),
           dropsEditor('gameitems', ['items', 'spd:' + g.p, 'drops'])),
         PDM.ui.section('코드로 고치기',

@@ -84,9 +84,26 @@ PDM.assets = (function () {
   /** 테마 타일셋 이미지 */
   function themeTiles(theme) {
     const t = PDM.THEMES[theme];
-    if (t) return load('game:' + t.tiles);
+    const custom = !t && ((PDM.store.get('world') || {}).customThemes || []).find(c => c.id === theme);
+    const baseTiles = 'game:' + PDM.THEMES[(custom && PDM.THEMES[custom.base]) ? custom.base : 'SEWER'].tiles;
+    const p = t ? load('game:' + t.tiles) : custom && custom.tiles ? load(custom.tiles).then(i => i || load(baseTiles)) : load(baseTiles);
+    // 물 그림도 함께 불러와 타일셋 그림에 묶어 둠 → drawTerrain 이 물 칸을 실제 물 그림으로 (사용자 테마의 물 · 바꾼 게임 물 포함)
+    // 사용자 테마는 바탕 테마와 같은 타일셋 그림을 쓸 수 있어서, 물이 섞이지 않게 사본(캔버스)에 묶음
+    return p.then(img => {
+      if (!img) return img;
+      let out = img;
+      if (custom) { out = document.createElement('canvas'); out.width = img.width; out.height = img.height; out.getContext('2d').drawImage(img, 0, 0); }
+      return themeWater(theme).then(w => { if (w) waterOf.set(out, w); return out; }, () => out);
+    });
+  }
+  const waterOf = new WeakMap();
+  /** 테마의 물 그림 (사용자 테마: water 가 있으면 그것, 없으면 바탕 테마 물) */
+  function themeWater(theme) {
+    const t = PDM.THEMES[theme];
+    if (t) return load('game:' + t.water).catch(() => null);
     const custom = ((PDM.store.get('world') || {}).customThemes || []).find(c => c.id === theme);
-    return custom ? load(custom.tiles) : load('game:' + PDM.THEMES.SEWER.tiles);
+    if (custom && custom.water) return load(custom.water).catch(() => null);
+    return load('game:' + PDM.THEMES[(custom && custom.base) || 'SEWER'].water).catch(() => null);
   }
 
   /** 타일 하나 그리기 (평면 타일, 물·함정은 색으로) */
@@ -95,6 +112,11 @@ PDM.assets = (function () {
     const t = PDM.TERRAIN_BY_ID[terrainId];
     if (!t) { g.fillStyle = terrainId < 0 ? '#1b1922' : '#000'; g.fillRect(x, y, size, size); return; }
     if (t.key === 'WATER') {
+      const w = tilesImg && waterOf.get(tilesImg);
+      if (w && w.width) {   // 물 그림을 칸 위치에 맞춰 이어 붙임 (게임처럼 끊김 없이)
+        const cx = Math.round(x / size), cy = Math.round(y / size), sx = (cx * 16) % w.width, sy = (cy * 16) % w.height;
+        g.drawImage(w, sx, sy, Math.min(16, w.width - sx), Math.min(16, w.height - sy), x, y, size, size); return;
+      }
       g.fillStyle = '#2d5f86'; g.fillRect(x, y, size, size);
       g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(x + size * .15, y + size * .3, size * .5, Math.max(1, size * .08));
       return;
@@ -157,5 +179,5 @@ PDM.assets = (function () {
     g.restore();
   }
 
-  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
+  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, themeWater, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
 })();

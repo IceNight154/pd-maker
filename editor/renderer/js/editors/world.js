@@ -687,6 +687,7 @@
               F.select('world', ['nodes', wi, 'group'], wd.groups.map(g => [g.id, g.name]), { label: '그룹', empty: '(없음)' })),
             row(F.text(k, ['label'], { label: '층 표시', placeholder: W_.label(id) }), F.num(k, ['depth'], { label: '난이도 깊이 (0=자동)', int: true, min: 0, max: 30, hint: `지금 ${I.depth[id]}` })),
             row(F.ref(k, ['theme'], 'theme', { label: '테마', empty: '(그룹 테마)' }), F.bool(k, ['boss'], { label: '보스 층' })),
+            PDM.filters ? PDM.filters.field(k, ['filter'], '화면 필터 (이 맵에 있는 동안)', '(없음 — 그룹 · 테마 설정대로)', { always: true }) : null,
             (() => { const on = d.mode === 'handmade' ? !!(d.spawn || {}).enabled : !d.noMobs;
               const cb = h('input', { type: 'checkbox', checked: on, onchange: () => store.edit(k, '몬스터 스폰', r => { r.noMobs = !cb.checked; if (r.mode === 'handmade') r.spawn = Object.assign({ mobs: [], initial: 3, max: 6, respawn: 50, minDist: 8 }, r.spawn || {}, { enabled: cb.checked }); }) });
               return h('label', { class: 'check', title: '끄면 이 맵에는 몬스터가 놓이지도 다시 생기지도 않습니다 (직접 놓은 몬스터·NPC 는 그대로)' }, cb, '몬스터 스폰 (몬스터가 생기고 다시 생김)'); })(),
@@ -743,6 +744,10 @@
                     if (out) { PDM.assets.clear(); PDM.tabs.refresh(); }
                   } }, '타일셋 편집…'))))
             })),
+          PDM.filters ? section('테마별 화면 필터',
+            h('p', { class: 'hint' }, '그 테마를 쓰는 모든 맵에 화면 필터를 씌웁니다. 우선순위: 이벤트 "화면 필터" → 방 템플릿 → 맵(노드) → 그룹 → 테마.'),
+            ...[...Object.entries(PDM.THEMES).map(([kk, t]) => [kk, t.name]), ...((wd.customThemes || []).map(c => ['custom:' + c.id, c.name + ' (사용자 테마)']))]
+              .map(([tk, nm], ti) => PDM.filters.field('world', ['themeFilters', tk], nm, '(없음)', { always: ti === 0 ? 'bare' : false }))) : null,
           section('방 템플릿',
             h('p', { class: 'hint' }, '자동 생성 노드에 끼워 넣을 직접 그린 방. 그룹이나 노드 속성의 "추가 방"에서 고릅니다.'),
             ...store.all('room').map(r => h('div', {}, h('a', { href: '#', onclick: ev => { ev.preventDefault(); PDM.tabs.open('room:' + r.id); } }, `▣ ${r.name}`), h('span', { class: 'hint' }, `  ${r.size.w}×${r.size.h} · 쓰는 곳 ${PDM.mapUtil.roomUsage(r.id).length}`))),

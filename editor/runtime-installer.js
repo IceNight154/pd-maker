@@ -63,6 +63,48 @@ const PATCHES = [
     anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
   { file: 'levels/Level.java', name: '테마별 몬스터 (드랍 테이블 › 테마별 몬스터)',
     anchor: /public Mob createMob\(\)\s*\{[^\n]*\n/, where: 'after', line: `{ Mob pdmTm = ${PKG}.MakerDrops.themeMob(this); if (pdmTm != null) return pdmTm; }` },
+  { file: 'items/wands/Wand.java', name: '마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트)',
+    anchor: /\n([ \t]*)curWand\.fx\(\s*shot\s*,\s*new Callback\(\)\s*\{/, where: 'before', line: `if (${PKG}.MakerWand.zap(curWand, shot)) return;` },
+  { file: 'items/Item.java', name: '버리기 금지 (아이템 noDrop)',
+    anchor: /\n([ \t]*)actions\.add\(\s*AC_THROW\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.flagActions(this, actions);` },
+  { file: 'actors/mobs/npcs/Shopkeeper.java', name: '판매 불가 (아이템 noSell)',
+    anchor: /public static boolean canSell\(\s*Item item\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.MakerItem.noSell(item)) return false;` },
+  { file: 'windows/WndBag.java', name: '새 가방의 탭 아이콘 (아이템 kind bag)',
+    anchor: /private Image icon\(\s*Bag bag\s*\)\s*\{[^\n]*\n/, where: 'after', line: `{ Image pdmI = ${PKG}.MakerBag.icon(bag); if (pdmI != null) return pdmI; }` },
+  { file: 'ui/InventoryPane.java', name: '새 가방의 탭 아이콘 (아이템 kind bag)',
+    anchor: /private Image bagIcon\(\s*Bag bag\s*\)\s*\{[^\n]*\n/, where: 'after', line: `{ Image pdmI = ${PKG}.MakerBag.icon(bag); if (pdmI != null) return pdmI; }` },
+  // ---- 아이템 추가 기능 (MakerFacets — 사용 효과 · 던지기 효과 · 가방 기능, 한 아이템에 종류 여러 개) ----
+  { file: 'items/Item.java', name: '아이템 추가 기능: 버튼 이름', anchor: /public String actionName\(\s*String action\s*,\s*Hero hero\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `{ String pdmN = ${PKG}.MakerFacets.actionName(this, action); if (pdmN != null) return pdmN; }` },
+  { file: 'items/Item.java', name: '아이템 추가 기능: 버튼 동작', anchor: /public void execute\(\s*Hero hero\s*,\s*String action\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.MakerFacets.execute(this, hero, action)) return;` },
+  { file: 'items/Item.java', name: '아이템 추가 기능: 던져서 떨어졌을 때 (물약 · 폭탄 · 룬석)', anchor: /protected void onThrow\(\s*int cell\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.MakerFacets.onThrow(this, cell)) return;` },
+  { file: 'items/Item.java', name: '아이템 추가 기능: 저장 (가방 기능의 내용물)', anchor: /public void storeInBundle\(\s*Bundle bundle\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerFacets.store(this, bundle);` },
+  { file: 'items/Item.java', name: '아이템 추가 기능: 불러오기 (가방 기능의 내용물)', anchor: /public void restoreFromBundle\(\s*Bundle bundle\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerFacets.restore(this, bundle);` },
+  { file: 'items/Item.java', name: '아이템 추가 기능: 가방 기능 안에 든 아이템을 그 자리에서 쓰기 (빼낼 곳)', anchor: /public final Item detachAll\(\s*Bag container\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `container = ${PKG}.MakerFacets.detachFrom(this, container);` },
+  { file: 'items/weapon/missiles/MissileWeapon.java', name: '아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과', anchor: /protected void rangedHit\(\s*Char enemy,\s*int cell\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerFacets.missileHit(this, cell);` },
+  { file: 'actors/Actor.java', name: '아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기', anchor: /\n([ \t]*)for \(Blob blob : Dungeon\.level\.blobs\.values\(\)\) \{\s*add\( blob \);\s*\}[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerFacets.reviveFuses();` },
+  // ---- 캐릭터 AI · 체력 (MakerCharAI — 제자리 고정 · 코드로 직접 · 체력 무한 · 지속 회복) ----
+  { file: 'actors/mobs/Mob.java', name: '캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복', anchor: /protected boolean act\(\)\s*\{\s*\n\s*super\.act\(\);[^\n]*\n/, where: 'after',
+    line: `{ Boolean pdmAi = ${PKG}.MakerCharAI.act(this); if (pdmAi != null) return pdmAi; }` },
+  { file: 'actors/Char.java', name: '캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로)', anchor: /\n([ \t]*)if \(HP < 0\) HP = 0;/, where: 'before',
+    line: `${PKG}.MakerCharAI.afterDamage(this, dmg + shielded);` },
+  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (세로)', anchor: /\n([ \t]*)waterOfs -= 5 \* Game\.elapsed;/, where: 'before',
+    line: `waterOfs = ${PKG}.LevelHooks.waterFlowY(waterOfs);` },
+  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (가로)', anchor: /\n([ \t]*)water\.offsetTo\( 0, waterOfs \);[^\n]*\n/, where: 'after',
+    line: `${PKG}.LevelHooks.waterFlowX(water);` },
+  { file: 'actors/mobs/Mob.java', name: '캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 저장', anchor: /public void storeInBundle\(\s*Bundle bundle\s*\)\s*\{\s*\n\s*super\.storeInBundle\(\s*bundle\s*\);[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerCharAI.store(this, bundle);` },
+  { file: 'actors/mobs/Mob.java', name: '캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 불러오기', anchor: /public void restoreFromBundle\(\s*Bundle bundle\s*\)\s*\{\s*\n\s*super\.restoreFromBundle\(\s*bundle\s*\);[^\n]*\n/, where: 'after',
+    line: `${PKG}.MakerCharAI.restore(this, bundle);` },
+  { file: 'actors/mobs/Mob.java', name: '샌드백: 받은 피해를 살펴보기에', anchor: /public String info\(\)\s*\{\s*\n\s*String desc = description\(\);[^\n]*\n/, where: 'after',
+    line: `desc += ${PKG}.MakerCharAI.damageInfo(this);` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
     anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
@@ -170,7 +212,10 @@ const PATCHES = [
     line: `if ({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }())` },
   { file: 'scenes/InterlevelScene.java', name: '층을 떠날 때 (감정 결정화·일기)',
     anchor: /public void create\(\)\s*\{\s*\n([ \t]*)super\.create\(\);[^\n]*\n/, where: 'after',
-    line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` }
+    line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` },
+  // (맨 끝: 같은 자리의 다른 줄보다 먼저 오게 — 나중에 넣은 줄이 바로 아래에 붙음)
+  { file: 'actors/mobs/Mob.java', name: '캐릭터 체력 무한: 쓰러지지 않음', anchor: /public void die\(\s*Object cause\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.MakerCharAI.preventDeath(this)) return;` },
 ];
 
 function javaDir(repo) { return path.join(repo, ...JAVA_ROOT); }
@@ -212,7 +257,8 @@ function generate(repo, projectDir, log = console.log) {
   const codegen = require('./renderer/js/codegen');
   const gen = path.join(javaDir(repo), 'pdmaker', 'gen');
   const readAll = dir => { const d = path.join(projectDir, dir); if (!fs.existsSync(d)) return []; return fs.readdirSync(d).filter(f => f.endsWith('.json')).map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')); } catch (e) { log(`읽기 실패 ${dir}/${f}: ${e.message}`); return null; } }).filter(Boolean); };
-  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items')) : {};
+  const readOne = rel => { const f = path.join(projectDir, rel); try { return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; } catch (e) { log(`읽기 실패 ${rel}: ${e.message}`); return null; } };
+  const files = projectDir ? codegen.generate(readAll('heroes'), readAll('items'), readOne('gameitems.json'), readAll('characters')) : {};
   fs.mkdirSync(gen, { recursive: true });
   // 이제 안 쓰는 파일 지우기 (분류를 옮기면 예전 폴더의 파일) + 빈 폴더 정리
   const sweep = (dir, rel) => {

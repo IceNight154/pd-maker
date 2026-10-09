@@ -2,7 +2,7 @@
 //  코드 생성기 — 영웅/아이템 데이터 + 사용자 Java 코드 → 게임 저장소의 pdmaker/gen/*.java
 //   · 영웅 heroes/<id>.json 의 code.* → gen/H_<id>.java  (MakerHeroCode 를 상속, 훅 메서드)
 //   · 아이템 items/<id>.json 의 kind(melee·missile·armor) 또는 code.* → gen/I_<id>.java
-//       melee → MeleeWeapon,  missile → MissileWeapon,  armor → Armor,  그 외 → MakerItem
+//       melee → MeleeWeapon,  ranged → MakerBow(쏘기 · 발사체),  missile → MissileWeapon,  armor → Armor,  그 외 → MakerItem
 //   생성된 파일은 게임과 함께 컴파일됩니다 (▶ 테스트 플레이 / 설치 때 자동으로 다시 만듦).
 //   에디터 화면(미리보기)과 main.js(실제 생성)가 같은 파일을 씁니다.
 // ================================================================
@@ -49,16 +49,16 @@
 
   /** 아이템 훅 (kind 별로 쓸 수 있는 것) */
   const ITEM_HOOKS = [
-    { key: 'proc', kinds: ['melee', 'missile'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 무기로 맞혔을 때 (damage 를 바꾸면 적용)' },
+    { key: 'proc', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 무기로 맞혔을 때 (damage 를 바꾸면 적용)' },
     { key: 'armorProc', kinds: ['armor'], ret: 'int', params: 'Char attacker, Char defender, int damage', val: 'damage', doc: '이 갑옷을 입고 공격받았을 때' },
-    { key: 'min', kinds: ['melee', 'missile'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 피해 (lvl = 강화 수치)' },
-    { key: 'max', kinds: ['melee', 'missile'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 피해' },
+    { key: 'min', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 피해 (lvl = 강화 수치)' },
+    { key: 'max', kinds: ['melee', 'missile', 'ranged'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 피해' },
     { key: 'drMin', kinds: ['armor'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최소 방어' },
     { key: 'drMax', kinds: ['armor'], ret: 'int', params: 'int lvl, int value', val: 'value', doc: '최대 방어' },
-    { key: 'onEquip', kinds: ['melee', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착했을 때' },
-    { key: 'onUnequip', kinds: ['melee', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착을 풀었을 때' },
-    { key: 'onPickUp', kinds: ['misc', 'melee', 'missile', 'armor', 'codex', 'grimoire'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
-    { key: 'desc', kinds: ['misc', 'melee', 'missile', 'armor', 'codex', 'grimoire'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
+    { key: 'onEquip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착했을 때' },
+    { key: 'onUnequip', kinds: ['melee', 'ranged', 'armor'], ret: 'void', params: 'Hero hero', doc: '장착을 풀었을 때' },
+    { key: 'onPickUp', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire', 'bag'], ret: 'void', params: 'Hero hero', doc: '주웠을 때' },
+    { key: 'desc', kinds: ['misc', 'melee', 'ranged', 'missile', 'armor', 'codex', 'grimoire', 'bag'], ret: 'String', params: 'String value', val: 'value', doc: '설명 글 (value = 에디터에 쓴 설명)' }
   ];
 
   const safeId = id => String(id).replace(/[^A-Za-z0-9_]/g, '_');
@@ -94,7 +94,7 @@
     return out;
   }
   const itemSub = i => i.subtype !== undefined && i.subtype !== null ? i.subtype
-    : i.kind === 'melee' ? 'melee' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
+    : i.kind === 'melee' ? 'melee' : i.kind === 'ranged' ? 'ranged' : i.kind === 'missile' ? 'missile' : i.kind === 'armor' ? 'armor' : i.kind === 'codex' ? ((i.codex || {}).type || 'melee') : '';
   /** ['items', 분류, 세부 종류] */
   const itemDirs = it => ['items', pkgSeg(it.category || 'misc') || 'misc', pkgSeg(itemSub(it))].filter(Boolean);
   /** gen 폴더 기준 파일 경로: items/weapon/melee/I_sword.java */
@@ -194,9 +194,9 @@
   const heroNeedsClass = hero => HERO_HOOKS.some(h => has((hero.code || {})[h.key])) || has((hero.code || {}).members) || codeCasts(hero).length > 0 || codeEntries(hero).length > 0;
 
   // ---------------------------------------------------------------- 아이템
-  const KIND_BASE = { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' };
+  const KIND_BASE = { melee: 'MeleeWeapon', ranged: 'MakerBow', missile: 'MissileWeapon', armor: 'Armor', misc: 'MakerItem', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire', bag: 'MakerBag' };
   /** 데이터로 도는 종류 (MakerItem 계열: 이름·설명·값을 데이터에서 읽음) */
-  const DATA_KINDS = ['misc', 'codex', 'grimoire'];
+  const DATA_KINDS = ['misc', 'codex', 'grimoire', 'bag'];
   /** 게임 아이템 상속(kind game): 바탕 클래스 경로로 훅 종류 추측 */
   const gameBaseKind = base => /^weapon\.melee\./.test(base || '') ? 'melee' : /^weapon\.missiles\./.test(base || '') ? 'missile' : /^armor\.(?!glyphs)/.test(base || '') ? 'armor' : 'misc';
   const hookKind = it => it.kind === 'game' ? gameBaseKind(it.base) : (KIND_BASE[it.kind] ? it.kind : 'misc');
@@ -217,6 +217,7 @@
     // 초기값
     const init = [`image = GenSupport.image(ID, image);`];
     if (kind === 'melee') init.push(`tier = ${num(w.tier, 1) | 0};`, `DLY = ${fnum(num(w.delay, 1))};`, `RCH = ${num(w.reach, 1) | 0};`, `ACC = ${fnum(num(w.accuracy, 1))};`);
+    if (kind === 'ranged') init.push(`tier = ${num(w.tier, 1) | 0};`, `DLY = ${fnum(num(w.delay, 1))};`, `ACC = ${fnum(num(w.accuracy, 1))};`);   // 쏘기 · 발사체는 MakerBow 가 데이터(ranged)로
     if (kind === 'missile') init.push(`tier = ${num(w.tier, 1) | 0};`, `baseUses = ${fnum(num(w.baseUses, 8))};`, `sticky = ${w.sticky === false ? 'false' : 'true'};`, `DLY = ${fnum(num(w.delay, 1))};`, `ACC = ${fnum(num(w.accuracy, 1))};`);
     const dk = DATA_KINDS.includes(kind);
     if (dk) init.push(`makerId = ID;`, `applyData();`);
@@ -225,7 +226,7 @@
     if (kind !== 'misc' && it.stackable && kind === 'missile') { /* 투척 무기는 원래 겹침 */ }
     s += `\t{\n${init.map(x => '\t\t' + x).join('\n')}\n\t}\n\n`;
     // 이름·설명
-    if (kind === 'melee' || kind === 'missile') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn enchantment != null && (cursedKnown || !enchantment.curse()) ? enchantment.name(n) : n;\n\t}\n`;
+    if (kind === 'melee' || kind === 'missile' || kind === 'ranged') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn enchantment != null && (cursedKnown || !enchantment.curse()) ? enchantment.name(n) : n;\n\t}\n`;
     if (kind === 'armor') s += `\t@Override public String name() {\n\t\tString n = GenSupport.name(ID);\n\t\treturn glyph != null && (cursedKnown || !glyph.curse()) ? glyph.name(n) : n;\n\t}\n`;
     if (!dk || hk('desc')) {
       if (hk('desc')) s += `\t${mark('아이템 ' + it.id, 'desc')}\n\t@Override public String desc() {\n\t\tString value = GenSupport.desc(ID);\n${hookBody(code.desc, hk('desc'), '\t\t')}\n\t}\n\n`;
@@ -241,7 +242,7 @@
       if (!hk(hook)) return `\t@Override public int ${fn}(int lvl) { return ${val}; }\n`;
       return `\t${mark('아이템 ' + it.id, hook)}\n\t@Override public int ${fn}(int lvl) {\n\t\tint value = ${val};\n${hookBody(code[hook], hk(hook), '\t\t')}\n\t}\n`;
     };
-    if (kind === 'melee' || kind === 'missile') {
+    if (kind === 'melee' || kind === 'missile' || kind === 'ranged') {
       s += dmgFn('min', w.min, w.minPerLvl, 'min') + dmgFn('max', w.max, w.maxPerLvl, 'max');
       if (num(w.str, 0) > 0) s += `\t@Override public int STRReq(int lvl) { return ${num(w.str, 0) | 0} + (super.STRReq(lvl) - super.STRReq(0)); }\n`;
       s += '\n';
@@ -278,6 +279,8 @@
     return s;
   }
 
+  /** 피해를 주는 마법봉 (DamageWand — min/max 를 고칠 수 있음, SPD 4.0) */
+  const DAMAGE_WANDS = ['WandOfBlastWave', 'WandOfDisintegration', 'WandOfFireblast', 'WandOfFrost', 'WandOfLightning', 'WandOfLivingEarth', 'WandOfMagicMissile', 'WandOfPrismaticLight', 'WandOfTransfusion'];
   /** 게임 아이템 상속: items.<base> 를 그대로 상속하고, 이름·설명·그림·가격은 비어 있으면 게임 것, 훅·행동·추가 멤버로 고침 */
   function gameItemSource(it) {
     const code = it.code || {};
@@ -293,6 +296,13 @@
     if (hk('desc')) s += `\t${mark('아이템 ' + it.id, 'desc')}\n\t@Override public String desc() {\n\t\tString value = ${has(it.desc) ? 'GenSupport.desc(ID)' : 'super.desc()'};\n${hookBody(code.desc, hk('desc'), '\t\t')}\n\t}\n\n`;
     else if (has(it.desc)) s += `\t@Override public String desc() { return GenSupport.desc(ID); }\n`;
     if (num(it.price, 0) > 0) s += `\t@Override public int value() { return GenSupport.price(ID, super.value(), quantity); }\n`;
+    // 마법봉 수치 (wand { charges, min, max, minPerLvl, maxPerLvl } — 비우면 게임 그대로)
+    if (/^wands\./.test(base) && it.wand) {
+      const wd = it.wand, cls = base.split('.').pop();
+      if (num(wd.charges, 0) > 0) s += `\t@Override public int initialCharges() { return ${num(wd.charges, 2) | 0}; }\n`;
+      if (DAMAGE_WANDS.includes(cls) && typeof wd.min === 'number' && isFinite(wd.min)) s += `\t@Override public int min(int lvl) { return ${num(wd.min, 0) | 0} + lvl * ${num(wd.minPerLvl, 0) | 0}; }\n`;
+      if (DAMAGE_WANDS.includes(cls) && typeof wd.max === 'number' && isFinite(wd.max)) s += `\t@Override public int max(int lvl) { return ${num(wd.max, 0) | 0} + lvl * ${num(wd.maxPerLvl, 0) | 0}; }\n`;
+    }
     s += '\n';
     const w = { min: 'min', max: 'max' };
     ['min', 'max'].forEach(k => { if (hk(k)) s += `\t${mark('아이템 ' + it.id, k)}\n\t@Override public int ${k}(int lvl) {\n\t\tint value = super.${k}(lvl);\n${hookBody(code[k], hk(k), '\t\t')}\n\t}\n`; });
@@ -323,8 +333,36 @@
     return s;
   }
 
+  /** 마법봉 공격 이펙트 코드 (wandFx.bolt = code) — 프로젝트 마법봉(item:<id>) · 게임 마법봉(gameitems spd:wands.X) 를 한 파일에. 런타임 MakerWand 가 GenWandFx.fx(key, …) 로 부름 */
+  const WANDFX_DOC = '쓸 수 있는 것: wand (이 마법봉) · bolt (Ballistica — 날아가는 길) · cell (닿는 칸 = bolt.collisionPos) · hero · done (날아가는 효과가 끝났을 때 부르기 — 부르면 마법봉 효과가 일어남, 꼭 한 번)';
+  const WANDFX_SNIPPET = 'MagicMissile.boltFromChar(hero.sprite.parent, MagicMissile.FIRE, hero.sprite, cell, done);\nSample.INSTANCE.play(Assets.Sounds.ZAP);';
+  function wandFxSource(items, gameitems) {
+    const list = [];
+    (items || []).forEach(it => { const f = it && it.wandFx; if (f && f.on && f.bolt === 'code' && has(f.code)) list.push(['item:' + it.id, '아이템 ' + it.id, f]); });
+    Object.entries(((gameitems || {}).items) || {}).forEach(([k, v]) => { const f = v && v.wandFx; if (f && f.on && f.bolt === 'code' && has(f.code)) list.push([k, '게임 아이템 ' + k, f]); });
+    const imps = list.map(([, , f]) => f.imports || '').join('\n') + `\n${PKG}.items.wands.Wand\n${PKG}.mechanics.Ballistica\ncom.watabou.utils.Callback\n${PKG}.effects.particles.*`;
+    let s = header(imps, '마법봉 공격 이펙트 코드', '');
+    s += `public class GenWandFx {\n\t/** key = item:<id> 또는 spd:wands.<클래스> — 코드가 있으면 실행하고 true */\n\tpublic static boolean fx(String key, Wand wand, Ballistica bolt, Callback done) {\n\t\tHero hero = Dungeon.hero; int cell = bolt.collisionPos;\n\t\tswitch (key) {\n`;
+    list.forEach(([k, what, f]) => { s += `\t\t\tcase ${lit(k)}: {\n\t\t\t\t${mark(what, '마법봉 이펙트 코드')}\n${indent(f.code, '\t\t\t\t')}\n\t\t\t\treturn true;\n\t\t\t}\n`; });
+    s += `\t\t}\n\t\treturn false;\n\t}\n}\n`;
+    return s;
+  }
+
+  /** 캐릭터 AI 코드 (ai.mode = code) — 런타임 MakerCharAI 가 GenCharAI.act(charId, self, ai) 로 매 행동마다 부름 */
+  const CHARAI_DOC = '쓸 수 있는 것: self (이 캐릭터 — Mob) · hero · level · ai (도우미: ai.stepTo(칸) · ai.stepAway(칸) · ai.wander() · ai.attack(대상) · ai.waitTurn() · ai.teleport(칸) · ai.hunt(대상) · ai.say("글") · ai.cell(x, y) · ai.dist(칸) · ai.sees(캐릭터) · ai.near(캐릭터) · ai.now()). 턴을 쓰는 도우미(이동 · 공격 · 기다리기)를 부르면 그 차례는 그걸로 끝납니다 (return 을 빠뜨려도 됨 · 한 차례에 하나만). 아무 도우미도 안 부르거나 return ai.def(); 이면 원래 AI 대로.';
+  const CHARAI_SNIPPET = '// 영웅이 보이면 3칸 거리를 두고, 붙으면 공격, 안 보이면 돌아다님\nif (ai.sees(hero)) {\n\tif (ai.near(hero)) return ai.attack(hero);\n\tif (ai.dist(hero.pos) < 3) return ai.stepAway(hero.pos);\n\treturn ai.waitTurn();\n}\nreturn ai.wander();';
+  function charAISource(chars) {
+    const list = (chars || []).filter(c => c && c.id && c.ai && c.ai.mode === 'code' && has(c.ai.code));
+    const imps = list.map(c => c.ai.imports || '').join('\n') + `\n${PKG}.actors.mobs.Mob\n${PKG}.levels.Level\n${PKG}.pdmaker.MakerCharAI`;
+    let s = header(imps, '캐릭터 AI 코드', '');
+    s += `public class GenCharAI {\n\t/** 코드가 있으면 실행 — true = 이번 턴을 씀, null · false = 원래 AI */\n\tpublic static Boolean act(String charId, Mob self, MakerCharAI.Ctl ai) {\n\t\tHero hero = Dungeon.hero; Level level = Dungeon.level;\n\t\tswitch (charId) {\n`;
+    list.forEach(c => { s += `\t\t\tcase ${lit(c.id)}: {\n\t\t\t\t${mark('캐릭터 ' + c.id, 'AI 코드')}\n\t\t\t\tif (true) {\n${indent(c.ai.code, '\t\t\t\t\t')}\n\t\t\t\t}\n\t\t\t\tbreak;\n\t\t\t}\n`; });
+    s += `\t\t}\n\t\treturn null;\n\t}\n}\n`;
+    return s;
+  }
+
   /** 프로젝트 전체 → { '파일이름.java': 소스 } */
-  function generate(heroes, items) {
+  function generate(heroes, items, gameitems, chars) {
     const out = {};
     projItems = items || [];
     (heroes || []).forEach(h => { if (h && h.id && heroNeedsClass(h)) out[heroClass(h.id) + '.java'] = heroSource(h); });
@@ -333,6 +371,8 @@
     // 클래스 찾기 표: 런타임(GenSupport)이 아이템 id 로 클래스를 찾을 때 씀 (분류를 옮기면 패키지가 바뀌므로)
     out['GenIndex.java'] = `// 자동 생성 파일 — PDMaker 가 만듭니다. 아이템 클래스가 어느 폴더(분류/세부 종류)에 있는지.\npackage ${PKG}.pdmaker.gen;\n\npublic class GenIndex {\n\tpublic static final String[][] ITEMS = {\n`
       + index.map(([a, b]) => `\t\t{ ${lit(a)}, ${lit(b)} },\n`).join('') + '\t};\n}\n';
+    out['GenWandFx.java'] = wandFxSource(items, gameitems);
+    out['GenCharAI.java'] = charAISource(chars);
     projItems = null;
     return out;
   }
@@ -375,5 +415,5 @@
     return out;
   }
 
-  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
+  return { HERO_HOOKS, ITEM_HOOKS, ENTRY_HOOKS, ENTRY_KINDS, hookKind, gameBaseKind, IMPORTS, lint, generate, DAMAGE_WANDS, wandFxSource, WANDFX_DOC, WANDFX_SNIPPET, charAISource, CHARAI_DOC, CHARAI_SNIPPET, heroSource, itemSource, heroClass, itemClass, itemPath, itemPkg, pkgSeg, heroNeedsClass, itemNeedsClass, locate };
 });

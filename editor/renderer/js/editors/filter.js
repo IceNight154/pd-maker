@@ -242,7 +242,9 @@ for (let i = 0; i < 6; i++) {
   PDM.filters = { K, make, PRESETS, TEX, makeTex, ops, list, bake, exportApng, CODE,
     invalidate(png) { if (png) delete imgCache[png]; else Object.keys(imgCache).forEach(k => delete imgCache[k]); },
     /** 속성 창에 넣는 "화면 필터" 고르기 칸 (확장 기능이 꺼져 있고 값도 없으면 안 보임) */
-    field(key, path, label, empty) { const cur = PDM.deepGet ? PDM.deepGet(store.get(key), path) : null; if (!(PDM.extensions && PDM.extensions.on(K)) && !cur) return null; return PDM.ui.F.ref(key, path, 'filter', { label: label || '화면 필터', empty: empty || '(없음)' }); } };
+    field(key, path, label, empty, o = {}) { const cur = PDM.deepGet ? PDM.deepGet(store.get(key), path) : null;
+      if (!(PDM.extensions && PDM.extensions.on(K)) && !cur) return o.always ? PDM.ui.field(o.always === 'bare' ? '' : label || '화면 필터', h('span', { class: 'hint' }, '화면 필터 확장 기능이 꺼져 있습니다 — ', h('a', { href: '#', onclick: e => { e.preventDefault(); store.edit('project', '확장 기능 켜기: 화면 필터', p => { p.extensions = Object.assign({}, p.extensions || {}, { [K]: true }); }); PDM.tabs.refresh && PDM.tabs.refresh(); } }, '켜기'))) : null;
+      return PDM.ui.F.ref(key, path, 'filter', { label: label || '화면 필터', empty: empty || '(없음)' }); } };
 
   const TRANS = { fade: '페이드 (서서히)', dissolve: '디졸브 (점으로 흩어짐)', slide: '슬라이드 (레터박스 띠가 밀려옴)', none: '없음 (바로)' };
   const TYPES = { tint: '색 덮기', letterbox: '레터박스 (위아래 띠)', vignette: '조리개 (가장자리 어둡게)', image: '그림 깔기 (흐르는 무늬)', code: '코드로 그리기 (JS · CSS)', flash: '번쩍임', shake: '화면 흔들림' };

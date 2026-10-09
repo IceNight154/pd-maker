@@ -100,11 +100,19 @@ public class MakerAssets {
 	static List<String> customItemRefs() {
 		if (itemRefs != null) return itemRefs;
 		java.util.TreeSet<String> set = new java.util.TreeSet<>();
-		for (JsonValue it : MakerRuntime.items.values()) { JsonValue sp = it.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png")); }
+		for (JsonValue it : MakerRuntime.items.values()) {
+			JsonValue sp = it.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png"));
+			// 원거리 무기의 발사체 그림 · 마법봉 이펙트의 날아가는 그림
+			JsonValue r = it.get("ranged"), p = r == null ? null : r.get("proj"), ps = p == null ? null : p.get("sprite"); if (ps != null && !ps.getString("png", "").isEmpty()) set.add(ps.getString("png"));
+			JsonValue wf = it.get("wandFx"), ws = wf == null ? null : wf.get("sprite"); if (ws != null && !ws.getString("png", "").isEmpty()) set.add(ws.getString("png"));
+		}
 		// 영웅 주문서 그림 (spellbook.image 가 "assets/…png" 파일이면)
 		for (JsonValue hr : MakerRuntime.heroes.values()) { JsonValue bk = hr.get("spellbook"); if (bk != null && bk.get("image") != null && bk.get("image").isString() && !bk.getString("image", "").isEmpty()) set.add(bk.getString("image")); }
 		JsonValue gi = MakerRuntime.gameitems == null ? null : MakerRuntime.gameitems.get("items");
-		if (gi != null) for (JsonValue e : gi) { JsonValue sp = e.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png")); }
+		if (gi != null) for (JsonValue e : gi) {
+			JsonValue sp = e.get("sprite"); if (sp != null && !sp.getString("png", "").isEmpty()) set.add(sp.getString("png"));
+			JsonValue wf = e.get("wandFx"), ws = wf == null ? null : wf.get("sprite"); if (ws != null && !ws.getString("png", "").isEmpty()) set.add(ws.getString("png"));
+		}
 		List<String> out = new ArrayList<>();
 		FileHandle root = MakerRuntime.root();
 		for (String r : set) {

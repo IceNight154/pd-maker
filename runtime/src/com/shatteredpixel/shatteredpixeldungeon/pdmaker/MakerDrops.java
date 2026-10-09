@@ -106,10 +106,20 @@ public class MakerDrops {
 	/** 이 몬스터의 프로젝트 캐릭터 id (게임 몬스터는 game 이 그 클래스인 캐릭터) */
 	static String charOf(Mob m) {
 		if (m instanceof MakerMob) return ((MakerMob) m).charId;
-		String cn = m.getClass().getName();
+		String tagged = MakerCharAI.tagOf(m);   // 프로젝트 캐릭터로 만든 게임 클래스 (복제한 원작 캐릭터도 구별)
+		if (tagged != null) return tagged;
+		return charOfClass(m.getClass());
+	}
+	/** 게임이 스스로 만든 몬스터: 그 클래스의 원작 캐릭터(id = 클래스 이름의 snake_case — 편집기 vanillaCharId), 없으면 game 이 같은 첫 캐릭터 */
+	static String charOfClass(Class<?> c) {
+		String cn = c.getName();
 		String pre = "com.shatteredpixel.shatteredpixeldungeon.actors.mobs.";
-		if (!cn.startsWith(pre)) return null;
+		if (!cn.startsWith(pre) || MakerRuntime.chars == null) return null;
 		cn = cn.substring(pre.length());
+		String last = cn.substring(Math.max(cn.lastIndexOf('.'), cn.lastIndexOf('$')) + 1);
+		String vid = last.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
+		JsonValue v = MakerRuntime.chars.get(vid);
+		if (v != null && cn.equals(v.getString("game", ""))) return vid;
 		for (Map.Entry<String, JsonValue> e : MakerRuntime.chars.entrySet()) if (cn.equals(e.getValue().getString("game", ""))) return e.getKey();
 		return null;
 	}

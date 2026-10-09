@@ -79,7 +79,7 @@ PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구
 
 // ---------- 캐릭터 / 아이템 ----------
 PDM.CHAR_KINDS = { npc: 'NPC', companion: '동료', mob: '몬스터', boss: '보스' };
-PDM.AI_MODES = { stand: '제자리', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)' };
+PDM.AI_MODES = { stand: '제자리', fixed: '제자리에 고정 (움직이지도 밀려나지도 않음 — 샌드백)', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)', code: '코드로 직접 (Java)' };
 PDM.ANIM_KEYS = ['idle', 'run', 'attack', 'zap', 'die', 'operate'];
 /** 영웅 시트에만 있는 기본 동작 (게임 HeroSprite 의 fly · read) · 캐릭터는 fly 만 */
 PDM.ANIM_KEYS_HERO = ['idle', 'run', 'attack', 'zap', 'die', 'dead', 'operate', 'fly', 'read'];   // dead = 쓰러진 뒤 이어서 반복 (선택)
@@ -398,6 +398,14 @@ PDM.make = {
     if (kind === 'missile') return { tier, min: 2 * tier, max: 5 * tier, minPerLvl: 1, maxPerLvl: tier, str: 0, delay: 1, accuracy: 1, baseUses: 8, sticky: true };
     return { tier, min: tier, max: 5 * (tier + 1), minPerLvl: 1, maxPerLvl: tier + 1, str: 0, delay: 1, reach: 1, accuracy: 1 };
   },
+  /** 원거리 무기 기본값 — 영혼의 활처럼 화살을 무한히 (런타임 MakerBow) */
+  rangedStats() { return { shootLabel: '', needEquip: true, ammo: 'none', projectile: '', proj: { name: '', damage: 'bow', accuracy: 1, spin: false, sprite: { sheet: 'builtin:items', name: 'SPIRIT_ARROW', index: 0 } } }; },
+  /** 아이템 추가 기능 기본값 (런타임 MakerFacets) */
+  useFx() { return { on: true, label: '', consume: false, time: 1, sound: '', fx: '', effects: [{ type: 'heal', on: 'self', amount: 10 }] }; },
+  throwFx() { return { on: true, consume: true, fuse: 0, sound: '', fx: '', effects: [{ type: 'damage', on: 'everyone', radius: 1, min: 5, max: 10 }] }; },
+  bagFx() { return { on: true, capacity: 10, holds: 'all', categories: [], items: [], tags: [], tagsText: '', openLabel: '', putLabel: '' }; },
+  /** 완전히 새 가방 (런타임 MakerBag) */
+  bagStats() { return { capacity: 20, holds: 'filter', categories: [], items: [], tags: [], tagsText: '', tabIcon: 'item' }; },
   armorStats(tier) { tier = tier || 1; return { tier, drMin: 0, drMax: tier * 2, drMinPerLvl: 1, drMaxPerLvl: tier, str: 0 }; },
   itemAction() { return { id: 'use', name: '사용', cond: '', default: true, consume: false, time: 1, code: 'GLog.i("사용했다!");' }; },
   event(id, kind) {
@@ -464,13 +472,13 @@ PDM.SKILL_EFFECTS = {
   gauge: { name: '게이지 (과열) 바꾸기', fields: ['amount'] },
   code: { name: '코드 (Java)', fields: ['code'] }
 };
-PDM.ITEM_KINDS = { misc: '일반 (사용 명령·코드 행동)', melee: '근접 무기', missile: '투척 무기', armor: '갑옷', codex: '코덱스 (내구가 닳는 사용형 마법 — mod-2)', grimoire: '그리모어 (코덱스 가방)', game: '게임 아이템 상속 (게임 클래스를 코드로 고치기)' };
+PDM.ITEM_KINDS = { misc: '일반 (사용 명령·코드 행동)', melee: '근접 무기', ranged: '원거리 무기 (활 · 석궁 — 쏘기로 발사체)', missile: '투척 무기', armor: '갑옷', bag: '가방 (칸 수 · 넣을 수 있는 것 — 완전히 새 가방)', codex: '코덱스 (내구가 닳는 사용형 마법 — mod-2)', grimoire: '그리모어 (코덱스 가방)', game: '게임 아이템 상속 (게임 클래스를 코드로 고치기)' };
 PDM.CODEX_TYPES = { melee: '근접 (옆 칸 적)', ranged: '원거리 (날아가 맞힘)', cast: '시전 (범위·자신)' };
 /** 게임 전직 (HeroSubClass) — 전직의 "게임 전직 효과도 켜기" */
 PDM.GAME_SUBCLASSES = { BERSERKER: '광전사', GLADIATOR: '검투사', BATTLEMAGE: '전투 마법사', WARLOCK: '흑마법사', ASSASSIN: '암살자', FREERUNNER: '질주자',
   SNIPER: '저격수', WARDEN: '감시자', CHAMPION: '챔피언', MONK: '수도사', PRIEST: '사제', PALADIN: '성기사',
   ARIA_HARMONY: '아리아: 조화 (mod-2)', ARIA_OVERHEAT: '아리아: 과열 (mod-2)', ARIA_GRIMOIRE_INK: '아리아: 잉크 그리모어 (mod-2)' };
-PDM.EFFECT_ON = { target: '대상', self: '자신', area: '범위 안의 적' };
+PDM.EFFECT_ON = { target: '대상', self: '자신', area: '범위 안의 적', everyone: '범위 안 모두 (자신 · 아군 포함)' };
 PDM.PASSIVE_STATS = { hp: '최대 체력 +', str: '힘 + (한 번)', regen: 'N턴마다 체력 1 회복', gold: '골드 + (한 번)', charges: '주문서 최대 충전 +' };
 /** 전직 · 게이지 단계 · 원소가 주는 능력치 ({stat, value}) */
 PDM.HERO_STATS = { hp: '최대 체력 +', accuracy: '명중 +', evasion: '회피 +', damage: '공격 피해 +', armor: '방어 +', speed: '이동 속도 +%',

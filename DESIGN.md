@@ -83,6 +83,7 @@
 | `levelpreview.js` | 타일셋 실시간 미리보기 |
 | `resops.js` | 파일 하나짜리 리소스(캐릭터 · 아이템 · 이벤트 · 맵 오브젝트 · 방 템플릿 · 영웅 — 영웅은 id 바꾸기 · 복제를 자기 방식으로 `o.rename/dup`) 공용 동작 `PDM.resOps` — 이름 바꾸기 · id 바꾸기(맵 오브젝트 · 이벤트 명령 매개변수 · 퀘스트 · 상점 · 드랍 · 영웅 연결 등 쓰는 곳도 고침) · 복제 · 삭제(쓰는 곳 수 표시) · 쓰는 곳 보기. 리소스 목록 메뉴와 편집 화면 맨 위 공용 도구 줄(`app.js render` 가 붙임). 방 템플릿은 맵 편집 화면이라 속성 창 맨 위에 같은 도구 줄 + "방 미리보기" 창의 카드마다 편집 · 복제 · 삭제(오른쪽 클릭 = 같은 메뉴) |
 | `clip.js` | 공용 클립보드 `PDM.clip` — Ctrl+C/V. 메모리 + 시스템 클립보드 JSON(다른 프로젝트 · 창에도). kind: `res:<종류>` · `list:<저장 키>` · `nodes` · `mapobj` · `cmds`. 붙여넣기는 지금 탭의 `ctx.copy/paste` → 리소스 · 목록 항목 기본 처리 |
+| `tips.js` | 설명문 표시 `PDM.tips` — 모드 hover(기본: 설명문을 숨기고 그 기능에 마우스를 올리면 상자) · inline(항상 펼침) · off(숨김), 보기 메뉴 · `localStorage pdm.hints`. 편집기 코드는 그대로 두고 MutationObserver 로 `p/div/small.hint` · `.lead` 를 찾아 붙일 곳을 정함(입력칸 설명 → `label.field`, 앞 요소, 앞이 여러 칸 묶음이거나 없으면 섹션 제목) → 대상에 `_tipEls`, 설명문에 `.tipped`(CSS 로 숨김), 제목 · 입력칸 이름에 ⓘ. 버튼 · 링크 · 입력칸을 담은 설명, 경고(글자색 · .bad), 테두리 상자, 대화상자 안, 줄 안의 `span.hint` 는 그대로. `title` 속성도 같은 상자로 (브라우저 말풍선 대신) |
 | `keys.js` | 단축키 `PDM.keys` — 동작 표(id · 기본 키 · scope global/draw) + 사용자 키(`localStorage pdm.keys`), `e.code` 기준 키 이름, 편집 › 단축키 설정 창 |
 | `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 복사/붙여넣기 · 삭제 · id 바꾸기 · 쓰는 곳(이벤트 명령 `cmdType`+`cmdKey` · 맵 오브젝트 `objType` · 참조 칸 `fields`) · 순서 `PDM.listOps` — 도구 줄은 resOps 와 같은 모양 |
 | `gamescan.js` · `gamehero.js` · `gameinfo.js` | 게임 저장소 소스를 읽어 목록 맞추기 · 원래 값 보여 주기 (§2.5) |
@@ -259,6 +260,14 @@ MyProject/
 ### 4.6 타일셋 · 사용자 테마 (`editors/gameart.js` "맵 그림")
 
 - 사용자 테마 `customThemes[{ id, name, base, tiles, water, music, light* }]` — 게임 테마 타일셋을 복사해 고침. 16×16칸이면 크기 자유(가로 ÷ 16 = 한 칸 px), "배율 적용"(×0.25~×4). 게임: 연결 줄 3개(`DungeonTilemap` → `LevelHooks.hiresTiles` 가 큰 칸 필름으로, `tileImg` 가 발견 연출 · 정보 창 크기 맞춤).
+- **물 그림**: 사용자 테마의 `water` — "물 그림 만들기(바탕 테마 물 복사 → `assets/tiles/<id>_water.png`)" · 편집 · PNG 불러오기 · 바탕 테마 물로, 2×2 이음매 미리보기. 런타임 `MakerLevel.waterTex` → `LevelHooks.customWater`(`pdmaker:water:<id>` 텍스처, 비우면 바탕 테마 물). 게임 물 그림(water0~4)은 "게임 물 그림"에서 고침(그 테마 전체). 편집기 맵 화면도 물 칸을 실제 물 그림으로(`assets.themeWater` — 사용자 테마는 타일셋 사본 캔버스에 물을 묶음).
+  "▦ 사용자 타일에서…": 사용자 타일을 이 테마의 **물** 로 — `waterTile`(타일 id) · `waterFxEvery`(효과는 몇 칸마다, 기본 1).
+  - 그림: 런타임 `LevelHooks.customTex` 가 그 타일 그림으로 물 텍스처를 만듦(`tileWater` — 흐르는 타일 = 그림 전체, 칸 타일 = 그 칸을 32×32 이상으로 이어 붙임; 타일을 고치면 게임에도 그대로). 편집기는 미리보기용 사본 `assets/tiles/<id>_water.png`("↻ 다시 가져오기").
+  - 효과 · 살펴보기 이름: `LevelHooks.afterCreate` → `MakerUserTiles.themeWater` 가 그 층의 물 칸마다 타일 id + `#water`(효과 건너뛰는 칸은 `#waterq`)로 넣음 → `finish` 가 효과(fx · gameFx) · 이름만 붙이고 그림은 덮지 않음(물가 모양 그대로). 맵에 직접 칠한 칸은 그대로.
+  - 흐름: 흐르는 타일이면 `GameScene.update` 연결 줄 2개(`waterOfs -= 5 * Game.elapsed` 앞 `waterFlowY` · `water.offsetTo` 뒤 `waterFlowX`)가 그 속도(flowX · flowY)로.
+- **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over, fx, gameFx, title, desc }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿 `layers.utile[칸] = id`(지우개 "사용자 타일", 크기 바꾸기 · 맵 전체 지우기도 함께). 런타임 `MakerUserTiles`: `MakerLevel.build` · `TemplateRoom.paintTemplate` 가 `put(칸, id)` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
+- **흐르는 그림 타일** (물 그림을 사용자 타일로): `flow` · `flowX` · `flowY`(px/초, 게임 물 0 · -5) — 그림 고르기에 게임 물(water0~4) · 사용자 테마 물이 있음, "+ 효과 타일"에 "흐르는 물 그림" · "빛나는 물(물 + 치유의 샘)". 런타임 `MakerUserTiles.FlowTiles`(칸마다 SkinnedBlock, 세상 좌표 + 시간으로 오프셋 → 이음매 없이 흐름, 다른 사용자 타일 · 효과 아래). 효과 · 살펴보기 이름도 함께. 편집기는 이어 붙인 멈춘 모습.
+- **효과 타일** (희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일): 사용자 타일의 `gameFx`(게임 효과 — sink 배수구 물방울 · torch 감옥 횃불 · vein 광맥 · smoke · greenflame · stream · alchemy 솥 거품 · sacrificial 희생의 불꽃 · healing · flame · sparks) · `fx`(effects.json — `MakerEffect.place`) · `title`/`desc`(살펴보기 창). `image` 를 비우면 그림 없이 지형(칠할 때 지형)의 원래 그림 + 효과. 맵 그림의 "+ 효과 타일 (게임 프리셋)"(재단 · 솥 · 배수구 · 횃불 벽 · 샘 · 연기 벽 · 광맥 · 초록 불꽃). 런타임: `finish` 가 칸마다 효과를 놓음 — `MakerUserTiles.GameFx`(CustomTilemap, 지형 층에 효과 Gizmo 를 붙임): 공개 클래스(PrisonLevel.Torch · CityLevel.Smoke/GreenFlame)는 그대로, 지역 전용 비공개 장식(SewerLevel Sink · CavesLevel Vein · HallsLevel Stream)은 `Level.map` 을 잠깐 그 칸만 해당 지형으로 바꾼 채 `add…Visuals` 를 불러 그 칸 것만 만듦, 솥 · 재단 · 샘 · 불꽃은 게임 입자(Speck.BUBBLE · SacrificialParticle · Speck.HEALING · FlameParticle · SparkParticle)를 `CellEmitter`(영웅이 보는 칸만)로. 이름 · 설명이 있으면 `image()/name()/desc()` 로 살펴보기 창(그림 없는 타일은 지형 그림). 편집기 맵 화면 · 팔레트에 ✦ 표시. 헤드리스 `eval:cellname,x,y`.
 - 타일셋 · 물 그림을 픽셀 편집기로 열면 옆에 **실시간 미리보기**(`levelpreview.js` — 게임이 만든 층 표본 `spd-level-previews.js`, 바닥 · 벽 타일 칸 번호까지 담아 벽 이어 붙이기가 게임과 같음).
 - 타일 효과(빛) 레이어 · 번짐 → §5.2 · §5.3.
 
@@ -316,7 +325,7 @@ MyProject/
 
 ### 5.6 화면 필터 (확장 `filters` · `editors/filter.js` · 런타임 `MakerFilter`)
 - `filters.json { list: [{ id, name, overUI, inType, outType, inSec, outSec, layers }] }`. 층: `tint`(색 · 진하기 · 더하기 · 깜빡임) · `image`(반복 무늬 — 배율 · 흐름 · 튐 · 시트 프레임, `fit: stretch` = 한 장 늘려 덮기) · `vignette`(조리개) · `letterbox`(띠, side tb|lr) · `flash` · `shake` · `code`(JS/CSS 를 편집기가 PNG 시트로 구움 — 게임에서 코드는 실행되지 않음, 여러 프레임이면 `_anim.png` APNG 도).
-- 적용 우선순위: 이벤트 명령 `filter`(set/map/off → StoryState `__filter`, 저장됨) → 영웅이 있는 방 템플릿 → 노드 → 그룹. 런타임은 UI 아래 · 위 `Host` 두 개, 바뀌면 이전 것을 `leave()` 시키고 새것을 나타냄(fade · dissolve(16단계 점 무늬) · slide · none). 대사창이 UI 를 숨겨도 필터는 그대로.
+- 적용 우선순위: 이벤트 명령 `filter`(set/map/off → StoryState `__filter`, 저장됨) → 영웅이 있는 방 템플릿 → 노드 → 그룹 → 테마(`world.themeFilters { "SEWER" | "custom:<id>": 필터 id }` — 맵 그래프 월드 설정 "테마별 화면 필터"). 노드 필터는 맵 화면 설정과 맵 그래프 노드 속성 창 양쪽에서(확장이 꺼져 있으면 "켜기" 링크). 런타임은 UI 아래 · 위 `Host` 두 개, 바뀌면 이전 것을 `leave()` 시키고 새것을 나타냄(fade · dissolve(16단계 점 무늬) · slide · none). 대사창이 UI 를 숨겨도 필터는 그대로.
 - 예시: 비 · 폭풍우 · 눈 · 안개 · 밤 · 노을 · 노이즈 · 주사선 · 글리치 · 위험 · 조리개 · 깨진 유리 · 훑는 빛. 기본 그림 `assets/filters/*.png`.
 
 ### 5.7 글자 연출 (APNG) (확장 `textfx` · `editors/textfx.js` · 런타임 `MakerTextFx`)
@@ -330,6 +339,7 @@ MyProject/
 - 이벤트 명령 `trailer { id, nowait }`. 영상이 아니라 UI 카메라 위에 실시간으로 그림(화면을 누르면 다음 장면).
 
 ### 5.9 노드 합성기 (확장 `compose` · `editors/compose.js` · `compose.json`)
+- 숫자 칸(식도 넣을 수 있는 글 칸): 숫자만 들어 있으면 마우스를 올리고 휠로 ±1 (Shift ±10 · Alt ±0.1) — 다른 편집기의 숫자 칸과 같은 손맛. 식이 들어 있으면 휠은 건드리지 않음.
 - 노드를 이어 배경 타일 · 오브젝트 스프라이트를 만드는 그림 합성 도구. 그래프 `{ w, h, out, frames, fps, cols, nodes[{id,type,x,y,p}], links[{from,to,port}] }`, 노드마다 출력은 w×h 캔버스. 계산은 편집기에서만, 게임에는 PNG 만.
 - 노드: 입력(그림 · 직접 그리기 · 단색 · 그라데이션 · 노이즈 · 도형 · 무늬 · 시트 칸 · 글자 · 파티클 · 이펙트) / 변형(이동 · 회전 · 크기 · 반복 · 뒤집기 · 픽셀화 · 대칭 · 물결 · 밀어내기) / 색(색조 · 채도 · 밝기 · 팔레트 · 색 바꾸기 · 반전 · 외곽선 · 그림자 · 투명도) / 합성(겹치기 · 마스크) / 효과(흐림 · 빛 번짐 · 넓히기/깎기 · 입체감) / 출력.
 - 숫자 칸에 식(`t` 0~1 · `frame` · `frames` · `pi` · sin/cos/abs/floor/min/max/rand — 허용한 이름만) → 프레임마다 계산(`evaluateAll`), 여러 프레임이면 시트(`toSheet`) · APNG.
@@ -432,8 +442,9 @@ MyProject/
               "lightMode": "add", "lightPower": 100, "lightBloom": 0 },
   "portrait": { "default": "assets/portraits/mireille/default.png", "expressions": [ { "key": "smile", "image": "…" } ],
                 "scale": 1, "offsetX": 0, "offsetY": 0, "side": "", "flip": false },
-  "stats": { "hp": 20, "attack": [1,4], "defense": 0, "accuracy": 10, "evasion": 5, "speed": 1 },
-  "ai": { "mode": "stand|wander|patrol|follow|schedule", "path": [ … ], "wait": 3 },
+  "stats": { "hp": 20, "attack": [1,4], "defense": 0, "accuracy": 10, "evasion": 5, "speed": 1,
+             "infiniteHp": false, "regen": 0, "regenEvery": 1, "regenDelay": 0 },
+  "ai": { "mode": "stand|fixed|wander|patrol|follow|schedule|hunt|code", "path": [ … ], "wait": 3, "fixedAttack": false, "code": "", "imports": "" },
   "heart": { "enabled": true, "traits": ["CHEERFUL"], "likes": ["tag:herb"], "dislikes": [], "initial": { "favor": 0, "trust": 0 } },
   "behaviors": { "onSpawn": [], "onInteract": [], "onDamaged": [], "onDeath": [], "onSeeHero": [], "onTurn": [] },
   "dialogue": { /* §13.6 토픽 */ },
@@ -442,6 +453,13 @@ MyProject/
   "shop": { "on": false, … } }
 ```
 
+- **AI 추가 방식 · 체력** (`MakerCharAI` — 데이터 캐릭터 `MakerMob` · `MakerNPC` 와 게임 클래스 캐릭터(`MakerDrops.charOf` — game 이 같은 캐릭터) 모두):
+  - `fixed` 제자리에 고정: `rooted` + `Property.IMMOVABLE`(밀치기 · 자리 바꾸기에도 안 밀림, 만들 때 · 맞을 때 · 차례마다 붙잡음). 몬스터는 `fixedAttack` 이면 원래 AI(걷지 못하니 옆에 온 적만 공격), 끄면 PASSIVE 로 가만히.
+  - 어느 캐릭터인지: 데이터 캐릭터는 자기 charId, 게임 클래스 캐릭터는 `LevelHooks.gameChar` 가 붙인 표(`MakerCharAI.tag` — Mob 저장 연결 줄로 `pdm_charTag` 저장)라서 원작 캐릭터를 복제한 샌드백(같은 게임 클래스)도 구별. 게임이 스스로 만든 몬스터는 원작 캐릭터(id = 클래스 이름 snake_case)로 (`MakerDrops.charOfClass`).
+  - `code` 코드로 직접: 생성 파일 `gen/GenCharAI.java`(`codegen.charAISource` — 캐릭터마다 `case "<id>": { if (true) { 코드 } break; }`), 런타임이 차례마다 `GenCharAI.act(charId, self, ai)` — true = 턴을 씀, null/false = 원래 AI. 도우미 `MakerCharAI.Ctl`: stepTo · stepAway · wander · attack(반사로 Mob.doAttack) · waitTurn · waitTurns · teleport · hunt · say · cell · x · y · dist · sees · near · now. 오류는 경고 한 번 + 원래 AI. 턴을 쓰는 도우미를 한 번 부르면(`Ctl.acted`) return 이 없어도 그 차례는 끝(원래 AI 가 또 움직이지 않음), 공격 동작 중이면 false(게임이 onAttackComplete 로 이어 감).
+  - `stats.infiniteHp` 체력 무한(샌드백): `Char.damage` 의 `if (HP < 0) HP = 0;` 앞 연결 줄 `afterDamage` 가 HP = HT 로 되돌림(피해 숫자는 그대로 뜸) + `Mob.die` 맨 앞 `preventDeath`(즉사 효과). 받은 피해(합계 · 횟수 · 평균 · 마지막)를 살펴보기에 붙임(`Mob.info` 연결 줄 — 게임 클래스 캐릭터에도).
+  - `stats.regen` 지속 회복: `regenEvery` 턴마다 `regen`, 마지막으로 맞은 뒤 `regenDelay` 턴이 지나야(초록 숫자). 편집기 "🎯 샌드백으로" = fixed + 공격 안 함 + 체력 무한.
+  - 연결 줄: `Mob.act` 의 `super.act()` 바로 뒤 · `Char.damage` · `Mob.die` 맨 앞(목록 맨 끝 — 같은 자리의 "몬스터 처치"보다 먼저). `MakerNPC.act` 는 직접 부름(동료일 때는 빼고). 헤드리스 `eval:charai` · `charhit` · `charstat`.
 - 원작 캐릭터 72명(`spd-chars.js` ← `tools/data/extract_spd_chars.py`): `useGame: true` 면 맵에 놓거나 소환하면 게임 클래스 그대로(`LevelHooks.gameChar`), 끄면 데이터로 도는 캐릭터(`MakerMob` · `MakerNPC`).
 - 스프라이트 `scale`: 0 = 세로 24px 초과 시 15px 높이에 맞춤. 런타임 `MakerSprite`.
 - 확장 기능 칸 4종(초상화 · 마음 · 상황별 대사 · 행동 이벤트)은 켜야 편집 화면에 보임.
@@ -475,7 +493,9 @@ MyProject/
   "name": "달빛 잎", "desc": "…", "sprite": { "sheet": "builtin:items", "index": 12, "name": "…" },   // 또는 { "png": "assets/sprites/items/moonleaf.png" }
   "stackable": true, "price": 30, "unique": false, "tags": ["herb","gift"], "consumable": true, "useLabel": "",
   "stats": { "energy": 0 }, "onUse": [ /* 이벤트 명령 */ ], "giftValue": { "default": 5 },
-  "kind": "misc|melee|missile|armor|codex|grimoire|game", "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
+  "kind": "misc|melee|ranged|missile|armor|bag|codex|grimoire|game", "noSell": false, "noDrop": false, "base": "", "weapon": {…}, "armor": {…}, "codex": {…}, "bag": {…},
+  "ranged": { "shootLabel": "", "needEquip": true, "ammo": "none|item", "projectile": "<투척 무기 id>", "proj": { "name", "sprite", "spin", "damage": "bow|own", "min", "max", "minPerLvl", "maxPerLvl", "accuracy", "sound", "hitSound", "castEffect", "hitEffect" } },
+  "wandFx": { "on": false, "bolt": "game|none|sprite|magic|fire|frost|…", "sprite", "spin", "sound", "hitSound", "castEffect", "hitEffect" },   // kind game + base wands.*
   "level": 0, "cursed": false, "code": {}, "actions": [ { "id": "ring", "name": "흔들기", "default": true, "consume": false, "time": 1, "code": "…" } ],
   "sound": "", "throwSound": "", "landSound": "", "pickupSound": "", "equipSound": "",
   "fxUse": "", "fxThrow": "", "fxEquip": "", "light": { "on": false }, "groundScale": 1, "catalog": true, "drops": [] }
@@ -483,7 +503,7 @@ MyProject/
 
 | 분류 (`category`) | 게임 폴더 | 세부 (`subtype`) | 사용 버튼 · 소모 |
 |---|---|---|---|
-| weapon 무기 | weapon/ | melee · missile · dart · bow | — (kind 로 무기 상속) |
+| weapon 무기 | weapon/ | melee · ranged · missile · dart | — (kind 로 무기 상속 — ranged = 쏘기) |
 | codex 코덱스 (mod-2) | weapon/codices/ | melee · ranged · cast | — |
 | armor 방어구 | armor/ | armor · class | — |
 | artifact · ring · wand | artifacts/ · rings/ · wands/ | | 사용 |
@@ -509,7 +529,22 @@ MyProject/
 - 연출: `magicImage`(items 칸) — 원거리는 그 그림이 날아감(`visual: item`, `spin`), 근접은 MagicImageAnimator(`anim` alternate · sweep · stab · charge · smash, mod-2 전용) · `hits`/`hitDelay` 연타 · `usesTargeting`(퀵슬롯 자동 조준).
 - `kind: "grimoire"` → `MakerCodex.MakerGrimoire`: `bag { capacity: 19, holds: "codex"|"all" }`.
 
-### 8.4 소리 · 이펙트 · 빛
+### 8.4 원거리 무기 · 마법봉 · 마법봉 공격 이펙트
+- **게임 동작이 있는 분류** (마법봉 · 반지 · 아티팩트 · 장신구 · 가방(그리모어 말고)): 새 아이템 창에서 "바탕 게임 아이템"을 골라 `kind: game` + `base` 로 만듦(`asGameBased` — 마법봉 기본 WandOfMagicMissile) → 충전 · 쏘기 · 장착 · 강화를 게임 그대로 물려받음. "게임 아이템을 프로젝트 아이템으로 복사"도 같은 방식. 예전에 `misc` 로 만든 그런 아이템은 "종류와 수치"에 경고 + "이 게임 아이템을 바탕으로 바꾸기". 무기 · 갑옷은 세부 종류로 kind 를 정함(근거리 melee · 원거리 ranged · 투척 missile · 갑옷 armor).
+- **추가 기능 — 한 아이템에 종류 여러 개** (`editors/item.js` "추가 기능" · 런타임 `MakerFacets`, 연결 줄 Item.java 6개(actionName · execute · onThrow · detachAll · store · restore) + MissileWeapon.rangedHit · Actor.init, actions 는 flagActions 에서): 아이템 종류와 상관없이(무기 · 갑옷 · 일반 · 게임 아이템 상속 · gameitems) 덧붙임.
+  - `useFx { on, label, consume, time, sound, fx, effects }` — 효과 목록(MakerCast — 대상 = 영웅 칸: 자신 · 범위 안의 적 · **범위 안 모두** `everyone`). 일반 아이템은 "사용(마시기 · 읽기)"에 합쳐짐, 그 밖은 "사용" 버튼(`PDM_FXUSE`).
+  - `throwFx { on, consume, fuse, sound, fx, effects, when }` — 연결 줄 `Item.onThrow` 맨 앞: 떨어진 칸에서 효과(물약 깨짐 · 룬석), `fuse` 턴이면 바닥에 놓였다가 `MakerFacets.Fuse`(Actor)로 터짐(주워 가면 안 터짐). 퓨즈는 그 아이템의 저장 묶음에 남은 턴 `pdm_fuse` 로 저장 → 불러온 뒤 `Actor.init` 연결 줄(`reviveFuses` — 바닥 더미를 훑음)이 다시 붙임(층을 떠났다 돌아와도 이어서 탐).
+  - 투척 무기(`MissileWeapon`)의 throwFx: 원래 규칙(맞힘 · 박힘 · 내구 · 바닥에 남기)은 그대로 두고 그 칸에서 효과만 더함 — 맞힘은 `MissileWeapon.rangedHit` 연결 줄(`missileHit`), 빗나감 · 바닥은 `Item.onThrow` 연결 줄(when `always` 일 때). consume · fuse 는 안 씀.
+  - `bagFx { on, capacity, holds, categories, items, tags, openLabel, putLabel }` — "넣기"(배낭에서 골라 담음) · "열기 (n/칸)"(보통 가방 창 `WndBag(inner)` — 누르면 그 자리에서 사용 · 장착 · 던지기, 또는 "꺼내기" `PDM_BAG_TAKE`). 안에 든 채로 쓸 수 있는 건 `Item.detachAll` 맨 앞 연결 줄(`detachFrom` — 배낭에 없고 가방 기능 안에 있으면 그곳에서 뺌) 덕분. 내용물은 `Item.storeInBundle/restoreFromBundle` 연결 줄로 저장. 주울 때 저절로 들어가지 않음(원래 기능 — 장착 · 퀵슬롯 그대로).
+  - 새 아이템 기본값(일반 kind): 물약 = 마시면 회복 15 + 던지면 깨짐, 폭탄 = 퓨즈 2 · 범위 1 모두 8~16, 룬석 = 던지면 범위 마비, 주문서 · 마법 = 사용하면 신속. 헤드리스 `eval:usetest` · `throwfx` · `bagfx` · `baguse` · `heaps`(+ `reload` 로 퓨즈 저장 확인).
+- **판매 불가 · 버리기 금지** `noSell` · `noDrop`(새 아이템 창 · 기본 칸, 게임 아이템은 보기 창 → gameitems.json): 연결 줄 `Item.actions`(AC_THROW 뒤 → `MakerItem.flagActions` — 버리기 · (투척 무기가 아니면) 던지기 버튼을 뺌) · `Shopkeeper.canSell` 맨 앞(`MakerItem.noSell`). 프로젝트 아이템 → 게임 클래스 사슬 순으로 설정을 찾음.
+- **완전히 새 가방** `kind: "bag"`(새 아이템 › 가방 › "완전히 새 가방", 기본) → 생성 클래스가 런타임 `MakerBag`(Bag) 상속: `bag { capacity, holds: all|filter, categories(분류 + missile · seed), items(프로젝트 id · spd:경로 — 상속 포함), tags, tabIcon }`. `canHold` = 설정에 맞고(가방은 안 받음) 게임 규칙(칸 수 · 겹침). 주운 아이템이 먼저 들어가는 것 · 가방 창 탭은 게임 그대로, 탭 아이콘은 연결 줄 `WndBag.icon` · `InventoryPane.bagIcon` → `MakerBag.icon`(가방 그림 또는 게임 가방 아이콘). 헤드리스 `eval:bagtest,<가방>,<아이템>`.
+- **마법봉 수치** `wand { charges, min, max, minPerLvl, maxPerLvl }`(kind game + `wands.*`): 코드 생성이 `initialCharges()` · (피해 마법봉 `codegen.DAMAGE_WANDS` 만) `min(lvl)` · `max(lvl)` 을 덮어씀, 비우면 게임 그대로.
+- `kind: "ranged"`(무기 › 원거리 무기, 게임 원거리 무기를 복사해도) → 생성 클래스가 런타임 `MakerBow`(MeleeWeapon) 상속 — 영혼의 활과 같은 방식: 행동 "쏘기"(`AC_SHOOT`, 기본 행동, `needEquip`) → 칸 고르기 → 발사체 `cast`. `ammo: none` = 발사체(`MakerBow.Arrow`, 가방에 안 들어가고 땅에 안 떨어짐 — 피해 `bow`(활 수치 · 강화 · 마법 부여 그대로) 또는 `own`(min/max + 활 강화당), 명중 배율, 그림 · 빙글빙글(아니면 `StraightArrow` 를 `MissileSprite.ANGULAR_SPEEDS` 에 0 으로 등록), 소리 · 이펙트), `ammo: item` = 가방의 프로젝트 투척 무기(`projectile`)를 하나씩 cast(그 아이템의 수치 · 그림). 근접 수치 `weapon` 은 들고 때릴 때. 편집기: 종류와 수치 › "쏘기 · 발사체".
+- **마법봉 공격 이펙트 코드** `wandFx.bolt = "code"`(`code` · `imports`): 코드 생성이 `gen/GenWandFx.java` 하나에 `fx(key, wand, bolt, done)` 의 switch(key = `item:<id>` · `spd:wands.X` — 프로젝트 마법봉 · 게임 마법봉 같이, `generate(heroes, items, gameitems)`)로 넣음. 쓸 수 있는 것 wand · bolt · cell · hero · done(끝나면 꼭 한 번 — onZap · wandUsed). 런타임 `MakerWand` 가 리플렉션으로 부르고 없거나 오류면 게임 원래 fx(오류는 게임 안 경고). 편집기: 코드 칸 · import · 예시 넣기 · 생성될 코드 보기 · 게임 코드 참고.
+- **마법봉 공격 이펙트** `wandFx`: 프로젝트 아이템(kind game + base `wands.*`, 종류와 수치에서) · 게임 마법봉(게임 아이템 보기 창 › "마법봉 공격 이펙트" → `gameitems.json items["spd:wands.X"].wandFx`). 연결 줄 `Wand.zapper` 의 `curWand.fx(` 앞 → `MakerWand.zap`: 설정이 켜져 있으면(프로젝트 → 게임 클래스 사슬 순) `bolt` game(게임 fx + 소리 · 이펙트만) · none · sprite(MissileSprite, 그림 · spin) · 마법 화살 종류(`MagicMissile.boltFromChar`, `MakerCast.missile`)로 날리고, 닿으면 hitSound · hitEffect → `onZap` → `wandUsed` 후 원래 줄을 건너뜀(저주 무작위 효과 · 공명 수지 추가 효과는 그대로/생략). 날아가는 그림 PNG 는 `MakerAssets` 아이템 시트에 함께 붙임. 헤드리스 `eval:shoottest,<id>[,<탄환 id>]` · `eval:mobhp`.
+
+### 8.5 소리 · 이펙트 · 빛
 - 프로젝트 아이템 `sound`(쓸 때 — 무기는 공격이 맞을 때 타격음 대신, `KindOfWeapon.hitSound` 연결 줄) · `throwSound`(**던지는 순간** — `Item.cast` 연결 줄 → `MakerAudio.onItemCast`, 던지기 버튼을 누를 때는 소리 없음) · `landSound`(떨어졌을 때 · 맞혔을 때 — `onItemLandHit/Ground`) · `pickupSound` · `equipSound`. 게임 아이템은 `sounds.json gameItems["spd:<경로>"] = { use, throw, land, pickup, equip }`.
 - 편집기 소리 칸: 기본 칸에 그 아이템의 **실제 기본 소리**를 게임 코드에서 읽어 표시(`PDM.gameItemSounds` — `extends` 사슬의 hitSound(메이스 = HIT_CRUSH 등) · 물약 DRINK · 주문서 READ · 음식 EAT · 완드 ZAP · doPickUp), 칸마다 🔇(`none`) · ↺(기본으로), "↺ 소리 모두 원래대로".
 - 이펙트 `fxUse` · `fxThrow` · `fxEquip`(§5.5), 빛 `light`(§5.4).
@@ -530,7 +565,7 @@ MyProject/
 - 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav. 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
 - `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 에 끼워 넣어 게임 설정의 음량 · 음소거를 그대로 따름. 게임 소리는 처음 재생 때 바로 불러옴(원래 `Sample.load` 는 다음 프레임이라 첫 소리가 빠졌음).
 - **배경음 우선순위**: 노드 `bgm` → 그룹(`bgm` + `bgmExtra[]` 층마다 무작위 — 전부 게임 곡이면 `Music.playTracks` 로 이어 재생, `bgmTense` + `bgmTenseWhen`, `bgmBoss`) → 사용자 테마 `music` → 게임 기본 테마 음악. "테마 기본 음악으로 채워서 고치기"(`PDM.THEME_MUSIC`).
-- **소리는 각 세부 설정에서**: 아이템(§8.4) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
+- **소리는 각 세부 설정에서**: 아이템(§8.5) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
 - **기본 소리 키** (`MakerAudio.SFX`, 편집 화면 없음 — 예전 `sfx` 값은 읽음): codex.melee · codex.meleeHit · codex.ranged · codex.cast · codex.hit · spell.cast · spell.hit · ability.cast · ability.hit · item.eat · item.drink · item.read · item.use · dialogue.open · dialogue.type · dialogue.next · choice.move · choice.select. mod-2 소리가 없으면 원작 소리로.
 - 편집기: 가져오기(→ `assets/audio`) · 게임 소리 복사 · 미리 듣기 · 쓰는 곳 목록 · **파형 편집**(구간 선택 · 확대 · 자르기 · 무음 · 페이드 · 음량 · 노멀라이즈 · 뒤집기 · 속도 · 모노 → WAV) · **효과음 합성기**(레이어 최대 4 × 파형 · 음높이 미끄러짐 · 유니즌 · FM · 비브라토 · ADSR · 바이쿼드 필터, 전체 드라이브 · 에코 · 리버브, 시작값 16개, "살짝 바꾸기" seed).
 - 코드: `MakerAudio.playSe("sound:bell")` · `playBgm(…)`, 이벤트 명령 "효과음 / 음악".
@@ -801,13 +836,14 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | | `MakerLevel` | 직접 그린 층 (`build` · `createMobs` · 투명 출입구 · 발판) |
 | | `LevelHooks` | 자동 생성 층 주입 · 구성 블럭 · 방 넣기 · 오브젝트 배치 · 밟기 · 스폰 위치 · 잠긴 맵 · 큰 타일셋 |
 | | `TemplateRoom` · `TemplateSpecialRoom` | 방 템플릿 (변형 · 무작위 칸) |
-| | `MakerProp` · `MakerPropTop` · `MakerPaint` | 맵 오브젝트 · 솟은 윗부분 · 맵 세부 그리기 |
+| | `MakerProp` · `MakerPropTop` · `MakerPaint` · `MakerUserTiles` | 맵 오브젝트 · 솟은 윗부분 · 맵 세부 그리기 · 사용자 타일 |
 | | `MakerSafe` · `MakerHomes` | 안전구역 · NPC 이주 |
 | 영웅 | `HeroRuntime` · `HeroSelect` | 영웅 적용 · 능력치 · 시트 · 초상화 · 저장 슬롯 · 코드 훅 / 영웅 선택 화면 · 해금 |
 | | `MakerCast` · `MakerSpells` · `MakerAbilities` · `MakerActive` · `MakerGauge` | 시전 엔진 · 주문 · 전직/직업 능력 · 전직 액티브 · 예전 게이지 |
 | | `MakerTalents` · `MakerTalentsPane` | 특성 포인트 · 효과 / 영웅 정보 창 특성 탭 |
 | 캐릭터 · 아이템 | `MakerNPC` · `MakerMob` · `MakerSprite` | 데이터 NPC/동료 · 몬스터 · 스프라이트(빛 레이어 · 번짐) |
 | | `MakerItem` · `MakerCodex` · `MakerCatalog` · `MakerDrops` | 데이터 아이템 · 코덱스/그리모어 · 도감 · 드랍/금지/상자 |
+| | `MakerBow` · `MakerWand` | 원거리 무기(쏘기 · 발사체) · 마법봉 공격 이펙트 |
 | | `MakerShop` · `MakerQuests` | 상인 창 · 퀘스트 |
 | 이벤트 · 마음 | `EventInterpreter` · `EventTriggers` | 명령 실행(창이 닫힐 때까지 대기) · 페이지 · 트리거 · `Ticker` |
 | | `HeartSystem` · `HeartMenu` · `HeartUI` | 마음 시스템 · 말 걸기 메뉴 · 마음 창/하트 버튼 |
@@ -824,13 +860,13 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **63개** 연결점 · **29개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **84개** 연결점 · **36개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 | 파일 | 연결점 |
 |---|---|
 | `Dungeon.java` | 새 게임 시작 시 스토리 초기화<br>영웅 편집기의 영웅 적용 (시작 아이템·주문서·능력치) · 시작 층<br>직접 그린 층 · 층 사이 맵으로 바꾸기<br>절차 생성 층에 오브젝트 넣기<br>저장<br>불러오기<br>플레이어 스폰 위치 (맵에 놓은 시작 위치 오브젝트)<br>저장 슬롯: 어떤 영웅인지 읽기 |
 | `messages/Messages.java` | 게임 글자 바꾸기 (texts.json) |
-| `scenes/GameScene.java` | 층 입장 이벤트<br>진행 방향(탑 모드) 계단 그림 |
+| `scenes/GameScene.java` | 층 입장 이벤트<br>진행 방향(탑 모드) 계단 그림<br>테마 물 = 흐르는 사용자 타일: 그 속도로 (세로 · 가로) |
 | `levels/RegularLevel.java` | 자동 생성 층에 직접 만든 방 추가<br>구성 블럭: 층 구조·분위기 |
 | `scenes/InterlevelScene.java` | 소개 화면: 로딩 배경 그림<br>소개 화면: 구역 이야기 글<br>층을 떠날 때 (감정 결정화·일기) |
 | `Badges.java` | 게임 원래 배지의 얻는 조건 끄기 · 바꾸기 |
@@ -838,7 +874,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `tiles/DungeonTilemap.java` | 큰 타일셋 (한 칸이 16px 이 아닌 타일셋)<br>큰 타일셋: 발견 연출 타일 크기 |
 | `tiles/DungeonTerrainTilemap.java` | 큰 타일셋: 정보 창 타일 크기 |
 | `actors/hero/Hero.java` | 맵 오브젝트: 옆에서 누르면 밀기·상호작용<br>영웅 코드: 명중<br>영웅 코드: 회피<br>영웅 코드: 피해<br>영웅 코드: 방어<br>영웅 코드: 속도<br>영웅 코드: 공격 적중<br>영웅 코드: 공격 받음<br>특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)<br>전직 이름 (영웅 정보 창) |
-| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치 |
+| `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치<br>캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복<br>캐릭터 체력 무한: 쓰러지지 않음<br>캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 저장 · 불러오기<br>샌드백: 받은 피해를 살펴보기에 |
 | `actors/mobs/MobSpawner.java` | 등장 금지한 몬스터 빼기 |
 | `sprites/ItemSprite.java` | 아이템 그림 배율 (바닥에 놓였을 때) |
 | `windows/WndHero.java` | 영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문 |
@@ -851,7 +887,13 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `scenes/StartScene.java` | 저장 슬롯 초상화·이름 (시작 화면) |
 | `windows/WndGameInProgress.java` | 저장 슬롯 초상화·이름 (이어하기 창) |
 | `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악) |
-| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때 |
+| `items/wands/Wand.java` | 마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트) |
+| `actors/mobs/npcs/Shopkeeper.java` | 판매 불가 (아이템 noSell) |
+| `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |
+| `items/Item.java` | 게임 아이템 그림 바꾸기 (gameitems.json)<br>아이템 소리: 행동 버튼 (사용·장착)<br>아이템 소리 · 이펙트: 실제로 던지는 순간 (던지기 버튼을 누를 때가 아니라)<br>아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)<br>아이템 소리: 던진 것이 적에게 닿을 때<br>아이템 소리: 던진 것이 바닥에 떨어질 때<br>버리기 금지 (아이템 noDrop)<br>아이템 추가 기능: 버튼 이름 · 버튼 동작 · 던져서 떨어졌을 때 · 가방 기능 안에서 빼내기(detachAll) · 저장 · 불러오기 |
+| `items/weapon/missiles/MissileWeapon.java` | 아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과 |
+| `actors/Char.java` | 캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로) |
+| `actors/Actor.java` | 아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기 |
 | `items/Gold.java` | 금화 양 배율 (드랍 테이블 › 금화) |
 | `items/KindOfWeapon.java` | 아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신) |
 | `services/updates/…/GitHubUpdates.java` | 업데이트 확인: 끄기 (타이틀 하위 페이지) (선택)<br>업데이트 확인: 내 GitHub 저장소 (타이틀 하위 페이지) (선택)<br>업데이트 버튼: 다운로드 페이지 (타이틀 하위 페이지) (선택) |
@@ -888,7 +930,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ## 19. 개발 도구 · 확인
 
-- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
+- **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `waterhere` · `shoottest` · `mobhp` · `cellname` · `bagtest` · `usetest` · `throwfx` · `bagfx` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
 - **게임 데이터 뽑기** (`tools/data`): `extract_spd_items.py` → `spd-items.js` · `extract_spd_chars.py` → `spd-chars.js`(+ 영웅) · `extract_spd_rooms.py` → `spd-rooms.js` · `gen_terms_java.js` → `DefaultTerms.java`.
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.
