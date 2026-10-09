@@ -72,7 +72,8 @@ public class MakerTitle {
 		try {
 			if (!MakerRuntime.isActive()) return;
 			JsonValue d = MakerRuntime.title;
-			if (d == null || !d.getBoolean("enabled", true)) return;
+			if (d == null) return;
+			if (!d.getBoolean("enabled", true)) { MakerAssets.titleMusic(d, false); return; }   // 원래 타이틀이어도 음악 설정은 씀
 			current = new MakerTitle(scene, d);
 			current.build();
 		} catch (Throwable t) {
@@ -119,15 +120,7 @@ public class MakerTitle {
 		}
 	}
 
-	void music() {
-		JsonValue m = d.get("music");
-		if (m == null || m.get("tracks") == null || m.get("tracks").size == 0) return;
-		List<String> l = new ArrayList<>();
-		for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
-		if (l.isEmpty()) return;
-		if (l.size() == 1 && l.get(0).equals("none")) { com.watabou.noosa.audio.Music.INSTANCE.end(); return; }
-		MakerAudio.playList(l);
-	}
+	void music() { MakerAssets.titleMusic(d, false); }
 
 	static int color(String s, int def) {
 		try { s = s.trim(); if (s.startsWith("#")) s = s.substring(1); if (s.length() == 3) s = "" + s.charAt(0) + s.charAt(0) + s.charAt(1) + s.charAt(1) + s.charAt(2) + s.charAt(2); return (int) Long.parseLong(s, 16) & 0xFFFFFF; }

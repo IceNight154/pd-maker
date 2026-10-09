@@ -353,10 +353,11 @@ public class MakerAssets {
 		@SuppressWarnings("unchecked")
 		void apply() throws Exception {
 			JsonValue d = MakerRuntime.title;
-			if (d == null || !d.getBoolean("enabled", true)) return;
+			if (d == null) return;
 			JsonValue menus = d.get("menus") == null ? new JsonValue(JsonValue.ValueType.object) : d.get("menus");
-			// 음악: 타이틀과 같은 곡 (게임은 랭킹·일지 등에서 theme 곡으로 바꿈)
-			if (menus.getBoolean("music", true)) titleMusic(d);
+			// 음악: 타이틀과 같은 곡 (게임은 랭킹·일지 등에서 theme 곡으로 바꿈) — 원래 타이틀을 쓸 때도 정한 곡이 있으면
+			if (menus.getBoolean("music", true)) titleMusic(d, true);
+			if (!d.getBoolean("enabled", true)) return;
 			// 배경
 			if (!menus.getBoolean("background", true)) return;
 			if (!customBackground(d)) return;       // 게임 배경 그대로면 손댈 것 없음
@@ -373,11 +374,28 @@ public class MakerAssets {
 		}
 	}
 
-	/** 타이틀 화면에서 트는 곡과 같은 곡 */
-	static void titleMusic(JsonValue d) {
+	/** 메뉴 화면(타이틀 · 랭킹 · 일지 …)이 게임 곡을 틀기 직전 (연결 줄): 타이틀 음악으로 정한 프로젝트 곡이 이미 흐르고 있으면 true → 게임 곡을 틀지 않음
+	 *  (예전에는 게임이 theme 곡으로 바꿨다가 PDMaker 가 프로젝트 곡을 처음부터 다시 틀어서, 메뉴를 오갈 때마다 끊기고 처음으로 돌아감) */
+	public static boolean keepMenuMusic(Object scene) {
+		try {
+			JsonValue d = MakerRuntime.isActive() ? MakerRuntime.title : null;
+			if (d == null) return false;
+			boolean title = scene instanceof com.shatteredpixel.shatteredpixeldungeon.scenes.TitleScene;
+			if (!title) { JsonValue menus = d.get("menus"); if (menus != null && !menus.getBoolean("music", true)) return false; }
+			JsonValue m = d.get("music");
+			List<String> l = new ArrayList<>();
+			if (m != null && m.get("tracks") != null) for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
+			if (l.size() == 1 && l.get(0).equals("none")) return true;   // 무음 — 게임 곡도 틀지 않음
+			return MakerAudio.holds(l);
+		} catch (Throwable t) { return false; }
+	}
+
+	/** 타이틀 화면에서 트는 곡과 같은 곡. menu = 메뉴 화면에서 (곡을 정하지 않았으면 게임 타이틀 곡으로 되돌림 — 원래 타이틀을 쓰면 손대지 않음) */
+	static void titleMusic(JsonValue d, boolean menu) {
 		JsonValue m = d.get("music");
 		List<String> l = new ArrayList<>();
 		if (m != null && m.get("tracks") != null) for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
+		if (l.isEmpty() && (!menu || !d.getBoolean("enabled", true))) return;   // 타이틀: 게임이 튼 곡 그대로
 		if (!l.isEmpty()) {
 			if (l.size() == 1 && l.get(0).equals("none")) { Music.INSTANCE.end(); return; }
 			MakerAudio.playList(l);

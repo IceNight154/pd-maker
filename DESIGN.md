@@ -596,7 +596,7 @@ CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부�
   "gameItems": { "spd:weapon.melee.Mace": { "use": "", "throw": "", "land": "", "pickup": "", "equip": "" } } }
 ```
 
-- 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav — **WAV 는 16비트(또는 8비트) PCM · 보통 머리(형식 1)만**(libGDX: 24비트 · 32비트 float · 확장 머리는 "Error reading WAV file"). 채널은 모노 · 스테레오 · 4채널 · **5.1 · 6.1 · 7.1** 그대로 재생(libGDX 1.12+ OpenAL, 스피커가 적으면 OpenAL 이 섞음). 편집기가 가져올 때 · 테스트 플레이 · 내보내기 전에 16비트로 바꾸고(`PDM.audio.fixWav` · `PDM.sounds.fixProjectWavs`, 소리 화면에 경고 + "16비트로 바꾸기"), 런타임 `MakerWav.playable` 도 그런 WAV(24 · 32비트 정수, float, 확장 머리)를 채널 · 샘플레이트 그대로 16비트로 바꾼 임시 파일로 틂(OpenAL 이 못 트는 3 · 5채널만 스테레오로)(원본 그대로, 배경음 · 효과음). 편집기 검사는 assets/ 밖(예: `audio/x.wav`)의 프로젝트 WAV 도 봄. 편집기 미리 듣기(`PDM.audio.resolve`)도 런타임과 같은 순서 — `game:` · 예전 형식 `music/` · `sounds/` 만 게임 파일, 그 밖(`assets/` · `audio/` …)은 프로젝트 파일(예전에는 assets/ 밖을 게임 파일로 찾아 재생 실패). 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
+- 참조: `sound:<id>` · `game:music/x.ogg` · `game:sounds/x.mp3` · `assets/audio/x.wav`. 게임은 ogg · mp3 · wav — **WAV 는 16비트(또는 8비트) PCM · 보통 머리(형식 1)만**(libGDX: 24비트 · 32비트 float · 확장 머리는 "Error reading WAV file"). 채널은 모노 · 스테레오 · 4채널 · **5.1 · 6.1 · 7.1** 그대로 재생(libGDX 1.12+ OpenAL, 스피커가 적으면 OpenAL 이 섞음). 편집기가 가져올 때 · 테스트 플레이 · 내보내기 전에 16비트로 바꾸고(`PDM.audio.fixWav` · `PDM.sounds.fixProjectWavs`, 소리 화면에 경고 + "16비트로 바꾸기"), 런타임 `MakerWav.playable` 도 그런 WAV(24 · 32비트 정수, float, 확장 머리)를 채널 · 샘플레이트 그대로 16비트로 바꾼 임시 파일로 틂(OpenAL 이 못 트는 3 · 5채널만 스테레오로)(원본 그대로, 배경음 · 효과음). 편집기 검사는 assets/ 밖(예: `audio/x.wav`)의 프로젝트 WAV 도 봄. 타이틀 음악(`title.music.tracks`)은 "이 설정 사용"을 꺼서 게임 원래 타이틀을 써도 적용. 메뉴 화면(타이틀 · 랭킹 · 일지 · 변경 · 환영)은 연결 줄 `MakerAssets.keepMenuMusic` — 정한 프로젝트 곡이 흐르는 중이면 게임 theme 곡을 틀지 않아 끊기지 않음. 여러 프로젝트 곡은 메뉴를 옮겨도 그대로, 곡이 끝나면 다른 곡(`MakerAudio.playNext`). 같은 곡 판단은 isPlaying 이 아니라 플레이어가 그대로인지로(일시정지 중에도 이어짐), 층 페이드아웃은 새 곡에서 초기화. 편집기 소리 칸은 작은 칸(목록)에도 ■ 멈춤. 편집기 미리 듣기(`PDM.audio.resolve`)도 런타임과 같은 순서 — `game:` · 예전 형식 `music/` · `sounds/` 만 게임 파일, 그 밖(`assets/` · `audio/` …)은 프로젝트 파일(예전에는 assets/ 밖을 게임 파일로 찾아 재생 실패). 값 "" = 기본(게임 원래) 소리, `"none"` = 소리 없음.
 - `MakerAudio`: 프로젝트 파일을 게임의 `Music`/`Sample` 에 끼워 넣어 게임 설정의 음량 · 음소거를 그대로 따름. 게임 소리는 처음 재생 때 바로 불러옴(원래 `Sample.load` 는 다음 프레임이라 첫 소리가 빠졌음).
 - **배경음 우선순위**: 노드 `bgm` → 그룹(`bgm` + `bgmExtra[]` 층마다 무작위 — 전부 게임 곡이면 `Music.playTracks` 로 이어 재생, `bgmTense` + `bgmTenseWhen`, `bgmBoss`) → 사용자 테마 `music` → 게임 기본 테마 음악. "테마 기본 음악으로 채워서 고치기"(`PDM.THEME_MUSIC`).
 - **소리는 각 세부 설정에서**: 아이템(§8.5) · 캐릭터(`sounds { attack, hurt, die, talk }` + `voice` = 대사 글자 소리) · 주문 · 직업 능력(쓸 때 · 맞을 때) · 코덱스(쓸 때 · 맞을 때 · 빗나갈 때 · 다 닳을 때) · 대사창 `sounds` · 마음 시스템 `heart.sounds`(up · down · bond · crystal) · 게이지 `gauge.sounds`. 🎚 = 그 소리를 사운드 편집기에서 열기(게임 소리면 프로젝트로 복사).
@@ -894,7 +894,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **86개** 연결점 · **37개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **91개** 연결점 · **41개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 **지원 저장소 · 판 차이** (`runtime-installer.js` `compat()` · 런타임 `MakerCompat`): 설치 전에 패키지(`com.shatteredpixel.shatteredpixeldungeon`) · 체력 형(int) · `LevelTransition.BRANCH_EXIT`(SPD 2.5+) · 연결 줄 위치를 살핌 → 안 되는 것은 설치하지 않고 이유를 알림, 위치를 못 찾은 줄은 경고(그 기능만 꺼짐 · 런타임 상태의 "필요한 줄 수"에서 빼서 매번 다시 설치하지 않음). 판마다 다른 API(GreenFlame · MissileWeapon.setID/spawnedForEffect · BannerSprites 종류 · Music.paused · Wand.wandUsed 접근 · customTiles 목록 형 · Fireball 위치 · MagicMissile.LIGHT_MISSILE)는 `MakerCompat` 반사로. 확인: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · javac 컴파일 · 헤드리스 테스트 플레이).
 
@@ -922,7 +922,11 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `GamesInProgress.java` | 저장 슬롯: 지금 영웅 기억 (저장할 때) |
 | `scenes/StartScene.java` | 저장 슬롯 초상화·이름 (시작 화면) |
 | `windows/WndGameInProgress.java` | 저장 슬롯 초상화·이름 (이어하기 창) |
-| `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악) |
+| `scenes/TitleScene.java` | 타이틀 화면 (배경·로고·버튼·음악)<br>타이틀 음악 이어 틀기 |
+| `scenes/RankingsScene.java` | 타이틀 음악 이어 틀기 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음) |
+| `scenes/JournalScene.java` | 타이틀 음악 이어 틀기 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음) |
+| `scenes/ChangesScene.java` | 타이틀 음악 이어 틀기 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음) |
+| `scenes/WelcomeScene.java` | 타이틀 음악 이어 틀기 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음) |
 | `items/wands/Wand.java` | 마법봉 공격 이펙트 (아이템 편집기 › 마법봉 이펙트) |
 | `actors/mobs/npcs/Shopkeeper.java` | 판매 불가 (아이템 noSell) |
 | `windows/WndBag.java` · `ui/InventoryPane.java` | 새 가방의 탭 아이콘 (아이템 kind bag) |

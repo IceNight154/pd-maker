@@ -54,7 +54,9 @@ public class MakerAudio {
 	private static String current = "";
 
 	/** ref: 참조 / "none" = 끄기 */
-	public static void playBgm(String ref) {
+	public static void playBgm(String ref) { playBgm(ref, null); }
+	/** onEnd != null: 반복하지 않고 끝나면 onEnd (여러 곡 목록의 다음 곡) */
+	static void playBgm(String ref, Runnable onEnd) {
 		if (ref == null || ref.isEmpty()) return;
 		if (ref.equals("none")) { Music.INSTANCE.end(); current = ""; return; }
 		Ref r = resolve(ref);
@@ -66,24 +68,32 @@ public class MakerAudio {
 			return;
 		}
 		try {
-			if (ref.equals(current) && Music.INSTANCE.isPlaying() && get(Music.INSTANCE, "player") != null && "pdm".equals(tag)) return;
+			// 같은 곡이 아직 우리 플레이어로 걸려 있으면 그대로 (isPlaying 만 보면 일시정지 중 화면을 옮길 때 처음부터 다시 틀었음)
+			if (ref.equals(current) && ourPlayer != null && get(Music.INSTANCE, "player") == ourPlayer && "pdm".equals(tag)) return;
 			Music.INSTANCE.stop();
+			set(Music.INSTANCE, "fadeTime", -1f); set(Music.INSTANCE, "fadeTotal", -1f);   // 층에서 하던 페이드아웃이 새 곡까지 줄이지 않게
 			set(Music.INSTANCE, "lastPlayed", null);   // 설정에서 음악을 다시 켜도 게임 파일로 착각하지 않게
 			set(Music.INSTANCE, "trackList", null);
 			set(Music.INSTANCE, "looping", r.loop);
 			if (!Music.INSTANCE.isEnabled()) { current = ref; return; }
 			com.badlogic.gdx.audio.Music m = Gdx.audio.newMusic(MakerWav.playable(MakerRuntime.root().child(r.file)));
-			m.setLooping(r.loop);
+			m.setLooping(onEnd == null && r.loop);
+			if (onEnd != null) m.setOnCompletionListener(x -> { if (curPlayer() == x) Gdx.app.postRunnable(onEnd); });
 			float vol = (Float) get(Music.INSTANCE, "volume");
 			m.setVolume(Math.min(1f, vol * r.volume));
 			set(Music.INSTANCE, "player", m);
 			if (!Boolean.TRUE.equals(get(Music.INSTANCE, "paused"))) m.play();   // paused() 는 SPD 3.x 부터 — 필드로 (예전 판도)
-			current = ref; tag = "pdm";
+			current = ref; tag = "pdm"; ourPlayer = m;
 		} catch (Exception e) {
 			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e + (r.file.toLowerCase().endsWith(".wav") ? " — 게임은 16비트(또는 8비트) PCM WAV 만 읽고, 24비트 · float · 여러 채널은 자동으로 바꿔 쓰는데 그것도 실패함 (편집기 소리 화면의 \"16비트로 바꾸기\" 또는 ogg 로 저장해 보세요)" : ""));
 		}
 	}
 	private static String tag = "";
+	private static Object ourPlayer;
+	/** 이 목록의 프로젝트 곡이 지금 우리 플레이어로 흐르는 중인지 */
+	static boolean holds(java.util.List<String> refs) { return !refs.isEmpty() && refs.contains(current) && ourPlayer != null && curPlayer() == ourPlayer && "pdm".equals(tag); }
+	/** 게임 Music 이 지금 쥔 플레이어 (못 읽으면 null) */
+	static Object curPlayer() { try { return get(Music.INSTANCE, "player"); } catch (Exception e) { return null; } }
 
 	private static void scaleVolume(float mul) {
 		if (mul == 1f) return;
@@ -133,7 +143,17 @@ public class MakerAudio {
 			current = String.join("|", refs);
 			return;
 		}
-		playBgm(com.watabou.utils.Random.element(refs));
+		// 프로젝트 곡이 섞인 목록: 지금 그 목록의 곡이 걸려 있으면 그대로 (메뉴를 옮길 때마다 곡이 바뀌지 않게), 아니면 무작위 한 곡 → 끝나면 다른 곡
+		if (holds(refs)) return;
+		playNext(new java.util.ArrayList<>(refs), "");
+	}
+	private static void playNext(java.util.List<String> refs, String last) {
+		java.util.List<String> pool = new java.util.ArrayList<>(refs);
+		if (pool.size() > 1) pool.remove(last);
+		String pick = com.watabou.utils.Random.element(pool);
+		Ref r = resolve(pick);
+		if (r != null && r.game) { playBgm(pick); return; }   // 게임 곡 하나만 고른 경우 — 게임 방식대로 반복
+		playBgm(pick, refs.size() > 1 ? () -> { if (pick.equals(current)) { current = ""; playNext(refs, pick); } } : null);
 	}
 
 	// ------------------------------------------------------------ 효과음
