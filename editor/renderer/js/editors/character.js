@@ -48,7 +48,7 @@
       acc += dt;
       while (acc >= step) { acc -= step; frame++; if (frame >= a.frames.length) frame = a.loop ? 0 : a.frames.length - 1; }
       if (frame >= a.frames.length) frame = 0;
-      const [fw, fh] = c.sprite.frame; const sc = Math.floor(64 / Math.max(fw, fh)) || 1;
+      const [fw, fh] = c.sprite.frame; const fit = 64 / Math.max(fw, fh), sc = fit >= 1 ? Math.floor(fit) : fit;   // 64px 보다 큰 프레임은 줄여서 (예전에는 1배로 그려 잘렸음)
       let n = a.frames[frame] | 0;
       if (rowOf) { const cols = Math.max(1, Math.floor(img.width / fw)); n = rowOf(img) * cols + Math.min(n, cols - 1); }
       PDM.assets.drawFrame(g, img, fw, fh, n, (72 - fw * sc) / 2, (72 - fh * sc) / 2, sc);
@@ -57,6 +57,53 @@
     cv.addEventListener('click', () => { frame = 0; acc = 0; });
     const prev = ctx._stop || (() => {}); ctx._stop = () => { prev(); alive = false; cancelAnimationFrame(raf); };
     return cv;
+  }
+
+  // ---------- 시트 맞춤 검사 (다른 시트로 바꿨을 때: 예 — 원작 영웅을 복제해 새 시트를 넣으면 원작의 12×15 프레임 · 0~20번 애니메이션이 그대로 남음) ----------
+  /** 시트 크기와 프레임 크기 · 애니메이션 프레임 번호가 맞는지 → { fits, cols, rows, bad: {애니: [번호]}, cands: [[w,h]] } */
+  PDM.sheetFit = function (sp, img, armorRows) {
+    const fw = +(sp.frame || [])[0] || 1, fh = +(sp.frame || [])[1] || 1, W = img.width, H = img.height;
+    const fits = W % fw === 0 && H % fh === 0 && fw <= W && fh <= H;
+    const cols = Math.max(1, Math.floor(W / fw)), rows = Math.max(1, Math.floor(H / fh));
+    const max = armorRows ? cols : cols * rows, bad = {};   // 영웅(갑옷 단계 행): 번호는 한 줄 안 — 게임은 줄 끝 프레임으로 바꿔 씀
+    for (const [k, a] of Object.entries(sp.anims || {})) { const b = [...new Set((a.frames || []).filter(n => n < 0 || n >= max))]; if (b.length) bad[k] = b; }
+    // 프레임 크기 후보: 정사각형(가로 · 세로 모두 나눔) 큰 것부터, 한 줄 시트(세로 = 시트 높이), 지금 가로/세로 하나만 맞추기
+    const c = [], add = (w, hh) => { if (w >= 8 && hh >= 8 && W % w === 0 && H % hh === 0 && !c.some(x => x[0] === w && x[1] === hh) && !(w === fw && hh === fh)) c.push([w, hh]); };
+    if (W % H === 0) add(H, H);
+    for (let q = Math.min(W, H); q >= 8; q--) if (W % q === 0 && H % q === 0) add(q, q);
+    if (W % fw === 0) for (let q = Math.min(H, 256); q >= 8; q--) if (H % q === 0) { add(fw, q); break; }
+    return { fits, cols, rows, bad, cands: c.slice(0, 5) };
+  };
+  function sheetFitBox(key, c, armorRows) {
+    const box = h('div', {});
+    PDM.assets.load(c.sprite.sheet).then(img => {
+      if (!img) return;
+      const r = PDM.sheetFit(c.sprite, img, armorRows), badN = Object.keys(r.bad).length;
+      if (r.fits && !badN) return;
+      const [fw, fh] = c.sprite.frame;
+      const setFrame = (w, hh) => store.edit(key, '프레임 크기 (시트에 맞춤)', o => { o.sprite.frame = [w, hh]; });
+      const fixAnims = () => store.edit(key, '애니메이션 프레임 정리 (시트에 맞춤)', o => {
+        const f = PDM.sheetFit(o.sprite, img, armorRows), max = armorRows ? f.cols : f.cols * f.rows;
+        for (const a of Object.values(o.sprite.anims || {})) a.frames = (a.frames || []).map(n => Math.max(0, Math.min(max - 1, n | 0)));
+      });
+      const resetAnims = () => store.edit(key, '애니메이션 새로 (시트에 맞춤)', o => {
+        const f = PDM.sheetFit(o.sprite, img, armorRows), n = armorRows ? f.cols : f.cols * f.rows, seq = k => Array.from({ length: Math.min(n, k) }, (_, i) => i);
+        o.sprite.anims = { idle: { frames: [0], fps: 1, loop: true }, run: { frames: seq(4), fps: 10, loop: true }, attack: { frames: seq(3), fps: 15, loop: false }, die: { frames: seq(3), fps: 10, loop: false } };
+        if (armorRows) o.sprite.tierRows = [0, 0, 0, 0, 0, 0, 0];   // 새 시트는 보통 갑옷 단계 줄이 없음 — 모든 단계가 0행
+        delete o.sprite.rowsChecked;
+      });
+      box.append(h('div', { class: 'callout warn', style: { margin: '4px 0 8px', padding: '8px 10px', border: '1px solid var(--warn, #c9a227)', borderRadius: '6px' } },
+        h('b', {}, '⚠ 시트와 설정이 맞지 않습니다'), ' ',
+        h('span', { class: 'hint' }, `시트 ${img.width}×${img.height}px · 프레임 ${fw}×${fh}px` + (r.fits ? ` → ${r.cols}열 × ${r.rows}행` : ' — 시트 크기가 프레임 크기로 나누어떨어지지 않음')),
+        !r.fits || r.cands.length ? h('div', { class: 'hstack wrap', style: { marginTop: '6px', gap: '4px' } }, h('span', { class: 'hint' }, '프레임 크기:'),
+          ...r.cands.map(([w, hh]) => h('button', { class: 'btn xs', onclick: () => setFrame(w, hh) }, `${w}×${hh} (${img.width / w}열 × ${img.height / hh}행)`))) : null,
+        badN ? h('div', { style: { marginTop: '6px' } },
+          h('div', { class: 'hint' }, '시트에 없는 프레임 번호 (다른 시트에서 가져온 설정 — 게임에서는 ' + (armorRows ? '줄 끝 프레임' : '첫 프레임 근처') + '으로 바뀌어 보임): ' + Object.entries(r.bad).map(([k, b]) => `${k} ${b.join(',')}`).join(' · ')),
+          h('div', { class: 'hstack wrap', style: { marginTop: '4px', gap: '4px' } },
+            h('button', { class: 'btn xs', onclick: fixAnims }, '번호를 시트 안으로 줄이기'),
+            h('button', { class: 'btn xs', onclick: resetAnims }, '애니메이션을 이 시트에 맞게 새로' + (armorRows ? ' (갑옷 단계 행도 0행으로)' : '')))) : null));
+    }).catch(() => {});
+    return box;
   }
 
   // ---------- 스프라이트 시트 보기 (프레임 번호 클릭 → 현재 애니메이션에 추가) ----------
@@ -245,6 +292,7 @@
             F.num(key, ['sprite', 'lightPower'], { label: '효과 레이어 세기 (%)', int: true, min: 0, max: 300, def: 100, hint: '"시트 그리기/편집"의 빛 레이어가 게임에서 더해지는 세기' }),
             F.num(key, ['sprite', 'lightPulse'], { label: '빛 깜빡임 주기 (초, 0 = 일정)', min: 0, step: 0.1, def: 0 }),
             F.num(key, ['sprite', 'lightPulseMin'], { label: '깜빡일 때 가장 어두운 세기 (%)', int: true, min: 0, max: 100, def: 40 })) : null,
+          c.sprite.sheet ? sheetFitBox(key, c, isHero && c.sprite.armorRows !== false) : null,
           c.sprite.sheet ? sheetView(key, c, st) : h('div', { class: 'hint' }, '시트를 고르면 프레임 번호가 표시됩니다'),
           tierBox, h('h3', {}, '애니메이션'), animRows];
   }
