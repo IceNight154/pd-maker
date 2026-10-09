@@ -86,12 +86,12 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const all = allPresets();
     const body = h('div', { style: { maxHeight: '70vh', overflow: 'auto', minWidth: 'min(900px, 86vw)' } });
     presetGroups().forEach(([g, keys]) => {
-      body.append(h('h3', { style: { margin: '10px 0 6px' } }, g));
+      body.append(h('h3', { class: 'm-0 mt-5 mb-3' }, g));
       body.append(h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' } },
         keys.filter(k => all[k]).map(k => { const p = all[k], z = Math.max(1, Math.min(4, Math.floor(140 / Math.max(p.w, p.h * 1.6))));
           return h('div', { class: 'card', style: { padding: '6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }, title: '눌러서 고르기', onclick: () => { PDM.ui.closeTop(); pickFn(k); } },
             h('div', { style: { height: (p.h * z + 2) + 'px', display: 'flex', alignItems: 'center' } }, livePreview(Object.assign({ seed: 1 }, p), z, '#16131f')),
-            h('b', { style: { fontSize: '12px', textAlign: 'center' } }, p.name), p.desc ? h('span', { class: 'hint', style: { fontSize: '11px', textAlign: 'center' } }, p.desc) : null); })));
+            h('b', { class: 'fs-sm ta-center' }, p.name), p.desc ? h('span', { class: 'hint fs-xs ta-center' }, p.desc) : null); })));
     });
     PDM.ui.modal('🎞 모션 예시', h('div', {}, h('p', { class: 'hint' }, '실제 코드가 그대로 돌고 있습니다. 눌러서 고르세요. "스크롤 연동" 예시는 게임 그림에 스크롤이 없으므로 시간이 스크롤 대신 진행을 끌고 갑니다.'), body), [['닫기', null]]);
   }
@@ -231,7 +231,7 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (!all.some(x => x.id === st.id)) st.id = (all[0] || {}).id;
       const idx = all.findIndex(x => x.id === st.id), m = all[idx];
       const intro = h('p', { class: 'hint' }, 'CSS(+HTML) 나 JS(캔버스)로 움직이는 그림을 만들고, 픽셀 아트로 구워 게임 그림(격자 시트 PNG · APNG)으로 씁니다. 화면 필터의 코드 층 · 글자 연출과 같은 굽는 부품을 씁니다. 게임 안에서 코드가 도는 것이 아니라 구운 그림이 정해진 길이로 반복됩니다.');
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      const head = h('div', { class: 'hstack wrap mb-4' },
         all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; st.baked = null; ctx.refresh(); } }, x.name || x.id)));
       const importBar = h('div', { class: 'btnbar' },
         PDM.ui.dropBtn('⤓ 가져오기', () => {
@@ -244,8 +244,8 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         h('span', { class: 'hint' }, '화면 필터의 코드 층(옮긴 층은 이 항목을 쓰게 됨) · 글자 연출(만들어진 HTML · CSS — 직접 다듬기용)'));
       if (!m) return h('div', { class: 'editor' }, h('h2', {}, '🎞 모션 랩'), intro, ops.bar(null), importBar,
         h('div', { class: 'btnbar' }, h('button', { class: 'btn pri', onclick: () => gallery(k => ops.add(k)) }, '🎞 예시 둘러보기 (움직이는 미리보기)…')),
-        ...presetGroups().map(([g, keys]) => h('div', {}, h('h3', { style: { margin: '10px 0 4px' } }, g),
-          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, keys.filter(k => allPresets()[k]).map(k => h('button', { class: 'btn', title: allPresets()[k].desc || '', onclick: () => ops.add(k) }, allPresets()[k].name))))));
+        ...presetGroups().map(([g, keys]) => h('div', {}, h('h3', { class: 'm-0 mt-5 mb-2' }, g),
+          h('div', { class: 'flex gap-3 wrap' }, keys.filter(k => allPresets()[k]).map(k => h('button', { class: 'btn', title: allPresets()[k].desc || '', onclick: () => ops.add(k) }, allPresets()[k].name))))));
 
       const P = (...p) => ['list', idx, ...p];
       const edit = (label, fn, silent) => store.edit(K, label, r => fn(r.list[idx]), silent ? { silent: true } : undefined);
@@ -272,17 +272,17 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
 
       return h('div', { class: 'editor' },
         h('h2', {}, '🎞 모션 랩'), intro, ops.bar(m), head,
-        h('div', { style: { display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' } },
+        h('div', { class: 'flex gap-7 items-start wrap' },
           h('div', { style: { flex: '1 1 460px', minWidth: '320px' } },
             row(F.text(K, P('name'), { label: '이름', rerender: true }), F.select(K, P('lang'), { css: 'CSS + HTML (움직임은 @keyframes)', js: 'JavaScript (캔버스에 프레임마다 그리기)' }, { label: '만드는 방식', rerender: true })),
-            h('div', { class: 'btnbar', style: { margin: '0 0 6px' } },
+            h('div', { class: 'btnbar m-0 mb-3' },
               PDM.ui.dropBtn('📋 예시로 바꾸기', () => groupedMenu(k => applyPreset(m.id, k)), { title: '지금 항목의 코드 · 크기 · 프레임을 예시로 바꿉니다 (이름 · 저장할 곳은 그대로)' }),
               h('button', { class: 'btn sm', onclick: () => gallery(k => applyPreset(m.id, k)) }, '🎞 예시 둘러보기…'),
               h('span', { class: 'hint' }, '등장 · 스크롤 연동 · 고정/전환/내비게이션 24종 + 픽셀 게임 움직임 — 고른 뒤 색 · 글자 · 크기를 고쳐 쓰세요.')),
             m.lang === 'js' ? h('div', {}, h('div', { class: 'fl' }, 'JS — 프레임마다 실행: g(캔버스 2D) · w · h · t(0~1 한 바퀴) · frame · frames · rand()(씨앗 난수: 매 프레임 같은 순서) · Math.random()(프레임마다 다름)'), ta(['code'], 16))
               : h('div', {},
                 h('div', { class: 'fl' }, 'HTML — 그림 전체 상자 .fx 안에 들어감 (비워도 됨: .fx 와 ::before/::after 로만 그려도 됨)'), ta(['html'], 3, '<div class="card">…</div>'),
-                h('div', { class: 'fl', style: { marginTop: '6px' } }, 'CSS — background · gradient · box-shadow · border · transform · ::before/::after · @keyframes · CSS 변수. 바깥 그림 url() · 웹 글꼴은 못 씀'), ta(['code'], 16)),
+                h('div', { class: 'fl mt-3' }, 'CSS — background · gradient · box-shadow · border · transform · ::before/::after · @keyframes · CSS 변수. 바깥 그림 url() · 웹 글꼴은 못 씀'), ta(['code'], 16)),
             row(F.num(K, P('w'), { label: '그림 가로 (px)', int: true, min: 4, max: 1024, def: 32, onchange: () => { st.baked = null; refreshLive(); previewBake(); } }),
               F.num(K, P('h'), { label: '그림 세로 (px)', int: true, min: 4, max: 1024, def: 32, onchange: () => { st.baked = null; refreshLive(); previewBake(); } }),
               F.num(K, P('frames'), { label: `프레임 수 (1~${M().MAXF})`, int: true, min: 1, max: M().MAXF, def: 8, onchange: () => { st.baked = null; previewBake(); } }),
@@ -296,7 +296,7 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
               row(F.select(K, P('pixel', 'palette'), { '': '색 그대로', editor: '편집기 기본 팔레트로', levels: '색마다 단계 수로' }, { label: '색 줄이기', rerender: true, onchange: () => { st.baked = null; } }),
                 pxl.palette === 'levels' ? opt('단계 수', 'levels', { int: true, min: 2, max: 32, def: 4 }) : null,
                 F.bool(K, P('pixel', 'dither'), { label: '디더링 (점 무늬로 섞기)', onchange: () => { st.baked = null; previewBake(); } }),
-                h('div', { class: 'field' }, h('span', { class: 'fl' }, '외곽선 (1칸)'), h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } },
+                h('div', { class: 'field' }, h('span', { class: 'fl' }, '외곽선 (1칸)'), h('div', { class: 'hstack gap-2' },
                   h('input', { type: 'checkbox', checked: !!pxl.outline, onchange: e => { edit('외곽선', x => { x.pixel = x.pixel || {}; x.pixel.outline = e.target.checked ? (x.pixel.outlineColor || '#231b3b') : ''; }); st.baked = null; } }),
                   h('input', { type: 'color', value: pxl.outline || pxl.outlineColor || '#231b3b', style: { width: '44px', padding: 0 }, onchange: e => { edit('외곽선 색', x => { x.pixel = x.pixel || {}; x.pixel.outlineColor = e.target.value; if (x.pixel.outline) x.pixel.outline = e.target.value; }); st.baked = null; } })))),
               h('p', { class: 'hint' }, 'CSS 는 경계를 부드럽게(반투명) 그려서 픽셀 게임에서 뿌옇게 보이기 쉽습니다 — 큰 크기로 그리고 덩어리 크기로 줄이거나(예: 128×128 + 덩어리 4 → 32×32), 투명 경계를 자르고 색을 줄이면 또렷해집니다.')),
@@ -312,12 +312,12 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
               h('p', { class: 'hint' }, '보내기: 화면 필터 층은 이 모션과 이어져 있어 여기서 고친 뒤 필터에서 "다시 굽기"하면 따라옵니다. 이펙트 · 맵 오브젝트는 저장한 시트를 쓰므로 여기서 다시 저장하면 그대로 바뀝니다. 아이템 · 노드 합성기에는 첫 장만 들어갑니다.')),
             importBar),
           h('div', { style: { flex: '0 1 auto', position: 'sticky', top: '0' } },
-            h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' } },
+            h('div', { class: 'hstack mb-3' },
               h('span', { class: 'hint' }, '확대'), (() => { const s = h('select', { onchange: () => { st.zoom = +s.value; refreshLive(); if (st.baked) showBaked(st.baked); } }, [1, 2, 3, 4, 6, 8].map(z => h('option', { value: z, selected: z === st.zoom }, '×' + z))); return s; })(),
               h('span', { class: 'hint' }, '배경'), (() => { const s = h('select', { onchange: () => { st.bg = s.value; refreshLive(); if (st.baked) showBaked(st.baked); } }, [['checker', '체크'], ['#16131f', '어둡게'], ['#3a3346', '중간'], ['#e8e4f0', '밝게']].map(([v, n]) => h('option', { value: v, selected: v === st.bg }, n))); return s; })()),
             h('div', { class: 'fl' }, '실시간 (코드 그대로)'), live,
-            h('div', { class: 'fl', style: { marginTop: '10px' } }, '구운 결과 (게임에 들어가는 그림)'), bakedBox,
-            h('div', { style: { marginTop: '6px' } }, h('button', { class: 'btn sm', onclick: previewBake }, '↻ 다시 굽기 (미리보기)')))));
+            h('div', { class: 'fl mt-5' }, '구운 결과 (게임에 들어가는 그림)'), bakedBox,
+            h('div', { class: 'mt-3' }, h('button', { class: 'btn sm', onclick: previewBake }, '↻ 다시 굽기 (미리보기)')))));
     }
   });
 

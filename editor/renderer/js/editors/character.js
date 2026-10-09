@@ -118,7 +118,7 @@
       const line = PDM.Heart.pickLine(sys, rec, c, topic.value);
       out.prepend(h('div', {}, `[${topic.value} · 호감 ${rec.favor} 신뢰 ${rec.trust}] `, line ? h('b', { style: { color: 'var(--fg)' } }, `${line.face ? '(' + line.face + ') ' : ''}${line.text}`) : h('i', {}, '맞는 대사 없음 → 공용 대사 사용')));
     };
-    return h('div', {}, h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+    return h('div', {}, h('div', { class: 'hstack wrap' },
       '토픽', topic, PDM.T('rel.favor'), favor, PDM.T('rel.trust'), trust, h('button', { class: 'btn sm', onclick: run }, '대사 뽑기'),
       h('button', { class: 'btn sm', onclick: () => PDM.heartSim && PDM.heartSim(c.id) }, '마음 시뮬레이터…')), out);
   }
@@ -129,7 +129,7 @@
     const sh = c.shop || {}, { F, row } = PDM.ui;
     const on = h('input', { type: 'checkbox', checked: !!sh.on });
     on.onchange = () => store.edit(key, '상인 기능', o => { o.shop = Object.assign({ title: '', greet: '', items: [], priceRate: 300, sell: true, sellRate: 50, direct: false }, o.shop || {}, { on: on.checked }); });
-    const head = h('label', { class: 'check' }, on, h('b', {}, '🛒 이 캐릭터를 상인으로 쓰기'), h('span', { class: 'hint', style: { marginLeft: '6px' } }, '말을 걸면 아이템을 사고파는 창이 뜹니다'));
+    const head = h('label', { class: 'check' }, on, h('b', {}, '🛒 이 캐릭터를 상인으로 쓰기'), h('span', { class: 'hint ml-3' }, '말을 걸면 아이템을 사고파는 창이 뜹니다'));
     if (!sh.on) return [head, h('p', { class: 'hint' }, '게임 원래 상점(바닥에 놓인 물건을 직접 집어서 사는 방식)과 달리, 파는 물건 목록을 여기서 정하고 창에서 사고팝니다.')];
     const ed = (lbl, fn, rr) => store.edit(key, lbl, o => fn(o.shop), rr === false ? { silent: true } : undefined);
     const numI = (v, fn, min, ph) => { const i = h('input', { type: 'number', value: v, min, placeholder: ph || '', style: { width: '84px' } }); i.onchange = () => fn(Math.max(min, i.value | 0)); return i; };
@@ -137,15 +137,15 @@
       h('td', {}, PDM.itemInput ? PDM.itemInput(e.item, v => ed('파는 물건', s => { s.items[i].item = v; }, false)) : null),
       h('td', {}, numI(e.price || 0, v => ed('값', s => { s.items[i].price = v; }, false), 0)),
       h('td', {}, numI(e.stock ?? -1, v => ed('재고', s => { s.items[i].stock = v; }, false), -1)),
-      h('td', { style: { whiteSpace: 'nowrap' } },
+      h('td', { class: 'nowrap' },
         h('button', { class: 'btn xs', disabled: i === 0, onclick: () => ed('순서', s => { [s.items[i - 1], s.items[i]] = [s.items[i], s.items[i - 1]]; }) }, '↑'),
         h('button', { class: 'btn xs', disabled: i === sh.items.length - 1, onclick: () => ed('순서', s => { [s.items[i + 1], s.items[i]] = [s.items[i], s.items[i + 1]]; }) }, '↓'),
         h('button', { class: 'btn xs danger', onclick: () => ed('물건 삭제', s => { s.items.splice(i, 1); }) }, '×'))));
     return [head,
       row(F.text(key, ['shop', 'title'], { label: '가게 이름 (비우면 캐릭터 이름)' }), F.text(key, ['shop', 'greet'], { label: '창 위쪽 인사말 (선택)' })),
-      h('div', { class: 'fl', style: { marginTop: '6px' } }, `파는 물건 (${(sh.items || []).length})`),
+      h('div', { class: 'fl mt-3' }, `파는 물건 (${(sh.items || []).length})`),
       h('table', { class: 'grid' }, h('tr', {}, h('th', {}, '아이템 (프로젝트 아이템 · 게임 아이템)'), h('th', { style: { width: '100px' } }, '값 (0 = 자동)'), h('th', { style: { width: '100px' } }, '재고 (-1 = 무제한)'), h('th', { style: { width: '90px' } }, '')), ...rows),
-      h('button', { class: 'btn xs add', style: { marginTop: '4px' }, onclick: () => ed('물건 추가', s => { s.items = s.items || []; s.items.push({ item: '', price: 0, stock: -1 }); }) }, '+ 물건 추가'),
+      h('button', { class: 'btn xs add mt-2', onclick: () => ed('물건 추가', s => { s.items = s.items || []; s.items.push({ item: '', price: 0, stock: -1 }); }) }, '+ 물건 추가'),
       row(F.num(key, ['shop', 'priceRate'], { label: '자동 값 = 아이템 가치의 몇 %', int: true, min: 1, def: 300 }),
         F.bool(key, ['shop', 'sell'], { label: '영웅이 가진 물건을 팔 수 있음 ("팔기" 탭)', def: true, rerender: true }),
         sh.sell !== false ? F.num(key, ['shop', 'sellRate'], { label: '사 주는 값 = 아이템 가치의 몇 %', int: true, min: 1, def: 50 }) : null),
@@ -177,15 +177,15 @@
       const custom = !BASE.includes(ak);
       animRows.append(h('div', { class: 'li', style: { alignItems: 'center', marginBottom: '6px', outline: st.anim === ak ? '1px solid var(--accent)' : '' }, onclick: e => { if (st.anim !== ak && !/INPUT|BUTTON/.test(e.target.tagName)) { st.anim = ak; ctx.refresh(); } } },
         a ? animPreview(c, ak, ctx, rowOf) : h('div', { style: { width: '72px' } }),
-        h('div', { style: { flex: 1 } },
+        h('div', { class: 'grow' },
           h('b', {}, ak, ' ', h('span', { class: 'hint' }, custom ? '추가 애니메이션 (이벤트 "애니메이션 재생")' : (PDM.ANIM_NAMES[ak] || ''))),
-          st.anim === ak ? h('span', { class: 'badge good', style: { marginLeft: '6px' } }, '시트 클릭 → 여기에 추가') : null,
+          st.anim === ak ? h('span', { class: 'badge good ml-3' }, '시트 클릭 → 여기에 추가') : null,
           a ? row(PDM.ui.field('프레임 번호 (쉼표로 구분)', (() => { const fi = h('input', { type: 'text', value: (a.frames || []).join(', ') }); fi.addEventListener('change', () => store.edit(key, '프레임', o => { o.sprite.anims[ak].frames = fi.value.split(/[ ,]+/).filter(Boolean).map(Number).filter(n => !isNaN(n)); })); return fi; })()),
             F.num(key, ['sprite', 'anims', ak, 'fps'], { label: 'fps', min: 1, max: 60, int: true }), F.bool(key, ['sprite', 'anims', ak, 'loop'], { label: '반복' }))
             : h('button', { class: 'btn sm', onclick: () => create(ak) }, '+ 이 애니메이션 만들기')),
         a ? h('button', { class: 'ib danger', title: '애니메이션 삭제', onclick: e => { e.stopPropagation(); if (st.anim === ak) st.anim = 'idle'; store.edit(key, '애니메이션 삭제', o => { delete o.sprite.anims[ak]; }); } }, '✕') : null));
     });
-    animRows.append(h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+    animRows.append(h('div', { class: 'hstack wrap' },
       h('button', { class: 'btn sm', onclick: async () => {
         const n = await PDM.ui.prompt('새 애니메이션 이름 (영문)', '', '예: cast, dance, hurt, sit — 이벤트 명령 "애니메이션 재생"에서 이 이름으로 틉니다');
         if (!n) return;
@@ -201,18 +201,18 @@
       const TIERS = ['0 (갑옷 없음)', '1 (천)', '2 (가죽)', '3 (사슬)', '4 (비늘)', '5 (판금)', '6 (직업 갑옷)'];
       const setRows = rows => store.edit(key, '갑옷 단계 행', o => { if (rows) o.sprite.tierRows = rows; else delete o.sprite.tierRows; });
       const cur = t => tr ? tr[Math.min(t, tr.length - 1)] : t;
-      return h('div', { class: 'tier-rows', style: { margin: '6px 0 10px' } },
+      return h('div', { class: 'tier-rows m-0 mt-3 mb-5' },
         h('div', { class: 'fl' }, '갑옷 단계별로 쓸 시트 행'),
-        h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', margin: '2px 0 6px' } },
+        h('div', { class: 'flex gap-2 wrap m-0 mt-1 mb-3' },
           h('button', { class: 'btn xs' + (!tr ? ' pri' : ''), onclick: () => setRows(null) }, '자동 (단계 = 행)'),
           h('button', { class: 'btn xs', onclick: () => setRows([0, 0, 0, 0, 0, 0, 0]) }, '0행만 사용'),
           ...[1, 2, 3, 4, 5].map(m => h('button', { class: 'btn xs', onclick: () => setRows([0, 1, 2, 3, 4, 5, 6].map(t => Math.min(t, m))) }, `${m}행까지`))),
-        h('div', { class: 'row', style: { flexWrap: 'wrap' } }, ...TIERS.map((nm, t) => {
+        h('div', { class: 'row wrap' }, ...TIERS.map((nm, t) => {
           const inp = h('input', { type: 'number', min: 0, max: 20, value: cur(t), style: { width: '60px' } });
           inp.addEventListener('change', () => { const rows = [0, 1, 2, 3, 4, 5, 6].map(i => cur(i)); rows[t] = Math.max(0, inp.value | 0); setRows(rows); });
           return PDM.ui.field('갑옷 ' + nm, inp);
         })),
-        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '미리보기 단계:'),
+        h('div', { class: 'hstack' }, h('span', { class: 'hint' }, '미리보기 단계:'),
           ...[0, 1, 2, 3, 4, 5, 6].map(t => h('button', { class: 'chip' + (pvTier === t ? ' on' : ''), onclick: () => { st.pvTier = t; ctx.refresh(); } }, String(t)))),
         h('p', { class: 'hint' }, '시트에 그린 행보다 큰 단계는 마지막 행을 씁니다. 예: 한 행만 그렸으면 "0행만 사용", 3단계까지 그렸으면 "3행까지".'));
     })() : null;
@@ -313,17 +313,17 @@
       });
 
       return h('div', { class: 'page' },
-        h('h1', {}, `${KIND_ICON[c.kind] || ''} ${c.name}`, h('span', { class: 'hint', style: { marginLeft: '8px' } }, c.id)),
+        h('h1', {}, `${KIND_ICON[c.kind] || ''} ${c.name}`, h('span', { class: 'hint ml-4' }, c.id)),
         c.game ? h('div', { class: 'banner', style: { border: '1px solid var(--line)', borderLeft: '3px solid var(--gold)', borderRadius: '6px', padding: '8px 10px', margin: '0 0 10px' } },
-          h('div', {}, h('b', {}, '원작 캐릭터'), h('span', { class: 'hint mono', style: { marginLeft: '6px' } }, 'actors.mobs.' + c.game)),
+          h('div', {}, h('b', {}, '원작 캐릭터'), h('span', { class: 'hint mono ml-3' }, 'actors.mobs.' + c.game)),
           F.bool(key, ['useGame'], { label: '게임 원래 동작 그대로 쓰기 (AI·공격·특수 능력·퀘스트 모두 게임 코드) — 맵에 놓거나 이벤트로 소환하면 게임 클래스가 나옵니다', def: true, rerender: true }),
-          h('p', { class: 'hint', style: { margin: '4px 0 0' } }, c.useGame === false
+          h('p', { class: 'hint m-0 mt-2' }, c.useGame === false
             ? '끔: 아래 능력치·그림·AI·대사로 동작하는 PDMaker 캐릭터가 됩니다 (게임의 특수 능력은 없음).'
             : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.'),
           PDM.gameMobBox(c, st)) : null,
         section('기본',
           row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용 (게임에 나옴)', def: true, rerender: true })),
-          c.enabled === false ? h('p', { class: 'hint', style: { color: 'var(--warn)' } }, '꺼져 있음 — 맵에 놓은 것 · 몬스터 스폰 목록 · 이벤트 소환 · 동료 합류 · 이주 어디서도 나오지 않습니다 (원작 몬스터면 층의 몬스터 목록에서도 빠짐). 대사의 화자 이름 · 초상화는 그대로 씁니다.') : null,
+          c.enabled === false ? h('p', { class: 'hint c-warn' }, '꺼져 있음 — 맵에 놓은 것 · 몬스터 스폰 목록 · 이벤트 소환 · 동료 합류 · 이주 어디서도 나오지 않습니다 (원작 몬스터면 층의 몬스터 목록에서도 빠짐). 대사의 화자 이름 · 초상화는 그대로 씁니다.') : null,
           F.textarea(key, ['desc'], { label: '설명(도감)', rows: 2 })),
         section('스프라이트 · 애니메이션', ...spriteEditor(key, c, ctx, st)),
         !PDM.extensions.on('charPortrait') ? null : section('초상화 · 표정 · 대사창 일러스트',
@@ -357,15 +357,15 @@
         ['mob', 'boss'].includes(c.kind) ? section('등장 · 전리품',
           c.game ? F.bool(key, ['noSpawn'], { label: '던전에 자동으로 나오지 않게 (등장 금지) — 게임이 층마다 뽑는 몬스터 목록에서 뺍니다. 맵에 직접 놓거나 이벤트로 소환한 것은 그대로 나옵니다', rerender: true }) : null,
           F.bool(key, ['noGameLoot'], { label: '게임 코드의 전리품을 떨어뜨리지 않음 (아래 드랍 테이블만 적용)' }),
-          c.game ? (() => { const el = h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 코드의 전리품: 읽는 중…'); PDM.gameMobLoot(c.game).then(t => { el.textContent = '게임 코드의 전리품: ' + (t || '없음') + ' — 자세한 코드는 위 "게임 코드의 실제 값"'; }); return el; })() : h('p', { class: 'hint', style: { margin: '2px 0 0' } }, '게임 클래스가 아닌 PDMaker 캐릭터라 게임 코드의 전리품은 없습니다.'),
-          h('h4', { style: { margin: '10px 0 4px' } }, '드랍 테이블'),
+          c.game ? (() => { const el = h('p', { class: 'hint m-0 mt-1' }, '게임 코드의 전리품: 읽는 중…'); PDM.gameMobLoot(c.game).then(t => { el.textContent = '게임 코드의 전리품: ' + (t || '없음') + ' — 자세한 코드는 위 "게임 코드의 실제 값"'; }); return el; })() : h('p', { class: 'hint m-0 mt-1' }, '게임 클래스가 아닌 PDMaker 캐릭터라 게임 코드의 전리품은 없습니다.'),
+          h('h4', { class: 'm-0 mt-5 mb-2' }, '드랍 테이블'),
           PDM.charLootEditor(key, c)) : null,
         ['npc', 'companion'].includes(c.kind) ? section('상인 기능 (사고파는 창)', shopEditor(key, c)) : null,
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '체력', min: 1, int: true }), F.num(key, ['stats', 'attackMin'], { label: '공격 최소', int: true }), F.num(key, ['stats', 'attackMax'], { label: '공격 최대', int: true })),
           row(F.num(key, ['stats', 'defense'], { label: '방어', int: true }), F.num(key, ['stats', 'accuracy'], { label: '명중', int: true }), F.num(key, ['stats', 'evasion'], { label: '회피', int: true }), F.num(key, ['stats', 'speed'], { label: '속도', step: 0.1 })),
           ['mob', 'boss'].includes(c.kind) ? h('div', {},
-            h('div', { class: 'fl', style: { marginTop: '6px' } }, '체력 (아이템 시험용 샌드백 등)'),
+            h('div', { class: 'fl mt-3' }, '체력 (아이템 시험용 샌드백 등)'),
             row(F.bool(key, ['stats', 'infiniteHp'], { label: '체력 무한 — 피해 숫자는 뜨지만 체력이 줄지 않고 쓰러지지 않음', rerender: true }),
               F.num(key, ['stats', 'regen'], { label: '지속 회복량 (0 = 없음)', int: true, min: 0, def: 0, rerender: true }),
               (c.stats || {}).regen > 0 ? F.num(key, ['stats', 'regenEvery'], { label: '몇 턴마다', int: true, min: 1, def: 1 }) : null,
@@ -390,7 +390,7 @@
         !PDM.extensions.on('charHeart') ? null : section(PDM.T('sys.heart') + ' (era 방식)',
           F.bool(key, ['heart', 'enabled'], { label: '이 캐릭터에 마음 시스템 사용' }),
           c.heart.enabled ? h('div', {},
-            h('div', { class: 'fl', style: { margin: '6px 0 4px' } }, PDM.T('sys.trait')),
+            h('div', { class: 'fl m-0 mt-3 mb-2' }, PDM.T('sys.trait')),
             F.chips(key, ['heart', 'traits'], (sys.traits || []).map(t => [t.key, t.name, `호감 ${t.favorAdd >= 0 ? '+' : ''}${t.favorAdd} / 신뢰 ${t.trustAdd >= 0 ? '+' : ''}${t.trustAdd}`])),
             row(F.list(key, ['heart', 'likes'], { label: '좋아하는 것', hint: '아이템 id 또는 tag:태그 (예: tag:herb)' }), F.list(key, ['heart', 'dislikes'], { label: '싫어하는 것' })),
             row(F.num(key, ['heart', 'initial', 'favor'], { label: '처음 ' + PDM.T('rel.favor'), int: true }), F.num(key, ['heart', 'initial', 'trust'], { label: '처음 ' + PDM.T('rel.trust'), int: true }))) : null),

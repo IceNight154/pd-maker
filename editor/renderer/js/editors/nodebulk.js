@@ -31,7 +31,7 @@
     // 게임이 빈 칸에 쓰는 값 (노드에 있던 광원을 보여 줄 때 — 새 광원 기본값 D 와 다름)
     const RT = area ? { color: '#9a7cff', k: 1.5, z: 10, range: 2, pulse: 0, pulseMin: 60 }
       : { color: '#ffe9a8', chance: 100, max: 0, spacing: 3, ox: 0, oy: 0, cond: '', k: 3, z: 10, range: 4, pulse: 0, pulseMin: 60, shadow: true, charShadow: true };
-    const list = [], box = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' } });
+    const list = [], box = h('div', { class: 'vstack w-full' });
     const lab = (t, input, title) => h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', margin: 0 }, title: title || '' }, h('span', { class: 'hint' }, t), input);
     function card(v) {
       const src = v._src;   // 노드에 있던 광원이면 원래 값
@@ -123,7 +123,7 @@
     if (!ids.length) { toast('노드가 없습니다', 'bad'); return; }
     const W_ = PDM.World;
     const on = new Set(ids);
-    const summary = h('div', { class: 'hint', style: { marginTop: '10px', fontWeight: 'bold' } });
+    const summary = h('div', { class: 'hint mt-5 fw-bold' });
 
     // ---- 대상 ----
     const tBoxes = {};
@@ -135,7 +135,7 @@
       }));
     const pick = f => { ids.forEach(id => { const v = f(store.get('node:' + id)); tBoxes[id].checked = v; v ? on.add(id) : on.delete(id); }); update(); };
     const targetBox = h('div', {},
-      h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+      h('div', { class: 'flex gap-3 wrap' },
         h('button', { class: 'btn xs', onclick: () => pick(() => true) }, '모두'),
         h('button', { class: 'btn xs', onclick: () => pick(() => false) }, '없음'),
         ...Object.keys(PDM.FLOOR_MODES || {}).filter(m => ids.some(id => store.get('node:' + id).mode === m))
@@ -152,7 +152,7 @@
       const ck = { display: 'inline-flex', alignItems: 'center', gap: '4px', margin: 0 };
       const el = h('div', { style: { display: 'grid', gridTemplateColumns: '150px 1fr', alignItems: 'center', gap: '6px', padding: '4px 0', borderBottom: '1px solid var(--line)' } },
         h('label', { class: 'check', style: ck }, cb, h('b', {}, label)),
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', minWidth: 0 }, oninput: touch, onchange: touch }, ...inputs,
+        h('div', { class: 'hstack wrap min-0', oninput: touch, onchange: touch }, ...inputs,
           wipe ? h('label', { class: 'check', style: ck, title: '체크하면 노드에 있던 것을 모두 지우고 여기서 넣는 것만 남깁니다' }, wipe, '기존 것 지우고') : null,
           hint ? h('span', { class: 'hint' }, hint) : null));
       rows.push({ kind, label, cb, wipe, apply, count });
@@ -228,8 +228,8 @@
 
     const ok = await PDM.ui.modal(`노드 한꺼번에 설정 — ${title}`, h('div', { style: { minWidth: '640px' } },
       h('div', { class: 'fl' }, `대상 노드 (${ids.length}개 중 고르기)`), targetBox,
-      h('div', { class: 'fl', style: { marginTop: '10px' } }, '바꾸기 — 체크한 항목을 모든 대상 노드에 같은 값으로'), setBox,
-      h('div', { class: 'fl', style: { marginTop: '10px' } }, '추가 — 대상 노드마다 넣기 (광원은 여러 개 · 세부 값까지 여기서, 나머지 세부 값은 나중에 노드 속성에서)'), addBox,
+      h('div', { class: 'fl mt-5' }, '바꾸기 — 체크한 항목을 모든 대상 노드에 같은 값으로'), setBox,
+      h('div', { class: 'fl mt-5' }, '추가 — 대상 노드마다 넣기 (광원은 여러 개 · 세부 값까지 여기서, 나머지 세부 값은 나중에 노드 속성에서)'), addBox,
       summary), [['취소', null], ['적용', true, 'pri']]);
     if (!ok) return;
     const act = rows.filter(x => x.cb.checked), targets = ids.filter(id => on.has(id));

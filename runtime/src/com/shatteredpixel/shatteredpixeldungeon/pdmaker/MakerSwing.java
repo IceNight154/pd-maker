@@ -83,6 +83,8 @@ public class MakerSwing {
 		final float face, dur, dist, scl, trailEvery; final boolean mirror;
 		final float[] hits; final boolean[] hitDone;
 		float time, trailT;
+		/** 마지막으로 계산한 날 끝 (테스트 도구용) */
+		public PointF lastTip;
 
 		Swing(Item w, CharSprite owner, int cell, JsonValue c) {
 			super(w);
@@ -96,6 +98,7 @@ public class MakerSwing {
 			JsonValue hs = c.get("hits"); hits = new float[hs == null ? 0 : hs.size]; for (int i = 0; i < hits.length; i++) hits[i] = hs.getFloat(i);
 			hitDone = new boolean[hits.length];
 			flipHorizontal = mirror;
+			updateFrame();   // 뒤집기는 그림 칸(frame)을 다시 정할 때만 반영됨 — 생성자에서 이미 칸이 정해졌으므로 직접 다시 (안 하면 왼쪽을 볼 때 그림은 안 뒤집히고 중심 · 날 방향만 뒤집혀 꼬임)
 			origin.set(mirror ? width : 0, height);   // 손잡이 = 왼쪽 아래 (뒤집으면 오른쪽 아래)
 			pose(0f);
 		}
@@ -118,7 +121,7 @@ public class MakerSwing {
 			super.update();
 			time += Game.elapsed;
 			float t = Math.min(1f, time / dur);
-			PointF tip = pose(t);
+			PointF tip = pose(t); lastTip = tip;
 			try {
 				String tr = c.getString("trail", "");
 				if (!tr.isEmpty() && (trailT -= Game.elapsed) <= 0 && t < 1f) { trailT = trailEvery; MakerEffect.play(tr, tip, null); }

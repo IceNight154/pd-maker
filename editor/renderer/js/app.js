@@ -129,9 +129,10 @@
       bar.append(h('div', { class: 'tab' + (t === active ? ' on' : ''), title: t.key,
         onmousedown: e => { if (e.button === 1) { e.preventDefault(); PDM.tabs.close(t.key); } },
         onclick: () => activate(t) },
-        h('span', {}, safe(() => typeof t.editor.icon === 'function' ? t.editor.icon(t.key) : t.editor.icon, '')), h('span', { class: 'tl' }, title + (dirty ? ' ●' : '')),
-        h('span', { class: 'x', onclick: e => { e.stopPropagation(); PDM.tabs.close(t.key); } }, '✕')));
+        h('span', { class: 'ti' }, PDM.iconFor(safe(() => typeof t.editor.icon === 'function' ? t.editor.icon(t.key) : t.editor.icon, ''))), h('span', { class: 'tl' }, title + (dirty ? ' ●' : '')),
+        h('span', { class: 'x', title: '닫기', onclick: e => { e.stopPropagation(); PDM.tabs.close(t.key); } }, PDM.icon('x'))));
     });
+    const on = bar.querySelector('.tab.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });   // 탭이 많아도 지금 탭이 보이게
   }
   const safe = (fn, d) => { try { return fn(); } catch (_) { return d; } };
 
@@ -198,13 +199,13 @@
           const cb = h('input', { type: 'checkbox', checked: extOn(x.id), onchange: () => { store.edit('project', (cb.checked ? '확장 기능 켜기: ' : '확장 기능 끄기: ') + x.name, p => { p.extensions = Object.assign({}, p.extensions || {}, { [x.id]: cb.checked }); }); drawTree(); draw(); } });
           const kids = r && r.children ? r.children : [];
           return h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '8px 10px', margin: '8px 0' } },
-            h('label', { class: 'check', style: { fontWeight: 600 } }, cb, h('span', {}, x.section ? `${x.name} — 편집 화면에 표시` : `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
+            h('label', { class: 'check fw-bold' }, cb, h('span', {}, x.section ? `${x.name} — 편집 화면에 표시` : `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
             h('div', { class: 'hint', style: { margin: '2px 0 6px 24px' } }, x.desc),
             ...kids.map(k => {
               const openBtn = n => h('button', { class: 'btn sm', onclick: () => { PDM.tabs.open(n.open); document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); } }, `${n.icon || ''} ${n.label}`);
               const leafs = k.children ? k.children.filter(n => n.open) : [];
               return h('div', { style: { margin: '4px 0 4px 24px' } },
-                k.open ? openBtn(k) : h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+                k.open ? openBtn(k) : h('div', { class: 'hstack wrap' },
                   h('b', {}, `${k.icon || ''} ${k.label}${k.count !== undefined ? ' (' + k.count + ')' : ''}`),
                   ...(k.menu || []).filter(m => m && m.label && /^새 |추가/.test(m.label)).slice(0, 2).map(m => h('button', { class: 'btn xs', onclick: () => { document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); m.run(); } }, m.label)),
                   ...leafs.slice(0, 30).map(openBtn)));
@@ -244,12 +245,12 @@
   function drawTreeSearch(roots) {
     const box = $('#treeSearch'); if (!box) return;
     if (!box.firstChild) {
-      const inp = h('input', { type: 'search', id: 'treeSearchInput', placeholder: '이름 검색…', style: { flex: 1, minWidth: 0 } });
+      const inp = h('input', { type: 'search', id: 'treeSearchInput', placeholder: '이름 검색…', class: 'grow min-0' });
       let tm = 0; inp.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { search.q = inp.value; drawTree(); }, 120); });
       inp.addEventListener('keydown', e => { if (e.key === 'Escape') { inp.value = ''; search.q = ''; drawTree(); } });
-      box.append(h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, inp,
+      box.append(h('div', { class: 'hstack gap-2' }, inp,
           h('button', { class: 'ib', id: 'treeSearchDetail', title: '세부 검색 — 분류·종류로 좁히기', onclick: () => { search.detail = !search.detail; drawTree(); } }, '☰'),
-          h('label', { title: '전체 검색 — 체크하면 접혀 있는 분류까지 목록 전체에서 찾습니다. 끄면 지금 펼쳐 놓은 분류 안에서만 찾습니다', style: { display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px', whiteSpace: 'nowrap' } },
+          h('label', { title: '전체 검색 — 체크하면 접혀 있는 분류까지 목록 전체에서 찾습니다. 끄면 지금 펼쳐 놓은 분류 안에서만 찾습니다', class: 'hstack gap-1 fs-xs nowrap' },
             h('input', { type: 'checkbox', checked: search.all, onchange: e => { search.all = e.target.checked; drawTree(); } }), '전체'),
           h('span', { id: 'treeSearchCount', class: 'hint', style: { fontSize: '11px', minWidth: '28px', textAlign: 'right' } })),
         h('div', { id: 'treeSearchMore', style: { display: 'none', gap: '4px', marginTop: '4px' } }));
@@ -262,7 +263,7 @@
     const subs = []; const rec = (nodes, d) => nodes.forEach(n => { if (n.children) { subs.push([n.id, '　'.repeat(d) + String(n.label)]); rec(n.children, d + 1); } });
     const r = groups.find(n => n.id === search.root); if (r) rec(r.children, 0);
     if (search.group && !subs.some(x => x[0] === search.group)) search.group = '';
-    const sel = (opts, val, first, on) => { const s = h('select', { style: { flex: 1, minWidth: 0 }, onchange: () => on(s.value) }, h('option', { value: '' }, first), opts.map(([v, t]) => h('option', { value: v }, t))); s.value = val; return s; };
+    const sel = (opts, val, first, on) => { const s = h('select', { class: 'grow min-0', onchange: () => on(s.value) }, h('option', { value: '' }, first), opts.map(([v, t]) => h('option', { value: v }, t))); s.value = val; return s; };
     more.replaceChildren(sel(groups.map(n => [n.id, `${n.icon || ''} ${n.label}`]), search.root, '(모든 분류)', v => { search.root = v; search.group = ''; drawTree(); }),
       sel(subs, search.group, '(모든 종류)', v => { search.group = v; drawTree(); }));
   }
@@ -271,7 +272,7 @@
     const body = $('#treeBody'); if (!body) return;
     saveExpanded();
     const sc = body.scrollTop; body.innerHTML = '';
-    if (!store.isOpen) { body.append(h('div', { class: 'empty', style: { padding: '10px' } }, '프로젝트를 열어 주세요')); return; }
+    if (!store.isOpen) { body.append(h('div', { class: 'empty p-5' }, '프로젝트를 열어 주세요')); return; }
     const dirty = new Set(store.dirtyKeys());
     const walk = (nodes, d) => nodes.forEach(n => {
       const hasKids = n.children && n.children.length;
@@ -282,7 +283,7 @@
         ondblclick: () => { if (n.children && n.open) { open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } },
         oncontextmenu: e => { e.preventDefault(); if (n.menu) PDM.ui.menu(e.clientX, e.clientY, typeof n.menu === 'function' ? n.menu() : n.menu); } },
         h('span', { class: 'tw', onclick: e => { if (hasKids) { e.stopPropagation(); open ? expanded.delete(n.id) : expanded.add(n.id); drawTree(); } } }, hasKids ? (open ? '▾' : '▸') : ''),
-        h('span', { class: 'ti' }, n.icon || ''), h('span', { class: 'tl' }, n.label), n.count !== undefined ? h('span', { class: 'tc' }, n.count) : null,
+        h('span', { class: 'ti' }, PDM.iconFor(n.icon)), h('span', { class: 'tl' }, n.label), n.count !== undefined ? h('span', { class: 'tc' }, n.count) : null,
         // 줄에 마우스를 올리면 보이는 작은 버튼 (예: 영웅 순서 ▲▼)
         n.actions && n.actions.length ? h('span', { class: 'tact' }, n.actions.map(a => h('button', { class: 'ib', title: a.title || '', onclick: e => { e.stopPropagation(); a.run(e); } }, a.label))) : null);
       // 끌어 놓기: n.drag = 끌 수 있는 것({ kind, id … }), n.drop(끈 것, 'before'|'after'|'into') = 여기에 놓았을 때 (true 를 돌려주면 처리함)
@@ -310,7 +311,7 @@
     let roots = treeRoots();
     drawTreeSearch(roots);
     const f = filterTree(roots);
-    if (f) { roots = f.nodes; if (!roots.length) body.append(h('div', { class: 'empty', style: { padding: '10px' } }, '찾는 것이 없습니다' + (search.all ? '' : ' — "전체"를 체크하면 접혀 있는 분류에서도 찾습니다'))); }
+    if (f) { roots = f.nodes; if (!roots.length) body.append(h('div', { class: 'empty p-5' }, '찾는 것이 없습니다' + (search.all ? '' : ' — "전체"를 체크하면 접혀 있는 분류에서도 찾습니다'))); }
     forced = f ? f.open : null;
     const cnt = $('#treeSearchCount'); if (cnt) cnt.textContent = f ? f.count + '개' : '';
     walk(roots, 0);
@@ -400,33 +401,8 @@
     });
   }
 
-  /** 도구 모음 아이콘 (선 그림 SVG — 글자색을 따라 테마에 맞음) */
-  const ICON = {
-    new: 'M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M12 11v6M9 14h6',
-    open: 'M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v2M3 7v11a1 1 0 0 0 1 1h14l3-8H7l-3 8',
-    save: 'M5 3h11l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM8 3v5h7V3M8 20v-6h8v6',
-    saveAs: 'M5 3h9l3 3v4M5 3a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1h6M8 3v5h6V3M14 20l6-6 2 2-6 6h-2z',
-    exportProj: 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
-    importProj: 'M12 3v12M7 10l5 5 5-5M4 17v3h16v-3',
-    exportGame: 'M3 5h18v11H3zM8 21h8M12 16v5M9 9l3 3 3-3M12 6v6',
-    undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
-    redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3',
-    check: 'M20 6L9 17l-5-5',
-    clean: 'M3 21l6-6M14 4l6 6-8 8-6-6zM9 9l6 6',
-    play: 'M7 4v16l13-8z',
-    stop: 'M6 6h12v12H6z',
-    theme: 'M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18',
-    gradle: 'M6 3h9l4 4v14H6zM15 3v4h4M9 12l-2 2 2 2M15 12l2 2-2 2M13 11l-2 6',
-    ext: 'M9 3h6v4a2 2 0 1 0 4 0V3h2v8h-4a2 2 0 1 0 0 4h4v6H3v-6h4a2 2 0 1 0 0-4H3V3h2v4a2 2 0 1 0 4 0z',
-    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z'
-  };
-  function svgIcon(name) {
-    const ns = 'http://www.w3.org/2000/svg';
-    const s = document.createElementNS(ns, 'svg');
-    s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'tbi');
-    const p = document.createElementNS(ns, 'path'); p.setAttribute('d', ICON[name] || ''); s.append(p);
-    return s;
-  }
+  /** 도구 모음 아이콘 — 공용 아이콘 한 벌(js/icons.js)에서 */
+  const svgIcon = name => PDM.icon(name, 'tbi');
   /** 도구 모음 버튼: 아이콘 + (짧은) 글자, 마우스를 올리면 설명과 단축키 */
   const tbBtn = (icon, label, run, o = {}) => h('button', { class: 'tb' + (o.cls ? ' ' + o.cls : '') + (o.iconOnly ? ' icon' : ''), onclick: run, disabled: !!o.disabled,
     title: (o.tip || label) + (o.key ? `  (${o.key})` : '') }, svgIcon(icon), o.iconOnly ? null : h('span', {}, label));
@@ -666,7 +642,7 @@
       r.note ? h('p', { class: 'hint' }, r.note) : null,
       h('div', { class: 'fl' }, '바뀐 내용' + (r.behind ? ` (${r.behind}개)` : '')),
       h('div', { style: { maxHeight: '40vh', overflow: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '6px 10px' } },
-        ...r.commits.slice(0, 60).map(c => h('div', { style: { margin: '2px 0' } }, h('code', { class: 'hint', style: { marginRight: '8px' } }, String(c.sha).slice(0, 7) + ' ' + fmtDate(c.date)), c.message))),
+        ...r.commits.slice(0, 60).map(c => h('div', { class: 'my-1' }, h('code', { class: 'hint mr-4' }, String(c.sha).slice(0, 7) + ' ' + fmtDate(c.date)), c.message))),
       h('p', { class: 'hint' }, r.mode === 'git' ? '업데이트하면 git pull 로 받아 온 뒤 PDMaker 를 다시 시작합니다.' + (r.dirty ? ` 이 폴더에 고친 파일이 ${r.dirty}개 있어 겹치면 실패할 수 있습니다 (실패하면 ZIP 방식으로 받을 수 있음).` : '')
         : r.mode === 'zip' ? '업데이트하면 PDMaker 파일을 최신으로 덮어쓴 뒤 다시 시작합니다. game 폴더(게임 저장소)와 프로젝트는 건드리지 않습니다.' : ''));
     const ans = await PDM.ui.modal('PDMaker 업데이트', body, [['닫기', null], ['GitHub 열기', 'page'], ...(r.canApply ? [['업데이트하고 다시 시작', 'go', 'pri']] : [])]);
@@ -734,7 +710,7 @@
     const folderName = n => String(n || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '').replace(/[. ]+$/, '').trim() || '새 픽셀 던전';
     // 프로젝트 이름 + 게임 이름 · 패키지 이름 (게임 저장소 build.gradle 의 appName · appPackageName — 세이브 폴더도 이걸로 정해짐)
     const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '') || 'mygame';
-    const iName = h('input', { type: 'text', value: '새 픽셀 던전' }), iSub = h('input', { type: 'checkbox', checked: true }), where = h('small', { class: 'hint', style: { display: 'block', wordBreak: 'break-all' } }), iApp = h('input', { type: 'text', value: 'My Pixel Dungeon' }), iPkg = h('input', { type: 'text', value: 'com.pdmaker.mypixeldungeon' }), warn = h('small', { class: 'hint', style: { color: 'var(--bad)' } });
+    const iName = h('input', { type: 'text', value: '새 픽셀 던전' }), iSub = h('input', { type: 'checkbox', checked: true }), where = h('small', { class: 'hint', style: { display: 'block', wordBreak: 'break-all' } }), iApp = h('input', { type: 'text', value: 'My Pixel Dungeon' }), iPkg = h('input', { type: 'text', value: 'com.pdmaker.mypixeldungeon' }), warn = h('small', { class: 'hint c-bad' });
     let pkgTouched = false;
     const target = () => iSub.checked ? pdm.join(base, folderName(iName.value)) : base;
     const showWhere = () => { where.textContent = '만들 곳: ' + target(); };
@@ -769,7 +745,7 @@
     const pick = h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const f = await pdm.openFolder('게임 저장소 폴더 선택 (gradlew 가 들어 있는 폴더)'); if (f) inp.value = pdm.relative(d, f).replace(/\\/g, '/') || f; } }, '폴더 찾기…');
     // PDMaker 의 game 폴더에 들어 있는 저장소들 — 눌러서 고름 (여러 개면 어느 것을 쓸지 꼭 골라야 함)
     const repos = await listRepos();
-    const repoBtns = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '4px 0 8px' } });
+    const repoBtns = h('div', { class: 'flex gap-3 wrap m-0 mt-2 mb-4' });
     const drawRepos = () => repoBtns.replaceChildren(...repos.map(r => { const rel = pdm.relative(d, r.dir).replace(/\\/g, '/'); return h('button', { class: 'btn sm' + (inp.value === rel ? ' pri' : ''), onclick: e => { e.preventDefault(); inp.value = rel; drawRepos(); } }, r.name); }));
     drawRepos(); inp.addEventListener('input', drawRepos);
     const rel = await PDM.ui.modal('게임 저장소 경로', h('div', { style: { maxWidth: '620px' } },
@@ -780,8 +756,8 @@
         h('li', {}, '원래 작업하던 픽셀 던전(모드) 소스 폴더 — gradlew 파일이 들어 있는 맨 위 폴더')),
       h('p', { class: 'hint' }, '받은 폴더를 PDMaker 폴더의 game 안에 shattered-pixel-dungeon-master 라는 이름으로 넣어 두면 자동으로 찾습니다. 다른 곳에 두었다면 아래에 경로를 적거나 [폴더 찾기…] 로 고르세요. 나중에 프로젝트 설정 → 게임 저장소 연결에서도 바꿀 수 있습니다.'),
       h('p', { class: 'hint', style: { color: found ? 'var(--good, #5fd66a)' : 'var(--bad)' } }, found ? '✓ 게임 저장소를 찾았습니다: ' + cur : '✗ 아직 게임 저장소를 찾지 못했습니다 — 경로를 지정하지 않으면 그림 미리보기·테스트 플레이가 되지 않습니다.'),
-      repos.length ? h('div', {}, h('b', { style: { fontSize: '12px' } }, repos.length > 1 ? 'PDMaker 의 game 폴더에 저장소가 여러 개 있습니다 — 이 프로젝트에 쓸 것을 고르세요:' : 'PDMaker 의 game 폴더에 있는 저장소:'), repoBtns) : null,
-      PDM.ui.field('게임 저장소 경로 (프로젝트 폴더 기준 상대 경로 또는 절대 경로)', h('div', { style: { display: 'flex', gap: '6px' } }, inp, pick))),
+      repos.length ? h('div', {}, h('b', { class: 'fs-sm' }, repos.length > 1 ? 'PDMaker 의 game 폴더에 저장소가 여러 개 있습니다 — 이 프로젝트에 쓸 것을 고르세요:' : 'PDMaker 의 game 폴더에 있는 저장소:'), repoBtns) : null,
+      PDM.ui.field('게임 저장소 경로 (프로젝트 폴더 기준 상대 경로 또는 절대 경로)', h('div', { class: 'flex gap-3' }, inp, pick))),
       [['나중에', null], ['확인', () => inp.value.trim(), 'pri']]);
     if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; r.gameRepoPinned = true; }); await store.save(); await resolveRepo(true); if (PDM.assets && PDM.assets.clear) PDM.assets.clear(); }
     // 고른 저장소가 기준 저장소와 다르면: 방금 채운 원작 영웅·캐릭터를 그 저장소에 맞춤 (없는 것은 빼고, 그 저장소에만 있는 것은 더함)
@@ -971,23 +947,37 @@
      char.mireille.trust>=200 || bond.close`));
   }
 
-  // ---------------- 시작 화면 ----------------
+  // ---------------- 시작 화면 (대시보드) ----------------
+  /** 단축키 글자 → <kbd> 묶음 ('Ctrl+Shift+N' → Ctrl Shift N) */
+  const kbdOf = id => { const k = PDM.keys.label(id); return k ? h('span', { class: 'hstack gap-1' }, String(k).split(' / ')[0].split('+').map(x => h('kbd', {}, x))) : null; };
   function drawWelcome() {
     const body = $('#tabbody'); body.innerHTML = '';
     const rec = recent();
+    const logo = h('canvas', { width: 24, height: 24, 'aria-hidden': 'true' }); drawLogo(logo);
+    const action = (ico, title, desc, run, key, pri) => h('button', { class: 'action' + (pri ? ' pri' : ''), onclick: run },
+      h('span', { class: 'a-ico' }, PDM.icon(ico, 'lg')), h('span', {}, h('b', {}, title), h('span', {}, desc)), key ? kbdOf(key) : h('span'));
+    const keyRow = (label, id) => [h('span', {}, label), kbdOf(id) || h('span', { class: 'c-dim' }, '—')];
     body.append(h('div', { class: 'welcome' },
-      h('h1', {}, '픽셀 던전 메이커'),
-      h('p', { class: 'lead' }, 'Shattered Pixel Dungeon 기반 게임 제작 도구. 맵 · 캐릭터 · 아이템 · 이벤트 · 스토리를 만들고 바로 테스트 플레이합니다.'),
-      !pdm.isElectron ? h('p', { class: 'hint bad' }, '웹 모드로 실행 중입니다. 저장은 브라우저 안에만 되고, 테스트 플레이는 할 수 없습니다.') : null,
-      h('div', { class: 'cards' },
-        h('div', { class: 'card', onclick: newProject }, h('b', {}, '새 프로젝트'), h('span', {}, '프로젝트 이름의 새 폴더에 26층 기본 구조로 시작')),
-        h('div', { class: 'card', onclick: openProject }, h('b', {}, '프로젝트 열기'), h('span', {}, 'project.json 이 있는 폴더 선택')),
-        h('div', { class: 'card', onclick: importProject }, h('b', {}, '프로젝트 가져오기'), h('span', {}, '내보낸 .pdmproj 파일을 빈 폴더에 풀어서 열기'))),
-      rec.length ? h('div', { class: 'recent-head' }, h('h3', {}, '최근 프로젝트'),
-        h('button', { class: 'btn sm', title: '최근 프로젝트 목록을 모두 지웁니다 (프로젝트 폴더는 그대로)', onclick: async () => {
-          if (await PDM.ui.confirm('최근 프로젝트 목록을 모두 지울까요?\n(목록에서만 빠지고 프로젝트 폴더는 지워지지 않습니다)')) { saveRecent([]); drawWelcome(); }
-        } }, '목록 비우기')) : null,
-      h('div', { class: 'recent' }, rec.map((r, i) => recentRow(r, i, rec)))));
+      h('div', { class: 'dash-hero' }, logo,
+        h('div', {}, h('h1', {}, '픽셀 던전 메이커'),
+          h('p', {}, 'Shattered Pixel Dungeon 기반 게임 제작 도구. 맵 · 캐릭터 · 아이템 · 이벤트 · 스토리를 만들고 바로 테스트 플레이합니다.'))),
+      !pdm.isElectron ? h('div', { class: 'dash-note', role: 'note' }, PDM.icon('circle-alert'), h('span', {}, '웹 모드로 실행 중입니다. 저장은 브라우저 안에만 되고, 테스트 플레이는 할 수 없습니다.')) : null,
+      h('div', { class: 'dash-grid' },
+        h('div', { class: 'dash-col' },
+          h('section', {}, h('div', { class: 'dash-label' }, '시작하기'),
+            h('div', { class: 'dash-actions' },
+              action('file-plus', '새 프로젝트', '프로젝트 이름의 새 폴더에 26층 기본 구조로 시작', newProject, 'newProject', true),
+              action('folder-open', '프로젝트 열기', 'project.json 이 있는 폴더 선택', openProject, 'openProject'),
+              action('download', '프로젝트 가져오기', '내보낸 .pdmproj 파일을 빈 폴더에 풀어서 열기', importProject))),
+          h('section', {}, h('div', { class: 'dash-label' }, '자주 쓰는 단축키'),
+            h('div', { class: 'dash-keys' }, keyRow('저장', 'save'), keyRow('테스트 플레이', 'playtest'), keyRow('검사 (끊어진 참조)', 'check'), keyRow('리소스 검색', 'treeSearch'), keyRow('지금 탭 닫기', 'closeTab')))),
+        h('section', { class: 'dash-col' },
+          h('div', {}, h('div', { class: 'dash-label' }, h('span', {}, '최근 프로젝트' + (rec.length ? ` · ${rec.length}` : '')),
+            rec.length ? h('button', { class: 'btn ghost xs', title: '최근 프로젝트 목록을 모두 지웁니다 (프로젝트 폴더는 그대로)', onclick: async () => {
+              if (await PDM.ui.confirm('최근 프로젝트 목록을 모두 지울까요?\n(목록에서만 빠지고 프로젝트 폴더는 지워지지 않습니다)')) { saveRecent([]); drawWelcome(); }
+            } }, '목록 비우기') : null),
+          rec.length ? h('div', { class: 'recent' }, rec.map((r, i) => recentRow(r, i, rec)))
+            : h('div', { class: 'recent-empty' }, PDM.icon('folder', 'xl'), h('b', {}, '아직 연 프로젝트가 없습니다'), h('span', { class: 'fs-sm' }, '새 프로젝트를 만들거나 폴더를 열면 여기에 쌓입니다.')))))));
     // 폴더가 없어진 항목 표시 (옮겼거나 지운 프로젝트)
     rec.forEach(async (r, i) => {
       let ok = true; try { ok = await pdm.exists(pdm.join(r.path, 'project.json')); } catch (_) { /* 무시 */ }
@@ -998,10 +988,10 @@
   /** 최근 프로젝트 한 줄: 클릭하면 열기 · 별명 · 경로 수정 · 위로 · 목록에서 삭제 */
   function recentRow(r, i, rec) {
     const base = r.path.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
-    const act = (label, title, fn) => h('button', { class: 'btn sm', title, onclick: e => { e.stopPropagation(); fn(); } }, label);
+    const act = (label, title, fn) => h('button', { class: 'btn ghost xs', title, onclick: e => { e.stopPropagation(); fn(); } }, label);
     const update = fn => { const list = recent(); const x = list.find(y => samePath(y.path, r.path)); if (x) { fn(x, list); saveRecent(list); } drawWelcome(); };
-    return h('div', { class: 'recent-row', 'data-i': i, onclick: () => loadProject(r.path), title: r.path },
-      h('div', { class: 'recent-main' }, h('b', {}, r.name || base), h('span', {}, r.path)),
+    return h('div', { class: 'recent-row', 'data-i': i, tabindex: 0, role: 'button', onclick: () => loadProject(r.path), onkeydown: e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); loadProject(r.path); } }, title: r.path },
+      PDM.icon('folder'), h('div', { class: 'recent-main' }, h('b', {}, r.name || base), h('span', {}, r.path)),
       h('div', { class: 'recent-acts' },
         i > 0 ? act('▲', '위로 올리기', () => update((x, list) => { const k = list.indexOf(x); list.splice(k, 1); list.splice(k - 1, 0, x); })) : null,
         act('이름', '목록에 보일 이름 바꾸기 (폴더 이름은 그대로)', async () => {
@@ -1038,8 +1028,8 @@
     });
   }
 
-  function drawLogo() {
-    const g = $('#logo').getContext('2d');
+  function drawLogo(cv) {
+    const g = (cv || $('#logo')).getContext('2d');
     const px = ['..aaaa..', '.aabbaa.', 'aabccbaa', '.abccba.', '..bddb..', '..d..d..', '.dd..dd.', '........'];
     const col = { a: '#6a45d6', b: '#a58bff', c: '#e6b95c', d: '#5fd6b4' };
     px.forEach((r, y) => [...r].forEach((c, x) => { if (col[c]) { g.fillStyle = col[c]; g.fillRect(x * 3, y * 3, 3, 3); } }));

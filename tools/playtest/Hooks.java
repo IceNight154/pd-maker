@@ -505,6 +505,24 @@ public class Hooks {
 					Object m = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(hh.sprite.parent, "members"); StringBuilder sb = new StringBuilder("[TEST] swinginfo heroCenter=" + hh.sprite.center() + " heroXY=" + hh.sprite.x + "," + hh.sprite.y);
 					if (m instanceof java.util.List) for (Object o : (java.util.List<?>) m) if (o instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing sw = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) o; sb.append(" | swing xy=").append(sw.x).append(',').append(sw.y).append(" wh=").append(sw.width).append('x').append(sw.height).append(" ang=").append(sw.angle).append(" a=").append(sw.alpha()).append(" vis=").append(sw.visible).append(" alive=").append(sw.alive).append(" frame=").append(sw.frame()); }
 					System.out.println(sb); break; }
+				case "swingcheck": { // swingcheck,<방향 r|l|u|d|ul|ur|dl|dr>,<영웅 방향 r|l> — 휘두르는 그림의 실제 날 끝(그림 칸의 오른쪽 위 픽셀이 화면에 놓인 자리)과 계산한 날 끝을 비교
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; int W = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.width();
+					String dr = p[1]; int d = (dr.contains("l") ? -1 : dr.contains("r") ? 1 : 0) + (dr.contains("u") ? -W : dr.contains("d") ? W : 0);
+					hh.sprite.flipHorizontal = p.length > 2 && p[2].equals("l");
+					hh.sprite.attack(hh.pos + d);
+					Object m = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(hh.sprite.parent, "members");
+					for (Object o : (java.util.List<?>) m) if (o instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing sw = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.Swing) o; if (!sw.alive) continue;
+						for (float t : new float[]{0f, 0.3f, 0.6f, 1f}) {
+							java.lang.reflect.Method pm = sw.getClass().getDeclaredMethod("pose", float.class); pm.setAccessible(true); com.watabou.utils.PointF tip = (com.watabou.utils.PointF) pm.invoke(sw, t);
+							float[] v = (float[]) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(sw, "vertices");
+							// 날 = 그림의 오른쪽 위 텍셀 (u 가장 큼 · v 가장 작음) 이 붙은 꼭짓점
+							int best = 0; for (int k = 1; k < 4; k++) { if (v[k * 4 + 2] > v[best * 4 + 2] + 1e-6 || (Math.abs(v[k * 4 + 2] - v[best * 4 + 2]) < 1e-6 && v[k * 4 + 3] < v[best * 4 + 3])) best = k; }
+							float lx = v[best * 4] - sw.origin.x, ly = v[best * 4 + 1] - sw.origin.y; double a = Math.toRadians(sw.angle);
+							float wx = sw.x + sw.origin.x + (float) (Math.cos(a) * lx * sw.scale.x - Math.sin(a) * ly * sw.scale.y), wy = sw.y + sw.origin.y + (float) (Math.sin(a) * lx * sw.scale.x + Math.cos(a) * ly * sw.scale.y);
+							System.out.println(String.format("[TEST] swingcheck dir=%s hero=%s t=%.1f expected=(%.1f,%.1f) actual=(%.1f,%.1f) err=%.2f flip=%s", dr, p.length > 2 ? p[2] : "r", t, tip.x, tip.y, wx, wy, Math.hypot(wx - tip.x, wy - tip.y), sw.flipHorizontal));
+						}
+						sw.killAndErase(); }
+					break; }
 				case "swingcount": System.out.println("[TEST] swingcount " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned + " blocking=" + com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.interfaceBlockingHero() + " wnds=" + PlayTest.windows() + " curAction=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.curAction + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready + " para=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.paralysed); break;
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;

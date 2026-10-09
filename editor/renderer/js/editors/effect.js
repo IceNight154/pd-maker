@@ -282,7 +282,7 @@
     cv.addEventListener('contextmenu', rm); cv.addEventListener('dblclick', rm);
     txt.addEventListener('change', () => { const n = parsePts(txt.value); if (n.length) { pts.length = 0; pts.push(...n); done(); } });
     draw();
-    return h('div', { style: { margin: '2px 0 6px' } }, cv, txt);
+    return h('div', { class: 'm-0 mt-1 mb-3' }, cv, txt);
   }
 
   PDM.registerEditor({
@@ -297,10 +297,10 @@
       if (!all.some(x => x.id === st.id)) { st.id = (all[0] || {}).id; st.em = 0; }
       const idx = all.findIndex(x => x.id === st.id), fx = all[idx];
       const add = (preset, from) => from ? ops.dup(from.id) : ops.add(preset);
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      const head = h('div', { class: 'hstack wrap mb-4' },
         all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; st.em = 0; ctx.refresh(); } }, x.name || x.id)));
       const intro = h('p', { class: 'hint' }, '이미터(뿜는 곳) 여러 개와 모디파이어(힘)로 파티클 이펙트를 만듭니다. 쓰는 곳: ① 맵 편집기의 오브젝트 놓기 › 종류 "이펙트" ② 아이템 편집 화면의 "이펙트" 칸 ③ 이벤트 명령 "연출 › 이펙트 재생".');
-      const starter = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 10px' } }, h('span', { class: 'hint' }, '새로 만들기:'), ...Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn sm', onclick: () => add(k) }, '+ ' + v.name)));
+      const starter = h('div', { class: 'hstack wrap m-0 mt-2 mb-5' }, h('span', { class: 'hint' }, '새로 만들기:'), ...Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn sm', onclick: () => add(k) }, '+ ' + v.name)));
       if (!fx) return h('div', { class: 'editor' }, h('h2', {}, '이펙트 · 파티클'), intro, ops.bar(null), starter);
       if (!fx.emitters) { store.edit(K, '이펙트 형식 바꾸기', r => { r.list = r.list.map(migrate); }); return h('div', {}); }
       if (st.em >= fx.emitters.length) st.em = Math.max(0, fx.emitters.length - 1);
@@ -322,7 +322,7 @@
         const set = fn => store.edit(K, label, r => { const o = PDM.deepGet(r, path); o[f] = Object.assign({ v: def, pts: null }, hasSpread ? { sp: 0 } : {}, o[f] || {}); fn(o[f]); });
         const inp = (val, on, dis) => { const i = h('input', { type: 'number', step: 'any', value: val, disabled: !!dis, style: { width: '76px' } }); i.addEventListener('change', () => on(num(i.value, 0))); return i; };
         return h('div', { style: { borderBottom: '1px solid var(--line)', padding: '3px 0' } },
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+          h('div', { class: 'hstack' },
             h('span', { style: { flex: '1 1 150px', fontSize: '12px' } }, label),
             inp(num(k.v, def), v => set(o => { o.v = v; }), curved),
             hasSpread ? h('span', { class: 'hint', title: '퍼짐: 알갱이마다 ± 이만큼 무작위' }, '±') : null, hasSpread ? inp(num(k.sp, 0), v => set(o => { o.sp = Math.abs(v); })) : null,
@@ -332,13 +332,13 @@
       const modList = (path, title) => {
         const arr = PDM.deepGet(store.get(K), path) || [];
         return h('div', {}, arr.map((m, i) => h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 8px', margin: '6px 0' } },
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+          h('div', { class: 'hstack' },
             sel(Object.entries(MODS), m.type, v => store.edit(K, '모디파이어', r => { PDM.deepGet(r, path)[i].type = v; })),
-            h('button', { class: 'ib', title: '지우기', style: { marginLeft: 'auto' }, onclick: () => store.edit(K, '모디파이어 삭제', r => { PDM.deepGet(r, path).splice(i, 1); }) }, '✕')),
+            h('button', { class: 'ib ml-auto', title: '지우기', onclick: () => store.edit(K, '모디파이어 삭제', r => { PDM.deepGet(r, path).splice(i, 1); }) }, '✕')),
           keyRow([...path, i], 'mag', m.type === 'drag' ? '세기 (1 = 1초에 거의 멈춤)' : m.type === 'accel' ? '세기 (px/초²)' : '세기', 0, true, '이미터 진행(0~1)에 따라 세기를 바꿈'),
           m.type === 'accel' ? row(F.num(K, [...path, i, 'rot'], { label: '방향(도) · 0 위 · 90 오른쪽 · 180 아래' })) :
             m.type === 'drag' ? null : row(F.num(K, [...path, i, 'x'], { label: '위치 x (이미터 기준 px)' }), F.num(K, [...path, i, 'y'], { label: '위치 y' }), F.num(K, [...path, i, 'maxDist'], { label: '닿는 거리 (0 = 끝없이)', min: 0 })))),
-          h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, Object.entries(MODS).map(([k, t]) => h('button', { class: 'btn xs', onclick: () => store.edit(K, '모디파이어 추가', r => { const o = PDM.deepGet(r, path.slice(0, -1)); o[path[path.length - 1]] = o[path[path.length - 1]] || []; o[path[path.length - 1]].push(mod(k, k === 'drag' ? 1 : 20)); }) }, '+ ' + t.split(' ')[0]))));
+          h('div', { class: 'flex gap-2 wrap' }, Object.entries(MODS).map(([k, t]) => h('button', { class: 'btn xs', onclick: () => store.edit(K, '모디파이어 추가', r => { const o = PDM.deepGet(r, path.slice(0, -1)); o[path[path.length - 1]] = o[path[path.length - 1]] || []; o[path[path.length - 1]].push(mod(k, k === 'drag' ? 1 : 20)); }) }, '+ ' + t.split(' ')[0]))));
       };
       const sp = e.sprite || {};
       const spriteBox = () => {
@@ -348,7 +348,7 @@
         const txt = h('input', { type: 'text', value: sp.png || '', placeholder: '(네모 알갱이) — assets/… 또는 game:effects/…', style: { flex: 1, minWidth: '140px' } });
         txt.addEventListener('change', () => setPng(txt.value.trim()));
         return h('div', {},
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, prev, txt,
+          h('div', { class: 'hstack wrap' }, prev, txt,
             h('button', { class: 'btn sm', onclick: async () => { const r = await PDM.ui.pickImage('fx'); if (r) { delete imgCache[r]; setPng(r); } } }, '그림 고르기…'),
             h('button', { class: 'btn sm', onclick: async () => {
               const rel = sp.png && !sp.png.startsWith('game:') ? sp.png : `assets/fx/${fx.id}_${st.em + 1}.png`;
@@ -358,7 +358,7 @@
             PDM.compose && PDM.compose.forEffect ? h('button', { class: 'btn sm', title: '노드 합성기에서 이 알갱이 그림을 만들거나 고칩니다. 합성기에서 저장하면 이 이미터의 그림 · 프레임 설정이 바로 바뀝니다 (확장 기능 "노드 합성기"가 켜짐)',
               onclick: async () => { const em = st.em, rel = await PDM.compose.forEffect(fx, em); if (rel && rel !== sp.png) { delete imgCache[rel]; } } }, '🧩 노드 합성기로…') : null,
             sp.png ? h('button', { class: 'btn sm', onclick: () => setPng('') }, '네모로') : null),
-          h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', margin: '6px 0' } }, h('span', { class: 'hint' }, '기본 모양:'),
+          h('div', { class: 'hstack gap-2 wrap my-3' }, h('span', { class: 'hint' }, '기본 모양:'),
             Object.entries(SHAPES).map(([k, v]) => h('button', { class: 'btn xs', onclick: async () => { try { setPng(await makeShape(k), { fw: 0, fh: 0, frames: '', anim: 'none' }); } catch (er) { PDM.log && PDM.log(er.message, 'err'); } } }, v[0]))),
           sp.png ? row(F.num(K, [...ep, 'sprite', 'fw'], { label: '프레임 너비 (0 = 그림 전체)', int: true, min: 0 }), F.num(K, [...ep, 'sprite', 'fh'], { label: '프레임 높이', int: true, min: 0 }),
             F.text(K, [...ep, 'sprite', 'frames'], { label: '프레임 (예: 0-3 또는 0,2,4)' }), F.select(K, [...ep, 'sprite', 'anim'], { none: '첫 프레임만', life: '수명에 맞춰 한 번', loop: '반복 재생', random: '알갱이마다 무작위' }, { label: '애니메이션' }),
@@ -369,14 +369,14 @@
         const stops = e.lColor || [];
         return h('div', {},
           stops.length ? h('div', { style: { height: '12px', borderRadius: '3px', margin: '4px 0', background: `linear-gradient(90deg, ${stops.map(s => `${s[1]} ${s[0] * 100}%`).join(',')})` } }) : null,
-          stops.map((s, i) => h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '2px 0' } },
+          stops.map((s, i) => h('div', { class: 'hstack my-1' },
             (() => { const c = h('input', { type: 'color', value: s[1], style: { width: '40px', padding: 0 } }); c.addEventListener('change', () => edit('색 변화', (f, em) => { em.lColor[i][1] = c.value; })); return c; })(),
             h('span', { class: 'hint' }, '시점'), (() => { const t = h('input', { type: 'number', min: 0, max: 1, step: 0.05, value: s[0], style: { width: '64px' } }); t.addEventListener('change', () => edit('색 변화', (f, em) => { em.lColor[i][0] = Math.max(0, Math.min(1, num(t.value, 0))); em.lColor.sort((a, b) => a[0] - b[0]); })); return t; })(),
             h('button', { class: 'ib', onclick: () => edit('색 변화', (f, em) => { em.lColor.splice(i, 1); if (!em.lColor.length) em.lColor = null; }) }, '✕'))),
           h('button', { class: 'btn xs', onclick: () => edit('색 변화', (f, em) => { em.lColor = em.lColor || []; em.lColor.push(em.lColor.length ? [1, '#ffffff'] : [0, '#ffffff']); if (em.lColor.length === 1) em.lColor.push([1, '#ffffff']); em.lColor.sort((a, b) => a[0] - b[0]); }) }, '+ 색 추가'),
-          h('span', { class: 'hint', style: { marginLeft: '6px' } }, stops.length ? '처음 색에 곱해집니다 (처음 색이 흰색이면 이 색 그대로).' : '수명 동안 색을 바꾸려면 추가하세요.'));
+          h('span', { class: 'hint ml-3' }, stops.length ? '처음 색에 곱해집니다 (처음 색이 흰색이면 이 색 그대로).' : '수명 동안 색을 바꾸려면 추가하세요.'));
       };
-      const emTabs = h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', margin: '6px 0' } },
+      const emTabs = h('div', { class: 'hstack gap-2 wrap my-3' },
         fx.emitters.map((x, i) => h('button', { class: 'btn sm' + (i === st.em ? ' pri' : ''), onclick: () => { st.em = i; ctx.refresh(); } }, `${i + 1}. ${x.name || '이미터'}`)),
         h('button', { class: 'btn sm', onclick: () => { st.em = fx.emitters.length; store.edit(K, '이미터 추가', r => { r.list[idx].emitters.push(emitter({ name: '이미터 ' + (fx.emitters.length + 1), mode: 'loop' })); }); } }, '+ 이미터'),
         e ? h('button', { class: 'btn sm', onclick: () => { st.em = fx.emitters.length; store.edit(K, '이미터 복제', r => { r.list[idx].emitters.push(Object.assign(PDM.clone(e), { name: e.name + ' 사본' })); }); } }, '복제') : null,
@@ -398,12 +398,12 @@
             section('이펙트',
               row(F.text(K, ['list', idx, 'name'], { label: '이름', rerender: true }), PDM.ui.field('id', h('input', { type: 'text', value: fx.id, disabled: true }))),
               F.sound ? F.sound(K, ['list', idx, 'sound'], { label: '재생할 때 소리 (한 번 재생할 때만)', kind: 'se', empty: '(소리 없음)' }) : null,
-              h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center', flexWrap: 'wrap' } },
-                uses.length ? h('span', { class: 'hint' }, '쓰는 곳: ', uses.map(([k, t]) => h('a', { href: '#', style: { marginRight: '8px' }, onclick: ev => { ev.preventDefault(); PDM.tabs.open(k); } }, t))) : null)),
+              h('div', { class: 'hstack wrap mt-3' },
+                uses.length ? h('span', { class: 'hint' }, '쓰는 곳: ', uses.map(([k, t]) => h('a', { href: '#', class: 'mr-4', onclick: ev => { ev.preventDefault(); PDM.tabs.open(k); } }, t))) : null)),
             section('광원 (재생하는 동안 퍼지는 빛)',
               F.bool(K, ['list', idx, 'light', 'on'], { label: '💡 광원 켜기 — 게임에서 이펙트 자리에 점광원 (벽 · 물건 · 캐릭터 그림자 있음). 따라다니는 이펙트면 빛도 따라가고, 한 번 재생이면 알갱이가 줄면서 함께 어두워짐', rerender: true }),
               (fx.light || {}).on ? h('div', {}, ...PDM.lightFields(K, ['list', idx, 'light'], fx.light || {})) : null),
-            h('h3', { style: { margin: '12px 0 0' } }, '이미터'), emTabs,
+            h('h3', { class: 'm-0 mt-6' }, '이미터'), emTabs,
             !e ? null : h('div', {},
               section('이미터 기본',
                 row(F.text(K, [...ep, 'name'], { label: '이름', rerender: true }), F.select(K, [...ep, 'mode'], { once: '한 번', loop: '반복' }, { label: '재생 방식', hint: '반복은 맵에 놓았을 때 끊김 없이 이어짐. 아이템·이벤트로 재생하면 길이만큼만' }), F.num(K, [...ep, 'duration'], { label: '길이(초)', min: 0.02, step: 0.1 }),
@@ -419,7 +419,7 @@
                   F.num(K, [...ep, 'colorSp'], { label: '색 밝기 퍼짐 (0~1)', min: 0, max: 1, step: 0.05 }))),
               section('수명 동안 변화 (곡선 = 알갱이가 태어나서 사라질 때까지)',
                 Object.entries(LK).map(([f, [label, def]]) => keyRow(ep, f, label, def, false, '알갱이 수명(0 = 태어남, 1 = 사라짐) 동안 이 값을 바꿈')),
-                h('div', { style: { marginTop: '6px' } }, h('b', { style: { fontSize: '12px' } }, '수명 동안 색'), gradEditor())),
+                h('div', { class: 'mt-3' }, h('b', { class: 'fs-sm' }, '수명 동안 색'), gradEditor())),
               section('모디파이어 (이 이미터에만)', modList([...ep, 'modifiers']))),
             section('모디파이어 (모든 이미터에)', modList(['list', idx, 'modifiers'])))));
     }

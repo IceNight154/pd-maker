@@ -101,8 +101,8 @@
       if (!all.some(x => x.id === st.id)) { st.id = (all[0] || {}).id; st.scene = 0; }
       const idx = all.findIndex(x => x.id === st.id), t = all[idx];
       const intro = h('p', { class: 'hint' }, '제목 · 등장인물 소개 · 맺음말 · 크레딧 장면을 순서대로 넣어 예고편(오프닝 · 장 시작 · 엔딩 크레딧)을 만듭니다. 이벤트 명령 "예고편 컷신 재생"으로 게임 안에서 틉니다. 영상 파일이 아니라 게임이 그 자리에서 그리므로 용량이 들지 않고, 글자는 게임 글꼴로 나옵니다. 글에는 {변수} 를 쓸 수 있습니다.');
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' } }, all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; st.scene = 0; ctx.refresh(); } }, x.name || x.id)));
-      if (!t) return h('div', { class: 'editor' }, h('h2', {}, '🎬 예고편 컷신'), intro, ops.bar(null), h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn', onclick: () => ops.add(k) }, v))));
+      const head = h('div', { class: 'flex gap-3 wrap mb-4' }, all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; st.scene = 0; ctx.refresh(); } }, x.name || x.id)));
+      if (!t) return h('div', { class: 'editor' }, h('h2', {}, '🎬 예고편 컷신'), intro, ops.bar(null), h('div', { class: 'flex gap-3 wrap' }, Object.entries(PRESETS).map(([k, v]) => h('button', { class: 'btn', onclick: () => ops.add(k) }, v))));
       if (st.scene >= (t.scenes || []).length) st.scene = Math.max(0, (t.scenes || []).length - 1);
       const edit = (label, fn) => store.edit(K, label, r => fn(r.list[idx]));
       const colorF = (path, cur, label) => { const c = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(cur || '') ? cur : '#000000', style: { width: '56px', padding: 0 } }); c.addEventListener('change', () => PDM.ui.commit(K, path, c.value, label)); return PDM.ui.field(label, c); };
@@ -117,7 +117,7 @@
         row(F.text(K, [...sp(i), 'chars', j, 'line'], { label: '한 줄 소개 (비우면 캐릭터의 칭호)' }),
           (() => { const tx = h('input', { type: 'text', value: c.image || '', placeholder: '(비우면 초상화 → 스프라이트)' }); tx.onchange = () => PDM.ui.commit(K, [...sp(i), 'chars', j, 'image'], tx.value.trim(), '인물 그림');
             return PDM.ui.field('그림', h('div', { class: 'imgpick' }, tx, h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const r = await PDM.ui.pickImage('portraits'); if (r) PDM.ui.commit(K, [...sp(i), 'chars', j, 'image'], r, '인물 그림', true); } }, '찾기…'))); })()))),
-        h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
+        h('div', { class: 'flex gap-3 mt-3' },
           (s.chars || []).length < 2 ? h('button', { class: 'btn xs', title: '두 사람을 나란히 (관계를 보여 주는 장면)', onclick: () => edit('인물 추가', x => { x.scenes[i].chars.push({ char: '', image: '', name: '', line: '' }); }) }, '+ 한 명 더 (2인 장면)') : h('button', { class: 'btn xs', onclick: () => edit('인물 빼기', x => { x.scenes[i].chars.pop(); }) }, '− 한 명으로')));
       const sceneEl = (s, i) => {
         const body = s.type === 'title' ? row(F.text(K, [...sp(i), 'sub'], { label: '위 작은 글 (부제 · 시스템)' }), F.text(K, [...sp(i), 'title'], { label: '제목' }))
@@ -126,7 +126,7 @@
             row(F.text(K, [...sp(i), 'date'], { label: '날짜 글 (예: 2026. 12. 24 공개)' }), F.text(K, [...sp(i), 'countdown'], { label: '남은 날 표시 — 기준일 (YYYY-MM-DD · 비우면 없음)', hint: '플레이하는 날 기준으로 D-12 · D-DAY 처럼 나옵니다. 지나면 안 나옵니다.' })))
           : F.text(K, [...sp(i), 'text'], { label: '문구' });
         return h('div', { style: { border: '1px solid ' + (i === st.scene ? 'var(--acc, #a58bff)' : 'var(--line)'), borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }, onclick: () => { if (st.scene !== i) { st.scene = i; st.playing = false; ctx.refresh(); } } },
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' } }, h('b', { style: { flex: 1 } }, `${i + 1}. ${TYPES[s.type] || s.type}`),
+          h('div', { class: 'hstack mb-3' }, h('b', { class: 'grow' }, `${i + 1}. ${TYPES[s.type] || s.type}`),
             h('button', { class: 'ib', title: '앞으로', disabled: i === 0, onclick: e => { e.stopPropagation(); st.scene = i - 1; edit('장면 순서', x => { [x.scenes[i - 1], x.scenes[i]] = [x.scenes[i], x.scenes[i - 1]]; }); } }, '↑'),
             h('button', { class: 'ib', title: '뒤로', disabled: i === t.scenes.length - 1, onclick: e => { e.stopPropagation(); st.scene = i + 1; edit('장면 순서', x => { [x.scenes[i + 1], x.scenes[i]] = [x.scenes[i], x.scenes[i + 1]]; }); } }, '↓'),
             h('button', { class: 'ib', title: '복제', onclick: e => { e.stopPropagation(); edit('장면 복제', x => { x.scenes.splice(i + 1, 0, PDM.clone(x.scenes[i])); }); } }, '⧉'),
@@ -136,8 +136,8 @@
       const total = (t.scenes || []).reduce((a, s) => a + num(s.sec, 3), 0);
       return h('div', { class: 'editor' }, h('h2', {}, '🎬 예고편 컷신'), intro, head, ops.bar(t),
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'flex-start', flexWrap: 'wrap' } },
-          h('div', { style: { flex: 'none' } }, cv,
-            h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px' } }, playBtn,
+          h('div', { class: 'flex-none' }, cv,
+            h('div', { class: 'hstack gap-4 mt-3' }, playBtn,
               (() => { const c = h('input', { type: 'checkbox', checked: st.portrait }); c.onchange = () => { st.portrait = c.checked; }; return h('label', { class: 'check' }, c, '세로 화면 (모바일)'); })(),
               h('span', { class: 'hint' }, `전체 ${total.toFixed(1)}초 · 장면을 누르면 그 장면이 보입니다`)),
             h('div', { class: 'hint', style: { marginTop: '4px', maxWidth: '480px' } }, '미리보기의 글꼴은 게임 글꼴과 다릅니다 (배치 확인용).')),
@@ -145,9 +145,9 @@
             row(F.text(K, ['list', idx, 'name'], { label: '이름', rerender: true }), F.select(K, ['list', idx, 'style'], STYLES, { label: '틀' })),
             row(colorF(['list', idx, 'bg'], t.bg, '배경 색'), F.num(K, ['list', idx, 'bgAlpha'], { label: '배경 진하기 (100 = 게임 화면 가림)', min: 0, max: 100, def: 100 }), colorF(['list', idx, 'text'], t.text, '글자 색'), colorF(['list', idx, 'accent'], t.accent, '강조 색')),
             row(F.num(K, ['list', idx, 'fade'], { label: '장면이 바뀌는 시간 (초)', min: 0.05, max: 3, step: 0.1, def: 0.4 }), F.bool(K, ['list', idx, 'skippable'], { label: '화면을 누르면 다음 장면으로' })),
-            h('div', { class: 'fl', style: { margin: '8px 0 4px' } }, '장면 (위에서부터 차례로)'),
+            h('div', { class: 'fl m-0 mt-4 mb-2' }, '장면 (위에서부터 차례로)'),
             (t.scenes || []).length ? t.scenes.map(sceneEl) : h('p', { class: 'hint' }, '장면이 없습니다. 아래에서 추가하세요.'),
-            h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, Object.entries(TYPES).map(([k, n]) => h('button', { class: 'btn sm', onclick: () => { st.scene = (t.scenes || []).length; edit('장면 추가', x => { x.scenes = x.scenes || []; x.scenes.push(S[k]()); }); } }, '+ ' + n))))));
+            h('div', { class: 'flex gap-3 wrap' }, Object.entries(TYPES).map(([k, n]) => h('button', { class: 'btn sm', onclick: () => { st.scene = (t.scenes || []).length; edit('장면 추가', x => { x.scenes = x.scenes || []; x.scenes.push(S[k]()); }); } }, '+ ' + n))))));
     }
   });
 })();

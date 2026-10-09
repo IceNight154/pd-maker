@@ -18,7 +18,7 @@
     setTimeout(() => idI.focus(), 30);
     const ok = await PDM.ui.modal('새 맵 오브젝트', h('div', { style: { minWidth: '380px' } },
       PDM.ui.field('id (영문 — 파일 이름이 됩니다)', idI), PDM.ui.field('이름', nmI),
-      h('label', { class: 'check', style: { marginTop: '8px' } }, mv, '이동 가능 오브젝트 — 영웅이 옆에서 누르면 한 칸씩 밀립니다 (상자 · 바위)'),
+      h('label', { class: 'check mt-4' }, mv, '이동 가능 오브젝트 — 영웅이 옆에서 누르면 한 칸씩 밀립니다 (상자 · 바위)'),
       h('p', { class: 'hint' }, '끄면 제자리에 고정된 오브젝트(가로등 · 문 · 레버)가 되고, 대신 "상호작용"을 정할 수 있습니다. 나중에 오브젝트 편집 화면의 "밀기"에서 바꿀 수 있습니다.')), [['취소', false], ['만들기', true, 'pri']]);
     if (!ok) return;
     const clean = PDM.slugId(idI.value);
@@ -140,14 +140,14 @@
       Object.keys(anims).forEach(ak => { const a = anims[ak], ub = usedBy(ak);
         animRows.append(h('div', { class: 'li', style: { alignItems: 'center', marginBottom: '6px', outline: st.anim === ak ? '1px solid var(--accent)' : '' }, onclick: e => { if (st.anim !== ak && !/INPUT|BUTTON/.test(e.target.tagName)) { st.anim = ak; ctx.refresh(); } } },
           animPreview(p, () => (p.sprite.anims || {})[ak], 72),
-          h('div', { style: { flex: 1 } },
+          h('div', { class: 'grow' },
             h('b', {}, ak, ' ', h('span', { class: 'hint' }, ub.length ? '쓰는 상태: ' + ub.join(', ') : '아직 쓰는 상태 없음 — 아래 "상태"에서 고르세요')),
-            st.anim === ak ? h('span', { class: 'badge good', style: { marginLeft: '6px' } }, '시트 클릭 → 여기에 추가') : null,
+            st.anim === ak ? h('span', { class: 'badge good ml-3' }, '시트 클릭 → 여기에 추가') : null,
             row(PDM.ui.field('프레임 번호 (쉼표로 구분)', (() => { const fi = h('input', { type: 'text', value: (a.frames || []).join(', ') }); fi.addEventListener('change', () => store.edit(key, '프레임', o => { o.sprite.anims[ak].frames = fi.value.split(/[ ,]+/).filter(Boolean).map(Number).filter(n => !isNaN(n)); })); return fi; })()),
               F.num(key, ['sprite', 'anims', ak, 'fps'], { label: 'fps', min: 1, max: 60, int: true }), F.bool(key, ['sprite', 'anims', ak, 'loop'], { label: '반복' }))),
           h('button', { class: 'ib danger', title: '애니메이션 삭제', onclick: e => { e.stopPropagation(); if (st.anim === ak) st.anim = ''; store.edit(key, '애니메이션 삭제', o => { delete o.sprite.anims[ak]; (o.states || []).forEach(x => { if (x.anim === ak) delete x.anim; }); }); } }, '✕')));
       });
-      animRows.append(h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+      animRows.append(h('div', { class: 'hstack wrap' },
         h('button', { class: 'btn sm', onclick: async () => {
           const n = await PDM.ui.prompt('새 애니메이션 이름 (영문)', '', '예: idle, open, burn, spin — 아래 "상태"에서 이 이름을 골라 씁니다');
           if (!n) return;
@@ -164,7 +164,7 @@
         return h('div', { class: 'li', style: { alignItems: 'flex-start', outline: st.sel === i && !st.anim ? '1px solid var(--accent)' : '' }, onclick: e => { if ((st.sel !== i || st.anim) && !/INPUT|BUTTON|SELECT|LABEL|A/.test(e.target.tagName)) { st.sel = i; st.anim = ''; ctx.refresh(); } } },
           cv,
           h('div', { class: 'li-body' },
-            h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' } }, h('b', {}, `상태 ${i}`),
+            h('div', { class: 'hstack mb-2' }, h('b', {}, `상태 ${i}`),
               (p.start || 0) === i ? h('span', { class: 'badge good' }, '시작 상태') : h('button', { class: 'btn xs', onclick: () => store.edit(key, '시작 상태', o => { o.start = i; }) }, '시작 상태로'),
               st.sel === i && !st.anim ? h('span', { class: 'badge' }, '시트 클릭 → 이 상태의 그림') : null),
             row(F.text(key, [...P, 'name'], { label: '이름' }), s.anim && anims[s.anim] ? null : F.num(key, [...P, 'frame'], { label: '프레임 번호', int: true, min: 0, rerender: true }),
@@ -203,7 +203,7 @@
           F.bool(key, ['sprite', 'over'], { label: '설치 칸 위로 솟은 부분이 캐릭터를 가림 (가로등 · 나무처럼 뒤에 선 캐릭터 위에 그려짐)' }),
           (() => { const fw = (p.sprite.frame || [16, 16])[0] || 16, fh = (p.sprite.frame || [16, 16])[1] || 16, ft = p.foot || [1, 1], fx = Math.max(1, ft[0] | 0), fy = Math.max(1, ft[1] | 0);
             const sc = p.sprite.scale > 0 ? p.sprite.scale : Math.min(1, fx * 16 / fw, fy * 16 / fh), dw = fw * sc / 16, dh = fh * sc / 16;
-            return h('div', { class: 'hint', style: { margin: '2px 0 6px' } }, `설치(막히는 칸): 가로 ${fx} × 세로 ${fy}칸 — 맵에 놓은 칸이 왼쪽 아래.  표시: 가로 ${+dw.toFixed(2)} × 세로 ${+dh.toFixed(2)}칸 (설치 칸의 아래 가운데에 맞춤).`); })(),
+            return h('div', { class: 'hint m-0 mt-1 mb-3' }, `설치(막히는 칸): 가로 ${fx} × 세로 ${fy}칸 — 맵에 놓은 칸이 왼쪽 아래.  표시: 가로 ${+dw.toFixed(2)} × 세로 ${+dh.toFixed(2)}칸 (설치 칸의 아래 가운데에 맞춤).`); })(),
           sheetBox,
           h('h3', {}, '애니메이션'), animRows),
         section('광원 (이 오브젝트에서 퍼지는 빛)',
@@ -214,7 +214,7 @@
         section(`상태 (${states.length})`,
           h('p', { class: 'hint' }, '상태마다 그림(프레임 하나 또는 위 "그림"에서 만든 애니메이션)과 "막힘" 여부를 정합니다. 예) 문짝: 닫힘(막힘) → 열림(지나감), 레버: 꺼짐 → 켜짐(스위치 ON).'),
           h('div', { class: 'listed' }, stateCards),
-          h('button', { class: 'btn sm add', style: { marginTop: '6px' }, onclick: () => store.edit(key, '상태 추가', o => { o.states = o.states || []; o.states.push({ name: '상태 ' + o.states.length, frame: ((o.states[o.states.length - 1] || {}).frame || 0) + 1, solid: true, switch: '' }); }) }, '+ 상태 추가')),
+          h('button', { class: 'btn sm add mt-3', onclick: () => store.edit(key, '상태 추가', o => { o.states = o.states || []; o.states.push({ name: '상태 ' + o.states.length, frame: ((o.states[o.states.length - 1] || {}).frame || 0) + 1, solid: true, switch: '' }); }) }, '+ 상태 추가')),
         section('밀기',
           F.bool(key, ['pushable'], { label: '이동 가능 (밀 수 있음) — 영웅이 옆에서 누르면 반대쪽으로 한 칸 밀립니다. 설치 칸이 여러 칸이면 통째로 밀립니다 (벽·다른 물건·캐릭터·아이템이 있으면 안 밀림)', rerender: true }),
           p.pushable ? h('div', {},

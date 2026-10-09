@@ -54,8 +54,8 @@
         if (obj.wait === undefined) obj.wait = true;
         let selI = list.length;   // 선택한 줄 (list.length = 맨 끝 ◇ — 새 명령이 들어갈 자리)
         const lb = h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', minHeight: '260px', maxHeight: '340px', overflow: 'auto', background: 'var(--bg)' } });
-        const detail = h('div', { style: { marginTop: '6px' } });
-        const optBox = h('div', { style: { marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '2px' } });
+        const detail = h('div', { class: 'mt-3' });
+        const optBox = h('div', { class: 'vstack gap-1 mt-4' });
         const chk = (k, label, dis) => { const i = h('input', { type: 'checkbox', checked: !!obj[k], disabled: !!dis }); i.onchange = () => { obj[k] = i.checked; redraw(); }; return h('label', { class: 'check', style: dis ? { opacity: .5 } : {} }, i, label); };
         const redraw = () => {
           lb.innerHTML = '';
@@ -67,7 +67,7 @@
             const d = PDM.ROUTE_OP[o.op] || { params: [] };
             d.params.forEach(([k, label, t]) => detail.append(PDM.ui.field(label, paramInput(o, { k, t }, {}))));
             detail.querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => { const y = lb.scrollTop; const keep = document.activeElement; redrawList(); lb.scrollTop = y; }));
-            detail.append(h('div', { style: { display: 'flex', gap: '4px', marginTop: '4px' } },
+            detail.append(h('div', { class: 'flex gap-2 mt-2' },
               h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); if (selI > 0) { [list[selI - 1], list[selI]] = [list[selI], list[selI - 1]]; selI--; redraw(); } } }, '▲ 위로'),
               h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); if (selI < list.length - 1) { [list[selI + 1], list[selI]] = [list[selI], list[selI + 1]]; selI++; redraw(); } } }, '▼ 아래로'),
               h('button', { class: 'btn xs', onclick: e => { e.preventDefault(); list.splice(selI + 1, 0, PDM.clone(o)); selI++; redraw(); } }, '복제'),
@@ -82,7 +82,7 @@
           PDM.ROUTE_OPS.map(([g, ops]) => h('div', {}, h('div', { class: 'fl', style: { marginBottom: '3px' } }, g),
             ops.map(([id, name]) => h('button', { class: 'btn xs', style: { display: 'block', width: '100%', marginBottom: '2px' }, onclick: e => { e.preventDefault(); add(id); } }, name)))));
         redraw();
-        return h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start' } }, h('div', { style: { width: '230px', flex: 'none' } }, lb, detail, optBox), cols);
+        return h('div', { class: 'flex gap-5 items-start' }, h('div', { style: { width: '230px', flex: 'none' } }, lb, detail, optBox), cols);
       }
       case 'cell': {   // 칸 좌표 (x, y) + 맵에서 보면서 고르기. p.yk = y 를 넣는 키, p.nodeKey = 맵을 넣는 키 (없으면 같은 맵 — 볼 맵을 창에서 고름)
         const yk = p.yk || 'y';
@@ -94,7 +94,7 @@
           obj[p.k] = r.x; obj[yk] = r.y; xi.value = r.x; yi.value = r.y;
           if (p.nodeKey && obj[p.nodeKey] !== r.node) { obj[p.nodeKey] = r.node; ctx.redraw && ctx.redraw(); }
         } }, '🗺 맵에서 고르기…');
-        return h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, 'x'), xi, h('span', { class: 'hint' }, 'y'), yi, b);
+        return h('div', { class: 'hstack' }, h('span', { class: 'hint' }, 'x'), xi, h('span', { class: 'hint' }, 'y'), yi, b);
       }
       case 'sound': return PDM.ui.soundPicker(cur, set, { allowNone: true });
       case 'switch': return sel(R('switch'), { create: () => createStoryVar('switches', '스위치') });
@@ -155,7 +155,7 @@
       const groups = {};
       Object.entries(PDM.COMMANDS).forEach(([id, d]) => { (groups[d.g] = groups[d.g] || []).push([id, d]); });
       const box = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: '10px' } },
-        Object.entries(groups).map(([g, list]) => h('div', {}, h('div', { class: 'fl', style: { marginBottom: '4px' } }, g),
+        Object.entries(groups).map(([g, list]) => h('div', {}, h('div', { class: 'fl mb-2' }, g),
           list.map(([id, d]) => h('button', { class: 'btn sm', style: { display: 'block', width: '100%', textAlign: 'left', marginBottom: '3px' },
             onclick: () => { PDM.$('.modal-bg').remove(); res(id); } }, d.name + (d.plugin ? ' 🧩' : ''))))));
       PDM.ui.modal('명령 넣기', box, [['취소', null]]).then(v => { if (v === null) res(null); });

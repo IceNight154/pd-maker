@@ -58,7 +58,7 @@
     sel.onchange = () => { st.node = sel.value; st.x = -1; st.y = -1; load(); };
     await load();
     const ok = await PDM.ui.modal(o.title || '맵에서 칸 고르기', h('div', { style: { minWidth: '460px' } },
-      h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' } }, h('span', { class: 'fl' }, '맵'), sel,
+      h('div', { class: 'hstack gap-4 mb-3' }, h('span', { class: 'fl' }, '맵'), sel,
         h('button', { class: 'btn xs', title: '이 맵을 맵 그리기 화면으로 열기', onclick: e => { e.preventDefault(); PDM.tabs.open('node:' + st.node); } }, '맵 열기')),
       h('div', { style: { maxHeight: '62vh', maxWidth: '80vw', overflow: 'auto' } }, cv), note, info), [['취소', false], ['이 칸으로', true, 'pri']]);
     if (!ok) return null;

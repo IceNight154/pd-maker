@@ -97,7 +97,7 @@
       PDM.deepSet(r, base, Object.assign({ dist: 0, speed: 1, scale: 1, trailEvery: 0.03, hitAt: 'tip' }, o, { on: true, motion: mid, keys: PDM.clone(m.keys), hits: m.hits.slice(), dur: m.dur })); });
     if (!cur.on) return h('div', {},
       h('p', { class: 'hint' }, '공격할 때 이 무기의 그림이 영웅 가운데에서 휘둘러지게 합니다 (아이템 그림의 왼쪽 아래 = 손잡이, 오른쪽 위 = 날 · 끝). 모션을 누르면 켜집니다.'),
-      h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } }, Object.entries(PDM.SWING_MOTIONS).map(([k, m]) => h('button', { class: 'btn sm', title: m.desc, onclick: () => pick(k) }, `${m.icon} ${m.name}`))));
+      h('div', { class: 'flex gap-2 wrap' }, Object.entries(PDM.SWING_MOTIONS).map(([k, m]) => h('button', { class: 'btn sm', title: m.desc, onclick: () => pick(k) }, `${m.icon} ${m.name}`))));
     const getCfg = () => PDM.deepGet(store.get(key), base) || {};
     const pv = preview(getCfg, spriteOf, st);
     return h('div', {},
@@ -107,7 +107,7 @@
             [['left', '←'], ['up', '↑'], ['upright', '↗'], ['right', '→'], ['down', '↓']].map(([d, ic]) => h('button', { class: 'btn xs' + (st.dir === d ? ' pri' : ''), onclick: () => { if (d === 'left') st.lastLeft = true; else if (d === 'right' || d === 'upright') st.lastLeft = false; st.dir = d; PDM.tabs.refresh(); } }, ic)))),
         h('div', { style: { flex: '1', minWidth: '260px' } },
           h('div', { class: 'fl' }, '모션 (누르면 그 모션으로)'),
-          h('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '6px' } }, Object.entries(PDM.SWING_MOTIONS).map(([k, m]) => h('button', { class: 'btn sm' + (cur.motion === k ? ' pri' : ''), title: m.desc, onclick: () => pick(k) }, `${m.icon} ${m.name}`))),
+          h('div', { class: 'flex gap-2 wrap mb-3' }, Object.entries(PDM.SWING_MOTIONS).map(([k, m]) => h('button', { class: 'btn sm' + (cur.motion === k ? ' pri' : ''), title: m.desc, onclick: () => pick(k) }, `${m.icon} ${m.name}`))),
           row(F.num(key, P('dist'), { label: '영웅과의 거리 (+px)', min: -16, max: 32, step: 1, def: 0 }), F.num(key, P('speed'), { label: '빠르기 (배)', min: 0.25, max: 4, step: 0.05, def: 1 }), F.num(key, P('scale'), { label: '무기 그림 크기 (배)', min: 0.25, max: 4, step: 0.05, def: 1 })),
           row(F.select(key, P('trail'), PDM.ui.refOptions('effect'), { label: '휘두르는 동안 끝에서 (파티클)', empty: '(없음)', rerender: true }),
             cur.trail ? F.num(key, P('trailEvery'), { label: '몇 초마다', min: 0.01, max: 0.5, step: 0.01, def: 0.03 }) : null),
@@ -118,7 +118,7 @@
           h('p', { class: 'hint' }, `${(PDM.SWING_MOTIONS[cur.motion] || {}).desc || '직접 고친 모션'} · 한 번 ${(num(cur.dur, 0.3) / Math.max(0.1, num(cur.speed, 1))).toFixed(2)}초 · 맞는 순간 ${(cur.hits || []).length}번. 왼쪽을 볼 때는 좌우가 뒤집혀서 위에서 내려베기는 왼쪽에서도 위에서 내려옵니다. 미리보기의 노란 점 · 흰 원은 파티클이 나오는 자리(실제 이펙트는 게임에서).`),
           h('details', {}, h('summary', { class: 'hint' }, '고급: 키프레임 직접 고치기'),
             h('p', { class: 'hint' }, '한 줄에 하나: 시각(0~1), 각도(°, 바라보는 쪽 기준 · + = 시계 방향 — 오른쪽을 볼 때 아래로), 거리(px), 크기, 불투명도'),
-            (() => { const ta = h('textarea', { rows: 6, class: 'mono', style: { width: '100%', fontSize: '12px' } }); ta.value = (cur.keys || []).map(k => k.join(', ')).join('\n');
+            (() => { const ta = h('textarea', { rows: 6, class: 'mono w-full fs-sm' }); ta.value = (cur.keys || []).map(k => k.join(', ')).join('\n');
               ta.addEventListener('change', () => { const keys = ta.value.split('\n').map(l => l.split(',').map(x => +x.trim())).filter(k => k.length >= 5 && k.every(isFinite)).sort((a, b) => a[0] - b[0]);
                 if (keys.length >= 2) store.edit(key, '공격 모션 키프레임', r => { const o = PDM.deepGet(r, base); o.keys = keys; o.motion = 'custom'; }); });
               const hi = h('input', { type: 'text', value: (cur.hits || []).join(', '), placeholder: '0.5' });

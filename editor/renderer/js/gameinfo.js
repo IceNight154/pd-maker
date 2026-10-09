@@ -62,9 +62,9 @@
 
   PDM.gameMobBox = function (c, st) {
     if (!c.game) return null;
-    const body = h('div', { style: { marginTop: '6px' } }, h('div', { class: 'hint' }, '저장소에서 읽는 중…'));
-    const box = h('details', { open: st ? st.gmob !== false : true, ontoggle: e => { if (st) st.gmob = e.target.open; }, style: { margin: '6px 0 0' } },
-      h('summary', { style: { cursor: 'pointer' } }, h('b', {}, '게임 코드의 실제 값'), h('span', { class: 'hint' }, '  게임 저장소 소스에서 읽음 (읽기 전용) — "게임 원래 동작 그대로"일 때 게임에서 쓰이는 값')), body);
+    const body = h('div', { class: 'mt-3' }, h('div', { class: 'hint' }, '저장소에서 읽는 중…'));
+    const box = h('details', { open: st ? st.gmob !== false : true, ontoggle: e => { if (st) st.gmob = e.target.open; }, class: 'm-0 mt-3' },
+      h('summary', { class: 'pointer' }, h('b', {}, '게임 코드의 실제 값'), h('span', { class: 'hint' }, '  게임 저장소 소스에서 읽음 (읽기 전용) — "게임 원래 동작 그대로"일 때 게임에서 쓰이는 값')), body);
     PDM.gameMob(c.game).then(d => { body.textContent = '';
       if (!d) { body.append(h('div', { class: 'hint' }, G.repoOf() ? `게임 저장소에 actors/mobs/${String(c.game).replace(/\./g, '/')}.java 가 없습니다.` : '게임 저장소를 찾지 못해 읽을 수 없습니다.')); return; }
       [kv('이름', d.name || '(글자 없음)'), kv('설명', d.desc), kv('클래스', d.file + (d.parent ? `  — extends ${d.parent}` : '')),
@@ -160,7 +160,7 @@
       h('div', {}, h('b', {}, '게임이 넣는 내용물 (원작 기준): '), H.text),
       fold(`이 저장소에서 Heap.Type.${H.type} 을 쓰는 곳`, async () => { const u = await PDM.gameUsages('Heap.Type.' + H.type, ['items/Heap.java']);
         if (!u.length) return h('div', {}, '쓰는 곳을 찾지 못했습니다.');
-        return [h('div', {}, u.length + '곳'), ...u.slice(0, 30).map(x => h('div', { style: { margin: '4px 0' } }, mono(x.file + ' : ' + x.line), codeView(x.text, x.from, x.line)))]; }));
+        return [h('div', {}, u.length + '곳'), ...u.slice(0, 30).map(x => h('div', { class: 'my-2' }, mono(x.file + ' : ' + x.line), codeView(x.text, x.from, x.line)))]; }));
   };
   PDM.gameHeapText = kind => (HEAP[kind] || {}).text || '';
 

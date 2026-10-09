@@ -18,7 +18,7 @@
       const used = k => store.all('item').filter(i => i.category === cat && (i.subtype || '') === k).length;
       const set = (k, v, label) => store.edit('project', label, p => { p.itemSubs = p.itemSubs || {}; p.itemSubs[cat] = p.itemSubs[cat] || {}; if (v === undefined) delete p.itemSubs[cat][k]; else p.itemSubs[cat][k] = v; });
       const rows = Object.entries(subs).map(([k, v]) => h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } },
-        h('code', { style: { minWidth: '90px' } }, k || '(일반)'), h('b', { style: { flex: 1 } }, v), h('span', { class: 'hint' }, `아이템 ${used(k)}개`),
+        h('code', { style: { minWidth: '90px' } }, k || '(일반)'), h('b', { class: 'grow' }, v), h('span', { class: 'hint' }, `아이템 ${used(k)}개`),
         h('button', { class: 'btn xs', onclick: async () => { const n = await PDM.ui.prompt('세부 종류 이름', v); if (n != null && n.trim()) { set(k, n.trim(), '세부 종류 이름'); box.replaceChildren(draw()); } } }, '이름'),
         base[k] !== undefined && custom[k] !== undefined ? h('button', { class: 'btn xs', title: '기본 이름으로', onclick: () => { set(k, undefined, '세부 종류 기본으로'); box.replaceChildren(draw()); } }, '기본') : null,
         h('button', { class: 'btn xs danger', onclick: async () => {
@@ -26,8 +26,8 @@
           set(k, base[k] !== undefined ? null : undefined, '세부 종류 지우기'); box.replaceChildren(draw());
         } }, base[k] !== undefined ? '숨기기' : '지우기')));
       const hidden = Object.keys(base).filter(k => custom[k] === null).map(k => h('button', { class: 'btn xs', onclick: () => { set(k, undefined, '세부 종류 다시 보이기'); box.replaceChildren(draw()); } }, '다시 보이기: ' + base[k]));
-      return h('div', {}, rows.length ? rows : h('p', { class: 'hint' }, '세부 종류가 없습니다'), hidden.length ? h('div', { style: { marginTop: '6px' } }, ...hidden) : null,
-        h('button', { class: 'btn sm', style: { marginTop: '8px' }, onclick: async () => {
+      return h('div', {}, rows.length ? rows : h('p', { class: 'hint' }, '세부 종류가 없습니다'), hidden.length ? h('div', { class: 'mt-3' }, ...hidden) : null,
+        h('button', { class: 'btn sm mt-4', onclick: async () => {
           const n = await PDM.ui.prompt('새 세부 종류 이름', '', '예: 단검, 대검, 활 — 키(영문)는 이름에서 자동으로 만듦'); if (!n || !n.trim()) return;
           let k = PDM.slugId(n, ''); if (!k || /^\d/.test(k)) k = 'sub_' + Date.now().toString(36).slice(-4);
           const exist = PDM.itemSubs(cat) || {}; while (exist[k] !== undefined) k += '_2';
@@ -47,14 +47,14 @@
     return h('div', {},
       row(F.select(key, ['category'], PDM.itemCategories(), { label: '분류 (게임 items 폴더 기준)', rerender: true, onchange: () => store.edit(key, '세부 종류 맞춤', o => { const s2 = PDM.itemSubs(o.category); o.subtype = s2 ? Object.keys(s2)[0] : ''; }) }),
         h('div', {}, subs ? F.select(key, ['subtype'], subs, { label: '세부 종류', rerender: true }) : h('div', { class: 'hint', style: { marginTop: '18px' } }, '세부 종류 없음'),
-          h('button', { class: 'btn xs', style: { marginTop: '4px' }, onclick: e => { e.preventDefault(); manageSubs(it.category); } }, '세부 종류 관리…')),
+          h('button', { class: 'btn xs mt-2', onclick: e => { e.preventDefault(); manageSubs(it.category); } }, '세부 종류 관리…')),
         F.num(key, tierPath(it), { label: '티어', int: true, min: 0, max: 9, def: 0, rerender: true, hint: tierPath(it).length > 1 ? '무기·갑옷 수치의 티어 (아래 "종류와 수치"와 같은 값)' : '0 = 없음 · 목록에서 정렬·표시' }),
         F.num(key, ['price'], { label: '가격', int: true, min: 0 })),
       (it.kind || 'misc') === 'misc' ? row(F.bool(key, ['consumable'], { label: '사용하면 1개 사라짐', def: !!info.consumable, rerender: true }),
         F.text(key, ['useLabel'], { label: '사용 버튼 이름', placeholder: info.use || '사용' }),
         it.category === 'food' ? F.num(key, ['stats', 'energy'], { label: '포만감 (300 = 식량 한 끼)', int: true, min: 0, def: 300 }) : null) : null,
       h('p', { class: 'hint' }, `게임 폴더: items/${info.dir || ''}${info.note ? ' · ' + info.note : ''}${cons && (it.kind || 'misc') === 'misc' ? ' · 사용하면 사라짐' : ''}`),
-      game.length ? h('details', {}, h('summary', { style: { cursor: 'pointer' }, class: 'hint' }, `게임의 같은 분류 아이템 ${game.length}개 (시작 아이템·상점 등에 spd:이름 으로 씀)`),
+      game.length ? h('details', {}, h('summary', { class: 'hint pointer' }, `게임의 같은 분류 아이템 ${game.length}개 (시작 아이템·상점 등에 spd:이름 으로 씀)`),
         h('div', { class: 'spd-list' }, game.map(x => h('code', { title: 'spd:' + x.p, class: x.mod2 ? 'mod2' : '' }, x.p.split('.').pop())))) : null);
   }
 
@@ -134,7 +134,7 @@
     const anySet = () => { const s = store.get(K); return Object.keys(pickers).some(f => PDM.deepGet(s, P(f))); };
     return [row(...fields.slice(0, 3)), row(...fields.slice(3)),
       codex ? h('p', { class: 'hint' }, '쓸 때·맞을 때·빗나갈 때 소리는 위의 코덱스 설정에 있습니다.') : null,
-      h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+      h('div', { class: 'hstack gap-4 wrap' },
         h('button', { class: 'btn sm', disabled: !anySet(), title: '이 아이템의 소리 설정을 모두 지워 원래(기본) 소리로', onclick: () => store.edit(K, '아이템 소리 모두 기본으로', r => { for (const f of Object.keys(pickers)) { const pp = P(f); let o2 = r; for (let i = 0; i < pp.length - 1 && o2; i++) o2 = o2[pp[i]]; if (o2) delete o2[pp[pp.length - 1]]; } if (game && r.gameItems && r.gameItems[key] && !Object.keys(r.gameItems[key]).length) delete r.gameItems[key]; }) }, '↺ 소리 모두 원래대로'),
         h('span', { class: 'hint' }, '🔇 = 그 소리 끄기 · ↺ = 원래 소리 · 🎚 = 사운드 편집기에서 편집 (게임 소리는 프로젝트로 복사해서 편집)'))];
   }
@@ -145,7 +145,7 @@
   async function newItem(cat, sub) {
     // id 입력: 영문 소문자·숫자·밑줄로 바뀌는 것을 바로 보여 줌 (이름도 처음엔 바뀐 id 와 같게)
     const inp = h('input', { type: 'text', placeholder: '예: TestWeapon' });
-    const out = h('div', { class: 'mono', style: { margin: '6px 0' } }, 'id · 이름 → ');
+    const out = h('div', { class: 'mono my-3' }, 'id · 이름 → ');
     inp.addEventListener('input', () => { out.textContent = 'id · 이름 → ' + (inp.value.trim() ? PDM.slugId(inp.value) : ''); });
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); PDM.$('.modal-foot .pri').click(); } });
     // 분류 · 세부 종류: 목록(리소스)의 그 자리에 들어감
@@ -173,7 +173,7 @@
     const flagRow = h('div', { style: { display: 'flex', gap: '14px', marginTop: '10px' } }, h('label', { class: 'check' }, noSell, h('span', {}, '판매 불가')), h('label', { class: 'check' }, noDrop, h('span', {}, '버리기 금지')));
     const id = await PDM.ui.modal('새 아이템', h('div', {}, h('div', { class: 'fl' }, 'id (영문)'), inp, out,
       h('small', { class: 'hint' }, '대문자는 소문자로, 영문·숫자 말고는 밑줄(_)로 바뀝니다 — 예: TestWeapon → testweapon. 이름도 처음엔 이 id 와 같게 만들고, 만든 뒤 "이름" 칸에서 바꿀 수 있습니다.'),
-      h('div', { style: { display: 'flex', gap: '8px', marginTop: '10px' } },
+      h('div', { class: 'flex gap-4 mt-5' },
         h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), baseRow, flagRow),
       [['취소', null], ['만들기', () => inp.value, 'pri']]);
     if (!id || !String(id).trim()) return;
@@ -256,7 +256,7 @@
 
   /** items.png 전체를 보여주고 클릭으로 고르기 — 원작(16px)·mod-2(32px) 시트 모두. ItemSpriteSheet 상수 이름도 같이 저장 */
   function sheetPicker(key, it) {
-    const cv = h('canvas', { style: { cursor: 'pointer', imageRendering: 'pixelated' } });
+    const cv = h('canvas', { class: 'pointer pixelated' });
     const info = h('div', { class: 'hint' });
     PDM.assets.load(it.sprite.sheet || 'builtin:items').then(img => {
       if (!img) return;
@@ -298,7 +298,7 @@
   /** 그림 편집 도구 줄: 게임 그림 복사해서 고치기 · 직접 그리기/편집 · PNG 파일 고르기 (skey 의 path 에 {png} 로 저장) */
   function spriteTools(skey, path, cur, baseName, gameSprite) {
     const set = (v, label) => store.edit(skey, label, r => { PDM.deepSet(r, path, v); });
-    return h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '4px 0 8px' } },
+    return h('div', { class: 'flex gap-3 wrap m-0 mt-2 mb-4' },
       h('button', { class: 'btn sm', title: '지금 그림(또는 게임 원래 그림)을 PNG 로 복사해서 픽셀 편집기로 엽니다', onclick: async () => {
         const src = cur && !cur.png ? cur : gameSprite;
         const rel = await copyCellToPng(src, await freePng(baseName)); if (!rel) return;
@@ -323,13 +323,13 @@
   /** items.png 의 한 칸 고르기 (작은 미리보기 + 시트 창) — 값: { sheet, index, name } */
   function itemSpriteField(key, path, o = {}) {
     const cur = PDM.deepGet(store.get(key), path) || null;
-    const cv = h('canvas', { width: 32, height: 32, class: 'thumb', style: { imageRendering: 'pixelated' } });
+    const cv = h('canvas', { width: 32, height: 32, class: 'thumb pixelated' });
     if (cur) PDM.assets.drawItemSprite(cv, cur, 2);
     const pick = async e => {
       e.preventDefault();
       const img = await PDM.assets.load('builtin:items'); if (!img) return;
       const G = PDM.assets.itemGrid(img), D = 32, sc = D / G.cell;
-      const big = h('canvas', { width: img.width * sc, height: img.height * sc, style: { cursor: 'pointer', imageRendering: 'pixelated' } });
+      const big = h('canvas', { width: img.width * sc, height: img.height * sc, class: 'pointer pixelated' });
       const g = big.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, big.width, big.height);
       if (cur) { const i = PDM.assets.itemIndex(cur, img); g.strokeStyle = '#ffde59'; g.lineWidth = 2; g.strokeRect((i % G.stride) * D + 1, Math.floor(i / G.stride) * D + 1, D - 2, D - 2); }
       let close = null;
@@ -370,7 +370,7 @@
     const r = it.ranged || {}, pr = r.proj || {};
     const ammoItems = store.all('item').filter(x => x.kind === 'missile').map(x => [x.id, x.name || x.id]);
     return [
-      h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '쏘기 · 발사체'),
+      h('div', { class: 'fl m-0 mt-5 mb-1' }, '쏘기 · 발사체'),
       row(F.text(key, R('shootLabel'), { label: '행동 버튼 이름', placeholder: '쏘기' }),
         F.bool(key, R('needEquip'), { label: '장착해야 쏠 수 있음', def: true }),
         F.select(key, R('ammo'), { none: '발사체를 무한히 만들어 쏨 (영혼의 활처럼)', item: '가방의 투척 무기를 하나씩 소모 (화살 · 볼트)' }, { label: '탄환', rerender: true }),
@@ -385,7 +385,7 @@
         pr.damage === 'own' ? row(F.num(key, P('min'), { label: '최소 피해', int: true, min: 0, def: 1 }), F.num(key, P('minPerLvl'), { label: '활 강화당 최소 +', int: true, min: 0, def: 0 }),
           F.num(key, P('max'), { label: '최대 피해', int: true, min: 0, def: 5 }), F.num(key, P('maxPerLvl'), { label: '활 강화당 최대 +', int: true, min: 0, def: 1 })) : null,
         flyingSprite(key, P('sprite'), '발사체 그림', 'SPIRIT_ARROW')) : null,
-      h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '소리 · 이펙트'),
+      h('div', { class: 'fl m-0 mt-4 mb-1' }, '소리 · 이펙트'),
       ...fxRow(key, ['ranged', 'proj']),
       h('p', { class: 'hint' }, '근접 수치(위)는 활을 들고 때릴 때와 "활의 피해 그대로"일 때 씁니다. 발사체는 영혼의 활 화살처럼 가방에 들어가지 않고 땅에 떨어지지 않습니다.')];
   }
@@ -422,7 +422,7 @@
         isBag ? F.select(key, B('tabIcon'), { item: '가방 그림 그대로', backpack: '배낭 아이콘', pouch: '씨앗 주머니 아이콘', scroll: '주문서 통 아이콘', wand: '마법봉 꽂이 아이콘', potion: '물약 띠 아이콘' }, { label: '가방 창 탭 아이콘' })
           : F.text(key, B('openLabel'), { label: '열기 버튼 이름', placeholder: '열기' }), isBag ? null : F.text(key, B('putLabel'), { label: '넣기 버튼 이름', placeholder: '넣기' })));
       if (bg.holds === 'filter') {
-        out.push(h('div', { class: 'fl', style: { marginTop: '6px' } }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
+        out.push(h('div', { class: 'fl mt-3' }, '분류 (고른 분류의 아이템 — 게임 아이템 · 프로젝트 아이템 모두)'),
           h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px 12px', margin: '2px 0 8px' } }, Object.entries(CATS).map(([k, v]) => h('label', { class: 'check' },
             h('input', { type: 'checkbox', checked: cats.has(k), onchange: e => store.edit(key, '가방 분류', o => { const bb = PDM.deepGet(o, base); const s2 = new Set(bb.categories || []); e.target.checked ? s2.add(k) : s2.delete(k); bb.categories = [...s2]; }) }), h('span', {}, v)))),
           h('div', { class: 'fl' }, '아이템 하나하나 (프로젝트 아이템 · 게임 아이템 — 게임 아이템은 그것을 상속한 것도)'),
@@ -441,8 +441,8 @@
     const misc = (it.kind || 'misc') === 'misc', missile = it.kind === 'missile' || (it.kind === 'game' && /^weapon\.missiles\./.test(it.base || ''));
     const u = it.useFx || {}, t = it.throwFx || {}, b = it.bagFx || {};
     const turnOn = (k, def) => store.edit(key, '추가 기능', o => { const cur = o[k] || {}; o[k] = Object.assign(def(), cur, { on: !cur.on }); });
-    const head = (k, label, on, def, hint) => h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 4px' } },
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!on, onchange: () => turnOn(k, def) }), h('span', { style: { fontWeight: 600 } }, label)), h('span', { class: 'hint' }, hint));
+    const head = (k, label, on, def, hint) => h('div', { class: 'hstack gap-4 m-0 mt-4 mb-2' },
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!on, onchange: () => turnOn(k, def) }), h('span', { class: 'fw-bold' }, label)), h('span', { class: 'hint' }, hint));
     return [
       h('p', { class: 'hint' }, '이 아이템의 종류(위)에 기능을 더합니다 — 예: 근접 무기 + 가방 기능(장착하면 무기, 가방 창에서 "열기"로 가방), 물약 + 던지기 효과(마시면 회복, 던지면 깨져서 둘레에 효과). 게임 아이템을 상속한 아이템에도 됩니다.'),
       head('useFx', '사용 효과', u.on, PDM.make.useFx, misc ? '"사용(마시기 · 읽기 …)" 버튼에 효과가 더해짐' : '"사용" 버튼이 생김'),
@@ -499,10 +499,10 @@
     if (gl.length) {   // 예전에 "일반"으로 만든 마법봉 · 반지 등 — 그 분류의 게임 성질이 없음
       const bs = h('select', {}, gl.map(g => h('option', { value: g.p, selected: g.p === DEFAULT_BASE[it.category] }, `${g.n} (${g.p})`)));
       out.push(h('div', { class: 'card', style: { padding: '8px 10px', margin: '4px 0 10px', borderColor: 'var(--warn)' } },
-        h('div', { style: { color: 'var(--warn)', marginBottom: '6px' } }, `이 아이템은 "일반 데이터 아이템"이라 게임의 ${(PDM.ITEM_CATEGORY_INFO[it.category] || {}).name || it.category} 성질(충전 · 쏘기 · 장착 등)이 없습니다.`),
-        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, bs,
+        h('div', { class: 'mb-3 c-warn' }, `이 아이템은 "일반 데이터 아이템"이라 게임의 ${(PDM.ITEM_CATEGORY_INFO[it.category] || {}).name || it.category} 성질(충전 · 쏘기 · 장착 등)이 없습니다.`),
+        h('div', { class: 'hstack wrap' }, bs,
           h('button', { class: 'btn sm pri', onclick: async () => { const g = findGame(bs.value)[1]; if (!g) return; const cur = PDM.clone(store.get(key)); await asGameBased(cur, g); store.edit(key, '게임 아이템 바탕으로', o => { Object.keys(o).forEach(k => delete o[k]); Object.assign(o, cur); }); } }, '이 게임 아이템을 바탕으로 바꾸기')),
-        h('p', { class: 'hint', style: { margin: '6px 0 0' } }, '이름 · 그림 · 가격은 그대로 두고, 게임 아이템의 동작(효과 · 강화 · 감정)을 물려받습니다. 효과는 아래 "코드"와 수치 · 이펙트로 고칩니다.')));
+        h('p', { class: 'hint m-0 mt-3' }, '이름 · 그림 · 가격은 그대로 두고, 게임 아이템의 동작(효과 · 강화 · 감정)을 물려받습니다. 효과는 아래 "코드"와 수치 · 이펙트로 고칩니다.')));
     }
     if (kind === 'game') {
       const all = Object.values(PDM.SPD_ITEM_GROUPS || {}).flat();
@@ -516,16 +516,16 @@
     const W = p => ['weapon', p], A = p => ['armor', p];
     if (kind === 'game' && /^wands\./.test(it.base || '')) {
       const dmg = (PDM.codegen.DAMAGE_WANDS || []).includes(String(it.base).split('.').pop()), WD = p => ['wand', p];
-      out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '마법봉 수치 (비우면 게임 그대로)'),
+      out.push(h('div', { class: 'fl m-0 mt-5 mb-1' }, '마법봉 수치 (비우면 게임 그대로)'),
         row(F.num(key, WD('charges'), { label: '처음 충전 수 (0 = 게임 기본)', int: true, min: 0, max: 10, def: 0 }),
           dmg ? F.num(key, WD('min'), { label: '최소 피해 (비우면 게임)', int: true, min: 0, def: '' }) : null, dmg ? F.num(key, WD('minPerLvl'), { label: '강화당 최소 +', int: true, min: 0, def: 1 }) : null,
           dmg ? F.num(key, WD('max'), { label: '최대 피해 (비우면 게임)', int: true, min: 0, def: '' }) : null, dmg ? F.num(key, WD('maxPerLvl'), { label: '강화당 최대 +', int: true, min: 0, def: 1 }) : null),
         h('p', { class: 'hint' }, (dmg ? '피해 칸을 비우면 게임 수치 그대로. ' : '이 마법봉은 피해를 주는 종류가 아니라 피해 수치가 없습니다 — 효과는 "코드"(onZap 은 추가 멤버에 @Override)로. ') + '충전은 강화마다 +1 (최대 10) — 게임과 같음.'));
     }
-    if (kind === 'game' && /^wands\./.test(it.base || '')) out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '마법봉 공격 이펙트'), PDM.wandFxEditor(key, ['wandFx']));
+    if (kind === 'game' && /^wands\./.test(it.base || '')) out.push(h('div', { class: 'fl m-0 mt-5 mb-1' }, '마법봉 공격 이펙트'), PDM.wandFxEditor(key, ['wandFx']));
     // 공격 모션: 근접 무기 · 활(들고 때릴 때) · 게임 근접 무기를 상속한 아이템 — 공격할 때 이 아이템 그림이 영웅 가운데에서 휘둘러짐 (런타임 MakerSwing)
     if (kind === 'melee' || kind === 'ranged' || (kind === 'game' && /^weapon\.melee\./.test(it.base || '')))
-      out.push(h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '⚔ 공격 모션 (무기 그림이 휘둘러짐)'), PDM.swingEditor(key, ['attackFx'], () => (store.get(key) || {}).sprite));
+      out.push(h('div', { class: 'fl m-0 mt-5 mb-1' }, '⚔ 공격 모션 (무기 그림이 휘둘러짐)'), PDM.swingEditor(key, ['attackFx'], () => (store.get(key) || {}).sprite));
     if (kind === 'melee' || kind === 'missile' || kind === 'ranged') {
       out.push(row(F.num(key, W('tier'), { label: '티어', int: true, min: 1, max: 5, hint: '힘 요구치 기본값' }),
         F.num(key, W('min'), { label: '최소 피해', int: true, min: 0 }), F.num(key, W('minPerLvl'), { label: '강화당 최소 +', int: true, min: 0 }),
@@ -563,13 +563,13 @@
         cx.type === 'ranged' ? F.bool(key, C('spin'), { label: '날아가며 빙글빙글' }) : null,
         F.num(key, C('hits'), { label: '연타 (한 번 쓸 때 맞히는 횟수)', int: true, min: 1, max: 10, def: 1 }),
         F.num(key, C('hitDelay'), { label: '연타 간격 (초)', step: 0.05, min: 0.02, def: cx.type === 'ranged' ? 0.05 : 0.1 })));
-      out.push(h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '이 코덱스의 소리 (비우면 기본 소리 · 🎚 로 편집)'));
+      out.push(h('div', { class: 'fl m-0 mt-3 mb-1' }, '이 코덱스의 소리 (비우면 기본 소리 · 🎚 로 편집)'));
       out.push(row(F.sound(key, C('sound'), { label: '쓸 때', kind: 'se', empty: '(기본 소리)' }),
         F.sound(key, C('hitSound'), { label: '맞을 때', kind: 'se', empty: '(기본 소리)' }),
         cx.type !== 'cast' ? F.sound(key, C('missSound'), { label: '빗나갈 때', kind: 'se', empty: '(기본 소리)' }) : null,
         F.sound(key, C('breakSound'), { label: '다 닳아 없어질 때', kind: 'se', empty: '(기본 소리)' })));
       out.push(h('p', { class: 'hint' }, `근접·원거리는 원작처럼 빗나갈 수 있습니다. 피해 × (1 + 코덱스 피해 %: 게이지 단계·원소·특성·전직). 힘이 모자라면 위력 −33%. +0: ${cx.min | 0}~${cx.max | 0} · +3: ${(cx.min | 0) + 3 * (cx.minPerLvl | 0)}~${(cx.max | 0) + 3 * (cx.maxPerLvl | 0)} · 사용 +0 ${Math.round(cx.baseUses || 10)}회, +3 ${Math.round((cx.baseUses || 10) * 3.375)}회`));
-      out.push(h('div', { class: 'fl', style: { margin: '6px 0 2px' } }, '추가 효과 (피해 뒤에 차례로 — 상태 효과·밀치기 등)'));
+      out.push(h('div', { class: 'fl m-0 mt-3 mb-1' }, '추가 효과 (피해 뒤에 차례로 — 상태 효과·밀치기 등)'));
       out.push(PDM.castEffectsEditor ? PDM.castEffectsEditor(key, C('effects'), { emptyText: '추가 효과 없음', make: () => ({ type: 'buff', on: 'target', buff: 'Burning', turns: 3 }) }) : h('span'));
     } else if (kind === 'bag') {
       out.push(...bagUI(key, ['bag'], it.bag || {}, true));
@@ -609,8 +609,8 @@
     return [
       h('p', { class: 'hint' }, `게임 클래스로 만들어집니다: pdmaker/gen/${cg.itemPath(it)} (${it.kind === 'game' ? 'items.' + (it.base || 'Item') : kind === 'misc' ? 'MakerItem' : { melee: 'MeleeWeapon', missile: 'MissileWeapon', armor: 'Armor', codex: 'MakerCodex', grimoire: 'MakerCodex.MakerGrimoire' }[kind]} 상속). 코드 오류는 게임을 멈추지 않고 경고만 뜹니다.${it.kind === 'game' ? ' "추가 멤버"에 @Override 로 게임 함수를 직접 다시 쓸 수 있습니다 (예: public void execute(Hero hero, String action) { … super.execute(hero, action); }).' : ''}`),
       tabs, body,
-      h('div', { class: 'fl', style: { margin: '10px 0 2px' } }, '행동 버튼'), acts,
-      h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center' } },
+      h('div', { class: 'fl m-0 mt-5 mb-1' }, '행동 버튼'), acts,
+      h('div', { class: 'hstack mt-3' },
         h('button', { class: 'btn sm', onclick: () => PDM.ui.codeView(cg.itemClass(it.id) + '.java', cg.itemSource(store.get(key))) }, '생성될 코드 보기'),
         h('span', { class: 'hint' }, '아이템마다 게임 클래스가 하나씩 만들어집니다 (아이템 도감에도 오름)')),
       PDM.codeApiRef ? PDM.codeApiRef() : null
@@ -695,7 +695,7 @@
         const subSel = h('select', {});
         const fill = keep => { const ss = PDM.itemSubs(catSel.value) || {}; subSel.replaceChildren(...Object.entries(ss).map(([k, v]) => h('option', { value: k }, v))); subSel.disabled = !Object.keys(ss).length; if (keep !== undefined && ss[keep] !== undefined) subSel.value = keep; };
         fill(subOf(it)); catSel.addEventListener('change', () => fill());
-        const ok = await PDM.ui.modal(`「${it.name}」 옮기기`, h('div', { style: { display: 'flex', gap: '8px' } }, h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), [['취소', null], ['옮기기', true, 'pri']]);
+        const ok = await PDM.ui.modal(`「${it.name}」 옮기기`, h('div', { class: 'flex gap-4' }, h('label', {}, h('div', { class: 'fl' }, '분류'), catSel), h('label', {}, h('div', { class: 'fl' }, '세부 종류'), subSel)), [['취소', null], ['옮기기', true, 'pri']]);
         if (ok) intoGroup(it.id, catSel.value, subSel.disabled ? '' : subSel.value);
       };
 
@@ -746,19 +746,19 @@
       return h('div', { class: 'page' },
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' } }, prev,
           h('div', {}, h('h1', {}, it.name), h('div', { class: 'hint' }, `${it.id} · ${PDM.ITEM_CATEGORIES[it.category] || it.category}${it.tier ? ' · ' + it.tier + '티어' : ''}`),
-            h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } },
+            h('div', { class: 'flex gap-3 mt-3' },
               h('button', { class: 'btn sm', title: '이 아이템으로 만들어지는 게임 클래스 (pdmaker/gen/' + PDM.codegen.itemClass(it.id) + '.java)', onclick: () => showCodeFile('pdmaker/gen/' + PDM.codegen.itemPath(it), PDM.codegen.itemClass(it.id) + '.java', PDM.codegen.itemSource(store.get(key))) }, '코드 파일 보기'),
               it.kind === 'game' && it.base ? h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + it.base.replace(/\./g, '/') + '.java', '게임 코드 — items.' + it.base) }, '바탕 게임 코드 보기') : null))),
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true }), F.bool(key, ['enabled'], { label: '사용 (게임에 나옴)', def: true, rerender: true })),
-          it.enabled === false ? h('p', { class: 'hint', style: { color: 'var(--warn)' } }, '꺼져 있음 — 드랍 · 상자 · 상점 · 시작 아이템 · 맵 · 이벤트 · 코드(MakerItem.create) 어디서도 만들어지지 않고 도감에도 나오지 않습니다. 코드에서 이 아이템 클래스를 직접 쓰는 곳은 그대로 컴파일됩니다.') : null,
+          it.enabled === false ? h('p', { class: 'hint c-warn' }, '꺼져 있음 — 드랍 · 상자 · 상점 · 시작 아이템 · 맵 · 이벤트 · 코드(MakerItem.create) 어디서도 만들어지지 않고 도감에도 나오지 않습니다. 코드에서 이 아이템 클래스를 직접 쓰는 곳은 그대로 컴파일됩니다.') : null,
           categoryBlock(key, it),
           F.textarea(key, ['desc'], { label: '설명', rows: 3 }),
           row((it.kind || 'misc') === 'misc' ? F.bool(key, ['stackable'], { label: '겹쳐 쌓임' }) : null, F.bool(key, ['unique'], { label: '유일 아이템' }), F.bool(key, ['cursed'], { label: '저주받음' }), F.num(key, ['level'], { label: '생성 시 강화', int: true, min: 0 })),
           row(F.bool(key, ['noSell'], { label: '판매 불가 (상점에 팔 수 없음)' }), F.bool(key, ['noDrop'], { label: '버리기 금지 (버리기 · 던지기 버튼 없음 — 투척 무기는 던지기만 남음)' })),
           F.list(key, ['tags'], { label: '태그', hint: '선물 취향·조건에 씀 (예: herb, gift, undead)' })),
         section('스프라이트',
-          h('div', { style: { display: 'flex', gap: '6px', marginBottom: '8px' } },
+          h('div', { class: 'flex gap-3 mb-4' },
             it.kind === 'game' && it.base ? h('button', { class: 'btn sm', title: '바탕 게임 아이템(' + it.base + ')의 원래 그림으로 되돌립니다', onclick: async () => {
               const g = findGame(it.base)[1]; if (!g) { toast('바탕 게임 아이템을 찾지 못했습니다', 'bad'); return; }
               const sp = { sheet: 'builtin:items', name: g.img };
@@ -813,7 +813,7 @@
           F.num(skey, [...p, 'chance'], { label: '확률(%)', min: 0, max: 100, step: 0.1, dec: 1 }),
           F.num(skey, [...p, 'min'], { label: '개수 최소', int: true, min: 1 }), F.num(skey, [...p, 'max'], { label: '최대', int: true, min: 1 })),
         it.src === 'floor' ? row(F.num(skey, [...p, 'depthMin'], { label: '깊이 최소 (0 = 제한 없음)', int: true, min: 0 }), F.num(skey, [...p, 'depthMax'], { label: '깊이 최대 (0 = 제한 없음)', int: true, min: 0 }),
-          PDM.ui.field('그룹 (안 고르면 전부)', h('div', {}, groups().map(g => h('label', { style: { marginRight: '8px' } },
+          PDM.ui.field('그룹 (안 고르면 전부)', h('div', {}, groups().map(g => h('label', { class: 'mr-4' },
             h('input', { type: 'checkbox', checked: (it.groups || []).includes(g.id), onchange: e => store.edit(skey, '드랍 그룹', o => { const d = PDM.deepGet(o, p); const a = new Set(d.groups || []); e.target.checked ? a.add(g.id) : a.delete(g.id); d.groups = [...a]; }) }), ' ' + g.name))))) : null,
         F.cond(skey, [...p, 'cond'], { label: '조건 (선택)' })) });
   }
@@ -844,19 +844,19 @@
       const users = store.all('hero').filter(hr => ((hr.inventory || {}).items || []).some(x => x.item === 'spd:' + g.p)).map(hr => '영웅 ' + hr.name + ' 시작 아이템');
       return h('div', { class: 'page' },
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center', marginBottom: '10px' } }, prev,
-          h('div', {}, h('h1', {}, g.n, g.mod2 ? h('span', { class: 'badge', style: { marginLeft: '8px' } }, 'mod-2') : null),
+          h('div', {}, h('h1', {}, g.n, g.mod2 ? h('span', { class: 'badge ml-4' }, 'mod-2') : null),
             h('div', { class: 'hint' }, `게임 아이템 · ${info.name || cat}${g.sub && info.subs ? ' › ' + info.subs[g.sub] : ''}${g.t ? ' · ' + g.t + '티어' : ''}`),
-            h('div', { style: { marginTop: '6px' } }, h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + g.p.replace(/\./g, '/') + '.java', '게임 코드 — items.' + g.p) }, '게임 코드 파일 보기')))),
-        PDM.ui.section('설명', h('p', { style: { whiteSpace: 'pre-wrap' } }, (g.d || '(설명 없음)').replace(/\\n/g, '\n').replace(/_([^_]+)_/g, '$1'))),
+            h('div', { class: 'mt-3' }, h('button', { class: 'btn sm', onclick: () => showCodeFile('items/' + g.p.replace(/\./g, '/') + '.java', '게임 코드 — items.' + g.p) }, '게임 코드 파일 보기')))),
+        PDM.ui.section('설명', h('p', { class: 'pre-wrap' }, (g.d || '(설명 없음)').replace(/\\n/g, '\n').replace(/_([^_]+)_/g, '$1'))),
         (() => {
           const gk = 'spd:' + g.p, cur = (((store.get('gameitems') || {}).items || {})[gk] || {}).sprite || null;
-          const pv = h('canvas', { class: 'thumb', width: 64, height: 64, style: { imageRendering: 'pixelated' } });
+          const pv = h('canvas', { class: 'thumb pixelated', width: 64, height: 64 });
           PDM.assets.drawItemSprite(pv, cur || { sheet: 'builtin:items', name: g.img }, 4);
           return PDM.ui.section('그림 바꾸기',
             h('p', { class: 'hint' }, '이 프로젝트에서 게임의 이 아이템(어디서 나오든)을 다른 그림으로 보여 줍니다. gameitems.json 에 저장.'),
-            h('div', { style: { display: 'flex', gap: '12px', alignItems: 'center' } }, pv,
+            h('div', { class: 'hstack gap-6' }, pv,
               h('div', {}, h('div', {}, cur ? (cur.png ? 'PNG: ' + cur.png : '게임 시트: ' + (cur.name || '#' + cur.index)) : '게임 원래 그림 (' + g.img + ')'),
-                cur ? h('button', { class: 'btn sm', style: { marginTop: '4px' }, onclick: () => store.edit('gameitems', '게임 아이템 그림 원래대로', r => { if (r.items && r.items[gk]) { delete r.items[gk].sprite; if (!Object.keys(r.items[gk]).length) delete r.items[gk]; } }) }, '원래 그림으로') : null)),
+                cur ? h('button', { class: 'btn sm mt-2', onclick: () => store.edit('gameitems', '게임 아이템 그림 원래대로', r => { if (r.items && r.items[gk]) { delete r.items[gk].sprite; if (!Object.keys(r.items[gk]).length) delete r.items[gk]; } }) }, '원래 그림으로') : null)),
             itemSpriteField('gameitems', ['items', gk, 'sprite'], { label: '게임 시트의 다른 칸으로' }),
             spriteTools('gameitems', ['items', gk, 'sprite'], cur, g.p.split('.').pop().toLowerCase(), { sheet: 'builtin:items', name: g.img }),
             cur && cur.png ? PDM.ui.F.image('gameitems', ['items', gk, 'sprite', 'png'], { label: 'PNG', sub: 'sprites/items', rerender: true }) : null);
@@ -874,7 +874,7 @@
           dropsEditor('gameitems', ['items', 'spd:' + g.p, 'drops'])),
         PDM.ui.section('코드로 고치기',
           h('p', { class: 'hint' }, '이 게임 아이템을 바탕(상속)으로 한 프로젝트 아이템을 만들고, 그 아이템의 "코드"에서 훅·행동 버튼·추가 멤버(@Override)로 동작을 직접 고칩니다. 게임 효과·강화는 그대로 유지됩니다. 만든 아이템은 시작 아이템·상점·이벤트에서 그 id 로 씁니다.'),
-          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } },
+          h('div', { class: 'flex gap-3 wrap' },
             h('button', { class: 'btn sm pri', onclick: () => inheritGameItem(g) }, '이 아이템을 바탕으로 코드 작성…'),
             ...store.all('item').filter(x => x.kind === 'game' && x.base === g.p).map(x => h('button', { class: 'chip', onclick: () => PDM.tabs.open('item:' + x.id) }, `${x.name || x.id} (${x.id})`)))),
         PDM.ui.section('소리', h('p', { class: 'hint' }, `이 프로젝트에서 게임 아이템 「${g.n}」 에 쓸 소리입니다 (audio/sounds.json 에 저장 · 이 아이템을 쓰는 곳 모두에 적용).`),
@@ -886,7 +886,7 @@
             h('b', {}, '그림'), h('code', {}, g.img),
             h('b', {}, '쓰는 곳'), h('span', {}, users.join(', ') || '없음')),
           h('p', { class: 'hint' }, '영웅 시작 아이템 · 이벤트의 아이템 주기 · 상점 등에 id 를 그대로 쓰면 게임의 이 아이템이 나옵니다. 이름·수치·그림을 바꾸고 싶으면 프로젝트 아이템으로 복사해서 고치세요.'),
-          h('div', { style: { display: 'flex', gap: '6px' } },
+          h('div', { class: 'flex gap-3' },
             h('button', { class: 'btn sm pri', onclick: () => copyGameItem(g) }, '프로젝트 아이템으로 복사해서 고치기'),
             h('button', { class: 'btn sm', onclick: () => { navigator.clipboard && navigator.clipboard.writeText('spd:' + g.p); toast('복사함: spd:' + g.p); } }, 'id 복사'))));
     }

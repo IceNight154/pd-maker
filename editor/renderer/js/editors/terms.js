@@ -36,7 +36,7 @@ PDM.registerEditor({
       h('h1', {}, '용어 관리'),
       h('p', { class: 'lead' }, '에디터와 게임에 보이는 시스템 이름입니다. "표시 이름"을 비우면 기본 이름을 씁니다. 코드와 데이터는 왼쪽의 키만 쓰기 때문에, 이름을 바꿔도 아무것도 깨지지 않습니다.',
         h('br'), 'era 위치는 원본 시스템(CFLAG, ABL, MARK …)의 어느 자리를 대체했는지 표시합니다. 원본의 성인향 명칭은 이 프로젝트 어디에도 들어가지 않습니다.'),
-      h('div', { style: { display: 'flex', gap: '8px', marginBottom: '10px' } }, search,
+      h('div', { class: 'flex gap-4 mb-5' }, search,
         h('button', { class: 'btn', onclick: async () => {
           const k = await PDM.ui.prompt('새 용어 키 (예: gauge.nostalgia, abl.fishing)', ''); if (!k) return;
           const label = await PDM.ui.prompt('표시 이름', ''); if (!label) return;

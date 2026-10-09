@@ -42,7 +42,7 @@
       row(F.select(K, P('dir'), DIRS, { label: '흐르는 방향', def: 'up', rerender: true }),
         F.num(K, P('speed'), { label: '속도 (게임 15)', min: 0, step: 1, def: 15, rerender: true }),
         F.bool(K, P('dark'), { label: '아래쪽 어둡게 (게임 기본)', def: true, rerender: true })),
-      h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '뒤 벽 (바둑판처럼 깔려 함께 흐름)'),
+      h('div', { class: 'fl m-0 mt-4 mb-1' }, '뒤 벽 (바둑판처럼 깔려 함께 흐름)'),
       row(F.bool(K, P('wall', 'show'), { label: '벽 보이기', def: true, rerender: true }),
         F.image(K, P('wall', 'image'), { label: '벽 그림 (비우면 게임 back_wall.png)', sub: 'title', rerender: true })),
       wall.show !== false ? row(
@@ -50,12 +50,12 @@
         F.num(K, P('wall', 'fh'), { label: '칸 높이', min: 1, step: 1, def: 100, rerender: true }),
         F.num(K, P('wall', 'cols'), { label: '시트 가로 칸 수', min: 1, step: 1, def: 3, rerender: true }),
         F.num(K, P('wall', 'frames'), { label: '칸 종류 수', min: 1, step: 1, def: 6, rerender: true })) : null,
-      h('div', { class: 'fl', style: { margin: '8px 0 2px', display: 'flex', gap: '8px', alignItems: 'center' } }, '떠오르는 조각 레이어 (아래 것이 위에 그려짐)',
-        h('button', { class: 'btn xs', style: { marginLeft: 'auto' }, onclick: async e => { e.preventDefault(); if (await PDM.ui.confirm('조각 레이어를 게임 기본 6개로 되돌릴까요?')) store.edit(K, '폐허 레이어 되돌리기', o => { o.background.ruins.layers = RUINS_LAYERS(); }); } }, '게임 기본 레이어로 되돌리기')),
+      h('div', { class: 'fl hstack gap-4 m-0 mt-4 mb-1' }, '떠오르는 조각 레이어 (아래 것이 위에 그려짐)',
+        h('button', { class: 'btn xs ml-auto', onclick: async e => { e.preventDefault(); if (await PDM.ui.confirm('조각 레이어를 게임 기본 6개로 되돌릴까요?')) store.edit(K, '폐허 레이어 되돌리기', o => { o.background.ruins.layers = RUINS_LAYERS(); }); } }, '게임 기본 레이어로 되돌리기')),
       listEditor(K, P('layers'), { addLabel: '폐허 레이어', emptyText: '레이어가 없습니다 (벽만 흐름).',
         make: () => ({ name: '레이어', image: '', fw: 0, fh: 0, cols: 1, frames: 1, count: 3, speed: 2, size: 1, dark: 0, spin: 20, show: true }),
         render: (l, i, p) => h('details', { open: !!st['ru' + i], ontoggle: e => { st['ru' + i] = e.target.open; } },
-          h('summary', { style: { cursor: 'pointer' } }, h('b', {}, l.name || '레이어 ' + (i + 1)),
+          h('summary', { class: 'pointer' }, h('b', {}, l.name || '레이어 ' + (i + 1)),
             h('span', { class: 'hint' }, `  ${(l.image || '(그림 없음)').replace(/^game:splashes\/title\//, '게임: ')} · ${l.count ?? 3}개 · 속도 ×${l.speed ?? 2}` + (l.show === false ? ' · 숨김' : ''))),
           row(F.text(K, [...p, 'name'], { label: '이름', rerender: true }), F.bool(K, [...p, 'show'], { label: '보이기', def: true, rerender: true })),
           row(F.image(K, [...p, 'image'], { label: '그림 (스프라이트 시트)', sub: 'title', rerender: true })),
@@ -123,7 +123,7 @@
   // ---------------- 레이아웃 직접 편집: 로고 · 버튼 영역을 끌어서 옮기고 크기 바꾸기 ----------------
   function layoutWrap(t, st, pv, ctx) {
     const wrap = h('div', { class: 'title-lay-wrap' }, pv.el);
-    const chk = h('label', { class: 'check', style: { marginTop: '4px' } }, h('input', { type: 'checkbox', checked: !!st.layoutEdit, onchange: e => { st.layoutEdit = e.target.checked; ctx.refresh(); } }),
+    const chk = h('label', { class: 'check mt-2' }, h('input', { type: 'checkbox', checked: !!st.layoutEdit, onchange: e => { st.layoutEdit = e.target.checked; ctx.refresh(); } }),
       h('span', {}, '레이아웃 직접 편집 (로고·버튼 영역을 끌어서 옮기기 · 모서리로 크기)'));
     const out = h('div', {}, wrap, chk);
     if (!st.layoutEdit) return out;
@@ -495,7 +495,7 @@
     if (!PDM.sprites) return wrap;
     const grid = h('div', { class: 'spr-grid' });
     wrap.append(h('p', { class: 'hint' }, '"고치기" = 게임 원본을 프로젝트 assets/game/ 으로 복사해 픽셀 편집기로 엶. "바꾸기" = 다른 PNG 로 교체. 노란 테두리 = 바꾼 그림, "원래대로" 로 되돌림. 새 그림은 위 "그림 레이어" 에 추가하세요.'), grid,
-      h('div', { style: { display: 'flex', gap: '6px' } },
+      h('div', { class: 'flex gap-3' },
         h('button', { class: 'btn sm', onclick: () => { const tb = PDM.tabs.open('sprites'); if (tb && tb.ctx) { tb.ctx.state = Object.assign(tb.ctx.state || {}, { dir: '@game', gameDir: 'interfaces' }); tb.ctx.refresh(); } } }, '그림 관리에서 게임 그림 모두 보기 →')));
     const style = archStyleOf(bg);
     PDM.assets.load(MOD2_LAYERS[0]).then(m2 => {
@@ -572,7 +572,7 @@
         h('h1', {}, '🏰 타이틀 화면'),
         h('p', { class: 'lead' }, '게임을 켰을 때 처음 나오는 화면입니다. 이 설정을 켜면 게임의 원래 타이틀을 숨기고 아래 설정대로 새로 그립니다. 미리보기는 대략적인 모습이고, 정확한 모습은 ▶ 테스트 플레이로 확인하세요.'),
         row(F.bool(K, ['enabled'], { label: '이 설정 사용 (끄면 게임 원래 타이틀)', def: true, rerender: true }),
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, h('span', { class: 'hint' }, '빠른 시작:'), preset('game', '지금 게임 기본'), preset('spd', '예전 아치 모양'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null)),
+          h('div', { class: 'hstack' }, h('span', { class: 'hint' }, '빠른 시작:'), preset('game', '지금 게임 기본'), preset('spd', '예전 아치 모양'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null)),
         h('div', { class: 'title-prev-wrap' }, sizeTabs, layoutWrap(t, st, pv, ctx)),
         section('음악',
           h('p', { class: 'hint' }, '비워 두면 게임이 트는 곡 그대로 (원작: theme_1·theme_2' + (PDM.isMod2() ? ', mod-2: title.mp3' : '') + '). 여러 곡이면 무작위, "(음악 끄기)"로 무음.'),
@@ -599,11 +599,11 @@
           row(F.select(K, ['background', 'effect'], Object.fromEntries(Object.entries(EFFECTS).filter(([k]) => PDM.isMod2() || k !== 'mana' || (t.background || {}).effect === 'mana')), { label: '날씨·입자 효과', rerender: true }), F.num(K, ['background', 'effectDensity'], { label: '양', step: 0.25, min: 0.1, def: 1, rerender: true }),
             F.select(K, ['background', 'effectArea'], { screen: '화면 전체', logo: '로고 주변' }, { label: '위치', rerender: true }),
             F.text(K, ['background', 'effectColor'], { label: '색 (비우면 기본)', rerender: true }), F.bool(K, ['background', 'effectFront'], { label: '로고 위에', rerender: true })),
-          h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '그림 레이어 (아래 것이 위에 그려짐) — 스프라이트 시트 애니메이션 · 가로/세로 흐름 · 흔들림 · 깜빡임 · 회전'),
+          h('div', { class: 'fl m-0 mt-4 mb-1' }, '그림 레이어 (아래 것이 위에 그려짐) — 스프라이트 시트 애니메이션 · 가로/세로 흐름 · 흔들림 · 깜빡임 · 회전'),
           listEditor(K, ['layers'], { addLabel: '그림 레이어', emptyText: '레이어가 없습니다. 직접 그린 그림을 넣어 보세요.',
             make: () => ({ name: '레이어', image: '', frame: [0, 0], frames: [], fps: 6, fit: 'cover', x: 0.5, y: 0.5, anchorX: 0.5, anchorY: 0.5, scale: 1, alpha: 1, blend: 'normal', tile: false, scrollX: 0, scrollY: 0, front: false }),
             render: (l, i, p) => h('details', { open: !!st['ly' + i], ontoggle: e => { st['ly' + i] = e.target.open; } },
-              h('summary', { style: { cursor: 'pointer' } }, h('b', {}, l.name || '레이어 ' + (i + 1)), h('span', { class: 'hint' }, '  ' + (l.image || '(그림 없음)') + (l.tile ? ' · 반복' : '') + (l.frame && l.frame[0] ? ' · 애니메이션' : '') + (l.scrollX ? (l.scrollX < 0 ? ' · ←' : ' · →') : '') + (l.scrollY ? (l.scrollY < 0 ? ' · ↑' : ' · ↓') : '') + (l.front ? ' · 로고 위' : '') + (l.titleOnly ? ' · 타이틀만' : ''))),
+              h('summary', { class: 'pointer' }, h('b', {}, l.name || '레이어 ' + (i + 1)), h('span', { class: 'hint' }, '  ' + (l.image || '(그림 없음)') + (l.tile ? ' · 반복' : '') + (l.frame && l.frame[0] ? ' · 애니메이션' : '') + (l.scrollX ? (l.scrollX < 0 ? ' · ←' : ' · →') : '') + (l.scrollY ? (l.scrollY < 0 ? ' · ↑' : ' · ↓') : '') + (l.front ? ' · 로고 위' : '') + (l.titleOnly ? ' · 타이틀만' : ''))),
               layerRow(p, l)) })),
         section('타이틀 스프라이트 (게임 그림 고치기 · 바꾸기)', spriteSection(t, bg)),
         section('메뉴 화면 (랭킹 · 모험 일지 · 변경 · 소개 · 새 소식 · 지원)',
@@ -639,7 +639,7 @@
           row(F.num(K, ['buttons', 'top'], { label: '시작 높이 (0~1, 0 = 자동)', step: 0.05, min: 0, max: 1, def: 0, rerender: true }),
             F.num(K, ['buttons', 'width'], { label: '버튼 영역 폭 (0 = 기본)', int: true, min: 0, def: 0, rerender: true }), F.num(K, ['buttons', 'height'], { label: '버튼 높이', int: true, min: 12, def: 20, rerender: true }),
             F.num(K, ['buttons', 'gap'], { label: '간격', int: true, min: 0, def: 3, rerender: true }), F.num(K, ['buttons', 'offsetX'], { label: '좌우 이동', int: true, def: 0, rerender: true })),
-          h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '버튼 애니메이션'),
+          h('div', { class: 'fl m-0 mt-4 mb-1' }, '버튼 애니메이션'),
           row(F.select(K, ['buttons', 'anim', 'enter'], ENTERS, { label: '나타날 때', rerender: true }),
             F.num(K, ['buttons', 'anim', 'duration'], { label: '걸리는 시간 (초)', step: 0.1, min: 0.05, def: 0.6, rerender: true }),
             F.num(K, ['buttons', 'anim', 'stagger'], { label: '버튼 사이 간격 (초)', step: 0.02, min: 0, def: 0.08, rerender: true }),
