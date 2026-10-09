@@ -56,6 +56,14 @@
   /** 이 소리 파일이 게임이 못 읽는 WAV 면 경고 + 16비트로 바꾸기 버튼 */
   function wavCheck(e) {
     const box = h('div', {});
+    if (/\.ogg$/i.test(e.file || '') && !/^(game|builtin):/.test(e.file)) {   // 여러 채널 ogg: 게임(libGDX jorbis)이 읽다가 멈춤
+      pdm.readDataURL(store.abs(e.file)).then(d => {
+        const bin = atob(d.split(',')[1] || '').slice(0, 200), i = bin.indexOf('\x01vorbis'), ch = i >= 0 ? bin.charCodeAt(i + 11) : 0;
+        if (ch > 2) box.append(h('div', { style: { margin: '6px 0', padding: '8px 10px', border: '1px solid var(--warn, #c9a227)', borderRadius: '6px' } },
+          h('b', {}, `⚠ ${ch}채널 ogg 는 게임에서 재생되지 않습니다`), ' ', h('span', { class: 'hint' }, '게임의 ogg 디코더가 2채널까지만 읽습니다 — 5.1 · 7.1 은 WAV 로 저장하세요 (WAV 는 5.1 · 7.1 그대로 재생).')));
+      }).catch(() => {});
+      return box;
+    }
     if (!projWav(e.file)) return box;
     pdm.readDataURL(store.abs(e.file)).then(d => {
       const info = PDM.audio.wavInfo(d);

@@ -181,6 +181,11 @@ public class Hooks {
 					System.out.println("[TEST] itemsnd " + p[1] + " " + p[2] + " -> '" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.lastSe + "'");
 					break;
 				}
+				case "rawmusic": { // rawmusic,<프로젝트 파일> — PDMaker 변환 없이 libGDX 로 바로 틀어 봄 (libGDX 자체 동작 확인)
+					com.badlogic.gdx.audio.Music rm = com.badlogic.gdx.Gdx.audio.newMusic(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerRuntime.root().child(p[1]));
+					rm.play(); System.out.println("[TEST] rawmusic " + p[1] + " playing=" + rm.isPlaying());
+					break;
+				}
 				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
 					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
 					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
