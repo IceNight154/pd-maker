@@ -323,7 +323,7 @@
         h('h1', {}, '💬 대사창'),
         h('p', { class: 'lead' }, '이벤트의 "대사 표시"·선택지가 게임에서 어떻게 보일지 정합니다. 화면 아래에 넓은 대사 상자가 뜨고, 말하는 캐릭터의 일러스트(캐릭터 편집기 → 초상화/일러스트)가 옆에 섭니다. 주인공이 말할 때는 영웅과 연결된 캐릭터의 일러스트를 씁니다.'),
         row(F.select(K, ['mode'], { box: '아래 대사창 + 일러스트 (RPG Maker 식)', window: '원작 가운데 창 (작은 그림 + 이름)' }, { label: '방식', rerender: true }),
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('span', { class: 'hint' }, '빠른 시작:'), ...Object.keys(PRESETS).map(preset))),
+          h('div', { class: 'hstack wrap' }, h('span', { class: 'hint' }, '빠른 시작:'), ...Object.keys(PRESETS).map(preset))),
         classic ? h('p', { class: 'hint' }, '원작 가운데 창은 캐릭터의 스프라이트를 작은 그림으로 보여 줍니다. 아래 설정은 쓰이지 않습니다.') : h('div', {},
           h('div', { class: 'dlg-prev-wrap' }, pv.el,
             h('div', { class: 'dlg-prev-ctl' },
@@ -378,7 +378,7 @@
             row(F.bool(K, ['indicator', 'show'], { label: '다 나오면 ▼ 표시', def: true, rerender: true }), col('indicator', 'color', '▼ · 고른 선택지 테두리 색'),
               F.select(K, ['indicator', 'anim'], ANIMS, { label: '▼ 움직임', rerender: true }),
               F.image(K, ['indicator', 'image'], { label: '▼ 대신 쓸 그림', sub: 'ui', rerender: true })),
-            h('div', { class: 'fl', style: { margin: '8px 0 2px' } }, '대사창 소리 (비우면 기본 소리 · 🎚 로 편집 · 캐릭터마다 목소리는 캐릭터 편집기에서)'),
+            h('div', { class: 'fl m-0 mt-4 mb-1' }, '대사창 소리 (비우면 기본 소리 · 🎚 로 편집 · 캐릭터마다 목소리는 캐릭터 편집기에서)'),
             row(F.sysSound(K, ['sounds', 'open'], 'dialogue.open', { label: '열 때' }), F.sysSound(K, ['sounds', 'type'], 'dialogue.type', { label: '글자 나올 때 (세 글자마다)' }),
               F.sysSound(K, ['sounds', 'next'], 'dialogue.next', { label: '넘길 때' })),
             row(F.sysSound(K, ['sounds', 'move'], 'choice.move', { label: '선택지 옮길 때' }), F.sysSound(K, ['sounds', 'select'], 'choice.select', { label: '선택지 고를 때' })))));

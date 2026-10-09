@@ -90,22 +90,22 @@
         } catch (e) { toast('가져오기 실패: ' + e.message, 'bad'); }
       };
       if (st.view === 'frame') {
-        return h('div', { class: 'page full', style: { display: 'flex', flexDirection: 'column' } },
+        return h('div', { class: 'page full vstack gap-0' },
           h('div', { class: 'map-tools' }, h('button', { class: 'tool', onclick: () => { st.view = 'info'; ctx.refresh(); } }, '← 돌아가기'),
             h('span', { class: 'hint' }, '이전 메이커 (디자인 모드). 게임 적용·테스트는 start-maker.bat 으로 실행한 버전에서 하세요.')),
-          h('iframe', { class: 'legacy', src: toFileURL(pdm.join(dir, 'pixel-dungeon-maker.html')), style: { flex: 1 } }));
+          h('iframe', { class: 'legacy grow', src: toFileURL(pdm.join(dir, 'pixel-dungeon-maker.html')) }));
       }
       return h('div', { class: 'page' },
         h('h1', {}, '고급: Java 코드 생성기'),
         h('p', { class: 'lead' }, '데이터만으로 표현하기 어려운 전투 메커니즘(코덱스 무기, 상태이상·버프, 스탠스, 방어구 특수능력, 영웅 클래스, 특성)은 이전 메이커가 Java 코드를 만들어 게임 저장소에 넣는 방식으로 계속 만듭니다.'),
         PDM.ui.section('이전 메이커',
           h('div', { class: 'kv' }, h('b', {}, '위치'), h('span', { class: 'mono' }, dir)),
-          h('div', { style: { display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' } },
+          h('div', { class: 'flex gap-3 wrap mt-5' },
             h('button', { class: 'btn pri', onclick: () => { st.view = 'frame'; ctx.refresh(); } }, '여기서 열기'),
             pdm.isElectron ? h('button', { class: 'btn', onclick: () => pdm.openExternal(pdm.join(dir, 'start-maker.bat')) }, 'start-maker.bat 실행 (게임 적용·테스트)') : null)),
         PDM.ui.section('데이터 가져오기',
           h('p', { class: 'hint' }, '호감도 규칙 → ' + PDM.T('sys.heart') + ', 시나리오 NPC → 캐릭터(대사·성격·선물 취향 포함), 픽셀 스프라이트 → PNG 로 옮깁니다. 이미 있는 캐릭터 id 는 건너뜁니다. 실행 취소(Ctrl+Z)로 되돌릴 수 있습니다.'),
-          h('div', { style: { display: 'flex', gap: '6px' } },
+          h('div', { class: 'flex gap-3' },
             h('button', { class: 'btn', onclick: () => doImport(pdm.join(dir, 'projects', 'autosave.json')) }, 'autosave.json 에서 가져오기'),
             h('button', { class: 'btn', onclick: async () => { const f = await pdm.openFile('이전 메이커 백업 JSON', ['json']); if (f) doImport(f); } }, '백업 파일 고르기…'))));
     }

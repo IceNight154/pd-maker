@@ -73,7 +73,7 @@
       const sel = (opts, cur, on, style) => { const s = h('select', { style: style || {}, onchange: () => on(s.value) }, opts.map(([v, t]) => h('option', { value: v }, t))); s.value = cur; return s; };
       const draw = async () => {
         let info; try { info = await repoInfo(); } catch (e) { info = null; }
-        if (!info || !info.bundles || !info.bundles.length) { body.replaceChildren(h('p', { class: 'hint', style: { color: 'var(--bad)' } }, '게임 저장소의 글자 파일(core/src/main/assets/messages)을 찾지 못했습니다. 프로젝트 설정에서 게임 저장소 경로를 확인하세요.')); return; }
+        if (!info || !info.bundles || !info.bundles.length) { body.replaceChildren(h('p', { class: 'hint c-bad' }, '게임 저장소의 글자 파일(core/src/main/assets/messages)을 찾지 못했습니다. 프로젝트 설정에서 게임 저장소 경로를 확인하세요.')); return; }
         if (!info.langs.includes(st.lang)) st.lang = info.langs.includes('ko') ? 'ko' : info.langs[0];
         const rows = await loadRows(st.bundle, st.lang);
         const q = st.q.trim().toLowerCase(), tgt = st.scope === 'all' ? '*' : st.lang;
@@ -83,11 +83,11 @@
         const total = Object.values(data()).reduce((a, m) => a + Object.keys(m).length, 0);
         const qi = h('input', { type: 'search', value: st.q, placeholder: '키 또는 글자 검색 (예: 단검, sword, hero.name)…', style: { flex: '1 1 220px' } });
         let tm = 0; qi.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { st.q = qi.value; st.page = 0; draw().then(() => { const n = body.querySelector('input[type=search]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }); }, 250); });
-        const pager = () => h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '8px 0' } },
+        const pager = () => h('div', { class: 'hstack my-4' },
           h('button', { class: 'btn sm', disabled: st.page <= 0, onclick: () => { st.page--; draw(); } }, '◀'), h('span', { class: 'hint' }, `${st.page + 1} / ${pages} 쪽 · ${list.length}개`),
           h('button', { class: 'btn sm', disabled: st.page >= pages - 1, onclick: () => { st.page++; draw(); } }, '▶'));
         body.replaceChildren(
-          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+          h('div', { class: 'hstack wrap' },
             sel(info.langs.map(c => [c, `${LANGS[c] || c} (${c})`]), st.lang, v => { st.lang = v; st.page = 0; draw(); }),
             sel([['all', '모든 분류'], ...info.bundles.map(b => [b, BUNDLES[b] || b])], st.bundle, v => { st.bundle = v; st.page = 0; draw(); }),
             qi,
@@ -96,12 +96,12 @@
           pager(),
           h('div', {}, list.slice(st.page * PER, st.page * PER + PER).map(r => {
             const mine = ov(tgt, r.key), other = tgt === '*' ? ov(st.lang, r.key) : ov('*', r.key);
-            const ta = h('textarea', { rows: Math.min(6, Math.max(1, Math.ceil(r.text.length / 60))), style: { width: '100%' }, placeholder: other !== undefined ? `(${tgt === '*' ? '이 언어에서' : '모든 언어로'} 바꿈: ${other})` : '(게임 원래 글자 그대로)' });
+            const ta = h('textarea', { rows: Math.min(6, Math.max(1, Math.ceil(r.text.length / 60))), class: 'w-full', placeholder: other !== undefined ? `(${tgt === '*' ? '이 언어에서' : '모든 언어로'} 바꿈: ${other})` : '(게임 원래 글자 그대로)' });
             ta.value = mine === undefined ? '' : mine;
             const box = h('div', { style: { borderTop: '1px solid var(--line)', padding: '6px 0', borderLeft: mine !== undefined || other !== undefined ? '3px solid var(--gold, #d9a441)' : '3px solid transparent', paddingLeft: '8px' } });
             const reset = h('button', { class: 'btn xs', style: { display: mine === undefined ? 'none' : '' }, onclick: () => { ta.value = ''; setOv(tgt, r.key, null); reset.style.display = 'none'; box.style.borderLeftColor = other !== undefined ? '' : 'transparent'; } }, '원래대로');
             ta.addEventListener('change', () => { const v = ta.value; if (v === '' || v === r.text) { setOv(tgt, r.key, null); reset.style.display = 'none'; } else { setOv(tgt, r.key, v); reset.style.display = ''; box.style.borderLeftColor = 'var(--gold, #d9a441)'; } });
-            box.append(h('div', { style: { display: 'flex', gap: '8px', alignItems: 'baseline' } }, h('code', { style: { fontSize: '11px', opacity: 0.75, wordBreak: 'break-all' } }, r.key), h('span', { class: 'hint', style: { marginLeft: 'auto', whiteSpace: 'nowrap' } }, (BUNDLES[r.bundle] || r.bundle) + (r.missing ? ' · 번역 없음(영어)' : '')),
+            box.append(h('div', { style: { display: 'flex', gap: '8px', alignItems: 'baseline' } }, h('code', { style: { fontSize: '11px', opacity: 0.75, wordBreak: 'break-all' } }, r.key), h('span', { class: 'hint ml-auto nowrap' }, (BUNDLES[r.bundle] || r.bundle) + (r.missing ? ' · 번역 없음(영어)' : '')),
               h('button', { class: 'btn xs', title: '원문을 입력 칸에 복사', onclick: () => { ta.value = r.text; ta.focus(); } }, '원문 복사'), reset),
               h('div', { style: { fontSize: '12.5px', margin: '3px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }, r.text), ta);
             return box; })),

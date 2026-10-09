@@ -96,7 +96,7 @@ PDM.listOps = function (o) {
         (o.cmdType || o.objType || o.fields) && fx ? h('button', { class: 'btn sm', onclick: () => showUsage(fx.id) }, '쓰는 곳') : null,
         fx ? h('button', { class: 'btn sm', title: '목록에서 앞으로', disabled: i <= 0, onclick: () => move(fx.id, -1) }, '◀') : null,
         fx ? h('button', { class: 'btn sm', title: '목록에서 뒤로', disabled: i < 0 || i >= l.length - 1, onclick: () => move(fx.id, 1) }, '▶') : null,
-        fx ? h('button', { class: 'btn sm danger', style: { marginLeft: 'auto' }, onclick: () => remove(fx.id) }, '삭제') : null,
+        fx ? h('button', { class: 'btn sm danger ml-auto', onclick: () => remove(fx.id) }, '삭제') : null,
         h('span', { class: 'hint', style: { flexBasis: '100%' } }, fx ? `고른 것: ${fx.name || fx.id} (${fx.id}) — 리소스 목록에서 항목을 오른쪽 클릭해도 같은 메뉴가 나옵니다.` : '아직 없습니다. "+ 새로 만들기"로 시작하세요.'));
     }
   };

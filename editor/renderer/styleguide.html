@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PDMaker 디자인 시스템</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="js/theme.js"></script>
+<link rel="stylesheet" href="css/app.css">
+<style>
+  /* 이 페이지 전용 배치 (스타일 가이드 자체) — 토큰만 씀 */
+  html, body { height: auto; overflow: auto; }
+  .sg { max-width: 1080px; margin: 0 auto; padding: var(--sp-10) var(--sp-9) 80px; }
+  .sg-head { display: flex; align-items: center; gap: var(--sp-6); margin-bottom: var(--sp-9); }
+  .sg-head h1 { font-size: var(--fs-2xl); margin: 0; }
+  .sg h2 { font-size: var(--fs-lg); margin: var(--sp-10) 0 var(--sp-2); }
+  .sg h2 + p { color: var(--mute); margin: 0 0 var(--sp-7); max-width: 72ch; line-height: var(--lh-loose); }
+  .sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-4); }
+  .sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--bg2); }
+  .sw i { display: block; height: 44px; border-bottom: 1px solid var(--line); }
+  .sw div { padding: var(--sp-3) var(--sp-4); font-size: var(--fs-xs); }
+  .sw code { font-family: var(--mono); color: var(--fg); }
+  .sg-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+  .sg-demo { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); padding: var(--sp-7); margin-bottom: var(--sp-6); }
+  .sg-scale { display: grid; grid-template-columns: 110px 1fr; gap: var(--sp-3) var(--sp-6); align-items: center; }
+  .sg-scale code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--mute); }
+  .sg-bar { height: 10px; background: var(--accent); border-radius: var(--r-xs); }
+  .sg-ico { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: var(--sp-2); }
+  .sg-ico div { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); padding: var(--sp-4) var(--sp-2); border-radius: var(--r); font-size: var(--fs-2xs); color: var(--mute); text-align: center; word-break: break-all; }
+  .sg-ico div:hover { background: var(--bg3); color: var(--fg); }
+  .sg-shell { display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; height: 260px; }
+  .sg-shell .panel { border-right: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="sg" id="sg"></div>
+<script src="js/util.js"></script>
+<script src="js/icons.js"></script>
+<script>
+(function () {
+  const root = document.getElementById('sg');
+  const cs = getComputedStyle(document.documentElement);
+  const v = n => cs.getPropertyValue(n).trim();
+  const sec = (title, desc, ...kids) => [h('h2', {}, title), desc ? h('p', {}, desc) : null, ...kids];
+  const swatch = (name, note) => h('div', { class: 'sw' }, h('i', { style: { background: `var(${name})` } }), h('div', {}, h('code', {}, name), h('div', { class: 'c-dim' }, note || '')));
+  const themeBtn = (m, label) => h('button', { class: 'btn sm', onclick: () => { window.PDM_THEME ? PDM_THEME.setMode(m) : document.documentElement.dataset.theme = m; setTimeout(draw, 30); } }, label);
+  const logo = () => { const c = h('canvas', { width: 24, height: 24, style: { width: '40px', height: '40px', imageRendering: 'pixelated' } }); const g = c.getContext('2d');
+    ['..aaaa..', '.aabbaa.', 'aabccbaa', '.abccba.', '..bddb..', '..d..d..', '.dd..dd.', '........'].forEach((r, y) => [...r].forEach((ch, x) => { const col = { a: '#6a45d6', b: '#a58bff', c: '#e6b95c', d: '#5fd6b4' }[ch]; if (col) { g.fillStyle = col; g.fillRect(x * 3, y * 3, 3, 3); } })); return c; };
+
+  function draw() {
+    root.innerHTML = '';
+    root.append(
+      h('div', { class: 'sg-head' }, logo(), h('div', { class: 'grow' }, h('h1', {}, 'PDMaker 디자인 시스템'), h('div', { class: 'c-mute' }, '에디터의 모든 화면이 쓰는 토큰 · 컴포넌트 · 아이콘. 문서: docs/UI-DESIGN-SYSTEM.md')),
+        h('div', { class: 'hstack' }, themeBtn('dark', '어둡게'), themeBtn('light', '밝게'), themeBtn('system', '시스템'))),
+
+      ...sec('1. 색 — 표면 · 글자', '표면은 4단계로만 쌓는다: --bg(작업 공간) → --bg2(패널) → --bg3(컨트롤) → --bg4(강한 hover · 선택). 글자 3단계는 모두 패널 바탕에서 4.5:1 이상.',
+        h('div', { class: 'sg-grid' }, swatch('--bg', '작업 공간'), swatch('--bg2', '패널 · 카드'), swatch('--bg3', '입력 칸 · 버튼'), swatch('--bg4', 'hover · 선택'), swatch('--line', '테두리'), swatch('--line-strong', '테두리 (hover)'),
+          swatch('--fg', '본문 글자'), swatch('--mute', '보조 글자'), swatch('--dim', '설명 · 개수'), swatch('--stage', '게임 그림 바탕 (테마 무관)'))),
+      ...sec('2. 색 — 의미', '강조색은 조작 · 선택에만. 상태 색(good · warn · bad · gold · info)은 뜻이 있을 때만 쓰고, 배지 바탕은 *-bg 토큰.',
+        h('div', { class: 'sg-grid' }, swatch('--accent', '강조 (OS 강조색 가능)'), swatch('--accent2', '눌린 버튼 · 메뉴 hover'), swatch('--accent-soft', '선택 바탕'), swatch('--good', '성공 · 실행'), swatch('--warn', '주의'), swatch('--bad', '오류 · 지우기'),
+          swatch('--gold', '저장 안 됨 · 시작'), swatch('--info', '정보'))),
+
+      ...sec('3. 글자', '한 화면에 크기는 3~4개만. 본문 13 · 목록/표 12 · 칸 이름/설명 11.',
+        h('div', { class: 'sg-demo sg-scale' }, ...[['--fs-2xl', '시작 화면 제목'], ['--fs-xl', '화면 제목 (h1)'], ['--fs-lg', '섹션 제목 (h2) · 창 제목'], ['--fs-md', '본문 기본 — 픽셀 던전 메이커'], ['--fs-sm', '표 · 목록 · 작은 버튼 · 코드'], ['--fs-xs', '칸 이름 · 설명 · 패널 제목'], ['--fs-2xs', '배지']]
+          .flatMap(([t, s]) => [h('code', {}, `${t} ${v(t)}`), h('div', { style: { fontSize: `var(${t})` } }, s)]))),
+
+      ...sec('4. 간격 · 모서리 · 높이', '간격은 2px 단위 10단계. 컨트롤(버튼 · 입력 칸 · 고르기)은 모두 같은 높이 --ctl-h(28) — 작은 것은 -sm(24) · -xs(20).',
+        h('div', { class: 'sg-demo sg-scale' }, ...Array.from({ length: 10 }, (_, i) => `--sp-${i + 1}`).flatMap(t => [h('code', {}, `${t} ${v(t)}`), h('div', { class: 'sg-bar', style: { width: `var(${t})` } })])),
+        h('div', { class: 'sg-row' }, ...['--r-xs', '--r-sm', '--r', '--r-lg', '--r-pill'].map(t => h('div', { class: 'vstack items-center' },
+          h('div', { style: { width: '64px', height: '40px', background: 'var(--bg3)', border: '1px solid var(--line-strong)', borderRadius: `var(${t})` } }), h('code', { class: 'fs-xs c-mute' }, t)))),
+        h('div', { class: 'sg-row' }, ...['--ctl-h', '--ctl-h-sm', '--ctl-h-xs', '--row-h', '--bar-h'].map(t => h('span', { class: 'badge' }, `${t} = ${v(t)}`)))),
+
+      ...sec('5. 버튼', '기본 · 주요(.pri) · 테두리 없음(.ghost) · 지우기(.danger) · 추가(.add) · 눌린 토글(.on). 크기 기본 · .sm · .xs.',
+        h('div', { class: 'sg-demo' },
+          h('div', { class: 'sg-row' }, h('button', { class: 'btn' }, '기본'), h('button', { class: 'btn pri' }, PDM.icon('check'), '저장'), h('button', { class: 'btn ghost' }, '취소'),
+            h('button', { class: 'btn danger' }, '삭제'), h('button', { class: 'btn on' }, '켜짐'), h('button', { class: 'btn', disabled: true }, '못 누름'), h('button', { class: 'btn add' }, '+ 새로 추가')),
+          h('div', { class: 'sg-row' }, h('button', { class: 'btn sm' }, '작은 버튼'), h('button', { class: 'btn xs' }, '아주 작은'), h('button', { class: 'ib', title: '아이콘 버튼' }, PDM.icon('pencil')),
+            h('button', { class: 'tb' }, PDM.icon('save', 'tbi'), h('span', {}, '도구 모음')), h('button', { class: 'tb play' }, PDM.icon('play', 'tbi'), h('span', {}, '테스트 플레이')), h('button', { class: 'tb stop icon' }, PDM.icon('stop', 'tbi'))),
+          h('div', { class: 'chips' }, h('span', { class: 'chip on' }, '전체'), h('span', { class: 'chip' }, '무기'), h('span', { class: 'chip' }, '물약'), h('span', { class: 'chip' }, '주문서')))),
+
+      ...sec('6. 입력 칸', '칸 이름(.fl)은 위, 설명(.hint)은 아래. 포커스 = 강조색 테두리 + 옅은 고리.',
+        h('div', { class: 'sg-demo' }, h('div', { class: 'row' },
+          h('label', { class: 'field' }, h('span', { class: 'fl' }, '이름'), h('input', { type: 'text', value: '젯불 지팡이' })),
+          h('label', { class: 'field' }, h('span', { class: 'fl' }, '분류'), h('select', {}, h('option', {}, '무기'), h('option', {}, '물약'))),
+          h('label', { class: 'field' }, h('span', { class: 'fl' }, '티어'), h('input', { type: 'number', value: 2 }), h('span', { class: 'hint' }, '1~5'))),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true }), h('span', {}, '사용 (게임에 나옴)')),
+          h('label', { class: 'field' }, h('span', { class: 'fl' }, '설명'), h('textarea', { rows: 2 }, '끝에 잿불이 맺힌 지팡이.')))),
+
+      ...sec('7. 상자 · 목록 · 배지', null,
+        h('div', { class: 'sec' }, h('div', { class: 'sec-head' }, h('span', { class: 'caret' }, '▾'), '섹션 제목', h('span', { class: 'badge accent ml-auto' }, '3')),
+          h('div', { class: 'sec-body' }, h('div', { class: 'listed' },
+            h('div', { class: 'li' }, h('div', { class: 'li-body' }, h('b', {}, '목록 항목'), h('div', { class: 'hint' }, '설명 글')), h('div', { class: 'li-tools' }, h('button', { class: 'ib' }, '▲'), h('button', { class: 'ib danger' }, '✕'))),
+            h('div', { class: 'li compact' }, h('div', { class: 'li-body' }, '촘촘한 항목 (.compact)'))))),
+        h('div', { class: 'sg-row' }, ...['', 'accent', 'good', 'warn', 'bad', 'gold', 'info'].map(k => h('span', { class: 'badge ' + k }, k || '기본'))),
+        h('div', { class: 'box' }, '테두리 상자 (.box) — 설명이나 묶음')),
+
+      ...sec('8. 셸 · 선택 표시', '선택은 한 가지 언어: 강조색 2px 줄 + --accent-soft 바탕 (리소스 목록 · 이벤트 명령 · 최근 프로젝트). 탭은 위쪽 줄.',
+        h('div', { class: 'sg-shell' },
+          h('div', { class: 'panel' }, h('div', { class: 'panel-title' }, '리소스'),
+            ...[['⚙', '프로젝트 설정'], ['🗺', '맵', 26], ['★', '영웅', 1, true], ['🎁', '아이템', 12], ['🎵', '사운드', 0]].map(([i, l, c, sel]) => h('div', { class: 'tn' + (sel ? ' sel' : '') }, h('span', { class: 'tw' }), h('span', { class: 'ti' }, PDM.iconFor(i)), h('span', { class: 'tl' }, l), c !== undefined ? h('span', { class: 'tc' }, c) : null))),
+          h('div', { style: { background: 'var(--bg)' } }, h('div', { id: 'tabbar', style: { display: 'flex' } },
+            h('div', { class: 'tab' }, h('span', { class: 'ti' }, PDM.iconFor('🗺')), h('span', { class: 'tl' }, '맵 그래프'), h('span', { class: 'x' }, PDM.icon('x'))),
+            h('div', { class: 'tab on' }, h('span', { class: 'ti' }, PDM.iconFor('★')), h('span', { class: 'tl' }, '아리아'), h('span', { class: 'x' }, PDM.icon('x')))),
+            h('div', { class: 'p-5' }, h('div', { class: 'ctx', style: { position: 'static', width: '260px' } },
+              h('div', { class: 'ctx-i' }, '이름 바꾸기', h('small', {}, 'F2')), h('div', { class: 'ctx-i' }, '복제', h('small', {}, 'Ctrl+D')), h('hr'), h('div', { class: 'ctx-i' }, '삭제')))))),
+
+      ...sec('9. 아이콘', '24×24 선 그림 한 벌 (도구 모음 전용 그림 + Lucide 일부). 편집기가 tree/tab 에 적은 이모지 · 기호는 PDM.iconFor 가 같은 SVG 로 바꿔 그린다. 새 아이콘은 js/icons.js 에.',
+        h('div', { class: 'sg-ico' }, ...Object.keys(PDM.icons.TOOL).concat(Object.keys(PDM.icons.LUCIDE)).map(n => h('div', { title: n }, PDM.icon(n, 'lg'), n)))));
+  }
+  draw();
+})();
+</script>
+</body>
+</html>

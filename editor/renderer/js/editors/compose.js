@@ -350,7 +350,7 @@
       const all = list(); ops.take(st);
       if (!all.some(x => x.id === st.id)) st.id = (all[0] || {}).id;
       const idx = all.findIndex(x => x.id === st.id), gr = all[idx];
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      const head = h('div', { class: 'hstack wrap mb-4' },
         all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; st.sel = null; ctx.refresh(); } }, x.name || x.id)));
       const intro = h('p', { class: 'hint' }, '노드를 이어서 배경 · 오브젝트 그림을 만듭니다. 숫자 칸에는 식(t · frame)을 넣어 움직이게 할 수 있고, 프레임 수를 늘리면 스프라이트 시트로 저장됩니다. Ctrl+휠 = 그래프 확대 · Delete = 고른 노드 삭제. 노드 오른쪽 점(출력)을 끌어 다른 노드의 왼쪽 점(입력)에 놓으면 이어지고, "출력" 노드에 이어진 그림이 결과입니다. 결과는 PNG 로 저장해 스프라이트 · 타일셋 · 일러스트로 씁니다.');
       if (!gr) return h('div', { class: 'editor' }, h('h2', {}, '🧩 노드 합성기'), intro, ops.bar(null));
@@ -455,10 +455,10 @@
         else if (kind === 'select') { inp = h('select', {}, Object.entries(opts || {}).map(([v, t]) => h('option', { value: v, selected: v === cur }, t))); inp.onchange = () => setP(k, inp.value); }
         else if (kind === 'effect') { const fl = (store.get('effects') || {}).list || [];
           const s2 = h('select', {}, h('option', { value: '' }, fl.length ? '(고르기)' : '(만든 이펙트가 없습니다)'), fl.map(x => h('option', { value: x.id, selected: x.id === cur }, x.name || x.id))); s2.onchange = () => { setP(k, s2.value); ctx.refresh(); };
-          inp = h('div', { style: { display: 'flex', gap: '4px' } }, s2, cur ? h('button', { class: 'btn sm', title: '이펙트 편집기에서 열기', onclick: e => { e.preventDefault(); if (PDM.effects && PDM.effects.ops) PDM.effects.ops.show(cur); } }, '열기') : null); }
+          inp = h('div', { class: 'flex gap-2' }, s2, cur ? h('button', { class: 'btn sm', title: '이펙트 편집기에서 열기', onclick: e => { e.preventDefault(); if (PDM.effects && PDM.effects.ops) PDM.effects.ops.show(cur); } }, '열기') : null); }
         else if (kind === 'image') { const t = h('input', { type: 'text', value: cur || '', placeholder: 'assets/… 또는 game:sprites/…' }); t.onchange = () => setP(k, t.value.trim());
           inp = h('div', { class: 'imgpick' }, t, h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const r = await PDM.ui.pickImage('sprites'); if (r) { t.value = r; setP(k, r); } } }, '찾기…')); }
-        else if (kind === 'paint') { inp = h('div', {}, h('code', { style: { fontSize: '11px' } }, cur || '(아직 안 그림)'), h('div', { style: { marginTop: '4px' } }, h('button', { class: 'btn sm pri', onclick: async e => { e.preventDefault();
+        else if (kind === 'paint') { inp = h('div', {}, h('code', { class: 'fs-xs' }, cur || '(아직 안 그림)'), h('div', { class: 'mt-2' }, h('button', { class: 'btn sm pri', onclick: async e => { e.preventDefault();
           const rel = cur || `assets/compose/${gr.id}_${sel.id}.png`; const out = await PDM.editPixelsModal('그리기 — ' + gr.name, rel, gr.w, gr.h); if (out) { PDM.assets.invalidate(out); setP(k, out); ctx.refresh(); } } }, '✎ 그리기…'))); }
         else { inp = h('input', { type: 'text', value: cur ?? '' }); inp.onchange = () => setP(k, inp.value); }
         return PDM.ui.field(label, inp); };
@@ -533,13 +533,13 @@
       const side = h('div', { style: { width: '320px', flex: 'none', display: 'flex', flexDirection: 'column', gap: '8px' } },
         h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px', background: 'var(--bg2)' } },
           h('div', { style: { maxHeight: '300px', overflow: 'auto', textAlign: 'center' } }, big), info,
-          h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' } },
+          h('div', { class: 'hstack gap-4 wrap mt-2' },
             (() => { const z = h('input', { type: 'range', min: 1, max: 12, value: st.zoom, style: { width: '90px' }, title: '확대' }); z.oninput = () => { st.zoom = +z.value; recompute(); }; return z; })(),
             nFrames() > 1 ? h('button', { class: 'btn xs', onclick: e => { setPlay(!st.play); e.target.textContent = st.play ? '❚❚' : '▶'; } }, st.play ? '❚❚' : '▶') : null,
             nFrames() > 1 ? (frameIn = (() => { const f = h('input', { type: 'range', min: 0, max: nFrames() - 1, value: st.frame, style: { width: '90px' }, title: '프레임' }); f.oninput = () => { st.frame = +f.value; recompute(); }; return f; })()) : null,
             (() => { const c = h('input', { type: 'checkbox', checked: st.tile }); c.onchange = () => { st.tile = c.checked; recompute(); }; return h('label', { class: 'check', title: '배경 타일이 끊기지 않고 이어지는지 확인' }, c, '이어 붙여 보기'); })())),
         sel ? h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', background: 'var(--bg2)' } },
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, h('b', { style: { flex: 1 } }, ST.name),
+          h('div', { class: 'hstack mb-2' }, h('b', { class: 'grow' }, ST.name),
             sel.type !== 'out' ? h('button', { class: 'btn xs', onclick: () => { const id = nid(); edit('노드 복제', g => { const n = g.nodes.find(x => x.id === st.sel); g.nodes.push(Object.assign(PDM.clone(n), { id, x: n.x + 20, y: n.y + 20 })); }); } }, '복제') : null,
             sel.type !== 'out' ? h('button', { class: 'btn xs danger', onclick: () => { const id = st.sel; st.sel = null; edit('노드 삭제', g => { g.nodes = g.nodes.filter(x => x.id !== id); g.links = g.links.filter(l => l.from !== id && l.to !== id); }); } }, '삭제') : null),
           ST.params.length ? ST.params.map(paramEl) : h('small', { class: 'hint' }, sel.type === 'out' ? '이 노드에 이어진 그림이 결과입니다.' : '정할 값이 없습니다.'))
@@ -549,19 +549,19 @@
           PDM.ui.row(F.text(K, ['list', idx, 'name'], { label: '이름', rerender: true }), F.num(K, ['list', idx, 'w'], { label: '가로 (px)', int: true, min: 1, max: 1024, rerender: true }), F.num(K, ['list', idx, 'h'], { label: '세로 (px)', int: true, min: 1, max: 1024, rerender: true })),
           PDM.ui.row(F.num(K, ['list', idx, 'frames'], { label: '프레임 수 (1 = 정지 그림)', int: true, min: 1, max: 64, def: 1, rerender: true }), F.num(K, ['list', idx, 'fps'], { label: '초당 프레임', int: true, min: 1, max: 60, def: 8, rerender: true }), F.num(K, ['list', idx, 'cols'], { label: '시트 한 줄 칸 수 (0 = 한 줄)', int: true, min: 0, max: 64, def: 0 })),
           F.text(K, ['list', idx, 'out'], { label: '저장할 파일 (프로젝트 안)', placeholder: `assets/compose/${gr.id}.png` }),
-          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' } },
+          h('div', { class: 'flex gap-3 wrap mt-3' },
             h('button', { class: 'btn pri', onclick: savePng }, nFrames() > 1 ? '시트 PNG 로 저장' : 'PNG 로 저장'),
             nFrames() > 1 ? h('button', { class: 'btn', title: '움직이는 그림 한 장 (미리 보기 · 공유용)', onclick: saveApng }, 'APNG 로 저장') : null,
             h('button', { class: 'btn', title: '저장한 뒤 픽셀 편집기로 열어 손으로 다듬습니다', onclick: async () => { await savePng(); const o = await PDM.editPixelsModal('다듬기 — ' + gr.name, outPath(), gr.w, gr.h); if (o) PDM.assets.invalidate(o); } }, '저장하고 다듬기…')),
-          h('div', { class: 'fl', style: { marginTop: '8px' } }, '다른 편집기에 바로 넣기'),
-          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '2px 0 6px' } }, h('button', { class: 'btn sm', onclick: toProp }, '📦 오브젝트 그림으로…'), h('button', { class: 'btn sm', onclick: toItem }, '🎁 아이템 그림으로…'), h('button', { class: 'btn sm', onclick: toTiles }, '▦ 타일셋 칸에…'), h('button', { class: 'btn sm', onclick: toEffect }, '🎇 이펙트 알갱이로…'), h('button', { class: 'btn sm', onclick: toFilter }, '🌧 화면 필터 층으로…')),
+          h('div', { class: 'fl mt-4' }, '다른 편집기에 바로 넣기'),
+          h('div', { class: 'flex gap-3 wrap m-0 mt-1 mb-3' }, h('button', { class: 'btn sm', onclick: toProp }, '📦 오브젝트 그림으로…'), h('button', { class: 'btn sm', onclick: toItem }, '🎁 아이템 그림으로…'), h('button', { class: 'btn sm', onclick: toTiles }, '▦ 타일셋 칸에…'), h('button', { class: 'btn sm', onclick: toEffect }, '🎇 이펙트 알갱이로…'), h('button', { class: 'btn sm', onclick: toFilter }, '🌧 화면 필터 층으로…')),
           h('small', { class: 'hint' }, '저장한 PNG 는 캐릭터 · 오브젝트 · 아이템 그림, 타일셋, 일러스트의 "찾기…"에서 고를 수 있습니다. 그래프를 고친 뒤에는 다시 저장해야 그림이 바뀝니다.')));
-      const palette = h('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-start', margin: '0 0 8px' } },
+      const palette = h('div', { class: 'flex gap-5 items-start wrap m-0 mb-4' },
         Object.entries(cats).map(([c, l]) => h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center' } }, h('span', { class: 'fl', style: { marginRight: '2px' } }, c),
           l.map(([id, T]) => h('button', { class: 'btn xs', title: T.name + ' 노드 추가', onclick: e => addNode(id, e) }, '+ ' + T.name)))));
       recompute(); if (st.play) setPlay(true);
       return h('div', { class: 'editor' }, h('h2', {}, '🧩 노드 합성기'), intro, ops.bar(gr), head, palette,
-        h('div', { style: { display: 'flex', gap: '12px', alignItems: 'flex-start' } }, scroll, side));
+        h('div', { class: 'flex gap-6 items-start' }, scroll, side));
     }
   });
 })();

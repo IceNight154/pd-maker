@@ -73,7 +73,7 @@
       });
       const js = h('select', { title: '조건이 여러 개일 때' }, h('option', { value: '&&', selected: cur.join === '&&' }, '모두 만족 (그리고)'), h('option', { value: '||', selected: cur.join === '||' }, '하나라도 만족 (또는)'));
       js.onchange = () => { cur.join = js.value; commit(buildCond(cur)); };
-      rowsEl.append(h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, h('button', { class: 'btn xs add', onclick: e => { e.preventDefault(); cur.terms.push({ name: '', op: '>=', val: '1' }); draw(); } }, '+ 조건 고르기'), cur.terms.length > 1 ? js : null,
+      rowsEl.append(h('div', { class: 'hstack gap-2' }, h('button', { class: 'btn xs add', onclick: e => { e.preventDefault(); cur.terms.push({ name: '', op: '>=', val: '1' }); draw(); } }, '+ 조건 고르기'), cur.terms.length > 1 ? js : null,
         o.suggest ? h('button', { class: 'btn xs', title: '게임 원래 조건: ' + o.suggest, onclick: e => { e.preventDefault(); cur = parseCond(o.suggest); draw(); commit(o.suggest); } }, '게임 원래 조건 넣기') : null));
     };
     txt.addEventListener('input', check);
@@ -126,7 +126,7 @@
     PDM.assets.invalidate('game:' + SHEET); PDM.assets.invalidate(SHEET_REL); await PDM.assets.scanOverrides();
     return true;
   }
-  const fileCv = (ref, size) => { const c = h('canvas', { width: size, height: size, style: { imageRendering: 'pixelated', flex: 'none' } });
+  const fileCv = (ref, size) => { const c = h('canvas', { width: size, height: size, class: 'pixelated flex-none' });
     PDM.assets.load(ref).then(im => { if (!im) return; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0, im.width, im.height, 0, 0, size, size); }).catch(() => { }); return c; };
   async function scan() {
     const repo = await PDM.app.resolveRepo(true);
@@ -166,7 +166,7 @@
   const OTRIG = { turn: '매 턴 검사', floorEnter: '층(맵)에 들어올 때 검사', mobKilled: '몬스터를 처치했을 때 검사', itemPickup: '아이템을 주웠을 때 검사' };
   const showCode = r => PDM.ui.modal(`얻는 조건 코드 — ${r.title || r.name}`, h('div', { style: { maxHeight: '65vh', overflow: 'auto', minWidth: '640px' } },
     h('p', { class: 'hint' }, `게임 저장소 Badges.java 에서 Badge.${r.name} 이(가) 나오는 메서드입니다. 이 메서드를 게임의 어느 곳에서 부르는지가 "얻는 때"입니다.`),
-    ...[...new Map((r.code || []).map(c => [c.m, c])).values()].map(c => h('div', {}, h('div', { style: { fontWeight: 600, margin: '6px 0 2px' } }, `${c.m}(${c.args})`), h('pre', { style: { fontSize: '11px', background: 'var(--bg2, #f3f1f8)', padding: '8px', borderRadius: '6px', whiteSpace: 'pre-wrap', userSelect: 'text' } }, c.src)))), [['닫기', true, 'pri']]);
+    ...[...new Map((r.code || []).map(c => [c.m, c])).values()].map(c => h('div', {}, h('div', { class: 'm-0 mt-3 mb-1 fw-bold' }, `${c.m}(${c.args})`), h('pre', { style: { fontSize: '11px', background: 'var(--bg2, #f3f1f8)', padding: '8px', borderRadius: '6px', whiteSpace: 'pre-wrap', userSelect: 'text' } }, c.src)))), [['닫기', true, 'pri']]);
   const iconCv = (idx, size, dim) => { const c = h('canvas', { width: size, height: size, style: { imageRendering: 'pixelated', flex: 'none', opacity: dim ? 0.35 : 1 } });
     PDM.assets.load('game:' + SHEET).then(im => { if (!im) return; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, (idx % COLS) * 16, Math.floor(idx / COLS) * 16, 16, 16, 0, 0, size, size); }).catch(() => { }); return c; };
   /** 배지 시트에서 칸 고르기 (원래 배지 · 내 배지가 쓰는 칸 표시) */
@@ -200,7 +200,7 @@
       // ---- 내 배지
       const mine = h('div', {});
       all.forEach((b, i) => { const p = ['list', i];
-        const sb = (label, title, fn, cls) => h('button', { class: 'btn xs' + (cls ? ' ' + cls : ''), title, style: { width: '100%' }, onclick: async e => { e.preventDefault(); await fn(); } }, label);
+        const sb = (label, title, fn, cls) => h('button', { class: 'btn xs w-full' + (cls ? ' ' + cls : ''), title, onclick: async e => { e.preventDefault(); await fn(); } }, label);
         const setB = (lbl, fn) => store.edit(K, lbl, r => fn(r.list[i]));
         const iconBtn = h('div', { style: { display: 'grid', gap: '3px', width: '104px' } },
           h('div', { style: { display: 'flex', justifyContent: 'center', padding: '4px', background: '#222', borderRadius: '6px', cursor: 'pointer' }, title: '두 번 누르면 그림 편집', ondblclick: () => editIcon() }, b.image ? fileCv(b.image, 48) : iconCv(b.icon | 0, 48)),
@@ -224,13 +224,13 @@
           setB('배지 그림 (다른 이름으로 저장)', x => { x.image = out; });
         }
         mine.append(h('div', { id: 'badge-' + b.id, style: { border: '1px solid ' + (st.id === b.id ? 'var(--acc, #a58bff)' : 'var(--line)'), borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', display: 'flex', gap: '10px', alignItems: 'flex-start' } },
-          h('div', { style: { flex: 'none', textAlign: 'center' } }, iconBtn),
-          h('div', { style: { flex: 1 } },
+          h('div', { class: 'flex-none ta-center' }, iconBtn),
+          h('div', { class: 'grow' },
             row(F.text(K, [...p, 'name'], { label: `이름 (id: ${b.id})`, rerender: true }), F.text(K, [...p, 'desc'], { label: '설명 (얻는 방법)' })),
             row(F.select(K, [...p, 'trigger'], TRIGGERS, { label: '얻는 때', rerender: true }),
               b.trigger && b.trigger !== 'manual' ? h('div', { class: 'field' }, h('span', { class: 'fl' }, '얻는 조건 — 목록에서 고르거나 아래 칸에 직접 입력 (참이면 얻음)'), condEditor(b.cond, v => store.edit(K, '배지 조건', r => { r.list[i].cond = v; }, { silent: true }))) : h('div', { class: 'field' }, h('span', { class: 'fl' }, '얻는 조건'), h('div', { class: 'hint' }, '이벤트의 "배지 주기" 명령으로 줍니다 (이벤트의 조건 · 분기를 그대로 쓸 수 있음).'))),
             row(F.ref(K, [...p, 'event'], 'event', { label: '얻었을 때 실행할 이벤트 (선택)', empty: '(없음)' }), F.bool(K, [...p, 'hidden'], { label: '얻기 전에는 이름 · 설명을 숨김 (???)' })),
-            h('div', { style: { display: 'flex', gap: '6px' } }, h('button', { class: 'btn xs', onclick: () => ops.rename(b.id) }, 'id 바꾸기'), h('button', { class: 'btn xs', onclick: () => ops.dup(b.id) }, '복제'),
+            h('div', { class: 'flex gap-3' }, h('button', { class: 'btn xs', onclick: () => ops.rename(b.id) }, 'id 바꾸기'), h('button', { class: 'btn xs', onclick: () => ops.dup(b.id) }, '복제'),
               h('button', { class: 'btn xs', disabled: i === 0, onclick: () => ops.move(b.id, -1) }, '↑'), h('button', { class: 'btn xs', disabled: i === all.length - 1, onclick: () => ops.move(b.id, 1) }, '↓'),
               h('button', { class: 'btn xs danger', onclick: () => ops.remove(b.id) }, '삭제')))));
       });
@@ -249,7 +249,7 @@
           const sel = h('select', {}, ...Object.entries(MODES).map(([k, v]) => h('option', { value: k, selected: (o.mode || '') === k }, v)));
           sel.onchange = () => setOrig(r.name, x => { x.mode = sel.value; if (sel.value === 'custom') { x.trigger = x.trigger || 'turn'; if (!x.cond) x.cond = r.suggest || ''; } }, true);
           const td = h('td', {},
-            h('div', { style: { display: 'flex', gap: '4px', alignItems: 'flex-start' } },
+            h('div', { class: 'flex gap-2 items-start' },
               h('code', { style: { fontSize: '10px', flex: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-all', opacity: o.mode ? 0.45 : 1, textDecoration: o.mode ? 'line-through' : 'none' } }, r.main ? `${r.main.m}(): ${r.main.text}` : '(Badges.java 에서 조건 줄을 찾지 못함)'),
               r.code && r.code.length ? h('button', { class: 'btn xs', title: '이 배지의 조건 코드 전체 보기', onclick: () => showCode(r) }, '코드') : null),
             sel);
@@ -267,8 +267,8 @@
           ic.onclick = async () => { const x = await editCell(r.icon, `배지 그림 편집 — ${r.title || r.name}`, r.key); if (x && x.file) toast('새 파일로 저장했습니다: ' + x.file + ' (게임 원래 배지는 시트의 칸을 씁니다)'); if (x) ctx.refresh(); };
           const imp = h('button', { class: 'btn xs', title: 'PNG 파일을 이 칸에 넣기', onclick: async () => { if (await importCell(r.icon)) ctx.refresh(); } }, '불러오기');
           tb.append(h('tr', {}, h('td', {}, ic, imp), h('td', {}, ti, h('div', { class: 'hint' }, r.title)), h('td', {}, di, h('div', { class: 'hint' }, r.desc)), condCell(r, og[r.name] || {}),
-            h('td', {}, h('div', { class: 'hint' }, TYPES[r.type] || r.type), h('code', { style: { fontSize: '10px' } }, r.name), h('div', { class: 'hint' }, `${r.icon}번 칸`)))); });
-        orig.append(h('div', { class: 'hint', style: { marginBottom: '4px' } }, `${show.length} / ${rows.length}개`), tb);
+            h('td', {}, h('div', { class: 'hint' }, TYPES[r.type] || r.type), h('code', { class: 'fs-2xs' }, r.name), h('div', { class: 'hint' }, `${r.icon}번 칸`)))); });
+        orig.append(h('div', { class: 'hint mb-2' }, `${show.length} / ${rows.length}개`), tb);
       };
       scan().then(rows => { q.oninput = () => { st.q = q.value; fill(rows); }; fill(rows); });
       return h('div', { class: 'page' }, h('h1', {}, '🏅 업적 (배지)'),
@@ -281,7 +281,7 @@
           h('div', { class: 'spr-grid' }, PDM.sprites && PDM.sprites.gameCard ? [PDM.sprites.gameCard(SHEET, '배지 그림 시트'), PDM.sprites.gameCard('interfaces/locked_badge.png', '잠긴 배지 그림')] : h('p', { class: 'hint' }, '그림 관리 화면에서 interfaces/badges.png 를 고치세요.'))),
         section('게임 원래 배지',
           h('p', { class: 'hint' }, '게임 저장소에서 읽은 실제 목록입니다. 이름 · 설명 칸에 적으면 모든 언어에서 그 글로 바뀝니다 (게임 텍스트에 저장). "얻는 조건" 칸에는 게임 코드(Badges.java)의 실제 조건 줄이 나옵니다 — "코드"로 메서드 전체를 볼 수 있고, "내 조건식으로 바꾸기"를 고르면 게임 원래 조건 대신 내 조건식이 참일 때 얻습니다 (게임 통계는 stat.이름 — 예: stat.enemiesSlain, stat.goldCollected, stat.foodEaten · 그 밖에 hero.lvl, hero.str, gold, depth, switch.x, var.x, badge.이름). 조건을 바꾸면 설명 글도 맞게 고쳐 주세요.'),
-          h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' } }, q,
+          h('div', { class: 'hstack gap-4 mb-3' }, q,
             (() => { const c = h('input', { type: 'checkbox', checked: st.only }); c.onchange = () => { st.only = c.checked; ctx.refresh(); }; return h('label', { class: 'check' }, c, '고친 것만'); })()),
           orig));
     }

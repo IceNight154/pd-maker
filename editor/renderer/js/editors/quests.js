@@ -40,7 +40,7 @@
       const cards = all.map((q, qi) => {
         const P = ['list', qi], open = st.id === q.id;
         const ed = (lbl, fn, rr) => store.edit(K, lbl, r => fn(r.list[qi]), rr === false ? { silent: true } : undefined);
-        const head = h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' }, onclick: () => { st.id = open ? null : q.id; ctx.refresh(); } },
+        const head = h('div', { class: 'hstack gap-4 pointer', onclick: () => { st.id = open ? null : q.id; ctx.refresh(); } },
           h('span', {}, open ? '▾' : '▸'), h('b', {}, q.name || q.id), h('span', { class: 'hint mono' }, q.id),
           h('span', { class: 'hint' }, `${q.giver ? '주는 캐릭터: ' + PDM.refName('char', q.giver) : '이벤트 명령으로 수주'} · 목표 ${(q.objectives || []).length}개` + (q.auto ? ' · 자동 완료' : '') + (q.repeat ? ' · 반복' : '')));
         if (!open) return h('div', { id: 'quest-' + q.id, style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px' } }, head);
@@ -57,41 +57,41 @@
           else { const t = h('input', { type: 'text', class: 'mono', value: o.cond || '', placeholder: '예: switch.boss_down · var.herbs>=5 · hero.lvl>=5', style: { flex: '2 1 160px', minWidth: 0 } }); const m = h('small', { class: 'hint' });
             const chk = () => { const e = PDM.Cond && PDM.Cond.check ? PDM.Cond.check(t.value) : ''; m.textContent = e ? '⚠ ' + e : ''; }; t.oninput = chk; t.onchange = () => eo(x => { x.cond = t.value.trim(); }, false); chk(); target = [t, m]; }
           const tx = h('input', { type: 'text', value: o.text || '', placeholder: '목표 글 (비우면 자동: "○○ 처치" 등)', style: { flex: '2 1 140px', minWidth: 0 } }); tx.onchange = () => eo(x => { x.text = tx.value; }, false);
-          return h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '4px' } },
+          return h('div', { class: 'hstack gap-2 wrap mb-2' },
             sel(Object.entries(OBJ), o.type, v => eo(x => { x.type = v; x.target = ''; }), { flex: '0 0 150px' }), ...target,
             o.type === 'kill' || o.type === 'collect' ? h('span', { class: 'hint' }, '×') : null, o.type === 'kill' || o.type === 'collect' ? num(o.count ?? 1, v => eo(x => { x.count = v; }, false), 1, 56) : null,
             tx, h('button', { class: 'btn xs', title: '이 목표 빼기', onclick: () => ed('목표 삭제', x => { x.objectives.splice(oi, 1); }) }, '×'));
         });
         // ---- 보상 아이템
         const rw = q.rewards || {};
-        const ritems = (rw.items || []).map((e, ei) => h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px' } },
+        const ritems = (rw.items || []).map((e, ei) => h('div', { class: 'hstack gap-2 mb-2' },
           itemInput(e.item, v => ed('보상 아이템', x => { x.rewards.items[ei].item = v; }, false)), h('span', { class: 'hint' }, '×'), num(e.count ?? 1, v => ed('보상 개수', x => { x.rewards.items[ei].count = v; }, false), 1, 56),
           h('button', { class: 'btn xs', onclick: () => ed('보상 아이템 삭제', x => { x.rewards.items.splice(ei, 1); }) }, '×')));
         return h('div', { id: 'quest-' + q.id, style: { border: '1px solid var(--acc, #a58bff)', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px' } }, head,
-          h('div', { style: { marginTop: '8px' } },
+          h('div', { class: 'mt-4' },
             row(F.text(K, [...P, 'name'], { label: '이름', rerender: true }), F.ref(K, [...P, 'giver'], 'char', { label: '주는 캐릭터 (말을 걸면 수주 창)', empty: '(없음 — 이벤트 명령으로만)', rerender: true }),
               F.ref(K, [...P, 'turnIn'], 'char', { label: '보고할 캐릭터', empty: '(주는 캐릭터와 같음)' })),
             F.textarea(K, [...P, 'desc'], { label: '설명 (수주 창에 나오는 글)', rows: 3 }),
             F.cond(K, [...P, 'cond'], { label: '받을 수 있는 조건 (비우면 언제나)', placeholder: '예: hero.lvl>=3 && quest.q1.done' }),
-            h('div', { class: 'fl', style: { marginTop: '6px' } }, '목표 (모두 채우면 달성)'), ...objs,
+            h('div', { class: 'fl mt-3' }, '목표 (모두 채우면 달성)'), ...objs,
             h('button', { class: 'btn xs add', onclick: () => ed('목표 추가', x => { x.objectives = x.objectives || []; x.objectives.push({ type: 'kill', target: '', count: 1, text: '' }); }) }, '+ 목표 추가'),
-            h('div', { class: 'fl', style: { marginTop: '10px' } }, '보상'),
+            h('div', { class: 'fl mt-5' }, '보상'),
             row(F.num(K, [...P, 'rewards', 'gold'], { label: '금화', int: true, min: 0, def: 0 }), F.num(K, [...P, 'rewards', 'exp'], { label: '경험치', int: true, min: 0, def: 0 })),
             ...ritems, h('button', { class: 'btn xs add', onclick: () => ed('보상 아이템 추가', x => { x.rewards = x.rewards || {}; x.rewards.items = x.rewards.items || []; x.rewards.items.push({ item: '', count: 1 }); }) }, '+ 보상 아이템 추가'),
-            h('div', { class: 'fl', style: { marginTop: '10px' } }, '진행'),
+            h('div', { class: 'fl mt-5' }, '진행'),
             row(F.bool(K, [...P, 'auto'], { label: '목표를 채우면 바로 완료 (보고 없이 보상)', rerender: true }), F.bool(K, [...P, 'repeat'], { label: '완료한 뒤에도 다시 받을 수 있음', rerender: true }),
               F.bool(K, [...P, 'remind'], { label: '진행 중에 주는 캐릭터에게 말을 걸면 진행 상황 창', def: true })),
             (() => { const mv = q.move || {}; const on = h('input', { type: 'checkbox', checked: !!mv.on });
               on.onchange = () => ed('완료하면 이주', x => { x.move = Object.assign({ char: '', node: '', x: 0, y: 0 }, x.move || {}, { on: on.checked }); });
               return h('div', { style: { border: '1px dashed var(--line)', borderRadius: '6px', padding: '6px 8px', margin: '6px 0' } },
-                h('label', { class: 'check' }, on, h('b', {}, '완료하면 NPC 이주'), h('span', { class: 'hint', style: { marginLeft: '6px' } }, '퀘스트를 완료하는 순간 캐릭터가 지정한 맵의 지정한 칸으로 옮겨 가서 삽니다')),
+                h('label', { class: 'check' }, on, h('b', {}, '완료하면 NPC 이주'), h('span', { class: 'hint ml-3' }, '퀘스트를 완료하는 순간 캐릭터가 지정한 맵의 지정한 칸으로 옮겨 가서 삽니다')),
                 mv.on ? row(F.ref(K, [...P, 'move', 'char'], 'char', { label: '이주할 캐릭터', empty: '(주는 캐릭터)' }), F.ref(K, [...P, 'move', 'node'], 'node', { label: '이주할 맵', empty: '(맵 고르기 — 비우면 사라짐)' }),
                   F.num(K, [...P, 'move', 'x'], { label: 'x', int: true, min: 0, def: 0 }), F.num(K, [...P, 'move', 'y'], { label: 'y', int: true, min: 0, def: 0 }),
                   h('div', { class: 'field' }, h('span', { class: 'fl' }, ' '), h('button', { class: 'btn sm', onclick: async () => { const r = await PDM.pickCell({ node: mv.node, x: mv.x, y: mv.y, title: 'NPC 가 살 칸 고르기' }); if (r) ed('이주할 칸', x => { x.move.node = r.node; x.move.x = Math.max(0, r.x); x.move.y = Math.max(0, r.y); }); } }, '🗺 맵에서 고르기…'))) : null,
                 mv.on ? h('div', { class: 'hint' }, '"맵에서 고르기"로 맵의 타일과 놓인 것들을 보면서 칸을 고를 수 있습니다 (좌표는 왼쪽 위가 0, 0). 그 칸이 막혀 있으면 바로 옆 칸이나 입구 근처에 섭니다. 원래 놓여 있던 맵에서는 사라집니다. 이벤트에서 하려면 명령 "NPC 이주"를 쓰세요.') : null); })(),
             row(F.ref(K, [...P, 'acceptEvent'], 'event', { label: '수락했을 때 실행할 이벤트 (선택)', empty: '(없음)' }), F.ref(K, [...P, 'doneEvent'], 'event', { label: '완료했을 때 실행할 이벤트 (선택)', empty: '(없음)' })),
             h('div', { class: 'hint' }, `조건식: quest.${q.id} (0 없음 · 1 진행 중 · 2 목표 달성 · 3 완료) · quest.${q.id}.active · quest.${q.id}.ready · quest.${q.id}.done`),
-            h('div', { style: { display: 'flex', gap: '6px', marginTop: '6px' } }, h('button', { class: 'btn xs', onclick: () => ops.rename(q.id) }, 'id 바꾸기'), h('button', { class: 'btn xs', onclick: () => ops.dup(q.id) }, '복제'),
+            h('div', { class: 'flex gap-3 mt-3' }, h('button', { class: 'btn xs', onclick: () => ops.rename(q.id) }, 'id 바꾸기'), h('button', { class: 'btn xs', onclick: () => ops.dup(q.id) }, '복제'),
               h('button', { class: 'btn xs', disabled: qi === 0, onclick: () => ops.move(q.id, -1) }, '↑'), h('button', { class: 'btn xs', disabled: qi === all.length - 1, onclick: () => ops.move(q.id, 1) }, '↓'),
               h('button', { class: 'btn xs danger', onclick: () => ops.remove(q.id) }, '삭제'))));
       });

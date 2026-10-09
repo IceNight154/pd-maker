@@ -17,7 +17,7 @@
     <div id="toolbar"></div>
   </header>
   <div id="work">
-    <aside id="tree" class="panel"><div class="panel-title">리소스<button class="ib" id="treeCollapse" title="모두 접기">⊟</button></div><div id="treeSearch" style="padding:4px 6px;border-bottom:1px solid var(--line)"></div><div id="treeBody"></div></aside>
+    <aside id="tree" class="panel"><div class="panel-title">리소스<button class="ib" id="treeCollapse" title="모두 접기" aria-label="모두 접기">⊟</button></div><div id="treeSearch"></div><div id="treeBody"></div></aside>
     <div class="split-v" data-target="tree"></div>
     <main id="center">
       <div id="tabbar"></div>
@@ -28,7 +28,7 @@
   </div>
   <div class="split-h"></div>
   <footer id="bottom" class="panel">
-    <div class="panel-title"><span class="btab on" data-b="log">출력</span><span class="btab" data-b="check">검사</span><span class="grow"></span><button class="ib" id="logClear" title="지우기">⌫</button></div>
+    <div class="panel-title"><span class="btab on" data-b="log">출력</span><span class="btab" data-b="check">검사</span><span class="grow"></span><button class="ib" id="logClear" title="지우기" aria-label="출력 지우기">⌫</button></div>
     <div id="logBody" class="bbody"></div>
     <div id="checkBody" class="bbody" hidden></div>
   </footer>
@@ -36,6 +36,7 @@
 </div>
 
 <script src="js/util.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/bridge.js"></script>
 <script src="js/terms.js"></script>
 <script src="js/cond.js"></script>

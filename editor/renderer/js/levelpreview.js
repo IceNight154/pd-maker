@@ -64,7 +64,7 @@
     addEventListener('mouseup', () => { pan = null; box.style.cursor = 'grab'; });
     box.style.cursor = 'grab';
     const el = h('div', { class: 'lp-panel', style: { position: 'relative', flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: '6px', width: 'min(30vw, 420px)', minWidth: '200px', height: '70vh' } },
-      h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } }, h('b', {}, '실시간 미리보기'), sel, zoom),
+      h('div', { class: 'hstack wrap' }, h('b', {}, '실시간 미리보기'), sel, zoom),
       list.length ? box : h('div', { class: 'empty' }, '층 표본이 없습니다'),
       h('div', { class: 'hint' }, '게임이 실제로 만든 층을 지금 고치는 타일셋으로 그립니다 (벽 이어 붙이기 · 입체 벽 · 문 · 장식 포함). 그리는 즉시 바뀌고, 끌어서 이동합니다. 층 구조는 표본이라 게임에서는 매번 다르게 만들어집니다.'));
     // 크기 조절: 왼쪽 가장자리를 끌면 너비, 왼쪽 아래 모서리를 끌면 너비 · 높이 (두 번 누르면 처음 크기)

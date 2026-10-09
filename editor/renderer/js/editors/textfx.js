@@ -437,7 +437,7 @@ ${o.css || ''}`;
       ops.take(st);
       if (!all.some(x => x.id === st.id)) st.id = (all[0] || {}).id;
       const idx = all.findIndex(x => x.id === st.id), raw = all[idx], p = ['list', idx];
-      const head = h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '8px' } },
+      const head = h('div', { class: 'hstack wrap mb-4' },
         all.map(x => h('button', { class: 'btn sm' + (x.id === st.id ? ' pri' : ''), onclick: () => { st.id = x.id; ctx.refresh(); } }, `${x.name || x.id}${x.sheet ? '' : ' ·'}`)));
       if (!raw) return h('div', { class: 'editor' }, h('h2', {}, '글자 연출 (APNG)'),
         h('p', { class: 'hint' }, '"전투 개시" 같은 컷인 글자, 장소·시간 자막, 예고편 글자를 CSS 애니메이션으로 만들어 APNG 로 저장합니다. 이벤트 명령 "글자 연출 표시"로 게임 화면에 띄울 수 있습니다.'), ops.bar(null));
@@ -449,9 +449,9 @@ ${o.css || ''}`;
       const S = (f, label, opts) => { const s = h('select', { onchange: () => patch(label, { [f]: /^(true|false)$/.test(s.value) ? s.value === 'true' : isFinite(+s.value) && s.value !== '' && typeof DEF[f] === 'number' ? +s.value : s.value }) }, (Array.isArray(opts) ? opts : Object.entries(opts)).map(([v, t]) => h('option', { value: v }, t))); s.value = String(fx[f]); return PDM.ui.field(label, s); };
       const B = (f, label) => { const c = h('input', { type: 'checkbox', checked: !!fx[f], onchange: () => patch(label, { [f]: c.checked }) }); return h('label', { class: 'check', style: { alignSelf: 'flex-end', marginBottom: '6px' } }, c, label); };
       const C = (f, label, allowNone) => { const cur = fx[f] || '', c = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#000000', style: { width: '40px', padding: 0 } }); c.addEventListener('change', () => patch(label, { [f]: c.value }));
-        return PDM.ui.field(label, h('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, c, h('code', { style: { fontSize: '11px' } }, cur || '안 씀'), allowNone && cur ? h('button', { class: 'ib', title: '안 쓰기', onclick: () => patch(label, { [f]: '' }) }, '✕') : null)); };
-      const seg = (f, label, opts) => PDM.ui.field(label, h('div', { style: { display: 'flex', gap: '2px', flexWrap: 'wrap' } }, Object.entries(opts).map(([v, t]) => h('button', { class: 'btn xs' + (String(fx[f]) === v ? ' pri' : ''), onclick: () => patch(label, { [f]: /^(true|false)$/.test(v) ? v === 'true' : v }) }, t))));
-      const chips = (f, label, opts) => h('div', { style: { margin: '4px 0 8px' } }, h('div', { class: 'fl' }, label), h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginTop: '3px' } }, Object.entries(opts).map(([v, t]) => h('button', { class: 'btn xs' + (fx[f] === v ? ' pri' : ''), onclick: () => patch(label, { [f]: v }) }, t))));
+        return PDM.ui.field(label, h('div', { class: 'hstack gap-2' }, c, h('code', { class: 'fs-xs' }, cur || '안 씀'), allowNone && cur ? h('button', { class: 'ib', title: '안 쓰기', onclick: () => patch(label, { [f]: '' }) }, '✕') : null)); };
+      const seg = (f, label, opts) => PDM.ui.field(label, h('div', { class: 'flex gap-1 wrap' }, Object.entries(opts).map(([v, t]) => h('button', { class: 'btn xs' + (String(fx[f]) === v ? ' pri' : ''), onclick: () => patch(label, { [f]: /^(true|false)$/.test(v) ? v === 'true' : v }) }, t))));
+      const chips = (f, label, opts) => h('div', { class: 'm-0 mt-2 mb-4' }, h('div', { class: 'fl' }, label), h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginTop: '3px' } }, Object.entries(opts).map(([v, t]) => h('button', { class: 'btn xs' + (fx[f] === v ? ' pri' : ''), onclick: () => patch(label, { [f]: v }) }, t))));
       const H3 = t => h('h4', { style: { margin: '12px 0 4px', borderBottom: '1px solid var(--line)', paddingBottom: '2px' } }, t);
 
       // ---- 미리보기 (멈춘 애니메이션을 직접 시각으로 돌림 → 일시 정지 · 타임라인)
@@ -478,19 +478,19 @@ ${o.css || ''}`;
         lastNow = performance.now(); raf = requestAnimationFrame(tick);
       }, 0);
       const bar = h('div', { style: { height: '4px', background: 'var(--line)', borderRadius: '2px', marginTop: '6px', display: 'none' } }, h('div', { style: { height: '100%', width: '0', background: 'var(--accent, #7a5cff)', borderRadius: '2px' } }));
-      const result = h('div', { class: 'hint', style: { marginTop: '6px' } }, raw.sheet ? `게임용 시트: ${raw.sheet.png} (${raw.sheet.frames}프레임 · ${raw.sheet.w}×${raw.sheet.h}px) · APNG: ${raw.apng || ''}` : '아직 게임용으로 만들지 않았습니다 — "APNG 내보내기"를 눌러야 게임에서 쓸 수 있습니다. 설정을 바꾼 뒤에도 다시 눌러 주세요.');
-      const out = h('div', { style: { marginTop: '6px' } });
+      const result = h('div', { class: 'hint mt-3' }, raw.sheet ? `게임용 시트: ${raw.sheet.png} (${raw.sheet.frames}프레임 · ${raw.sheet.w}×${raw.sheet.h}px) · APNG: ${raw.apng || ''}` : '아직 게임용으로 만들지 않았습니다 — "APNG 내보내기"를 눌러야 게임에서 쓸 수 있습니다. 설정을 바꾼 뒤에도 다시 눌러 주세요.');
+      const out = h('div', { class: 'mt-3' });
       let cancelled = false;
       const run = async (fn, btns) => {
         btns.forEach(b => { b.disabled = true; }); bar.style.display = ''; cancelled = false; stopBtn.style.display = '';
         try {
           const r = await fn(raw, f => { bar.firstChild.style.width = Math.round(f * 100) + '%'; }, () => cancelled);
-          out.replaceChildren(h('div', { class: 'hint' }, `저장했습니다 — ${r.n}프레임 · ${r.w}×${r.h}px${r.bytes ? ' · ' + (r.bytes / 1024).toFixed(0) + 'KB' : ''} → ${r.rel}`), r.warn ? h('div', { class: 'hint', style: { color: 'var(--bad)' } }, r.warn) : '',
+          out.replaceChildren(h('div', { class: 'hint' }, `저장했습니다 — ${r.n}프레임 · ${r.w}×${r.h}px${r.bytes ? ' · ' + (r.bytes / 1024).toFixed(0) + 'KB' : ''} → ${r.rel}`), r.warn ? h('div', { class: 'hint c-bad' }, r.warn) : '',
             r.url ? h('img', { src: r.url, style: { maxWidth: '100%', marginTop: '4px', background: st.bg === 'check' ? CHECK : st.bg === 'image' ? '#222' : st.bg } }) : '',
-            pdm.showInFolder ? h('div', {}, h('button', { class: 'btn sm', style: { marginTop: '4px' }, onclick: () => pdm.showInFolder(pdm.join(store.root, r.rel)).catch(e => PDM.log(e.message, 'err')) }, '파일 위치 열기')) : '');
+            pdm.showInFolder ? h('div', {}, h('button', { class: 'btn sm mt-2', onclick: () => pdm.showInFolder(pdm.join(store.root, r.rel)).catch(e => PDM.log(e.message, 'err')) }, '파일 위치 열기')) : '');
           PDM.log && PDM.log(`글자 연출 「${fx.name}」 저장: ${r.rel}` + (r.sheet ? ` · ${r.sheet.png}` : ''), r.warn ? 'err' : 'ok');
           if (r.sheet) result.textContent = `게임용 시트: ${r.sheet.png} (${r.sheet.frames}프레임 · ${r.sheet.w}×${r.sheet.h}px) · APNG: ${r.rel}`;
-        } catch (e) { out.replaceChildren(h('div', { class: 'hint', style: { color: 'var(--bad)' } }, '만들지 못했습니다: ' + e.message)); console.error(e); }
+        } catch (e) { out.replaceChildren(h('div', { class: 'hint c-bad' }, '만들지 못했습니다: ' + e.message)); console.error(e); }
         btns.forEach(b => { b.disabled = false; }); bar.style.display = 'none'; stopBtn.style.display = 'none';
       };
       const stopBtn = h('button', { class: 'btn sm', style: { display: 'none' }, onclick: () => { cancelled = true; } }, '중지');
@@ -510,7 +510,7 @@ ${o.css || ''}`;
           row(N('wrap', '자동 줄바꿈 (한 줄 최대 글자 수, 0 = 안 함)', 0, 60, 1), B('pages', '빈 줄에서 쪽 나누기'), B('shrink', '넘칠 경우 자동으로 축소'))),
         font: () => h('div', {},
           row(S('font', '글꼴', FONTS), S('weight', '굵기', [[400, '400 (Regular)'], [700, '700 (Bold)'], [900, '900 (Black)']]), B('italic', '기울임꼴')),
-          fx.font === 'file' || fx.subFont === 'file' ? h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '4px 0 8px' } },
+          fx.font === 'file' || fx.subFont === 'file' ? h('div', { class: 'hstack m-0 mt-2 mb-4' },
             h('button', { class: 'btn sm', onclick: async () => { const src = await pdm.openFile('글꼴 파일 선택', ['ttf', 'otf', 'woff', 'woff2']); if (!src) return; const rel = 'assets/fonts/' + pdm.basename(src); try { await pdm.copy(src, pdm.join(store.root, rel)); patch('글꼴 파일', { fontFile: rel }); } catch (e) { PDM.log(e.message, 'err'); } } }, '＋ 글꼴 파일 등록 (TTF / OTF / WOFF)…'),
             h('span', { class: 'hint' }, fx.fontFile || '아직 고르지 않았습니다 — 쓸 수 있는 글꼴 파일인지 라이선스를 확인하세요')) : null,
           row(N('size', '글자 크기 (px)', 12, 400, 1), N('spacing', '자간 (px)', -20, 120, 1), N('lineH', '행간', 0.9, 3.2, 0.05)),
@@ -535,7 +535,7 @@ ${o.css || ''}`;
           row(S('subIn', '서브 텍스트 등장', SUBIN), N('subDelay', '서브 등장 (메인 등장 완료 후 시간차)', -2, 2, 0.05), N('pre', '시작 전 공백 (초)', 0, 3, 0.05), N('post', '종료 후 공백 (초)', 0, 5, 0.05)),
           h('p', { class: 'hint' }, '"(전체)"가 붙은 등장·퇴장은 글자 전체가 한 덩어리로 움직입니다. 쪽이 여러 개면 쪽마다 등장 → 표시 → 퇴장을 차례로 합니다.')),
         style: () => h('div', {},
-          h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '6px' } }, h('span', { class: 'hint', style: { alignSelf: 'center' } }, '프리셋:'), Object.entries(STYLES).map(([n, o]) => h('button', { class: 'btn xs', onclick: () => patch('꾸밈 프리셋: ' + n, o) }, n))),
+          h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '6px' } }, h('span', { class: 'hint self-center' }, '프리셋:'), Object.entries(STYLES).map(([n, o]) => h('button', { class: 'btn xs', onclick: () => patch('꾸밈 프리셋: ' + n, o) }, n))),
           H3('글자 채우기'),
           row(seg('fill', '채우기', { solid: '단색', grad: '그라데이션' }), C('color', '색'), fx.fill === 'grad' ? C('color2', '색 2') : null, fx.fill === 'grad' ? C('color3', '색 3', true) : null,
             fx.fill === 'grad' ? seg('gradDir', '방향', { v: '세로 (한 줄마다)', h: '가로 (전체)', d: '대각선 (전체)' }) : null, N('fillOp', '채우기 불투명도', 0, 1, 0.01)),
@@ -562,19 +562,19 @@ ${o.css || ''}`;
             N('padX', '좌우 여백', 0, 400, 1), N('padY', '상하 여백', 0, 400, 1), N('offX', '가로 미세 조정', -800, 800, 1), N('offY', '세로 미세 조정', -800, 800, 1))),
         css: () => h('div', {},
           h('p', { class: 'hint' }, '위 설정으로 만든 CSS 뒤에 덧붙습니다. 구조: .stage › .bg · .anchor › .fit › .page › .wrap(표시 중 효과) › .block(장식 = ::before) › .sub · .text › .glowbox › .line › .ch(글자 하나, --i 순번 · --n 그 줄 글자 수) › .chi. 전체 길이 var(--t). @keyframes 와 ::before/::after 도 쓸 수 있고, 바깥 그림·웹 글꼴(url)은 쓸 수 없습니다.'),
-          (() => { const ta = h('textarea', { rows: 8, class: 'mono', style: { width: '100%' }, placeholder: '예)\n.chi{animation:wv 0.8s ease-in-out infinite;animation-delay:calc(var(--i) * 0.08s)}\n@keyframes wv{50%{transform:translateY(-18%)}}' });
+          (() => { const ta = h('textarea', { rows: 8, class: 'mono w-full', placeholder: '예)\n.chi{animation:wv 0.8s ease-in-out infinite;animation-delay:calc(var(--i) * 0.08s)}\n@keyframes wv{50%{transform:translateY(-18%)}}' });
             ta.value = fx.css || ''; ta.addEventListener('change', () => PDM.ui.commit(K, [...p, 'css'], ta.value, 'CSS', true)); return ta; })(),
           h('details', {}, h('summary', { class: 'hint' }, '지금 만들어진 CSS · HTML 보기'), h('pre', { class: 'mono', style: { whiteSpace: 'pre-wrap', fontSize: '11px', wordBreak: 'break-all' } }, (() => { const b = build(raw, ''); return b.css.trim() + '\n\n' + b.html; })())))
       };
       return h('div', { class: 'editor' },
         h('h2', {}, '글자 연출 (APNG)'), head, ops.bar(raw),
         h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '6px 8px', marginBottom: '8px' } },
-          h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center' } }, h('b', { style: { fontSize: '12px', marginRight: '4px' } }, '템플릿'),
+          h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center' } }, h('b', { class: 'mr-2 fs-sm' }, '템플릿'),
             Object.keys(TEMPLATES).map(g => h('button', { class: 'btn xs' + (st.tg === g ? ' pri' : ''), onclick: () => { st.tg = g; ctx.refresh(); } }, g)),
-            h('button', { class: 'btn xs', style: { marginLeft: 'auto' }, title: '이름·id 만 남기고 모든 설정을 처음 값으로', onclick: async () => { if (await PDM.ui.confirm('이 글자 연출의 설정을 처음 값으로 되돌릴까요?')) store.edit(K, '초기화', r => { const c = r.list[idx]; r.list[idx] = Object.assign(make(c.id), { name: c.name }); }); } }, '↺ 초기화')),
+            h('button', { class: 'btn xs ml-auto', title: '이름·id 만 남기고 모든 설정을 처음 값으로', onclick: async () => { if (await PDM.ui.confirm('이 글자 연출의 설정을 처음 값으로 되돌릴까요?')) store.edit(K, '초기화', r => { const c = r.list[idx]; r.list[idx] = Object.assign(make(c.id), { name: c.name }); }); } }, '↺ 초기화')),
           h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginTop: '4px' } }, (TEMPLATES[st.tg] || []).map(([n, o]) => h('button', { class: 'btn sm', title: '지금 연출에 이 템플릿을 적용', onclick: () => store.edit(K, '템플릿: ' + n, r => { const c = r.list[idx]; r.list[idx] = Object.assign(make(c.id), o, { name: /^새 글자 연출/.test(c.name || '') ? n : c.name, fileName: c.fileName || '' }); }) }, n)))),
         h('div', {}, pv),
-        h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '6px' } },
+        h('div', { class: 'hstack wrap mt-3' },
           playBtn, h('button', { class: 'btn sm', title: '처음부터', onclick: () => { t = 0; st.play = true; playBtn.textContent = '❚❚'; } }, '⟲'), tl, tlab,
           h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.repeat !== false, onchange: e => { st.repeat = e.target.checked; } }), '반복 재생'),
           (() => { const s = h('select', { onchange: async () => { if (s.value === 'image') { const f = await pdm.openFile('미리보기 배경 이미지', ['png', 'jpg', 'jpeg', 'webp']); if (!f) { s.value = st.bg; return; } try { st.bgImg = await pdm.readDataURL(f); } catch (e) { PDM.log(e.message, 'err'); return; } } st.bg = s.value; ctx.refresh(); } }, Object.entries(BGS).map(([v, tt]) => h('option', { value: v }, '배경: ' + tt))); s.value = st.bg; return s; })(),
@@ -586,7 +586,7 @@ ${o.css || ''}`;
             PDM.ui.field('루프', (() => { const s = h('select', { onchange: () => patch('루프', { loop: s.value === 'once' ? 1 : s.value === 'inf' ? 0 : Math.max(2, num(fx.loop, 3) > 1 ? fx.loop : 3) }) }, [['once', '1회 재생 (마지막 상태에서 정지)'], ['inf', '계속 반복'], ['count', '횟수 지정']].map(([v, tt]) => h('option', { value: v }, tt))); s.value = num(fx.loop, 1) === 0 ? 'inf' : num(fx.loop, 1) === 1 ? 'once' : 'count'; return s; })()),
             num(fx.loop, 1) > 1 ? N('loop', '횟수', 2, 999, 1) : null,
             F.text(K, [...p, 'fileName'], { label: '파일 이름 (비우면 id)', placeholder: fx.id }), B('crop', '투명한 여백을 자동으로 잘라내기')),
-          h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '6px' } }, bApng, bStill, bZip, stopBtn),
+          h('div', { class: 'hstack wrap mt-3' }, bApng, bStill, bZip, stopBtn),
           h('p', { class: 'hint' }, '파일은 프로젝트의 assets/fx 폴더에 저장됩니다. 게임에서는 이벤트 명령 "글자 연출 표시"로 한 번 재생하고 사라집니다 (게임은 APNG 대신 함께 저장되는 프레임 시트를 씁니다). 배경을 넣었거나 여백 자르기를 끄면 이미지 전체 크기로 저장됩니다.'),
           bar, result, out));
     }

@@ -80,7 +80,7 @@
             const who = c.speaker ? PDM.refName('character', c.speaker) : '';
             const img = c.illust || (c.speaker && c.speaker !== '$hero' ? portraitOf(c.speaker, c.face) : null);
             if (img) await setIllust(9, img, 'right', 2);
-            box.hidden = false; box.replaceChildren(who ? h('b', {}, who + (c.face ? ` (${c.face})` : '')) : '', h('div', { style: { whiteSpace: 'pre-wrap' } }, c.text || ''));
+            box.hidden = false; box.replaceChildren(who ? h('b', {}, who + (c.face ? ` (${c.face})` : '')) : '', h('div', { class: 'pre-wrap' }, c.text || ''));
             await click(); break;
           }
           case 'choice': {
@@ -115,7 +115,7 @@
       }
       return 'done';
     }
-    const done = PDM.ui.modal('장면 미리보기 — ' + ev.name, h('div', {}, stage, h('div', { class: 'hint', style: { margin: '6px 0' } }, '화면을 클릭하면 대사가 넘어갑니다. 게임 데이터(수치 변경, 이동 등)는 기록만 됩니다.'), logEl), [['닫기', null]]);
+    const done = PDM.ui.modal('장면 미리보기 — ' + ev.name, h('div', {}, stage, h('div', { class: 'hint my-3' }, '화면을 클릭하면 대사가 넘어갑니다. 게임 데이터(수치 변경, 이동 등)는 기록만 됩니다.'), logEl), [['닫기', null]]);
     done.then(() => { closed = true; });
     const res = await run(ev.pages[0].commands);
     if (!closed) { box.hidden = false; box.replaceChildren(h('i', {}, res === 'stop' ? '— 이벤트 중지 —' : '— 끝 —')); }
@@ -172,7 +172,7 @@
       // ---- 페이지 설정 (RPG Maker 의 이벤트 에디터처럼: 왼쪽 = 조건 · 이미지 · 자율 이동 · 옵션 · 발동, 오른쪽 = 실행 내용)
       const cd = pg.conds || {}, mv = pg.move || {}, op = pg.opts || {}, gr = pg.graphic || {};
       const setIn = (path, v, label) => store.edit(key, label || '페이지 설정', r => { const p = r.pages[pi]; let o = p; for (let k = 0; k < path.length - 1; k++) o = o[path[k]] = (o[path[k]] && typeof o[path[k]] === 'object' && !Array.isArray(o[path[k]])) ? o[path[k]] : {}; if (v === undefined) delete o[path[path.length - 1]]; else o[path[path.length - 1]] = v; });
-      const sel = (opts, cur, on, o = {}) => { const s2 = h('select', { disabled: !!o.disabled, style: { flex: 1, minWidth: 0 } }, o.empty ? h('option', { value: '' }, o.empty) : null, opts.map(([v, t]) => h('option', { value: v, selected: String(v) === String(cur ?? '') }, t))); s2.onchange = () => on(s2.value); return s2; };
+      const sel = (opts, cur, on, o = {}) => { const s2 = h('select', { disabled: !!o.disabled, class: 'grow min-0' }, o.empty ? h('option', { value: '' }, o.empty) : null, opts.map(([v, t]) => h('option', { value: v, selected: String(v) === String(cur ?? '') }, t))); s2.onchange = () => on(s2.value); return s2; };
       const story = store.get('story') || {};
       const swOpts = (story.switches || []).map(x => [x.id, x.name ? `${x.name} (${x.id})` : x.id]), varOpts = (story.variables || []).map(x => [x.id, x.name ? `${x.name} (${x.id})` : x.id]);
       const itemOpts = store.all('item').map(x => [x.id, x.name || x.id]), heroOpts = store.all('hero').filter(x => x.enabled !== false).map(x => [x.id, x.name || x.id]), charOpts = store.all('char').map(x => [x.id, `${x.name || x.id}`]);
@@ -181,8 +181,8 @@
         const cb = h('input', { type: 'checkbox', checked: on }); cb.onchange = () => { if (cb.checked && !opts.length) { cb.checked = false; toast(label + ': 고를 것이 없습니다 — 먼저 만들어 주세요', 'bad'); return; } setIn(['conds', k], cb.checked ? opts[0][0] : undefined, '출현 조건'); };
         return h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('label', { class: 'check', style: { width: '92px', flex: 'none' } }, cb, label),
           sel(opts, cd[k], v => setIn(['conds', k], v, '출현 조건'), { disabled: !on }), extra ? extra(on) : null); };
-      const panel = (title, ...kids) => h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', background: 'var(--bg2)' } }, h('div', { style: { fontWeight: 600, marginBottom: '4px' } }, title), ...kids);
-      const varMin = on => { const i = h('input', { type: 'number', value: cd.varMin ?? 0, disabled: !on || PDM.varTypeOf(cd.var) !== 'number', style: { width: '64px' }, title: '숫자 변수: 이 값 이상 · 참/거짓 변수: 참일 때 · 문자열 변수: 비어 있지 않을 때' }); i.onchange = () => setIn(['conds', 'varMin'], parseInt(i.value, 10) || 0, '출현 조건'); return h('span', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, '≥', i); };
+      const panel = (title, ...kids) => h('div', { style: { border: '1px solid var(--line)', borderRadius: '8px', padding: '8px 10px', background: 'var(--bg2)' } }, h('div', { class: 'mb-2 fw-bold' }, title), ...kids);
+      const varMin = on => { const i = h('input', { type: 'number', value: cd.varMin ?? 0, disabled: !on || PDM.varTypeOf(cd.var) !== 'number', style: { width: '64px' }, title: '숫자 변수: 이 값 이상 · 참/거짓 변수: 참일 때 · 문자열 변수: 비어 있지 않을 때' }); i.onchange = () => setIn(['conds', 'varMin'], parseInt(i.value, 10) || 0, '출현 조건'); return h('span', { class: 'hstack gap-2' }, '≥', i); };
       const gch = gr.char && store.has('char:' + gr.char) ? store.get('char:' + gr.char) : null;
       const gcv = h('canvas', { width: 64, height: 64, class: 'checker', style: { imageRendering: 'pixelated', borderRadius: '4px', flex: 'none' } });
       if (gch && gch.sprite && gch.sprite.sheet) PDM.assets.load(gch.sprite.sheet).then(im => { if (!im) return; const fw = (gch.sprite.frame || [16, 16])[0], fh = (gch.sprite.frame || [16, 16])[1], z = Math.max(1, Math.floor(Math.min(64 / fw, 64 / fh))); const g2 = gcv.getContext('2d'); g2.imageSmoothingEnabled = false; g2.drawImage(im, 0, 0, fw, fh, (64 - fw * z) / 2, (64 - fh * z) / 2, fw * z, fh * z); }).catch(() => {});
@@ -193,8 +193,8 @@
           condRow('셀프 스위치', 'self', [['A', 'A'], ['B', 'B'], ['C', 'C'], ['D', 'D']]), condRow('아이템', 'item', itemOpts), condRow('영웅', 'hero', heroOpts),
           F.cond(key, [...P, 'cond'], { label: '조건식 (선택 — 위 조건과 함께 모두 만족해야 함)', hint: '예: switch.bridge_fixed && self.A' })),
         panel('이미지',
-          h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, gcv,
-            h('div', { style: { flex: 1, minWidth: 0 } }, sel(charOpts, gr.char, v => setIn(['graphic', 'char'], v || undefined, '페이지 이미지'), { empty: '(없음 — 보이지 않음)' }),
+          h('div', { class: 'hstack gap-4' }, gcv,
+            h('div', { class: 'grow min-0' }, sel(charOpts, gr.char, v => setIn(['graphic', 'char'], v || undefined, '페이지 이미지'), { empty: '(없음 — 보이지 않음)' }),
               h('small', { class: 'hint' }, '캐릭터의 그림을 씁니다. 맵 편집기에서 이 이벤트를 "이벤트" 오브젝트로 놓으면 이 모습으로 나타나고, 페이지가 바뀌면 그림도 바뀝니다. 이미지가 없는 페이지에서는 사라집니다.')))),
         panel('자율 이동',
           h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', margin: '3px 0' } }, h('span', { style: { width: '48px' } }, '유형:'), sel([['fixed', '고정'], ['random', '랜덤'], ['approach', '접근 (영웅에게)'], ['custom', '사용자 지정']], mv.type || 'fixed', v => setIn(['move', 'type'], v, '자율 이동')),
@@ -214,7 +214,7 @@
           h('small', { class: 'hint' }, TRIG_HINT[pg.trigger || 'action'] || '')));
 
       return h('div', { class: 'page' },
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, h('h1', { style: { flex: 1 } }, `${KIND_ICON[ev.kind] || ''} ${ev.name}`),
+        h('div', { class: 'hstack gap-5' }, h('h1', { class: 'grow' }, `${KIND_ICON[ev.kind] || ''} ${ev.name}`),
           h('button', { class: 'btn pri', onclick: () => preview(ev) }, '▶ 미리보기')),
         section('기본',
           row(F.text(key, ['name'], { label: '이름', rerender: true }), F.select(key, ['kind'], PDM.EVENT_KINDS, { label: '종류' })),
@@ -222,8 +222,8 @@
           F.textarea(key, ['note'], { label: '메모', rows: 2 })),
         h('p', { class: 'hint' }, '페이지는 번호가 큰 것부터 조건을 검사해서, 처음 맞는 페이지 하나만 동작합니다 (RPG Maker 와 같음).'),
         pageTabs,
-        h('div', { style: { display: 'flex', gap: '12px', alignItems: 'flex-start', marginTop: '8px' } }, left,
-          h('div', { style: { flex: 1, minWidth: 0 } }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
+        h('div', { class: 'flex gap-6 items-start mt-4' }, left,
+          h('div', { class: 'grow min-0' }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
     }
   });
   PDM.events = { newEvent };

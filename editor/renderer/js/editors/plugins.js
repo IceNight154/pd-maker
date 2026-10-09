@@ -23,7 +23,7 @@ PDM.registerEditor({
         const loaded = PDM.registry.loadedPlugins.some(x => x.id === m.id);
         const c = m.contributes || {};
         body.append(h('div', { class: 'sec' }, h('div', { class: 'sec-body', style: { paddingTop: '12px' } },
-          h('div', { style: { display: 'flex', gap: '10px', alignItems: 'center' } },
+          h('div', { class: 'hstack gap-5' },
             h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: on, onchange: e => store.edit('project', '플러그인 ' + (e.target.checked ? '켜기' : '끄기'), r => {
               r.plugins = r.plugins || []; if (e.target.checked) { if (!r.plugins.includes(m.id)) r.plugins.push(m.id); } else r.plugins = r.plugins.filter(x => x !== m.id);
             }) }), h('b', {}, m.name || m.id)),
@@ -41,9 +41,9 @@ PDM.registerEditor({
             m.runtime ? [h('b', {}, '게임 쪽'), h('span', { class: 'mono' }, `${m.runtime.jar || ''} ${m.runtime.entry || ''}`)] : null,
             h('b', {}, '위치'), h('span', { class: 'mono hint' }, m.__dir)))));
       });
-      body.append(h('div', { style: { marginTop: '10px' } },
+      body.append(h('div', { class: 'mt-5' },
         h('button', { class: 'btn', onclick: async () => { await PDM.app.saveAll(); PDM.app.loadProject(store.root); } }, '저장하고 프로젝트 다시 열기'),
-        h('button', { class: 'btn', style: { marginLeft: '6px' }, onclick: () => PDM.ui.modal('플러그인 만들기', h('pre', { class: 'mono', style: { whiteSpace: 'pre-wrap' } },
+        h('button', { class: 'btn', style: { marginLeft: '6px' }, onclick: () => PDM.ui.modal('플러그인 만들기', h('pre', { class: 'mono pre-wrap' },
 `plugins/my-plugin/plugin.json
 {
   "id": "my-plugin", "name": "내 플러그인", "version": "0.1.0",
