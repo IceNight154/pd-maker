@@ -57,6 +57,7 @@ PDM.defaults = {
       indicator: { show: true, color: '#8a82a8', image: '', anim: 'bob' },
       choice: { pos: 'middle', width: 0.42, fontSize: 0, textColor: '', textOnColor: '', image: '', imageOn: '', slice: 4 },
       sounds: { open: '', type: '', next: '', move: '', select: '' },
+      text: { autoScale: true, scaleMax: 2, scale: 1, lineSpacing: 0, shadow: false, shadowColor: '#000000', shadowX: 0.5, shadowY: 0.5, outline: false, outlineColor: '#000000', outlineWidth: 0.5, bold: false },
       layout: { enabled: false } };
   },
   /** 게임 아이템 바꾸기 (아이템 트리의 ▫ 게임 아이템 → 그림) — { items: { 'spd:<경로>': { sprite } } } */

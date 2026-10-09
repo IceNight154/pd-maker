@@ -661,12 +661,15 @@ CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부�
   "typing": { "speed": 40, "sound": "" }, "indicator": { "show": true, "image": "", "anim": "bob|blink|none" },
   "choice": { "pos": "middle", "width": 0.42, "image": "", "imageOn": "", "slice": 4 },
   "sounds": { "open": "", "type": "", "next": "", "move": "", "select": "" },
+  "text": { "autoScale": true, "scaleMax": 2, "scale": 1, "lineSpacing": 0, "bold": false, "outline": false, "outlineColor": "#000000", "outlineWidth": 0.5,
+            "shadow": false, "shadowColor": "#000000", "shadowX": 0.5, "shadowY": 0.5 },
   "layout": { "enabled": false, "box": {…}, "text": {…}, "name": {…}, "illust": {…}, "choices": {…}, "indicator": {…} } }
 ```
 
 - 크기 단위 = 게임 화면 픽셀(16:9 에서 높이 약 270). 일러스트 높이 = 화면 높이 × `illust.height` × 캐릭터 `portrait.scale`. 큰 그림은 LINEAR 로 부드럽게(`smooth`).
 - 화자: 캐릭터 id → 그 캐릭터의 초상화(표정 키 → 표정 그림), `$hero` → 영웅의 `character`. 대사 명령: 화자 · 표정 · 이번만 다른 일러스트 · 위치 · 이름 바꾸기(???) · `_강조_`. "표정 바꾸기" 이후 표정을 적지 않은 대사는 그 표정.
 - 대사 바로 뒤의 선택지는 대사창을 띄운 채로. 조작: 누르기 · Enter · Space · Z = 넘김, ↑↓ · 숫자 = 선택지. 캐릭터에게 말을 걸 때의 메뉴(`HeartMenu`)도 같은 방식.
+- **글자 크기 · 스타일** (`text`): 글자 배율 = (`autoScale` 이면 min(화면 가로/300, 세로/190) — 세로 화면 150×260 기준, 1 ~ `scaleMax`) × `scale`, 대사 · 이름표 · 선택지 글자 크기에 곱함(런타임 `MakerDialogue.textScale` · 편집기 `textScale` 같은 계산). PC 는 게임이 보통 3배 확대라 큰 창일수록 화면 단위가 넓어져 글자가 작아 보였음 → 1280×720 ×1.26, 1080p ×1.89. `lineSpacing` = 줄마다 더하는 px(`TypeText.layout` 뒤에 줄을 내림). 외곽선(8방향) · 그림자 · 굵게 = 같은 글을 옮겨 겹친 사본(`deco`, 글자 나오기도 함께) — 외곽선 · 그림자 사본은 단색 실루엣(`silhouette`: 곱하기 0 + 더하기 색, 게임 글꼴의 검은 테두리까지 그 색)이라 테두리 바깥에 보임. 거리는 실제 화면 한 픽셀 단위로 맞춤(`px`).
 - `hideHud`: 대사창 · 선택지가 떠 있는 동안 게임 UI 를 숨기고 마지막 창이 닫히고 0.15초 뒤 되돌림(화면 필터 · 일러스트 층은 그대로).
 - **레이아웃 직접 편집** (`layout.js PDM.layoutEditor`): 미리보기에서 영역을 끌기 · 모서리로 크기 · 새로 그리기 — 화면 비율 0~1. 타이틀의 로고 · 버튼 영역도 같은 방식.
 - "일러스트 표시/숨김" 명령(번호 1~8 · 왼쪽 · 가운데 · 오른쪽 · 전체 화면 · 페이드)은 `MakerStage` 층(게임 화면 위, 대사창 아래).

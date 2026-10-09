@@ -186,6 +186,13 @@ public class Hooks {
 					rm.play(); System.out.println("[TEST] rawmusic " + p[1] + " playing=" + rm.isPlaying());
 					break;
 				}
+				case "dlgtest": { // dlgtest,<글 — | 는 줄바꿈> — 대사창을 바로 띄움 (글자 크기 · 스타일 확인)
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Line dl = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.line("", "", "", code.substring(8).replace("|", "\n"));
+					dl.name = "테스트";
+					com.watabou.noosa.Game.scene().addToFront(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd(dl, null, null));   // 게임 화면 밖(타이틀)에서도
+					break;
+				}
 				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
 					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
 					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
