@@ -185,7 +185,7 @@ public class Hooks {
 					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
 					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
 					Object pl = fpl.get(com.watabou.noosa.audio.Music.INSTANCE);
-					System.out.println("[TEST] bgmtest " + (p.length > 1 ? p[1] : "") + " player=" + (pl == null ? "null" : pl.getClass().getSimpleName()) + " playing=" + (pl != null && ((com.badlogic.gdx.audio.Music) pl).isPlaying()) + " enabled=" + com.watabou.noosa.audio.Music.INSTANCE.isEnabled() + " current=" + ((java.util.function.Supplier<Object>) () -> { try { java.lang.reflect.Field fc = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.class.getDeclaredField("current"); fc.setAccessible(true); return fc.get(null); } catch (Exception e) { return e; } }).get());
+					System.out.println("[TEST] bgmtest " + (p.length > 1 ? p[1] : "") + " player=" + (pl == null ? "null" : pl.getClass().getSimpleName()) + " playing=" + (pl != null && ((com.badlogic.gdx.audio.Music) pl).isPlaying()) + " enabled=" + com.watabou.noosa.audio.Music.INSTANCE.isEnabled() + " alFormat=" + (pl == null ? "-" : String.valueOf(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.getField(pl, "format"))) + " current=" + ((java.util.function.Supplier<Object>) () -> { try { java.lang.reflect.Field fc = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.class.getDeclaredField("current"); fc.setAccessible(true); return fc.get(null); } catch (Exception e) { return e; } }).get());
 					break;
 				}
 				case "paneavatar": { // 상태 창 초상화의 실제 자리 — 가운데가 칸 가운데(bg.x+15, bg.y+16)와 같아야 함

@@ -145,19 +145,26 @@ PDM.audio = (function () {
     }
     return null;
   }
-  /** 게임(libGDX)이 읽을 수 있는 WAV 인지: PCM 8 · 16비트, 1 · 2채널만 (24비트 · 32비트 float · 확장 형식은 "Error reading WAV file" 로 재생 안 됨) */
-  const wavOk = i => !i || (i.format === 1 && (i.bits === 8 || i.bits === 16) && i.channels >= 1 && i.channels <= 2);
+  /** 게임(OpenAL)이 그대로 트는 채널 수: 모노 · 스테레오 · 4채널 · 5.1 · 6.1 · 7.1 (런타임 MakerWav.keepable 과 같음) */
+  const keepCh = n => [1, 2, 4, 6, 7, 8].includes(n);
+  /** 게임(libGDX)이 읽을 수 있는 WAV 인지: 보통 머리(형식 1)의 PCM 8 · 16비트 (24비트 · 32비트 float · 확장 머리는 "Error reading WAV file" 로 재생 안 됨) */
+  const wavOk = i => !i || (i.format === 1 && (i.bits === 8 || i.bits === 16) && keepCh(i.channels));
   const wavDesc = i => i ? `${i.format === 3 ? '32비트 float' : i.format === 0xFFFE ? '확장 형식 ' + i.bits + '비트' : i.bits + '비트'} · ${i.channels}채널 · ${i.rate}Hz` : '';
   /** WAV 파일을 게임이 읽는 16비트 PCM 으로 (그 자리에 덮어씀). → { changed, from } */
   async function fixWav(absPath) {
     if (!/\.wav$/i.test(absPath)) return { changed: false };
     const d = await pdm.readDataURL(absPath), info = wavInfo(d);
     if (wavOk(info)) return { changed: false, info };
-    const buf = await dataToBuffer(d);
+    // 원래 샘플레이트 그대로 풀기 (보통 AudioContext 는 장치 샘플레이트로 바꿔 버림)
+    let buf;
+    try { const bin = atob(d.split(',')[1]), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      buf = await new OfflineAudioContext(Math.max(1, info.channels), 1, info.rate).decodeAudioData(u.buffer); }
+    catch (_) { buf = await dataToBuffer(d); }
     let ch = channelsOf(buf);
-    if (ch.length > 2) {   // 여러 채널(5.1: FL FR FC LFE BL BR) → 스테레오 (가운데 · 뒤 0.707, LFE 뺌) — 런타임 MakerWav 와 같은 계산
-      const z = new Float32Array(ch[0].length), C = ch[2] || z, BL = ch[4] || z, BR = ch[5] || z;
-      ch = [ch[0].map((v, i) => (v + C[i] * 0.707 + BL[i] * 0.707) / 2.414), ch[1].map((v, i) => (v + C[i] * 0.707 + BR[i] * 0.707) / 2.414)];
+    if (!keepCh(ch.length)) {   // OpenAL 이 못 트는 채널 수(3 · 5 …)만 스테레오로 — 5.1 · 7.1 등은 채널 그대로 16비트로
+      const n = ch.length, k = 1 / (1 + 0.707 * (n - 2) / 2 + 0.707), L = ch[0].slice(), R = ch[1].slice();
+      for (let c = 2; c < n; c++) for (let i = 0; i < L.length; i++) { const v = ch[c][i] * 0.707; if (c === 2) { L[i] += v; R[i] += v; } else if (c % 2 === 0) L[i] += v; else R[i] += v; }
+      ch = [L.map(v => v * k), R.map(v => v * k)];
     }
     await pdm.writeDataURL(absPath, encodeWav(ch, buf.sampleRate));
     invalidate(absPath);

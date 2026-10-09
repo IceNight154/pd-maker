@@ -61,7 +61,7 @@
       const info = PDM.audio.wavInfo(d);
       if (PDM.audio.wavOk(info)) return;
       box.append(h('div', { style: { margin: '6px 0', padding: '8px 10px', border: '1px solid var(--warn, #c9a227)', borderRadius: '6px' } },
-        h('b', {}, '⚠ 게임에서 재생되지 않는 WAV'), ' ', h('span', { class: 'hint' }, `${PDM.audio.wavDesc(info)} — 게임은 16비트(또는 8비트) PCM · 1~2채널 WAV 만 읽습니다 (ogg · mp3 는 상관없음). 테스트 플레이 · 내보내기 때도 자동으로 바꿉니다.`), ' ',
+        h('b', {}, '⚠ 게임에서 재생되지 않는 WAV'), ' ', h('span', { class: 'hint' }, `${PDM.audio.wavDesc(info)} — 게임은 16비트(또는 8비트) PCM WAV 만 읽습니다 (채널은 모노 · 스테레오 · 5.1 · 7.1 등 그대로 가능) (ogg · mp3 는 상관없음). 테스트 플레이 · 내보내기 때도 자동으로 바꿉니다.`), ' ',
         h('button', { class: 'btn xs pri', onclick: async () => { try { const r = await PDM.audio.fixWav(store.abs(e.file)); if (r.changed) { toast(`16비트 WAV 로 바꿨습니다 (${r.from} →)`, 'ok'); PDM.tabs.refresh && PDM.tabs.refresh(); } } catch (err) { toast('변환 실패: ' + (err.message || err), 'bad'); } } }, '16비트로 바꾸기')));
     }).catch(() => {});
     return box;

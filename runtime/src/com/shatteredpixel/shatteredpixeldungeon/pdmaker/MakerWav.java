@@ -1,8 +1,9 @@
 /*
- * PDMaker — 게임(libGDX)이 못 읽는 WAV 를 읽을 수 있게: libGDX 는 16비트(또는 8비트) PCM · 1~2채널만 읽음.
- *   24비트 · 32비트 정수 · 32/64비트 float · 확장 형식(WAVE_FORMAT_EXTENSIBLE) · 3채널 이상(5.1 등)은 "Error reading WAV file".
- *   그런 파일은 한 번 16비트 스테레오(또는 모노)로 바꿔 임시 폴더에 두고 그것을 씀 (원본 파일은 그대로).
- *   여러 채널은 스테레오로 섞음 (5.1 순서 FL FR FC LFE BL BR — 가운데 · 뒤는 0.707, LFE 는 뺌).
+ * PDMaker — 게임(libGDX)이 못 읽는 WAV 를 읽을 수 있게: libGDX 의 WAV 읽기는 16비트(또는 8비트) PCM · 보통 머리(형식 1)만 읽음.
+ *   24비트 · 32비트 정수 · 32/64비트 float · 확장 머리(WAVE_FORMAT_EXTENSIBLE — 24비트 · 5.1 파일은 보통 이것)는 "Error reading WAV file".
+ *   그런 파일은 한 번 16비트 PCM(보통 머리)으로 바꿔 임시 폴더에 두고 그것을 씀 (원본 파일은 그대로).
+ *   채널은 그대로 둠 — OpenAL 이 모노 · 스테레오 · 4채널 · 5.1 · 6.1 · 7.1 을 재생 (스피커가 적으면 OpenAL 이 알아서 섞음).
+ *   그 밖의 채널 수(3 · 5 …)만 스테레오로 섞음.
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
@@ -53,13 +54,13 @@ public class MakerWav {
 				fmt = in.getShort(o + 8) & 0xFFFF; ch = in.getShort(o + 10) & 0xFFFF; rate = in.getInt(o + 12); bits = in.getShort(o + 22) & 0xFFFF;
 				if (fmt == 0xFFFE && size >= 40) fmt = in.getShort(o + 8 + 24) & 0xFFFF;   // 확장 형식: 하위 형식 GUID 의 앞 2바이트 (1 = PCM, 3 = float)
 				else if (fmt == 0xFFFE) fmt = 1;
-				if ((in.getShort(o + 8) & 0xFFFF) == 1 && (bits == 8 || bits == 16) && ch >= 1 && ch <= 2) return null;   // 그대로 읽힘
+				if ((in.getShort(o + 8) & 0xFFFF) == 1 && (bits == 8 || bits == 16) && keepable(ch)) return null;   // 그대로 읽힘
 			} else if (id.equals("data")) { dataOff = o + 8; dataLen = Math.min(size, b.length - dataOff); break; }
 			o += 8 + size + (size & 1);
 		}
 		if (fmt < 0 || dataOff < 0 || ch <= 0 || bits <= 0) return null;
 		if (fmt != 1 && fmt != 3) return null;   // ADPCM 등은 모름 — 원본 그대로 (게임이 오류를 냄)
-		int bps = bits / 8, frames = dataLen / (bps * ch), outCh = ch >= 2 ? 2 : 1;
+		int bps = bits / 8, frames = dataLen / (bps * ch), outCh = keepable(ch) ? ch : 2;
 		float[] fr = new float[ch];
 		ByteBuffer out = ByteBuffer.allocate(44 + frames * outCh * 2).order(ByteOrder.LITTLE_ENDIAN);
 		out.put("RIFF".getBytes()).putInt(36 + frames * outCh * 2).put("WAVE".getBytes()).put("fmt ".getBytes()).putInt(16)
@@ -68,15 +69,12 @@ public class MakerWav {
 		for (int i = 0; i < frames; i++) {
 			int base = dataOff + i * bps * ch;
 			for (int c = 0; c < ch; c++) fr[c] = sample(in, b, base + c * bps, bits, fmt);
-			float l, r;
-			if (ch == 1) { l = r = fr[0]; }
-			else if (ch == 2) { l = fr[0]; r = fr[1]; }
-			else {   // FL FR FC LFE BL BR (SL SR …)
-				float c = ch > 2 ? fr[2] * 0.707f : 0f, bl = ch > 4 ? fr[4] * 0.707f : 0f, br = ch > 5 ? fr[5] * 0.707f : 0f;
-				l = (fr[0] + c + bl) / 2.414f; r = (fr[1] + c + br) / 2.414f;
-			}
-			out.putShort(s16(l));
-			if (outCh == 2) out.putShort(s16(r));
+			if (outCh == ch) { for (int c = 0; c < ch; c++) out.putShort(s16(fr[c])); continue; }   // 채널 그대로
+			// OpenAL 이 못 트는 채널 수 → 스테레오 (FL FR FC … — 가운데 · 나머지는 0.707)
+			float l = fr[0], r = ch > 1 ? fr[1] : fr[0];
+			for (int c = 2; c < ch; c++) { float v = fr[c] * 0.707f; if (c == 2) { l += v; r += v; } else if (c % 2 == 0) l += v; else r += v; }
+			float k = 1f / (1f + 0.707f * (ch - 2) / 2f + 0.707f);
+			out.putShort(s16(l * k)); out.putShort(s16(r * k));
 		}
 		return out.array();
 	}
@@ -90,6 +88,8 @@ public class MakerWav {
 			default: return 0f;
 		}
 	}
+	/** OpenAL(libGDX 1.12+) 이 그대로 트는 채널 수: 모노 · 스테레오 · 4채널 · 5.1 · 6.1 · 7.1 */
+	static boolean keepable(int ch) { return ch == 1 || ch == 2 || ch == 4 || ch == 6 || ch == 7 || ch == 8; }
 	private static short s16(float v) { v = Math.max(-1f, Math.min(1f, v)); return (short) (v < 0 ? v * 32768 : v * 32767); }
 	private static String str(byte[] b, int o) { return o + 4 <= b.length ? new String(b, o, 4, java.nio.charset.StandardCharsets.ISO_8859_1) : ""; }
 }
