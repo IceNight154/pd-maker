@@ -261,6 +261,12 @@ MyProject/
 ### 4.6 타일셋 · 사용자 테마 (`editors/gameart.js` "맵 그림")
 
 - 사용자 테마 `customThemes[{ id, name, base, tiles, water, music, light* }]` — 게임 테마 타일셋을 복사해 고침. 16×16칸이면 크기 자유(가로 ÷ 16 = 한 칸 px), "배율 적용"(×0.25~×4). 게임: 연결 줄 3개(`DungeonTilemap` → `LevelHooks.hiresTiles` 가 큰 칸 필름으로, `tileImg` 가 발견 연출 · 정보 창 크기 맞춤).
+- **모든 스프라이트의 "배율 적용"** (`rescale.js` `PDM.rescaleControl`, 해상도 ×0.25~×4): 그림을 가장 가까운 픽셀로 다시 만들고(짝 `<그림>_light.png` 도 함께) 설정을 고쳐 게임 화면 크기는 그대로. 게임 · 공용 그림은 먼저 프로젝트로 복사.
+  - 캐릭터 · 영웅: `frame` ×f, `scale` = 지금 실제 배율(`PDM.charSpriteScale` — 0 이면 세로 24px 초과 시 15/fh) ÷ f, `res` = 배율.
+  - 맵 오브젝트: `frame` ×f, `scale` > 0 이면 ÷ f (0 = 설치 칸에 맞춤이라 그대로).
+  - 아이템(PNG 그림): `sprite.res`. 아이템 시트에는 16px 로 줄여 넣고, 런타임 `MakerAssets.hiresItem`(ItemSprite.frame 연결 줄)이 16px 보다 큰 PNG 는 그 그림을 텍스처로 한 칸 크기에 그림(다른 아이템에 다시 쓰이면 시트로 되돌림).
+  - 사용자 타일: `size` ×f (흐르는 타일 제외). 이펙트 알갱이 그림: `fw/fh` ×f (알갱이 크기는 px 라 그대로).
+  - 제외: UI 그림 · 초상화 · 타이틀 그림.
 - **물 그림**: 사용자 테마의 `water` — "물 그림 만들기(바탕 테마 물 복사 → `assets/tiles/<id>_water.png`)" · 편집 · PNG 불러오기 · 바탕 테마 물로, 2×2 이음매 미리보기. 런타임 `MakerLevel.waterTex` → `LevelHooks.customWater`(`pdmaker:water:<id>` 텍스처, 비우면 바탕 테마 물). 게임 물 그림(water0~4)은 "게임 물 그림"에서 고침(그 테마 전체). 편집기 맵 화면도 물 칸을 실제 물 그림으로(`assets.themeWater` — 사용자 테마는 타일셋 사본 캔버스에 물을 묶음).
   "▦ 사용자 타일에서…": 사용자 타일을 이 테마의 **물** 로 — `waterTile`(타일 id) · `waterFxEvery`(효과는 몇 칸마다, 기본 1).
   - 그림: 런타임 `LevelHooks.customTex` 가 그 타일 그림으로 물 텍스처를 만듦(`tileWater` — 흐르는 타일 = 그림 전체, 칸 타일 = 그 칸을 32×32 이상으로 이어 붙임; 타일을 고치면 게임에도 그대로). 편집기는 미리보기용 사본 `assets/tiles/<id>_water.png`("↻ 다시 가져오기").
@@ -886,7 +892,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 설치기가 게임 원본 파일에 한 줄씩 넣는다 — 줄 끝에 `// >>> pdmaker` 표시, ▶ 테스트 플레이 · 게임 내보내기 때 자동 갱신, `node runtime-installer.js <저장소> --uninstall` 로 깨끗이 제거. 고칠 파일이 없는 `optional` 연결점(서비스 모듈)은 건너뛴다. 처음 고칠 때 원본을 `*.pdmaker-backup` 으로 남긴다.
 설치기는 그 밖에 사용자 코드 생성(`generate` → `pdmaker/gen/` · `GenIndex.java`, 예전 파일 지움)과 게임 이름 적용(`applyGameId`, §18.3)을 한다.
 
-총 **85개** 연결점 · **37개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
+총 **86개** 연결점 · **37개** 파일 (경로는 `core/src/main/java/…/shatteredpixeldungeon/` 기준, services · settings.gradle 은 저장소 기준).
 
 **지원 저장소 · 판 차이** (`runtime-installer.js` `compat()` · 런타임 `MakerCompat`): 설치 전에 패키지(`com.shatteredpixel.shatteredpixeldungeon`) · 체력 형(int) · `LevelTransition.BRANCH_EXIT`(SPD 2.5+) · 연결 줄 위치를 살핌 → 안 되는 것은 설치하지 않고 이유를 알림, 위치를 못 찾은 줄은 경고(그 기능만 꺼짐 · 런타임 상태의 "필요한 줄 수"에서 빼서 매번 다시 설치하지 않음). 판마다 다른 API(GreenFlame · MissileWeapon.setID/spawnedForEffect · BannerSprites 종류 · Music.paused · Wand.wandUsed 접근 · customTiles 목록 형 · Fireball 위치 · MagicMissile.LIGHT_MISSILE)는 `MakerCompat` 반사로. 확인: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · javac 컴파일 · 헤드리스 테스트 플레이).
 
@@ -904,7 +910,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 | `actors/hero/Hero.java` | 맵 오브젝트: 옆에서 누르면 밀기·상호작용<br>영웅 코드: 명중<br>영웅 코드: 회피<br>영웅 코드: 피해<br>영웅 코드: 방어<br>영웅 코드: 속도<br>영웅 코드: 공격 적중<br>영웅 코드: 공격 받음<br>특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)<br>전직 이름 (영웅 정보 창) |
 | `actors/mobs/Mob.java` | 드랍 테이블: 몬스터가 죽을 때<br>영웅 코드: 몬스터 처치<br>캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복<br>캐릭터 체력 무한: 쓰러지지 않음<br>캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 저장 · 불러오기<br>샌드백: 받은 피해를 살펴보기에 |
 | `actors/mobs/MobSpawner.java` | 등장 금지한 몬스터 빼기 |
-| `sprites/ItemSprite.java` | 아이템 그림 배율 (바닥에 놓였을 때) |
+| `sprites/ItemSprite.java` | 아이템 그림 배율 (바닥에 놓였을 때)<br>세밀한 아이템 그림 (배율 적용으로 키운 PNG — 한 칸 크기로 그림) |
 | `windows/WndHero.java` | 영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문 |
 | `actors/hero/HeroClass.java` | 직업 능력: 왕관으로 고르는 목록 → 영웅 편집기의 직업 능력 |
 | `items/TengusMask.java` | 전직: 텐구의 가면 → 영웅 편집기의 전직 |

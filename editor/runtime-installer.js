@@ -109,6 +109,8 @@ const PATCHES = [
     line: `desc += ${PKG}.MakerCharAI.damageInfo(this);` },
   { file: 'sprites/CharSprite.java', name: '무기 공격 모션 (무기 그림이 휘둘러짐 — 아이템 편집기 › 공격 모션)', anchor: /public synchronized void attack\(\s*int cell,\s*Callback callback\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerSwing.onAttack(this, cell);` },
+  { file: 'sprites/ItemSprite.java', name: '세밀한 아이템 그림 (배율 적용으로 키운 PNG — 한 칸 크기로 그림)', anchor: /public void frame\(\s*int image\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.MakerAssets.hiresItem(this, image)) return;` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
     anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',

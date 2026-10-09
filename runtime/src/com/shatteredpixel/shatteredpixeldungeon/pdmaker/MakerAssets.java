@@ -93,6 +93,31 @@ public class MakerAssets {
 	static final String ITEMS = Assets.Sprites.ITEMS;
 	public static final int CUSTOM_BASE = 20000;
 	static final Map<String, Integer> itemPng = new HashMap<>();
+	// 세밀한(고해상도) 아이템 그림: 아이템 시트에는 한 칸(16px)으로 줄여 붙이지만, 그릴 때는 원래 PNG 를 같은 크기로 (배율 적용으로 키운 그림)
+	static final Map<Integer, String> hiresItem = new HashMap<>();
+	static final Map<Integer, int[]> hiresSize = new HashMap<>();
+	static final java.util.Set<Object> hiresTex = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+	private static java.lang.reflect.Method updVerts;
+	/** ItemSprite.frame(image) 맨 앞 연결 줄 — 세밀한 그림이면 그 PNG 를 한 칸 크기로 그리고 true. 아니면 (예전에 바꿔 둔 그림이면 아이템 시트로 되돌리고) false */
+	public static boolean hiresItem(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite s, int image) {
+		try {
+			String png = hiresItem.get(image);
+			if (png == null) {
+				if (s.texture != null && hiresTex.contains(s.texture)) s.texture(ITEMS);
+				return false;
+			}
+			Object tx = MakerRuntime.texture(png);
+			if (tx == null) return false;
+			s.texture(tx);
+			hiresTex.add(s.texture);
+			s.frame(new com.watabou.utils.RectF(0, 0, 1, 1));
+			int[] sz = hiresSize.get(image);
+			s.width = sz[0]; s.height = sz[1];
+			if (updVerts == null) { updVerts = com.watabou.noosa.Image.class.getDeclaredMethod("updateVertices"); updVerts.setAccessible(true); }
+			updVerts.invoke(s);
+			return true;
+		} catch (Throwable t) { MakerRuntime.log("세밀한 아이템 그림 오류: " + t); return false; }
+	}
 	static SmartTexture itemsTex;
 	static List<String> itemRefs;
 
@@ -127,6 +152,7 @@ public class MakerAssets {
 		SmartTexture cur = all.get(ITEMS);
 		if (cur != null && cur == itemsTex) return;
 		List<String> refs = customItemRefs();
+		hiresItem.clear(); hiresSize.clear();
 		FileHandle baseFile = overrides.containsKey(ITEMS) ? overrides.get(ITEMS) : com.badlogic.gdx.Gdx.files.internal(ITEMS);
 		Pixmap base = new Pixmap(baseFile);
 		final int S = com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.SIZE;   // 원작 16 · mod-2 32
@@ -151,6 +177,7 @@ public class MakerAssets {
 			px.drawPixmap(src, 0, 0, w, h, x, y, dw, dh);
 			src.dispose();
 			rects[k] = new int[]{x, y, dw, dh};
+			if (w > S || h > S) { hiresItem.put(CUSTOM_BASE + k, refs.get(k)); hiresSize.put(CUSTOM_BASE + k, new int[]{dw, dh}); }   // 칸보다 세밀한 그림 → 그릴 때는 원래 PNG 로 (hiresItem)
 		}
 		SmartTexture tx = new SmartTexture(px);
 		if (cur != null) { all.remove(ITEMS); cur.delete(); }

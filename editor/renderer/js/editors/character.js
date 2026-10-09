@@ -234,6 +234,11 @@
               if (out && out !== rel) { PDM.assets.invalidate(out); store.edit(key, '시트 경로 (다른 이름으로 저장)', o => { o.sprite.sheet = out; }); }   // 새 파일을 이 캐릭터의 시트로
               else if (out) ctx.refresh();
             } }, '시트 그리기/편집…'))),
+          c.sprite.sheet ? h('div', { style: { margin: '2px 0 8px' } }, PDM.rescaleControl({ what: '스프라이트 시트',
+            png: () => ((store.get(key) || {}).sprite || {}).sheet, cur: () => +(((store.get(key) || {}).sprite || {}).res) || 1,
+            ensureOwn: async rel => { if (!/^(game|builtin):/.test(rel)) return rel; const dest = `assets/${PDM.assets.folderFor(key)}/${c.id}.png`; try { await pdm.copy(PDM.assets.resolvePath(rel), store.abs(dest)); return dest; } catch (e) { toast('게임 시트 복사 실패', 'bad'); return null; } },
+            apply: (f, k, path) => store.edit(key, `스프라이트 배율 ×${k}`, o => { const sp = o.sprite, eff = PDM.charSpriteScale(sp); sp.sheet = path; sp.frame = [Math.max(1, Math.round(sp.frame[0] * f)), Math.max(1, Math.round(sp.frame[1] * f))]; sp.scale = +(eff / f).toFixed(5); sp.res = k; }) }),
+            h('div', { class: 'hint' }, '프레임 크기와 게임 배율도 함께 바뀌어 게임에서의 크기는 그대로입니다 (효과 레이어 …_light.png 도 같이).')) : null,
           key.startsWith('char:') ? row(F.select(key, ['sprite', 'lightMode'], { add: '발광 (더하기)', screen: '스크린', overlay: '오버레이', dodge: '닷지 (색상 닷지)' }, { label: '✨ 효과 레이어 합성 방식', def: 'add' }),
             F.num(key, ['sprite', 'lightBloom'], { label: '번짐 반경 (px, 0 = 없음)', int: true, min: 0, max: 48, def: 0 }),
             F.num(key, ['sprite', 'lightBloomPower'], { label: '번짐 세기 (%)', int: true, min: 0, max: 300, def: 100 }),

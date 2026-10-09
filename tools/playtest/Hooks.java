@@ -524,6 +524,13 @@ public class Hooks {
 						sw.killAndErase(); }
 					break; }
 				case "swingcount": System.out.println("[TEST] swingcount " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned + " blocking=" + com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.interfaceBlockingHero() + " wnds=" + PlayTest.windows() + " curAction=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.curAction + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready + " para=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.paralysed); break;
+				case "itemsprite": { // itemsprite,<아이템 id> — 그 아이템의 ItemSprite 가 어떤 그림(텍스처) · 크기로 그려지는지 (세밀한 아이템 그림)
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]);
+					com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite sp = new com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite(it);
+					System.out.println("[TEST] itemsprite " + p[1] + " image=" + it.image() + " tex=" + sp.texture.width + "x" + sp.texture.height + " size=" + sp.width + "x" + sp.height + " uv=" + sp.frame().left + "," + sp.frame().top + "-" + sp.frame().right + "," + sp.frame().bottom);
+					sp.view(new com.shatteredpixel.shatteredpixeldungeon.items.food.Food());   // 같은 그림 객체를 다른(보통) 아이템으로 다시 쓰면 아이템 시트로 돌아오는지
+					System.out.println("[TEST] itemsprite reuse→food tex=" + sp.texture.width + "x" + sp.texture.height + " size=" + sp.width + "x" + sp.height);
+					break; }
 				case "closewnds": for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) w.hide(); break;
 				case "msg": System.out.println("[TEST] msg " + p[1] + " = " + com.shatteredpixel.shatteredpixeldungeon.messages.Messages.get(Class.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + p[1]), p[2])); break;
 				case "global": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDrops.setGlobal(p[1], p.length < 3 || !p[2].equals("0")); System.out.println("[TEST] global " + p[1]); break;

@@ -317,7 +317,9 @@
         try { await pdm.mkdir(pdm.dirname(store.abs(rel))); } catch (_) { /* 있음 */ }
         await pdm.copy(f, store.abs(rel)); PDM.assets.invalidate(rel);
         set({ png: rel }, '아이템 그림: PNG 파일');
-      } }, 'PNG 파일 고르기…'));
+      } }, 'PNG 파일 고르기…'),
+      cur && cur.png ? PDM.rescaleControl({ what: '아이템 그림', png: () => (PDM.deepGet(store.get(skey), path) || {}).png, cur: img => Math.max(img.width, img.height) / 16,
+        apply: (f, k) => { store.edit(skey, `아이템 그림 배율 ×${k}`, r => { const sp = PDM.deepGet(r, path); if (sp) sp.res = k; }); } }) : null);
   }
 
   /** items.png 의 한 칸 고르기 (작은 미리보기 + 시트 창) — 값: { sheet, index, name } */
