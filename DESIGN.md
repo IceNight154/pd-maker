@@ -355,7 +355,10 @@ CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부�
   - `sheet(frames)`(가로 2048 이하 격자) · `encodeApng` · `bake(src, png)`(시트 + 옆에 `…_anim.png` APNG) · `exportApng`.
 - **모션 랩** `motion.json { list: [{ id, name, lang, html, code, w, h, frames, fps, seed, pixel, out, baked { fw, fh, frames, fps, cols, apng } }] }`:
   - 왼쪽 코드(HTML · CSS 또는 JS) · 크기 · 프레임 · 초당 프레임 · 픽셀 설정, 오른쪽 실시간(코드 그대로 — CSS 는 shadow 상자에서 실제로 돌고 JS 는 프레임을 차례로) · 구운 결과(게임에 들어가는 그림) 재생, 확대 · 배경.
-  - 예시: 빈 CSS · 반짝이는 별 · 퍼지는 고리 · 도는 마법진 · 흐르는 물결 무늬(이어 붙임) · 글자가 하나씩 튀어 오름 · 떠오르는 불티(JS) · 일렁이는 불꽃(JS) + 화면 필터 예시(훑는 빛 · 깨진 화면).
+  - 예시 (묶음 메뉴 — 새로 만들기 · "📋 예시로 바꾸기"(지금 항목의 코드 · 크기 · 프레임 · 픽셀 설정을 바꿈, 직접 지은 이름은 그대로) · "🎞 예시 둘러보기"(실제 코드가 도는 갤러리)):
+    - 기본(픽셀 게임 움직임): 빈 CSS · 반짝이는 별 · 퍼지는 고리 · 도는 마법진 · 흐르는 물결 무늬(이어 붙임) · 글자가 하나씩 튀어 오름 · 떠오르는 불티(JS) · 일렁이는 불꽃(JS) + 화면 필터 예시(훑는 빛 · 깨진 화면).
+    - 웹 모션 24종 (`editors/motion-presets.js` — `PDM.MOTION_WEB_PRESETS` · `PDM.MOTION_PRESET_GROUPS`): 등장 01–08(페이드 인 · 슬라이드 인 · 스태거 · 텍스트 리빌 · 마스크 리빌 · 블러 인 · 타이프라이터 · 카운트업) / 스크롤 연동 09–16(읽기 진행률 · 패럴랙스 · 스크롤 줌 · 이미지 시퀀스 · SVG 라인 드로우 · 텍스트 필 · 배경색 트랜지션 · 마키) / 고정 · 전환 · 내비게이션 17–24(스티키 · 핀 고정 + 스크럽 · 스크롤텔링 · 카드 스택 · 스크롤 스냅 · 가로 스크롤 · 숨김 헤더 · 스크롤스파이). 게임 그림에는 스크롤이 없으므로 시간이 스크롤 대신 진행을 끌고 감. 바깥 그림 없이 그라데이션 · 도형 · 인라인 SVG, `animation-fill-mode: both` + 끝 모습 유지 구간으로 끊김 없이 반복.
+  - 코어 약속: `.fx` = 그림 전체 상자, HTML 은 그 안에 들어감(자기 `.stage` 가 있으면 — 글자 연출에서 가져온 것 — 그대로). `@property` 는 문서 전체에 등록(`registerProps` — shadow 상자 안의 @property 는 무시되므로)하고, `@keyframes` 안의 CSS 변수도 프레임마다 박아 넣음(getKeyframes 가 알려 주지 않음) → CSS 변수 애니메이션(카운트업 등)도 그대로 구워짐.
   - 💾 굽고 저장(`out`, 기본 `assets/motion/<id>.png`) · APNG 내보내기.
   - ➜ 보내기 (`lab.SEND` — `targets()` · `apply(모션, 대상)`): 화면 필터 층(`code` 층 + `motion: <id>` — 필터에서 "다시 굽기"하면 모션의 코드 · 크기 · 픽셀 설정을 따름, 새 필터도 만들 수 있음) · 이펙트 알갱이(`sprite { png, fw, fh, frames "0-n", fps, anim loop }`) · 맵 오브젝트(`sprite.sheet · frame` + `anims.motion` · 첫 상태의 anim) · 노드 합성기 그림 노드(첫 장 `…_still.png`) · 아이템 그림(첫 장).
   - ⤓ 가져오기: 화면 필터의 코드 층(모션으로 옮기고 그 층은 `motion` 으로 이어짐) · 글자 연출(`PDM.textfx.build` 결과 HTML · CSS 그대로 — 직접 다듬기용, 등록한 글꼴 · 넘치면 줄이기는 빠짐).

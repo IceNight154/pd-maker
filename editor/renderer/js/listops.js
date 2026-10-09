@@ -1,7 +1,7 @@
 // ================================================================
 //  listOps — { list: [ { id, name … } ] } 꼴 리소스(이펙트 · 글자 연출)의 추가 · 복제 · 삭제 · id 바꾸기 · 순서
 //    리소스 목록(트리)의 항목·오른쪽 클릭 메뉴와 편집 화면의 도구 줄에서 같이 씀
-//    o = { K(저장 키), label, icon, prefix(새 id 앞머리), make(id, preset), clean(복제본 손질), presets{키: 이름}, cmdType(이벤트 명령 이름) + cmdKey(그 명령의 id 칸, 기본 fx), objType(맵 오브젝트 type), fields[아이템 등의 참조 칸] }
+//    o = { K(저장 키), label, icon, prefix(새 id 앞머리), make(id, preset), clean(복제본 손질), presets{키: 이름} · presetMenu(add)(묶음 메뉴 — 있으면 presets 대신), cmdType(이벤트 명령 이름) + cmdKey(그 명령의 id 칸, 기본 fx), objType(맵 오브젝트 type), fields[아이템 등의 참조 칸] }
 // ================================================================
 PDM.listOpsAll = {};   // 저장 키 → listOps (Ctrl+C / Ctrl+V 가 지금 탭의 것을 찾음)
 PDM.listOps = function (o) {
@@ -68,7 +68,7 @@ PDM.listOps = function (o) {
     toast(`붙여 넣었습니다: ${c.name || id}`);
   }
   const move = (id, d) => store.edit(o.K, o.label + ' 순서', r => { const i = r.list.findIndex(x => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= r.list.length) return; [r.list[i], r.list[j]] = [r.list[j], r.list[i]]; });
-  const addMenu = () => o.presets ? Object.entries(o.presets).map(([k, name]) => ({ label: `새 ${o.label}: ${name}`, run: () => add(k) })) : [{ label: `새 ${o.label}…`, run: () => add() }];
+  const addMenu = () => o.presetMenu ? o.presetMenu(add) : o.presets ? Object.entries(o.presets).map(([k, name]) => ({ label: `새 ${o.label}: ${name}`, run: () => add(k) })) : [{ label: `새 ${o.label}…`, run: () => add() }];   // presetMenu(add) = 묶음이 있는 메뉴
   const menuOf = x => [{ label: '열기', run: () => show(x.id) }, { label: '복제', run: () => dup(x.id) }, { label: 'id 바꾸기…', run: () => rename(x.id) },
     { label: '복사', hint: PDM.keys.label('copy'), run: () => copy(x.id) }, { label: '붙여넣기', hint: PDM.keys.label('paste'), run: async () => { const c = await PDM.clip.get(); if (c && c.kind === 'list:' + o.K) paste(c.payload); else toast(`복사한 ${o.label}이(가) 없습니다`); } }, '-',
     { label: '위로', run: () => move(x.id, -1) }, { label: '아래로', run: () => move(x.id, 1) }, '-', { label: '삭제', run: () => remove(x.id) }];

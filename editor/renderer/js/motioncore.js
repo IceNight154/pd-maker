@@ -18,7 +18,20 @@
   // ---------------- 화면 밖에 올리기 · 프레임 찍기 (글자 연출에서 쓰던 방식을 공용으로)
   /** host 에 HTML · CSS 를 올리고 애니메이션을 모두 멈춘 채 돌려줌 → { root, stage, anims, seek(초) }
    *  doc = { html, css, W, H, prepare(root, stage) } — stage 는 .pdm-stage(크기 W×H) 또는 html 안의 .stage */
+  /** @property 규칙을 문서 전체에 등록 (shadow 상자 안의 @property 는 브라우저가 무시함 — 등록해야 CSS 변수가 숫자 · 색으로 이어져 변함). 같은 이름은 처음 것만 */
+  const registered = new Set();
+  function registerProps(css) {
+    String(css || '').replace(/@property\s+(--[\w-]+)\s*\{([^}]*)\}/g, (_, name, body) => {
+      if (registered.has(name) || !window.CSS || !CSS.registerProperty) return '';
+      const d = k => { const m = new RegExp(k + '\\s*:\\s*([^;]+)').exec(body); return m ? m[1].trim() : null; };
+      try { CSS.registerProperty({ name, syntax: (d('syntax') || "'*'").replace(/^['"]|['"]$/g, ''), inherits: d('inherits') === 'true', initialValue: d('initial-value') || undefined }); } catch (_) { /* 이미 있음 · 잘못된 값 */ }
+      registered.add(name); return '';
+    });
+  }
+  /** @keyframes 안에서 움직이는 CSS 변수 이름들 (getKeyframes 는 CSS 변수를 알려 주지 않음) */
+  const keyframeVars = css => { const out = new Set(); String(css || '').replace(/@keyframes[^{]*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/g, (_, body) => { (body.match(/--[\w-]+(?=\s*:)/g) || []).forEach(v => out.add(v)); return ''; }); return [...out]; };
   async function mount(doc, host, zoom) {
+    registerProps(doc.css);
     const root = host.shadowRoot || host.attachShadow({ mode: 'open' });
     const own = !/class="stage"/.test(doc.html || '');
     const body = own ? `<div class="pdm-stage" style="position:relative;width:${doc.W}px;height:${doc.H}px;overflow:hidden">${doc.html || ''}</div>` : doc.html;
@@ -40,10 +53,11 @@
       const m = await mount(doc, host), { stage, anims } = m;
       // 애니메이션이 바꾸는 속성만 골라 프레임마다 계산된 값을 박아 넣음 (가상 요소 ::before/::after 포함)
       [stage, ...stage.querySelectorAll('*')].forEach((e, i) => e.setAttribute('data-k', i));
-      const targets = new Map();
+      const targets = new Map(), vars = keyframeVars(doc.css);
       anims.forEach(a => { const ef = a.effect; if (!ef || !ef.target) return; const key = ef.target.getAttribute('data-k') + '|' + (ef.pseudoElement || '');
         const t = targets.get(key) || { el: ef.target, pseudo: ef.pseudoElement || null, props: new Set() }; targets.set(key, t);
-        ef.getKeyframes().forEach(kf => Object.keys(kf).forEach(p => { if (!['offset', 'easing', 'composite', 'computedOffset'].includes(p)) t.props.add(p === 'cssFloat' ? 'float' : p === 'cssOffset' ? 'offset' : p.startsWith('--') ? p : p.replace(/[A-Z]/g, c => '-' + c.toLowerCase())); })); });
+        ef.getKeyframes().forEach(kf => Object.keys(kf).forEach(p => { if (!['offset', 'easing', 'composite', 'computedOffset'].includes(p)) t.props.add(p === 'cssFloat' ? 'float' : p === 'cssOffset' ? 'offset' : p.startsWith('--') ? p : p.replace(/[A-Z]/g, c => '-' + c.toLowerCase())); }));
+        vars.forEach(v => t.props.add(v)); });
       const xml = new XMLSerializer();
       for (let i = 0; i < times.length; i++) {
         if (cancel && cancel()) throw new Error('중지했습니다');
@@ -69,10 +83,11 @@
   function dims(src) {
     return { w: clamp(num(src.w, 64) | 0, 4, 1024), h: clamp(num(src.h, 64) | 0, 4, 1024), n: clamp(num(src.frames, 1) | 0, 1, MAXF), fps: clamp(num(src.fps, 8), 1, 60) };
   }
-  /** CSS 문서 (html 이 비면 화면 가득한 .fx 하나 — 화면 필터 코드 층과 같은 약속) */
+  /** CSS 문서: .fx 가 그림 전체 상자이고 html 은 그 안에 들어감 (비면 .fx 하나 — 화면 필터 코드 층과 같은 약속).
+   *  html 에 자기 .stage 가 있으면(글자 연출에서 가져온 것) 그대로 */
   function cssDoc(src) {
-    const { w, h: hh } = dims(src);
-    return { W: w, H: hh, html: (src.html || '').trim() || DEFAULT_HTML, css: `.fx{position:absolute;left:0;top:0;width:${w}px;height:${hh}px;overflow:hidden}\n${src.code || ''}` };
+    const { w, h: hh } = dims(src), raw = (src.html || '').trim();
+    return { W: w, H: hh, html: /class="stage"/.test(raw) ? raw : `<div class="fx">${raw}</div>`, css: `.fx{position:absolute;left:0;top:0;width:${w}px;height:${hh}px;overflow:hidden}\n${src.code || ''}` };
   }
   /** src → { frames, w, h, n, fps } */
   async function renderSrc(src, onProgress, cancel) {
@@ -199,5 +214,5 @@
     catch (_) { const a = h('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove(); return name; }
   }
 
-  PDM.motion = Object.assign(PDM.motion || {}, { mount, shoot, renderSrc, cssDoc, dims, pixelize, pixelOn, sheet, encodeApng, crc32, bytesUrl, apngPath, bake, exportApng, rng, DEFAULT_HTML, MAXF });
+  PDM.motion = Object.assign(PDM.motion || {}, { mount, shoot, registerProps, renderSrc, cssDoc, dims, pixelize, pixelOn, sheet, encodeApng, crc32, bytesUrl, apngPath, bake, exportApng, rng, DEFAULT_HTML, MAXF });
 })();

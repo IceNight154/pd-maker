@@ -5,6 +5,7 @@
 //    굽기 · 프레임 찍기는 공용 모션 코어(motioncore.js — PDM.motion) — 화면 필터의 코드 층 · 글자 연출과 같은 부품
 //    보내기: 화면 필터 층(motion 으로 이어짐 — 다시 구우면 따라감) · 이펙트 알갱이 그림 · 맵 오브젝트 그림(애니메이션) · 노드 합성기 그림 노드 · 아이템 그림(첫 장)
 //    가져오기: 화면 필터의 코드 층 · 글자 연출(만들어진 HTML · CSS 그대로)
+//    예시: 기본(픽셀 게임 움직임) + 웹 모션 24종(motion-presets.js — 등장 · 스크롤 연동(시간으로) · 고정/전환/내비게이션), 묶음 메뉴 · "예시로 바꾸기" · "예시 둘러보기"(실시간 미리보기 갤러리)
 //    게임 안에서 코드가 도는 것은 아님 — 구운 그림이 들어감 (정해진 길이로 반복되는 그림)
 // ================================================================
 (function () {
@@ -56,7 +57,14 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
   const filterPresets = () => PDM.filters && PDM.filters.CODE ? {
     scanbar: { name: '훑는 빛 + 조리개 (화면 · CSS)', lang: 'css', w: 160, h: 96, frames: 12, fps: 12, html: '', code: PDM.filters.CODE.scanbar, pixel: {} },
     crack: { name: '깨진 화면 (화면 · JS)', lang: 'js', w: 160, h: 96, frames: 1, fps: 8, html: '', code: PDM.filters.CODE.crack, pixel: {} } } : {};
-  const allPresets = () => Object.assign({}, PRESETS, filterPresets());
+  const allPresets = () => Object.assign({}, PRESETS, filterPresets(), PDM.MOTION_WEB_PRESETS || {});
+  /** 예시 묶음 [[묶음 이름, [키 …]]] — 기본 + 웹 모션 24종(motion-presets.js) */
+  const presetGroups = () => [['기본 (픽셀 게임 움직임)', [...Object.keys(PRESETS), ...Object.keys(filterPresets())]], ...(PDM.MOTION_PRESET_GROUPS || [])];
+  /** 묶음 메뉴: 묶음 이름(누를 수 없음) 아래에 예시들. pickFn(키) */
+  const groupedMenu = pickFn => { const all = allPresets(), out = [];
+    presetGroups().forEach(([g, keys], gi) => { if (gi) out.push('-'); out.push({ head: g }); keys.filter(k => all[k]).forEach(k => out.push({ label: all[k].name, hint: all[k].desc || '', run: () => pickFn(k) })); });
+    out.push('-', { label: '🎞 예시 둘러보기 (움직이는 미리보기)…', run: () => gallery(pickFn) });
+    return out; };
 
   function make(id, preset) {
     const p = allPresets()[preset] || PRESETS.blank;
@@ -64,8 +72,29 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       pixel: Object.assign({}, PX0, p.pixel || {}), out: `assets/motion/${id}.png` };
   }
   const ops = PDM.listOps({ K, label: '모션', title: '모션 랩', icon: '🎞', prefix: 'motion', make, fields: ['motion'],
-    presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.name])),
+    presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, v.name])), presetMenu: add => groupedMenu(k => add(k)),
     clean: c => { c.out = `assets/motion/${c.id}.png`; delete c.baked; } });   // 복제본은 제 그림 파일로
+
+  /** 지금 항목의 코드를 예시로 바꿈 (이름 · id · 저장할 곳은 그대로) */
+  async function applyPreset(id, k) {
+    const p = allPresets()[k], m = list().find(x => x.id === id); if (!p || !m) return;
+    if ((m.code || '').trim() && !(await PDM.ui.confirm(`「${m.name || m.id}」 의 코드를 예시 「${p.name}」 로 바꿀까요?\n(크기 · 프레임 · 픽셀 설정도 예시대로 — 실행 취소로 되돌릴 수 있음)`))) return;
+    store.edit(K, '예시로 바꾸기: ' + p.name, o => { const x = o.list.find(q => q.id === id); Object.assign(x, { lang: p.lang, html: p.html || '', code: p.code || '', w: p.w, h: p.h, frames: p.frames, fps: p.fps, pixel: Object.assign({}, PX0, p.pixel || {}) }); delete x.baked; const presetNames = Object.values(allPresets()).map(q => q.name); if (!x.name || x.name === x.id || presetNames.includes(x.name)) x.name = p.name; });   // 직접 지은 이름은 그대로
+  }
+  /** 예시 둘러보기: 모든 예시를 실시간으로 돌려 보여 주고 고르면 pickFn(키) */
+  function gallery(pickFn) {
+    const all = allPresets();
+    const body = h('div', { style: { maxHeight: '70vh', overflow: 'auto', minWidth: 'min(900px, 86vw)' } });
+    presetGroups().forEach(([g, keys]) => {
+      body.append(h('h3', { style: { margin: '10px 0 6px' } }, g));
+      body.append(h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' } },
+        keys.filter(k => all[k]).map(k => { const p = all[k], z = Math.max(1, Math.min(4, Math.floor(140 / Math.max(p.w, p.h * 1.6))));
+          return h('div', { class: 'card', style: { padding: '6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }, title: '눌러서 고르기', onclick: () => { PDM.ui.closeTop(); pickFn(k); } },
+            h('div', { style: { height: (p.h * z + 2) + 'px', display: 'flex', alignItems: 'center' } }, livePreview(Object.assign({ seed: 1 }, p), z, '#16131f')),
+            h('b', { style: { fontSize: '12px', textAlign: 'center' } }, p.name), p.desc ? h('span', { class: 'hint', style: { fontSize: '11px', textAlign: 'center' } }, p.desc) : null); })));
+    });
+    PDM.ui.modal('🎞 모션 예시', h('div', {}, h('p', { class: 'hint' }, '실제 코드가 그대로 돌고 있습니다. 눌러서 고르세요. "스크롤 연동" 예시는 게임 그림에 스크롤이 없으므로 시간이 스크롤 대신 진행을 끌고 갑니다.'), body), [['닫기', null]]);
+  }
 
   // ---------------- 굽기 · 저장
   const srcAt = id => list().find(x => x.id === id);
@@ -176,7 +205,7 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       requestAnimationFrame(tick);
       return box;
     }
-    const host = h('div'), doc = M().cssDoc(m); box.append(host);
+    const host = h('div'), doc = M().cssDoc(m); box.append(host); M().registerProps(doc.css);
     const root = host.attachShadow({ mode: 'open' }), own = !/class="stage"/.test(doc.html);
     root.innerHTML = `<style>${doc.css}</style>` + (own ? `<div class="pdm-stage" style="position:relative;width:${doc.W}px;height:${doc.H}px;overflow:hidden;zoom:${zoom}">${doc.html}</div>` : `<div style="zoom:${zoom}">${doc.html}</div>`);
     return box;
@@ -214,7 +243,9 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         }),
         h('span', { class: 'hint' }, '화면 필터의 코드 층(옮긴 층은 이 항목을 쓰게 됨) · 글자 연출(만들어진 HTML · CSS — 직접 다듬기용)'));
       if (!m) return h('div', { class: 'editor' }, h('h2', {}, '🎞 모션 랩'), intro, ops.bar(null), importBar,
-        h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, Object.entries(allPresets()).map(([k, v]) => h('button', { class: 'btn', onclick: () => ops.add(k) }, v.name))));
+        h('div', { class: 'btnbar' }, h('button', { class: 'btn pri', onclick: () => gallery(k => ops.add(k)) }, '🎞 예시 둘러보기 (움직이는 미리보기)…')),
+        ...presetGroups().map(([g, keys]) => h('div', {}, h('h3', { style: { margin: '10px 0 4px' } }, g),
+          h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, keys.filter(k => allPresets()[k]).map(k => h('button', { class: 'btn', title: allPresets()[k].desc || '', onclick: () => ops.add(k) }, allPresets()[k].name))))));
 
       const P = (...p) => ['list', idx, ...p];
       const edit = (label, fn, silent) => store.edit(K, label, r => fn(r.list[idx]), silent ? { silent: true } : undefined);
@@ -244,9 +275,13 @@ for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         h('div', { style: { display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' } },
           h('div', { style: { flex: '1 1 460px', minWidth: '320px' } },
             row(F.text(K, P('name'), { label: '이름', rerender: true }), F.select(K, P('lang'), { css: 'CSS + HTML (움직임은 @keyframes)', js: 'JavaScript (캔버스에 프레임마다 그리기)' }, { label: '만드는 방식', rerender: true })),
+            h('div', { class: 'btnbar', style: { margin: '0 0 6px' } },
+              PDM.ui.dropBtn('📋 예시로 바꾸기', () => groupedMenu(k => applyPreset(m.id, k)), { title: '지금 항목의 코드 · 크기 · 프레임을 예시로 바꿉니다 (이름 · 저장할 곳은 그대로)' }),
+              h('button', { class: 'btn sm', onclick: () => gallery(k => applyPreset(m.id, k)) }, '🎞 예시 둘러보기…'),
+              h('span', { class: 'hint' }, '등장 · 스크롤 연동 · 고정/전환/내비게이션 24종 + 픽셀 게임 움직임 — 고른 뒤 색 · 글자 · 크기를 고쳐 쓰세요.')),
             m.lang === 'js' ? h('div', {}, h('div', { class: 'fl' }, 'JS — 프레임마다 실행: g(캔버스 2D) · w · h · t(0~1 한 바퀴) · frame · frames · rand()(씨앗 난수: 매 프레임 같은 순서) · Math.random()(프레임마다 다름)'), ta(['code'], 16))
               : h('div', {},
-                h('div', { class: 'fl' }, 'HTML (비우면 그림 전체를 덮는 <div class="fx"> 하나)'), ta(['html'], 3, M().DEFAULT_HTML),
+                h('div', { class: 'fl' }, 'HTML — 그림 전체 상자 .fx 안에 들어감 (비워도 됨: .fx 와 ::before/::after 로만 그려도 됨)'), ta(['html'], 3, '<div class="card">…</div>'),
                 h('div', { class: 'fl', style: { marginTop: '6px' } }, 'CSS — background · gradient · box-shadow · border · transform · ::before/::after · @keyframes · CSS 변수. 바깥 그림 url() · 웹 글꼴은 못 씀'), ta(['code'], 16)),
             row(F.num(K, P('w'), { label: '그림 가로 (px)', int: true, min: 4, max: 1024, def: 32, onchange: () => { st.baked = null; refreshLive(); previewBake(); } }),
               F.num(K, P('h'), { label: '그림 세로 (px)', int: true, min: 4, max: 1024, def: 32, onchange: () => { st.baked = null; refreshLive(); previewBake(); } }),

@@ -601,7 +601,7 @@ PDM.ui = (function () {
     document.body.append(m);
     const r = m.getBoundingClientRect();
     if (r.right > innerWidth) m.style.left = (innerWidth - r.width - 4) + 'px';
-    if (r.bottom > innerHeight) m.style.top = (innerHeight - r.height - 4) + 'px';
+    if (r.bottom > innerHeight) m.style.top = Math.max(4, innerHeight - r.height - 4) + 'px';   // 긴 메뉴는 위에서부터 (넘치면 메뉴 안에서 스크롤)
     setTimeout(() => document.addEventListener('mousedown', function off(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', off); } }), 0);
   }
 
