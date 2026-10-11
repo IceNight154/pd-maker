@@ -146,6 +146,7 @@ public class TemplateRoom extends StandardRoom {
 		}
 		int w = vw(t, var), h = vh(t, var);
 		int[] ter = resolve(t);
+		java.util.List<String> tl = MakerTileLayers.layersOf(t);
 		for (int y = 0; y < h && y < r.height(); y++) {
 			for (int x = 0; x < w && x < r.width(); x++) {
 				int v = ter[src(t, var, x, y)];
@@ -154,7 +155,9 @@ public class TemplateRoom extends StandardRoom {
 				if (border && isDoor(v)) v = Terrain.WALL;               // 문 자리 → 연결 안 되면 벽
 				if (v == Terrain.ENTRANCE || v == Terrain.EXIT) v = Terrain.EMPTY_SP; // 템플릿 안의 계단은 장식으로
 				Painter.set(level, r.left + x, r.top + y, v);
-				MakerUserTiles.put(level, r.left + x + (r.top + y) * level.width(), MakerUserTiles.at(t, src(t, var, x, y)));   // 사용자 타일
+				int cell = r.left + x + (r.top + y) * level.width();
+				if (!tl.isEmpty()) MakerTileLayers.putCell(level, t, tl, src(t, var, x, y), cell);   // 타일 레이어
+				MakerTraps.legacy(level, cell);                                                      // 예전 데이터: 지형에 칠한 함정
 			}
 		}
 		// 연결된 문 안쪽이 막혀 있으면 한 칸 뚫기
