@@ -215,7 +215,7 @@ MyProject/
 
 ```jsonc
 { "id": "n1", "mode": "procedural|handmade|hybrid", "name": "", "label": "", "depth": 0, "boss": false, "theme": "",
-  "size": { "w": 32, "h": 32 }, "layers": { "terrain": [ … ], "spawn": [ … ] }, "objects": [ … ],
+  "size": { "w": 32, "h": 32 }, "layers": { "terrain": [ … ], "tiles": { "base": [ … ], "grass": [ … ] }, "spawn": [ … ] }, "objects": [ … ],
   "procedural": { "blocks": [], "rooms": [] }, "hybrid": { "placement": "special|random" },
   "noMobs": false, "spawn": { "enabled": true, "mobs": [ { "ref": "spd:Rat", "weight": 1 } ], "initial": 3, "max": 6, "respawn": 50, "minDist": 8 },
   "safe": { "on": false }, "filter": "", "bgm": "", "terrainLights": [], "autoLights": [],
@@ -228,6 +228,20 @@ MyProject/
 - **몬스터 스폰**: `noMobs` 면 `LevelHooks.afterCreate` 가 게임이 놓은 적을 치우고 `onFloorEnter` 가 `MobSpawner` 를 뺌. 직접 그린 노드는 `spawn` — 처음 `initial` 마리, 게임 재생성기가 `max` 까지 `respawn` 턴마다. `layers.spawn` 칸 0 보통 · 1 스폰 구역 · 2 금지 (구역이 있으면 그 안에서만, 영웅 시야 밖 · 입구 위 제외). `mobs` 가 비면 깊이에 맞는 게임 기본 몬스터.
 - **안전구역** `safe { on, hunger(허기가 쌓이지 않고 천천히 풀림), feed(들어올 때 허기 해소), cure(해로운 상태 해제), heal(턴마다 회복), msg }` — 방 템플릿에도. 런타임 `MakerSafe.tick`(매 턴, 방 템플릿이 노드보다 먼저), 조건식 `safe`, 용어 `safe.enter/leave`.
 - **화면 필터** `filter` (§5.6), **배경음** `bgm` (§9), **광원** `terrainLights` · `autoLights` (§5.4 — 없으면 그룹 것), **들어올 때 이벤트** `onEnter`(처음 한 번).
+
+### 4.2.1 타일 레이어 · 함정 오브젝트
+
+맵 요소를 세 가지로 나눔 — **타일 정의**(무엇: `world.userTiles` 그림 · 칠할 때 지형 · 효과 · 이름) / **타일 레이어**(어디에: 칸 → 타일 id) / **오브젝트 인스턴스**(놓인 것 하나하나: `objects[]` — 위치 · 종류 · 상태).
+
+- **지형** `layers.terrain` = 맨 아래 고정 레이어. 게임 `Level.map` 그대로라 **판정(지나감 · 막힘 · 시야)의 유일한 근거** — 판정 코드는 게임 것 하나뿐(레이어마다 따로 만들지 않음).
+- **사용자 타일 레이어** `layers.tiles { <레이어 id>: [칸 → 타일 id ("" = 없음)] }` — 같은 칸에 레이어마다 다른 타일. 레이어 정의는 모든 맵 공통 `world.tileLayers [{ id, name, depth: below|above, visible, solid }]`(없으면 기본: 기본 타일 · 풀 · 식생 · 벽 · 구조물(solid) · 벽 장식 · 전경(above)). 배열 순서 = 그리는 순서.
+  - 런타임 `MakerTileLayers`(정의 · 읽기 · `putCell`) → `MakerUserTiles.finish` 가 레이어 순서대로 (레이어 · 그림 · 크기) 묶음마다 CustomTilemap 하나를 `customTiles`(below — 지형 위 · 함정 · 아이템 · 캐릭터 아래) / `customWalls`(above — 캐릭터 · 벽 윗면 위)에. 게임 그리기 순서: 물 → 지형 → customTiles → 함정 · 식물 → 아이템 → 캐릭터 → 솟은 지형 · 벽 윗면 → customWalls → 효과 · 가스 · 안개. 타일 자체의 `over` 도 그대로(그 타일만 위로).
+  - `visible: false` = 게임에 그리지 않음(효과도, 살펴보기 이름은 남음) · `solid: true` = 층을 만들 때 타일이 있는 칸의 지나갈 수 있는 지형을 게임의 보이지 않는 막힌 장식 `CUSTOM_DECO`(물이면 `CUSTOM_DECO_WTR`)로 — 그림은 그대로, 판정만 막힘.
+  - 새 레이어는 데이터만 추가(레이어 설정 창) — 코드 수정 없음. 세이브에는 묶음마다 `pdm_layer` 저장.
+- **함정** = 지형이 아니라 오브젝트 `{ type: "trap", ref: "<levels.traps 클래스>", hidden, inactive, at, cond, chance(방 템플릿) }`. 바닥 지형은 그대로 두고, 층을 만들 때 런타임 `MakerTraps.place` 가 게임 함정을 만들어 `Level.setTrap` + 그 칸을 게임 규칙대로 TRAP · SECRET_TRAP · INACTIVE_TRAP — 작동 · 피해 · 애니메이션 · 찾기 · 해제 · 세이브는 게임 코드 그대로. 숨길 수 없는 함정(`canBeHidden = false` — 다트 · 분해 · 낙석 · 음침한)은 숨김을 켜도 보임. 없는 클래스(다른 판)는 경고만. 직접 그린 맵(`MakerLevel.build`) · 방 템플릿 · 혼합 층(`LevelHooks.placeObject`)에서.
+  - 그 밖의 특수 요소도 같은 오브젝트 목록: 투명 발판(`plate`) · 맵 오브젝트(`prop` — 스위치 · 문 · 밀기 · 상호작용 · 막힘 상태) · 이벤트 칸 · 광원 · 입구 · 출구, 모두 `cond`(등장 조건).
+- **예전 형식 변환** (`PDM.migrateMapData` — 프로젝트를 열 때 노드 · 방 템플릿마다, 저장하면 적용): `layers.utile` → `layers.tiles.base` · 지형에 칠한 함정(17 숨김 · 18 · 19 작동함) → 바닥(1) + 함정 오브젝트(`WornDartTrap` — 예전엔 게임 함정이 만들어지지 않아 보이지도 작동하지도 않았음). 런타임도 변환 전 데이터를 그대로 읽음(`utile` = base, 지형 함정 → `MakerTraps.legacy`).
+- 편집기: 팔레트 "타일 레이어"(고른 레이어에 칠함 · 👁 편집기에서만 숨기기 · 칸 수 · "위" "막힘" 표시 · 레이어 설정 창 — 이름 · 높이 · 게임 표시 · 막힘 · 순서 · 추가 · 삭제), 위(above) 레이어는 오브젝트 위에 그림, 지우개 "사용자 타일" = 지금 레이어 · "전부" = 모든 레이어. 오브젝트 "함정"(게임 그림 terrain_features.png 로 고르기 · 그리기, 숨김 = 흐리게 + ?). 지형 팔레트에서 지형 함정은 뺌. 헤드리스 `eval:layerinfo` · `eval:presscell`.
 
 ### 4.3 맵 편집기 (`editors/map.js`)
 
@@ -274,7 +288,7 @@ MyProject/
   - 그림: 런타임 `LevelHooks.customTex` 가 그 타일 그림으로 물 텍스처를 만듦(`tileWater` — 흐르는 타일 = 그림 전체, 칸 타일 = 그 칸을 32×32 이상으로 이어 붙임; 타일을 고치면 게임에도 그대로). 편집기는 미리보기용 사본 `assets/tiles/<id>_water.png`("↻ 다시 가져오기").
   - 효과 · 살펴보기 이름: `LevelHooks.afterCreate` → `MakerUserTiles.themeWater` 가 그 층의 물 칸마다 타일 id + `#water`(효과 건너뛰는 칸은 `#waterq`)로 넣음 → `finish` 가 효과(fx · gameFx) · 이름만 붙이고 그림은 덮지 않음(물가 모양 그대로). 맵에 직접 칠한 칸은 그대로.
   - 흐름: 흐르는 타일이면 `GameScene.update` 연결 줄 2개(`waterOfs -= 5 * Game.elapsed` 앞 `waterFlowY` · `water.offsetTo` 뒤 `waterFlowX`)가 그 속도(flowX · flowY)로.
-- **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over, fx, gameFx, title, desc }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿 `layers.utile[칸] = id`(지우개 "사용자 타일", 크기 바꾸기 · 맵 전체 지우기도 함께). 런타임 `MakerUserTiles`: `MakerLevel.build` · `TemplateRoom.paintTemplate` 가 `put(칸, id)` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 (그림 · 칸 크기 · 위/아래) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
+- **사용자 타일** `world.userTiles[{ id, name, image, x, y, size, terrain, over, fx, gameFx, title, desc }]`: 아무 그림(게임 타일셋 · 사용자 테마 · PNG)의 한 칸(`size` px, 기본 16)을 타일로. `terrain` = 칠할 때 지형(-2 = 칠한 칸의 지형 그대로 — 그림만 덮음), `over` = 캐릭터 위에(지붕 · 가지). 맵 그림 화면에서 칸 고르기(그림 격자 클릭) · 그림 고치기 · 새로 그리기 · 복제 · 쓰는 곳. 맵 편집기 팔레트 "사용자 타일"(칠하기 · 사각형 · 채우기 · 지우개, 오른쪽 클릭 = 그 칸의 타일 고르기) → 노드 · 방 템플릿의 타일 레이어 `layers.tiles[레이어][칸] = id`(§4.2.1). 런타임 `MakerUserTiles`: `MakerTileLayers.putCell` 로 모으고 `LevelHooks.afterCreate` 가 `finish` 로 레이어 순서대로 (레이어 · 그림 · 칸 크기) 묶음마다 CustomTilemap 하나(customTiles 또는 customWalls), 칸 배치는 세이브에 저장. 직접 그린 맵 · 혼합 맵 · 방 템플릿에서. 헤드리스 `eval:waterhere`.
 - **흐르는 그림 타일** (물 그림을 사용자 타일로): `flow` · `flowX` · `flowY`(px/초, 게임 물 0 · -5) — 그림 고르기에 게임 물(water0~4) · 사용자 테마 물이 있음, "+ 효과 타일"에 "흐르는 물 그림" · "빛나는 물(물 + 치유의 샘)". 런타임 `MakerUserTiles.FlowTiles`(칸마다 SkinnedBlock, 세상 좌표 + 시간으로 오프셋 → 이음매 없이 흐름, 다른 사용자 타일 · 효과 아래). 효과 · 살펴보기 이름도 함께. 편집기는 이어 붙인 멈춘 모습.
 - **효과 타일** (희생의 재단 · 연금술 솥 · 하수도 배수구처럼 효과가 붙은 타일): 사용자 타일의 `gameFx`(게임 효과 — sink 배수구 물방울 · torch 감옥 횃불 · vein 광맥 · smoke · greenflame · stream · alchemy 솥 거품 · sacrificial 희생의 불꽃 · healing · flame · sparks) · `fx`(effects.json — `MakerEffect.place`) · `title`/`desc`(살펴보기 창). `image` 를 비우면 그림 없이 지형(칠할 때 지형)의 원래 그림 + 효과. 맵 그림의 "+ 효과 타일 (게임 프리셋)"(재단 · 솥 · 배수구 · 횃불 벽 · 샘 · 연기 벽 · 광맥 · 초록 불꽃). 런타임: `finish` 가 칸마다 효과를 놓음 — `MakerUserTiles.GameFx`(CustomTilemap, 지형 층에 효과 Gizmo 를 붙임): 공개 클래스(PrisonLevel.Torch · CityLevel.Smoke/GreenFlame)는 그대로, 지역 전용 비공개 장식(SewerLevel Sink · CavesLevel Vein · HallsLevel Stream)은 `Level.map` 을 잠깐 그 칸만 해당 지형으로 바꾼 채 `add…Visuals` 를 불러 그 칸 것만 만듦, 솥 · 재단 · 샘 · 불꽃은 게임 입자(Speck.BUBBLE · SacrificialParticle · Speck.HEALING · FlameParticle · SparkParticle)를 `CellEmitter`(영웅이 보는 칸만)로. 이름 · 설명이 있으면 `image()/name()/desc()` 로 살펴보기 창(그림 없는 타일은 지형 그림). 편집기 맵 화면 · 팔레트에 ✦ 표시. 헤드리스 `eval:cellname,x,y`.
 - 타일셋 · 물 그림을 픽셀 편집기로 열면 옆에 **실시간 미리보기**(`levelpreview.js` — 게임이 만든 층 표본 `spd-level-previews.js`, 바닥 · 벽 타일 칸 번호까지 담아 벽 이어 붙이기가 게임과 같음).

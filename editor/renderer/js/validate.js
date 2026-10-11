@@ -99,6 +99,7 @@ PDM.validate = function () {
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);
+      if (o.type === 'trap' && o.ref && PDM.TRAP_BY_ID && !PDM.TRAP_BY_ID[o.ref]) add('warn', w, `함정 "${o.ref}" 은(는) 원작에 없는 함정입니다 (게임 저장소에 그 클래스가 없으면 놓이지 않음)`, k);
       if (o.at && o.at.x != null && f.mode !== 'procedural' && (o.at.x >= f.size.w || o.at.y >= f.size.h)) add('error', w, '맵 밖에 있습니다', k);
       if (o.at && o.at.x != null && f.mode !== 'procedural') {
         const tt = PDM.TERRAIN_BY_ID[(f.layers.terrain || [])[o.at.y * f.size.w + o.at.x]];

@@ -317,6 +317,9 @@ public class LevelHooks {
 			case "item": { Item it = MakerItem.create(ref); if (it != null) { it.quantity(Math.max(1, o.getInt("count", 1))); level.drop(it, cell).type = MakerDrops.heapType(o.getString("container", "")); } break; }
 			case "prop": MakerProp.place(level, ref, cell); break;
 			case "effect": MakerEffect.place(level, ref, cell); break;
+			case "trap":   // 함정 오브젝트 (방 템플릿 · 혼합 층)
+				MakerTraps.place(level, o, cell);
+				break;
 			case "event":
 				if (EventTriggers.placeEvent(level, ref, cell)) break;
 				if (level instanceof MakerLevel) ((MakerLevel) level).eventCells.put(cell, ref);

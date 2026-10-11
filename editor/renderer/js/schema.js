@@ -37,9 +37,9 @@ PDM.TERRAIN = [
   { id: 26, key: 'STATUE_SP',    name: '특수 석상',     tile: 73, color: '#8a8a9a', pass: false },
   { id: 33, key: 'REGION_DECO',  name: '지역 장식',     tile: 74, color: '#6a5a4a', pass: false },
   { id: 34, key: 'REGION_DECO_ALT', name: '지역 장식 2', tile: 75, color: '#6a5a5a', pass: false },
-  { id: 18, key: 'TRAP',         name: '함정',          tile: 0,  color: '#aa2a6a', pass: true, mark: '!' },
-  { id: 17, key: 'SECRET_TRAP',  name: '숨겨진 함정',   tile: 0,  color: '#7a2a5a', pass: true, mark: '?' },
-  { id: 19, key: 'INACTIVE_TRAP', name: '작동한 함정',  tile: 0,  color: '#5a3a4a', pass: true, mark: 'x' }
+  { id: 18, key: 'TRAP',         name: '함정',          tile: 0,  color: '#aa2a6a', pass: true, mark: '!', legacy: true },
+  { id: 17, key: 'SECRET_TRAP',  name: '숨겨진 함정',   tile: 0,  color: '#7a2a5a', pass: true, mark: '?', legacy: true },
+  { id: 19, key: 'INACTIVE_TRAP', name: '작동한 함정',  tile: 0,  color: '#5a3a4a', pass: true, mark: 'x', legacy: true }
 ];
 PDM.TERRAIN_BY_ID = Object.fromEntries(PDM.TERRAIN.map(t => [t.id, t]));
 
@@ -73,7 +73,66 @@ PDM.OBJECT_TYPES = {
   light: { name: '광원', color: '#ffe08a', ref: null },
   start: { name: '플레이어 스폰 위치', color: '#63b3ed', ref: null },
   entrance: { name: '입구 (투명)', color: '#3aa0c8', ref: null, nodeOnly: true },
-  exit: { name: '출구 (투명)', color: '#d05a5a', ref: null, nodeOnly: true }
+  exit: { name: '출구 (투명)', color: '#d05a5a', ref: null, nodeOnly: true },
+  trap: { name: '함정', color: '#d0507a', ref: 'trap' }
+};
+
+// ---------- 함정 (오브젝트 type "trap" · ref = 게임 levels.traps 클래스) ----------
+//  색 · 모양 = 게임 Trap.color · shape → terrain_features.png 의 (작동 중 ? color : 검정 8) + shape × 16 칸 (게임 TerrainFeaturesTilemap 과 같음)
+//  hide = 숨길 수 없는 함정 (canBeHidden = false — "숨김"을 켜도 보임)
+PDM.TRAPS = [
+  ['WornDartTrap', '오래된 다트 함정', 7, 5, 1], ['PoisonDartTrap', '독 다트 함정', 3, 5, 1], ['DisintegrationTrap', '분해 함정', 5, 5, 1],
+  ['AlarmTrap', '경보 함정', 0, 0], ['BurningTrap', '발화 함정', 1, 0], ['BlazingTrap', '불타는 함정', 1, 3], ['ChillingTrap', '냉동 함정', 6, 0], ['FrostTrap', '서리 함정', 6, 3],
+  ['ShockingTrap', '전격 함정', 2, 0], ['StormTrap', '폭풍 함정', 2, 3], ['ToxicTrap', '독가스 함정', 3, 2], ['CorrosionTrap', '부식성 가스 함정', 7, 2], ['ConfusionTrap', '혼란 가스 함정', 4, 2],
+  ['OozeTrap', '산성 점액 함정', 3, 0], ['WeakeningTrap', '약화 함정', 3, 1], ['CursingTrap', '저주 함정', 5, 1], ['GrippingTrap', '쇠덫 함정', 7, 0], ['FlashingTrap', '섬광 함정', 7, 3],
+  ['ExplosiveTrap', '폭발 함정', 1, 4], ['RockfallTrap', '낙석 함정', 7, 4, 1], ['PitfallTrap', '낭떠러지 함정', 0, 4], ['GeyserTrap', '간헐천 함정', 4, 4],
+  ['TeleportationTrap', '공간이동 함정', 4, 0], ['WarpingTrap', '순간이동 함정', 4, 3], ['GatewayTrap', '통로 함정', 4, 5], ['DistortionTrap', '왜곡 함정', 4, 6],
+  ['SummoningTrap', '소환 함정', 4, 1], ['FlockTrap', '양떼 함정', 6, 1], ['GuardianTrap', '수호자 함정', 0, 3], ['DisarmingTrap', '무장 해제 함정', 0, 6], ['GrimTrap', '음침한 함정', 7, 6, 1]
+].map(([id, name, color, shape, noHide]) => ({ id, name, color, shape, noHide: !!noHide }));
+PDM.TRAP_BY_ID = Object.fromEntries(PDM.TRAPS.map(t => [t.id, t]));
+/** 예전 데이터의 지형 함정(17 · 18 · 19)을 바꿀 때 쓰는 함정 — 런타임 MakerTraps.LEGACY 와 같음 */
+PDM.TRAP_LEGACY = 'WornDartTrap';
+
+// ---------- 타일 레이어 (world.tileLayers — 런타임 MakerTileLayers.DEFAULT 와 같음) ----------
+//  지형(layers.terrain)은 맨 아래 고정 레이어(게임 판정). 그 위에 사용자 타일 레이어를 배열 순서대로 그림.
+//  depth: below = 캐릭터 아래 · above = 캐릭터 위 / visible = 게임에 그림 / solid = 타일을 칠한 칸은 못 지나감
+PDM.TILE_LAYERS_DEFAULT = [
+  { id: 'base', name: '기본 타일', depth: 'below', visible: true, solid: false },
+  { id: 'grass', name: '풀 · 식생', depth: 'below', visible: true, solid: false },
+  { id: 'wall', name: '벽 · 구조물', depth: 'below', visible: true, solid: true },
+  { id: 'walldeco', name: '벽 장식', depth: 'below', visible: true, solid: false },
+  { id: 'front', name: '전경 (캐릭터 위)', depth: 'above', visible: true, solid: false }
+];
+PDM.tileLayers = () => { const w = PDM.store && PDM.store.get('world'); const l = w && Array.isArray(w.tileLayers) && w.tileLayers.length ? w.tileLayers : PDM.TILE_LAYERS_DEFAULT; return l; };
+
+/** 맵 데이터(노드 · 방 템플릿) 예전 형식 → 지금 형식. 바꿨으면 바꾼 내용 설명 배열, 아니면 [] — store 가 불러올 때 (PDM.migrate)
+ *   ① layers.utile (사용자 타일 한 장) → layers.tiles.base
+ *   ② 지형에 칠한 함정(17 숨김 · 18 · 19 작동함) → 바닥(1) + 함정 오브젝트 (예전엔 게임에서 함정이 만들어지지 않아 아무 일도 없었음 — 런타임과 같은 기본 함정으로) */
+PDM.migrateMapData = function (d) {
+  const out = [];
+  if (!d || !d.layers) return out;
+  const L = d.layers;
+  if (Array.isArray(L.utile)) {
+    L.tiles = L.tiles || {};
+    if (!L.tiles.base && L.utile.some(Boolean)) L.tiles.base = L.utile;
+    delete L.utile;
+    out.push('사용자 타일 → 타일 레이어 "기본 타일"');
+  }
+  const T = L.terrain, W = d.size && d.size.w;
+  if (Array.isArray(T) && W) {
+    let n = 0;
+    T.forEach((v, i) => {
+      if (v !== 17 && v !== 18 && v !== 19) return;
+      T[i] = 1;
+      d.objects = d.objects || [];
+      const x = i % W, y = Math.floor(i / W);
+      if (!d.objects.some(o => o.type === 'trap' && o.at && o.at.x === x && o.at.y === y))
+        d.objects.push({ id: PDM.uid ? PDM.uid('o') : 'trap' + i, type: 'trap', ref: PDM.TRAP_LEGACY, at: { x, y }, cond: '', hidden: v === 17, inactive: v === 19 });
+      n++;
+    });
+    if (n) out.push(`지형 함정 ${n}칸 → 함정 오브젝트 (${PDM.TRAP_BY_ID[PDM.TRAP_LEGACY].name} — 오른쪽에서 종류를 바꿀 수 있음)`);
+  }
+  return out;
 };
 PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구 방', exit: '출구 방', special: '특수 방' };
 

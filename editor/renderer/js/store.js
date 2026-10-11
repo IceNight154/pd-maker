@@ -82,6 +82,7 @@ PDM.store = (function () {
           const before = JSON.stringify(obj);
           data[`${type}:${id}`] = PDM.migrate(type, obj);
           if (type === 'hero' && JSON.stringify(obj) !== before) { dirty.add(`hero:${id}`); problems.push(`영웅 ${id}: 예전 스킬을 새 구조(주문·주문서)로 바꿨습니다 (저장하면 적용)`); }
+          if ((type === 'node' || type === 'room') && PDM.migrateMapData) { const ch = PDM.migrateMapData(obj); if (ch.length) { dirty.add(`${type}:${id}`); problems.push(`${type === 'node' ? '맵' : '방 템플릿'} ${id}: ${ch.join(' · ')} (저장하면 적용)`); } }
         } catch (e) { problems.push(`${folder}/${f.name}: ${e.message}`); }
       }
     }

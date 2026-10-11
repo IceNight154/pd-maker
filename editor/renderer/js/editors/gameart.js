@@ -204,7 +204,7 @@
   function userTileUsage(id) {
     const out = [];
     [...store.all('node').map(f => ['node', f]), ...store.all('room').map(r => ['room', r])].forEach(([k, f]) => {
-      const n = (((f.layers || {}).utile) || []).filter(v => v === id).length;
+      const L = f.layers || {}, n = Object.values(L.tiles || {}).concat(L.utile ? [L.utile] : []).reduce((a, arr) => a + (Array.isArray(arr) ? arr.filter(v => v === id).length : 0), 0);   // 모든 타일 레이어
       if (n) out.push(`${k === 'room' ? '방 ' + f.name : PDM.World.fullName(f.id)} ${n}칸`);
     });
     return out;

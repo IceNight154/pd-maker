@@ -82,13 +82,20 @@ public class MakerLevel extends Level {
 			}
 		}
 		if (MakerPaint.on(f)) { MakerPaint mp = new MakerPaint(); mp.setRect(0, 0, w, h); customTiles.add(mp); }
-		for (int i = 0; i < w * h; i++) MakerUserTiles.put(this, i, MakerUserTiles.at(f, i));   // 사용자 타일 (afterCreate 에서 타일맵으로)
-		if (f.get("objects") != null) for (JsonValue o : f.get("objects")) {   // 투명 입구 오브젝트
+		java.util.List<String> tl = MakerTileLayers.layersOf(f);   // 타일 레이어 (afterCreate 에서 타일맵으로 · solid 레이어는 여기서 막음)
+		if (!tl.isEmpty()) for (int i = 0; i < w * h; i++) MakerTileLayers.putCell(this, f, tl, i, i);
+		if (f.get("objects") != null) for (JsonValue o : f.get("objects")) {
 			JsonValue at = o.get("at");
-			if (!"entrance".equals(o.getString("type", "")) || at == null || !at.has("x")) continue;
+			if (at == null || !at.has("x")) continue;
 			int c = at.getInt("x") + at.getInt("y") * w;
-			if (c >= 0 && c < map.length && getTransition(c) == null) transitions.add(new LevelTransition(this, c, LevelTransition.Type.REGULAR_ENTRANCE));
+			String type = o.getString("type", "");
+			if (type.equals("entrance")) {   // 투명 입구 오브젝트
+				if (c >= 0 && c < map.length && getTransition(c) == null) transitions.add(new LevelTransition(this, c, LevelTransition.Type.REGULAR_ENTRANCE));
+			} else if (type.equals("trap") && Cond.eval(o.getString("cond", ""), StoryState.globalResolver())) {   // 함정 오브젝트 (바닥 지형은 그대로 두고 그 위에)
+				MakerTraps.place(this, o, c);
+			}
 		}
+		for (int i = 0; i < map.length; i++) MakerTraps.legacy(this, i);   // 예전 데이터: 지형에 칠한 함정 → 기본 함정
 		return true;
 	}
 
