@@ -74,7 +74,8 @@ PDM.OBJECT_TYPES = {
   start: { name: '플레이어 스폰 위치', color: '#63b3ed', ref: null },
   entrance: { name: '입구 (투명)', color: '#3aa0c8', ref: null, nodeOnly: true },
   exit: { name: '출구 (투명)', color: '#d05a5a', ref: null, nodeOnly: true },
-  trap: { name: '함정', color: '#d0507a', ref: 'trap' }
+  trap: { name: '함정', color: '#d0507a', ref: 'trap' },
+  combo: { name: '조합 타일', color: '#ffb060', ref: 'combo' }
 };
 
 // ---------- 함정 (오브젝트 type "trap" · ref = 게임 levels.traps 클래스) ----------
@@ -101,8 +102,20 @@ PDM.TILE_LAYERS_DEFAULT = [
   { id: 'grass', name: '풀 · 식생', depth: 'below', visible: true, solid: false },
   { id: 'wall', name: '벽 · 구조물', depth: 'below', visible: true, solid: true },
   { id: 'walldeco', name: '벽 장식', depth: 'below', visible: true, solid: false },
+  { id: 'light', name: '광원 · 효과', depth: 'below', visible: true, solid: false, blend: 'add' },
   { id: 'front', name: '전경 (캐릭터 위)', depth: 'above', visible: true, solid: false }
 ];
+// ---------- 분리된(투명 배경) 타일셋의 밑그림 대응표 (런타임 MakerTileUnderlay.LEGACY 와 같음) ----------
+//  게임은 칸마다 그림 하나만 그려서, 풀 · 장식 · 계단 · 조각상 칸의 바닥을 지운 타일셋은 그 자리에 물이 비침.
+//  → 그 그림(visual) 아래에 under 칸들을 먼저 그림. 0 바닥 · 6 바닥(변형 1) · 4 특수 바닥 (원작 타일셋 5종 픽셀 비교 결과)
+//  75 · 131(지역 장식 변형)은 원작마다 달라(하수도 · 동굴 4, 도시 10, 전당 0) 4 로 둠. 프로젝트 값: tilecombos.json legacy (같은 visual 이면 덮어씀)
+PDM.TILE_LEGACY_DEFAULT = [[1, 0], [2, 0], [3, 0], [7, 6], [8, 6], [9, 6], [16, 0], [18, 0], [22, 4], [64, 4], [65, 0], [66, 0], [67, 0], [69, 6], [70, 6],
+  [72, 0], [73, 4], [74, 0], [75, 4], [120, 4], [121, 0], [122, 0], [123, 0], [125, 6], [126, 6], [128, 0], [129, 4], [130, 0], [131, 4]].map(([visual, u]) => ({ visual, under: [u] }));
+/** 지금 대응표: Map visual → under[] */
+PDM.tileLegacy = () => { const m = new Map(PDM.TILE_LEGACY_DEFAULT.map(e => [e.visual, e.under]));
+  (((PDM.store && PDM.store.get('tilecombos')) || {}).legacy || []).forEach(e => { if (e && e.visual != null) m.set(+e.visual, Array.isArray(e.under) ? e.under.map(Number) : []); }); return m; };
+/** 원작 타일셋의 원래 구멍 (16×16, 줄마다 비트 = 투명) — 원작 5종 모두 같음. 런타임 MakerTileUnderlay.HOLES 와 같음 */
+PDM.TILE_HOLES = { 18: [0, 0, 0, 0, 0, 0, 8184, 8184, 8184, 8184, 8184, 0, 0, 0, 0, 0], 64: [0, 0, 0, 0, 0, 2016, 8184, 8184, 4080, 960, 0, 0, 0, 0, 0, 0], 120: [2016, 8184, 8184, 4080, 960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
 PDM.tileLayers = () => { const w = PDM.store && PDM.store.get('world'); const l = w && Array.isArray(w.tileLayers) && w.tileLayers.length ? w.tileLayers : PDM.TILE_LAYERS_DEFAULT; return l; };
 
 /** 맵 데이터(노드 · 방 템플릿) 예전 형식 → 지금 형식. 바꿨으면 바꾼 내용 설명 배열, 아니면 [] — store 가 불러올 때 (PDM.migrate)

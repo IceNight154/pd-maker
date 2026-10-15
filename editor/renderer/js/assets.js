@@ -81,8 +81,42 @@ PDM.assets = (function () {
     return ok ? { ok: true, dir: g } : { ok: false, reason: '게임 에셋을 찾지 못했습니다: ' + g };
   }
 
-  /** 테마 타일셋 이미지 */
-  function themeTiles(theme) {
+  /** 분리된(투명 배경) 타일셋 → 밑그림을 합친 사본 (런타임 MakerTileUnderlay 와 같은 규칙: 지금 타일셋에서 투명하고 원작에서는 불투명한 픽셀에만 under 칸을 아래에 깜).
+   *  원작과 같은 타일셋이면 그대로 img. 대응표가 바뀌면 다시 구움 */
+  const underCache = new WeakMap();
+  function withUnderlay(img) {
+    if (!img || !img.width || !PDM.tileLegacy) return img;
+    const tbl = PDM.tileLegacy(), key = JSON.stringify([...tbl]);
+    const hit = underCache.get(img); if (hit && hit.key === key) return hit.out;
+    const W = img.width, H = img.height, n = Math.max(1, Math.round(W / 16));
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+    let id; try { id = g.getImageData(0, 0, W, H); } catch (_) { return img; }
+    const d = id.data, src = new Uint8ClampedArray(d); let changed = false;
+    const over = (o, p) => { const a = src[p + 3] / 255; if (!a) return; const oa = o[3] + a * (1 - o[3]); for (let k = 0; k < 3; k++) o[k] = (src[p + k] * a + o[k] * o[3] * (1 - a)) / oa; o[3] = oa; };
+    for (const [v, under] of tbl) {
+      if (v < 0 || v > 255 || !under || !under.length) continue;
+      const x0 = (v % 16) * n, y0 = Math.floor(v / 16) * n, hole = PDM.TILE_HOLES[v];
+      if (x0 + n > W || y0 + n > H) continue;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const p = ((y0 + y) * W + x0 + x) * 4;
+        if (src[p + 3] === 255) continue;
+        if (hole && (hole[Math.floor(y * 16 / n)] >> Math.floor(x * 16 / n) & 1)) continue;
+        const o = [0, 0, 0, 0];
+        under.forEach(u => { if (u >= 0 && u < 256) over(o, ((Math.floor(u / 16) * n + y) * W + (u % 16) * n + x) * 4); });
+        if (!o[3]) continue;
+        over(o, p);
+        d[p] = o[0]; d[p + 1] = o[1]; d[p + 2] = o[2]; d[p + 3] = Math.round(o[3] * 255); changed = true;
+      }
+    }
+    let out = img;
+    if (changed) { g.putImageData(id, 0, 0); out = cv; }
+    underCache.set(img, { key, out });
+    return out;
+  }
+
+  /** 테마 타일셋 이미지 (분리된 타일셋은 밑그림을 합친 모습 — 게임 화면과 같게). raw = 타일셋 파일 그대로 (조합 타일의 스프라이트 고르기) */
+  function themeTiles(theme, raw) {
     const t = PDM.THEMES[theme];
     const custom = !t && ((PDM.store.get('world') || {}).customThemes || []).find(c => c.id === theme);
     const baseTiles = 'game:' + PDM.THEMES[(custom && PDM.THEMES[custom.base]) ? custom.base : 'SEWER'].tiles;
@@ -91,8 +125,8 @@ PDM.assets = (function () {
     // 사용자 테마는 바탕 테마와 같은 타일셋 그림을 쓸 수 있어서, 물이 섞이지 않게 사본(캔버스)에 묶음
     return p.then(img => {
       if (!img) return img;
-      let out = img;
-      if (custom) { out = document.createElement('canvas'); out.width = img.width; out.height = img.height; out.getContext('2d').drawImage(img, 0, 0); }
+      let out = raw ? img : withUnderlay(img);
+      if (custom) { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(out, 0, 0); out = c; }
       return themeWater(theme).then(w => { if (w) waterOf.set(out, w); return out; }, () => out);
     });
   }
@@ -179,5 +213,5 @@ PDM.assets = (function () {
     g.restore();
   }
 
-  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, themeWater, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
+  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, themeWater, withUnderlay, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
 })();

@@ -378,7 +378,7 @@
       const utDef = id => id ? UT().find(t => t.id === id) : null;
       const utImgs = new Map();   // 그림 경로 → 불러온 그림 (paint 가 씀, 없으면 불러온 뒤 다시 그림)
       if (ui.utile === undefined) ui.utile = ''; if (!ui.utShape) ui.utShape = 'pen';
-      let tilesImg = null, paintImg = null, featImg = null;   // featImg = 게임 terrain_features.png (함정 그림)
+      let tilesImg = null, rawTilesImg = null, paintImg = null, featImg = null;   // featImg = 게임 terrain_features.png (함정 그림)
       const theme = themeKey(themeOf(fl, kind));
 
       // ---- 팔레트 ----
@@ -481,7 +481,7 @@
         typeSel.value = ui.objType;
         const refKind = PDM.OBJECT_TYPES[ui.objType].ref;
         const opts = refKind === 'character' ? store.all('char').filter(c => ui.objType === 'mob' ? ['mob', 'boss'].includes(c.kind) : !['mob', 'boss', 'hero'].includes(c.kind)).map(c => [c.id, c.name])
-          : refKind === 'trap' ? PDM.TRAPS.map(t => [t.id, t.name]) : refKind === 'item' ? store.all('item').map(c => [c.id, c.name]) : refKind === 'event' ? store.all('event').map(c => [c.id, c.name]) : refKind === 'prop' ? store.all('prop').map(c => [c.id, c.name]) : refKind === 'effect' ? PDM.ui.refOptions('effect') : [];
+          : refKind === 'trap' ? PDM.TRAPS.map(t => [t.id, t.name]) : refKind === 'item' ? store.all('item').map(c => [c.id, c.name]) : refKind === 'event' ? store.all('event').map(c => [c.id, c.name]) : refKind === 'prop' ? store.all('prop').map(c => [c.id, c.name]) : refKind === 'effect' ? PDM.ui.refOptions('effect') : refKind === 'combo' ? PDM.ui.refOptions('combo') : [];
         if (refKind === 'character' && ui.objType === 'mob') opts.push(...['rat', 'gnoll', 'crab', 'slime', 'snake', 'albino'].map(m => ['spd:' + m, `(게임) ${m}`]));
         const refSel = h('select', { onchange: () => { ui.objRef = refSel.value; ui.tool = 'object'; drawTools(); } }, opts.map(([v, t]) => h('option', { value: v }, t)));
         if (!ui.objRef && opts[0]) ui.objRef = opts[0][0];
@@ -499,7 +499,12 @@
           const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === tp.id ? ' on' : ''), title: tp.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = tp.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
           drawTrap(c.getContext('2d'), tp.id, false, 0, 0, 16); quick.append(c);
         });
+        if (ui.objType === 'combo' && PDM.combos) PDM.combos.list().forEach(cb => {
+          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === cb.id ? ' on' : ''), title: (cb.name || cb.id) + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = cb.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
+          const g = c.getContext('2d'); g.imageSmoothingEnabled = false; PDM.combos.drawCombo(g, cb, 0, 0, 16, rawTilesImg); quick.append(c);
+        });
         palette.append(typeSel, refKind ? refSel : '', quick.children.length ? quick : '',
+          ui.objType === 'combo' ? h('div', { class: 'hint my-2' }, '조합 타일: 여러 스프라이트 + 광원 · 오브젝트 묶음을 한 칸에 놓습니다. 만들고 고치는 곳은 리소스 목록의 "조합 타일". ', h('button', { class: 'btn xs', onclick: () => PDM.tabs.open('tilecombos') }, '조합 타일 열기')) : '',
           ui.objType === 'trap' ? h('div', { class: 'hint my-2' }, '함정은 지형이 아니라 오브젝트입니다 — 바닥 타일 위에 따로 놓이고, 게임의 함정 규칙(밟으면 작동 · 찾기 · 해제)을 그대로 따릅니다. 숨김 · 작동함은 오른쪽에서.') : '',
           !opts.length && refKind ? h('div', { class: 'hint c-gold' }, '아직 만든 것이 없습니다.') : '',
           ui.objType === 'prop' ? h('button', { class: 'btn xs mt-3', title: '새 맵 오브젝트(상자·레버·문·장식 등)를 만듭니다', onclick: () => PDM.propUtil && PDM.propUtil.newProp() }, '＋ 새 맵 오브젝트 만들기') : '',
@@ -605,6 +610,7 @@
       const sprites = {};
       async function loadSprites() {
         tilesImg = await PDM.assets.themeTiles(theme);
+        rawTilesImg = await PDM.assets.themeTiles(theme, true).catch(() => tilesImg);   // 조합 타일의 타일셋 스프라이트 (밑그림 없이)
         featImg = await PDM.assets.load('game:environment/terrain_features.png').catch(() => null);
         if (fl.paint && fl.paint.image && fl.paint.enabled !== false) { try { paintImg = await PDM.assets.load(fl.paint.image); } catch (_) { paintImg = null; } }
         for (const o of fl.objects || []) {
@@ -798,9 +804,11 @@
             PDM.assets.drawFrame(g, sp.img, fw, fh, (((pr.sprite.anims || {})[stt.anim] || {}).frames || stt.frames || [])[0] ?? (stt.frame || 0), x + (fx * s - fw * k) / 2 + (+pr.sprite.ox || 0) * u, y + s - fh * k + (+pr.sprite.oy || 0) * u, k);
           } else if (sp && sp.img) { const fw = sp.c.sprite.frame[0], fh = sp.c.sprite.frame[1]; const sc = s / Math.max(fw, fh); PDM.assets.drawFrame(g, sp.img, fw, fh, 0, x + (s - fw * sc) / 2, y + (s - fh * sc), sc); }
           else if (sp && sp.canvas) g.drawImage(sp.canvas, x, y, s, s);
+          else if (o.type === 'combo' && PDM.combos && PDM.combos.thumb(o.ref, rawTilesImg, () => paint())) g.drawImage(PDM.combos.thumb(o.ref, rawTilesImg), x - s, y - s, s * 3, s * 3);
           else if (o.type === 'trap') { g.save(); if (o.hidden) g.globalAlpha = .55; drawTrap(g, o.ref, o.inactive, x, y, s); g.restore(); if (o.hidden) { g.fillStyle = '#fff'; g.font = `bold ${Math.max(7, s * .4)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillText('?', x + s - 1, y); } }
           else { g.fillStyle = col + 'cc'; g.fillRect(x + s * .15, y + s * .15, s * .7, s * .7); g.fillStyle = '#000'; g.font = `bold ${s * .5}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText({ light: '☀', npc: 'N', mob: 'M', item: 'I', event: 'E', start: 'S', prop: 'P', entrance: '<', exit: '>', plate: 'T' }[o.type] || '?', x + s / 2, y + s / 2 + 1); }
-          if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s, { block: lightBlock });   // 광원: 게임과 같은 감쇠 · 그림자로 미리보기
+          if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s, { block: lightBlock });
+          if (o.type === 'combo') { const cb = (PDM.combos ? PDM.combos.list() : []).find(c => c.id === o.ref), lt = cb && cb.light; if (lt && lt.on) PDM.drawLightPreview(g, x + s / 2 + (+lt.ox || 0) * s / 16, y + s / 2 + (+lt.oy || 0) * s / 16, Object.assign({ color: '#ffe9a8', k: 3, z: 10, range: 4 }, lt), s, lt.shadow === false ? {} : { block: lightBlock }); }   // 광원: 게임과 같은 감쇠 · 그림자로 미리보기
           g.strokeStyle = i === ui.sel ? '#fff' : col; g.lineWidth = i === ui.sel ? 2 : 1; g.strokeRect(x + 1, y + 1, s - 2, s - 2);
           if (!drawable) { g.fillStyle = '#ccc'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(PDM.PLACE_RULES[(o.at && o.at.rule) || 'random'] || '', x + s / 2, y + s + 2); }
         });
@@ -1170,7 +1178,7 @@
       /** 오브젝트 우클릭 메뉴 */
       function objMenu(e, i) {
         const o = fl.objects[i]; if (!o) return;
-        const T = PDM.OBJECT_TYPES[o.type] || {}, refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect' }[o.type];
+        const T = PDM.OBJECT_TYPES[o.type] || {}, refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' }[o.type];
         const at = o.at && o.at.x != null ? o.at : null;
         PDM.ui.menu(e.clientX, e.clientY, [
           { label: `${T.name || o.type}${o.ref ? ' · ' + o.ref : ''}${at ? ` (${at.x}, ${at.y})` : ''}`, disabled: true, run: () => {} },
@@ -1178,7 +1186,7 @@
           { label: '설정 열기', hint: '오른쪽 속성 창', run: () => { ui.sel = i; paint(); showInspector(); const ins = document.querySelector('#inspBody'); if (ins) ins.scrollTop = 0; } },
           { label: '이동…', hint: '다음에 누르는 칸으로', disabled: !drawable, run: () => { ui.moveObj = i; ui.moveTo = null; cv.style.cursor = 'move'; info.textContent = '옮길 칸을 누르세요 (오른쪽 클릭 · Esc = 취소)'; } },
           { label: '복제', hint: '옆 빈 칸에', run: () => dupObj(i) },
-          refKind ? { label: '대상 열기', disabled: !o.ref || o.ref.startsWith('spd:'), run: () => PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`) } : null,
+          refKind ? { label: '대상 열기', disabled: !o.ref || o.ref.startsWith('spd:'), run: () => (refKind === 'combo' ? PDM.combos.ops.show(o.ref) : PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`)) } : null,
           '-',
           { label: '삭제', hint: 'Delete', run: () => { ui.sel = -1; withPorts('오브젝트 삭제', () => store.edit(key, '오브젝트 삭제', r => { r.objects.splice(i, 1); })); } },
         ].filter(Boolean));
@@ -1252,7 +1260,7 @@
         const o = fl.objects && fl.objects[ui.sel];
         if (o) {
           const p = ['objects', ui.sel];
-          const refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect' }[o.type];
+          const refKind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' }[o.type];
           const el = h('div', {},
             F.select(key, [...p, 'type'], Object.fromEntries(Object.entries(PDM.OBJECT_TYPES).map(([k, v]) => [k, v.name])), { label: '종류' }),
             refKind ? F.ref(key, [...p, 'ref'], refKind, { label: '대상' }) : null,
@@ -1279,7 +1287,7 @@
             o.type === 'plate' ? h('div', {}, F.bool(key, [...p, 'once'], { label: '한 번만 발동 (밟은 뒤 사라짐)' }), h('div', { class: 'hint my-2' }, '게임에서는 보이지 않습니다. 영웅이 이 칸을 밟으면 위 「대상」 이벤트가 바로 실행됩니다 (이벤트의 발동 방식·이미지 설정과 상관없이).')) : null,
             F.text(key, [...p, 'note'], { label: '메모' }),
             h('div', { class: 'flex gap-3 mt-4' },
-              refKind ? h('button', { class: 'btn sm', onclick: () => o.ref && !o.ref.startsWith('spd:') && PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`) }, '대상 열기') : null,
+              refKind ? h('button', { class: 'btn sm', onclick: () => o.ref && !o.ref.startsWith('spd:') && (refKind === 'combo' ? PDM.combos.ops.show(o.ref) : PDM.tabs.open(refKind === 'effect' ? 'effects' : `${refKind}:${o.ref}`)) }, '대상 열기') : null,
               h('button', { class: 'btn sm danger', onclick: () => { const i = ui.sel; ui.sel = -1; withPorts('오브젝트 삭제', () => store.edit(key, '오브젝트 삭제', r => { r.objects.splice(i, 1); })); } }, '삭제')));
           PDM.inspector.show(`${PDM.OBJECT_TYPES[o.type].name} #${ui.sel}`, el);
           return;

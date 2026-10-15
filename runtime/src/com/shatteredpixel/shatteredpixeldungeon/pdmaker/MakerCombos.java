@@ -1,5 +1,5 @@
 /*
- * PDMaker — 조합 타일 (maps/tilecombos.json combos[]): 여러 스프라이트 + 레이어 + 오프셋 + 광원 · 이펙트 · 오브젝트를 묶은 재사용 프리셋
+ * PDMaker — 조합 타일 (maps/tilecombos.json list[] — 편집기 "조합 타일"): 여러 스프라이트 + 레이어 + 오프셋 + 광원 · 이펙트 · 오브젝트를 묶은 재사용 프리셋
  *   { id, name,
  *     sprites: [{ src: "tileset"(이 층 타일셋의 칸) | "image"(그림 파일), tile, image, x, y, size, layer, ox, oy (px, 한 칸 = 16), alpha, blend: normal | add(발광 스프라이트) }],
  *     light:   { on, color, k, z, range, ox, oy, pulse, pulseMin, shadow, charShadow }   — 게임 화면에 실제 빛 · 그림자 (MakerLights 점광원)
@@ -39,7 +39,9 @@ public class MakerCombos extends CustomTilemap {
 
 	static JsonValue list() {
 		JsonValue c = MakerRuntime.tilecombos;
-		return c == null ? null : c.get("combos");
+		if (c == null) return null;
+		JsonValue l = c.get("list");
+		return l != null ? l : c.get("combos");   // 예전 이름 combos
 	}
 	public static JsonValue combo(String id) {
 		JsonValue l = list();

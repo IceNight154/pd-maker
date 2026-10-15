@@ -129,6 +129,7 @@ PDM.ui = (function () {
       case 'trailer': return ((s.get('trailers') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})`]);
       case 'quest': return ((s.get('quests') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})`]);
       case 'badge': return ((s.get('badges') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})`]);
+      case 'combo': return ((s.get('tilecombos') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})`]);
       case 'filter': return ((s.get('filters') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})`]);
       case 'textfx': return ((s.get('textfx') || {}).list || []).map(c => [c.id, `${c.name || c.id} (${c.id})` + (c.sheet ? '' : ' — 아직 안 만듦')]);
       case 'prop': return s.all('prop').map(c => [c.id, `${c.name} (${c.id})`]);

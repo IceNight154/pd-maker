@@ -151,6 +151,7 @@ MyProject/
 ├ gameitems.json        게임 아이템 그림 · 드랍 · 금지 (§8)
 ├ effects.json  filters.json  textfx.json  trailers.json  compose.json  quests.json   (확장 기능)
 ├ maps/world.json       맵 그래프 (§4.1)             ├ maps/nodes/<id>.json   노드 = 맵 하나
+├ maps/tilecombos.json  조합 타일 · 분리된 타일셋 밑그림 대응표 (§4.2.2)
 ├ rooms/<id>.json       방 템플릿                     ├ props/<id>.json        맵 오브젝트
 ├ heroes/<id>.json      영웅                          ├ characters/<id>.json   NPC · 동료 · 몬스터 · 보스
 ├ items/<id>.json       아이템                        ├ events/<id>.json       커먼 이벤트 · 장면
@@ -234,7 +235,7 @@ MyProject/
 맵 요소를 세 가지로 나눔 — **타일 정의**(무엇: `world.userTiles` 그림 · 칠할 때 지형 · 효과 · 이름) / **타일 레이어**(어디에: 칸 → 타일 id) / **오브젝트 인스턴스**(놓인 것 하나하나: `objects[]` — 위치 · 종류 · 상태).
 
 - **지형** `layers.terrain` = 맨 아래 고정 레이어. 게임 `Level.map` 그대로라 **판정(지나감 · 막힘 · 시야)의 유일한 근거** — 판정 코드는 게임 것 하나뿐(레이어마다 따로 만들지 않음).
-- **사용자 타일 레이어** `layers.tiles { <레이어 id>: [칸 → 타일 id ("" = 없음)] }` — 같은 칸에 레이어마다 다른 타일. 레이어 정의는 모든 맵 공통 `world.tileLayers [{ id, name, depth: below|above, visible, solid }]`(없으면 기본: 기본 타일 · 풀 · 식생 · 벽 · 구조물(solid) · 벽 장식 · 전경(above)). 배열 순서 = 그리는 순서.
+- **사용자 타일 레이어** `layers.tiles { <레이어 id>: [칸 → 타일 id ("" = 없음)] }` — 같은 칸에 레이어마다 다른 타일. 레이어 정의는 모든 맵 공통 `world.tileLayers [{ id, name, depth: below|above, visible, solid }]`(없으면 기본: 기본 타일 · 풀 · 식생 · 벽 · 구조물(solid) · 벽 장식 · 광원 · 효과(`blend: add` — 더하기로 그려 발광) · 전경(above)). 배열 순서 = 그리는 순서.
   - 런타임 `MakerTileLayers`(정의 · 읽기 · `putCell`) → `MakerUserTiles.finish` 가 레이어 순서대로 (레이어 · 그림 · 크기) 묶음마다 CustomTilemap 하나를 `customTiles`(below — 지형 위 · 함정 · 아이템 · 캐릭터 아래) / `customWalls`(above — 캐릭터 · 벽 윗면 위)에. 게임 그리기 순서: 물 → 지형 → customTiles → 함정 · 식물 → 아이템 → 캐릭터 → 솟은 지형 · 벽 윗면 → customWalls → 효과 · 가스 · 안개. 타일 자체의 `over` 도 그대로(그 타일만 위로).
   - `visible: false` = 게임에 그리지 않음(효과도, 살펴보기 이름은 남음) · `solid: true` = 층을 만들 때 타일이 있는 칸의 지나갈 수 있는 지형을 게임의 보이지 않는 막힌 장식 `CUSTOM_DECO`(물이면 `CUSTOM_DECO_WTR`)로 — 그림은 그대로, 판정만 막힘.
   - 새 레이어는 데이터만 추가(레이어 설정 창) — 코드 수정 없음. 세이브에는 묶음마다 `pdm_layer` 저장.
@@ -242,6 +243,22 @@ MyProject/
   - 그 밖의 특수 요소도 같은 오브젝트 목록: 투명 발판(`plate`) · 맵 오브젝트(`prop` — 스위치 · 문 · 밀기 · 상호작용 · 막힘 상태) · 이벤트 칸 · 광원 · 입구 · 출구, 모두 `cond`(등장 조건).
 - **예전 형식 변환** (`PDM.migrateMapData` — 프로젝트를 열 때 노드 · 방 템플릿마다, 저장하면 적용): `layers.utile` → `layers.tiles.base` · 지형에 칠한 함정(17 숨김 · 18 · 19 작동함) → 바닥(1) + 함정 오브젝트(`WornDartTrap` — 예전엔 게임 함정이 만들어지지 않아 보이지도 작동하지도 않았음). 런타임도 변환 전 데이터를 그대로 읽음(`utile` = base, 지형 함정 → `MakerTraps.legacy`).
 - 편집기: 팔레트 "타일 레이어"(고른 레이어에 칠함 · 👁 편집기에서만 숨기기 · 칸 수 · "위" "막힘" 표시 · 레이어 설정 창 — 이름 · 높이 · 게임 표시 · 막힘 · 순서 · 추가 · 삭제), 위(above) 레이어는 오브젝트 위에 그림, 지우개 "사용자 타일" = 지금 레이어 · "전부" = 모든 레이어. 오브젝트 "함정"(게임 그림 terrain_features.png 로 고르기 · 그리기, 숨김 = 흐리게 + ?). 지형 팔레트에서 지형 함정은 뺌. 헤드리스 `eval:layerinfo` · `eval:presscell`.
+
+### 4.2.2 조합 타일 · 분리된 타일셋 밑그림 (`maps/tilecombos.json`)
+
+`{ format: "pdmaker-tilecombos", legacy: [ { visual, under: [칸] } ], list: [ 조합 ] }` — 편집기 "🧩 조합 타일"(`editors/combos.js`), 런타임 `MakerCombos` · `MakerTileUnderlay`. 예전 이름 `combos` 는 편집기가 열 때 `list` 로 바꾸고, 런타임은 둘 다 읽음.
+
+- **분리된(투명 배경) 타일셋 → 예전 모습 그대로.** 게임은 칸마다 그림 하나(`DungeonTerrainTilemap.getTileVisual`)만 그려서, 풀 · 장식 · 계단 · 조각상 칸의 바닥을 지운 타일셋은 그 자리에 물 층이 비침. `MakerTileUnderlay` = 지형 타일맵 **아래** 밑그림 타일맵(그리는 순서: 물 → 밑그림 → 지형 → customTiles …). 층을 만들 때 타일셋과 같은 크기의 밑그림 텍스처를 한 번 굽고, 칸마다 게임이 그리는 그림 번호를 그대로 물어(변형 · 이음 규칙 그대로) 같은 자리를 그림.
+  - 굽는 규칙: 대응표의 칸 v 마다 "지금 타일셋에서는 투명(alpha < 255)한데 원작에서는 불투명한" 픽셀에만 `under[d]` 칸의 같은 픽셀. 원작의 원래 구멍(`HOLES` — 18 우물 물 · 64 / 120 연금술 솥 입구, 원작 5종이 모두 같은 모양)은 비워 둬서 물이 비치는 것도 예전 그대로. 원작 타일셋 · 일체형 사용자 타일셋은 아무것도 그리지 않음(밑그림 층 자체를 안 만듦).
+  - 기본 대응표(원작 5종 픽셀 비교): 1 · 2 · 3 · 16 · 18 · 65 · 66 · 67 · 72 · 74 · 121 · 122 · 123 · 128 · 130 → 0(바닥) / 7 · 8 · 9 · 69 · 70 · 125 · 126 → 6(바닥 변형) / 22 · 64 · 73 · 120 · 129 → 4(특수 바닥) / 75 · 131 → 4(원작마다 달라 확인 필요 — 하수도 · 동굴 4, 도시 10, 전당 0). `legacy` 로 칸마다 바꿈(여러 칸 = 아래부터 겹침, `[]` = 없음). 편집기 `PDM.TILE_LEGACY_DEFAULT` · `PDM.TILE_HOLES` · `PDM.assets.withUnderlay` 가 같은 규칙으로 맵 편집기 · 미리보기를 그림.
+  - 연결 줄(runtime-installer PATCHES): `GameScene.create`(지형 타일맵을 넣기 직전 `addTo`) · `updateMap()` · `updateMap(cell)`(`refresh`).
+- **조합** `{ id, name, sprites: [ { src: tileset | image, tile, image, x, y, size, layer, ox, oy (px, 한 칸 16), alpha, blend: normal | add } ], light: { on, color, k, z, range, ox, oy, shadow, charShadow, pulse, pulseMin }, effect, objects: [ { type: trap | prop, ref, hidden } ], terrain (-2 = 그대로), autogen }`
+  - 그림: 스프라이트마다 `MakerUserTiles.put(레이어, 칸, "combo:<id>#<n>")` — 타일 레이어(§4.2.1) 순서대로 그리고, 같은 레이어 안에서는 배열 순서. `src: tileset` 은 그 층 테마 타일셋의 칸(테마를 따라감, 밑그림 없는 원본), `image` 는 그림 파일의 칸. 오프셋 · 불투명도 · 더하기(발광)는 (레이어 · 그림 · 옵션) 묶음마다 타일맵 하나로.
+  - 빛: 발광 스프라이트(`blend: add` 또는 레이어 `blend: add`)는 빛무리 그림만, `light` 는 실제 점광원(`MakerLights` — 바닥 · 캐릭터를 밝히고 그림자). 층에 놓인 조합 목록은 보이지 않는 CustomTilemap `MakerCombos`(`pdm_combo_ids` · `pdm_combo_cells`)로 세이브에 남고, 광원은 여기서 다시 만듦.
+  - 오브젝트: 조합은 정의만 하고 만드는 것은 오브젝트 시스템(`LevelHooks.placeObject` — 함정은 `MakerTraps`, 게임 규칙 그대로). 바닥 타일은 바뀌지 않음.
+  - 놓기: ① 맵 오브젝트 `{ type: "combo", ref }` (직접 그린 맵 · 방 템플릿 · 혼합 층) ② 자동 생성 `autogen { enabled, where: wallFace(아래가 바닥인 벽) | wall | floor | floorNearWall | grass | water | terrain, terrains, chance(칸마다 %), max(0 = 제한 없음), spacing(칸, 체비셰프), themes([] = 모두), handmade }` — `LevelHooks.afterCreate` 끝에서 층 씨앗(`Dungeon.seedCurDepth`)으로 후보 칸을 섞어 확률 · 간격 · 최대대로(같은 층은 늘 같은 자리). 계단 · 함정 · 더미 · 식물 칸, 문 · 맵 가장자리는 피함. 목록 앞의 조합이 먼저 자리를 가짐.
+  - 참조 정책: 맵 · 자동 생성은 id 로만 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그린 결과 그대로. 조합을 지우거나 자동 생성을 끄면 새 층에 놓이지 않을 뿐 맵 데이터는 남고, 편집기 검사가 없는 id 를 오류로 알려 줌. id 바꾸기는 맵 오브젝트 참조도 함께 고침(`listOps` `objType: combo`).
+- 편집기: 목록(● 쓰는 중 = 자동 생성 켜짐 또는 맵에 놓임 / ○ 안 씀) · 새로 만들기(빈 조합 · 벽면 광원 장식 · 바닥 장식 + 함정 · 빛나는 풀) · 복제 · id 바꾸기 · 복사/붙여넣기 · 삭제 · 쓰는 곳, 미리보기(주변 칸 · 테마 타일셋 · 광원), 팔레트(타일셋 칸 · 사용자 타일 · 그림 파일 · 발광 빛무리 그림 `assets/tiles/combo_glow.png`), 스프라이트마다 레이어 · 오프셋 · 불투명도 · 겹치는 방식 · 순서 · 교체 · 복제 · 빼기 · 미리보기에서 숨기기, 광원 · 이펙트 · 지형 · 오브젝트 · 자동 생성, 밑그림 대응표(칸마다 원본 / 밑그림을 깐 모습 비교). 실행 취소는 공용 Ctrl+Z. 맵 편집기 오브젝트 "조합 타일"(팔레트에 조합 그림 · 맵에 3×3 칸으로 그림 · 광원 미리보기). 검사: 없는 조합 id · 빈 조합 · 없는 레이어 · 그림 · 이펙트 · 확률 0. 헤드리스 `eval:layerinfo`(조합 수 · id 별 · 광원 수 · 그림 묶음).
 
 ### 4.3 맵 편집기 (`editors/map.js`)
 
