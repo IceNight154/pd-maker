@@ -160,6 +160,13 @@ const PATCHES = [
     anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
   { file: 'scenes/WelcomeScene.java', name: '타이틀 음악 이어 틀기: 환영 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
     anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+  // ---- 분리된(투명 배경) 타일셋: 지형 아래 밑그림 (MakerTileUnderlay) ----
+  { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 지형 타일맵 아래에 넣기',
+    anchor: /\n([ \t]*)terrain\.add\( tiles \);/, where: 'before', line: `${PKG}.MakerTileUnderlay.addTo(terrain, tiles);` },
+  { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 맵 전체 다시 그리기',
+    anchor: /\n([ \t]*)scene\.tiles\.updateMap\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerTileUnderlay.refresh(-1);` },
+  { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 칸 하나 다시 그리기',
+    anchor: /\n([ \t]*)scene\.tiles\.updateMapCell\( cell \);[^\n]*\n/, where: 'after', line: `${PKG}.MakerTileUnderlay.refresh(cell);` },
   { file: 'scenes/HeroSelectScene.java', name: '영웅 선택 화면: 게임 직업 대신 프로젝트 영웅 버튼',
     anchor: /\n([ \t]*)for \(HeroClass cl : HeroClass\.values\(\)\)\s*\{/, where: 'before',
     line: `if (!${PKG}.HeroSelect.addButtons(this, heroBtns))` },

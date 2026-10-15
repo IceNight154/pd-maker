@@ -212,6 +212,15 @@ public class Hooks {
 					System.out.println("[TEST] pressed " + c + " terrain=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.map[c] + " trap=" + (t == null ? "-" : t.getClass().getSimpleName() + " active=" + t.active) + " blobs=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.blobs.keySet());
 					break;
 				}
+				case "seed": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.customSeed(p[1]); System.out.println("[TEST] seed " + p[1]); break;   // seed,<글자> — 다음 새 게임의 씨앗 (그림 변형 · 생성이 같게)
+				case "revealall": { // 맵 전체를 본 것으로 (화면 비교용)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					for (int i = 0; i < lv.length(); i++) { lv.visited[i] = true; lv.mapped[i] = true; }
+					java.util.Arrays.fill(lv.heroFOV, true);
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.updateFog();
+					System.out.println("[TEST] revealed");
+					break;
+				}
 				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
 					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
 					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
