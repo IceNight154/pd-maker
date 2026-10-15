@@ -126,6 +126,8 @@ public class MakerLevel extends Level {
 				}
 			} else if (type.equals("prop")) {
 				MakerProp.place(this, ref, cell);
+			} else if (type.equals("combo")) {   // 조합 타일 (그림은 afterCreate 의 MakerUserTiles.finish 에서)
+				MakerCombos.place(this, ref, cell);
 			} else if (type.equals("effect")) {
 				MakerEffect.place(this, ref, cell);
 			} else if (type.equals("plate")) {   // 투명 발판: 밟으면 이벤트 ("!" = 한 번만, "*" = 매번)

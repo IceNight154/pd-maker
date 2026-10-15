@@ -34,12 +34,18 @@ public class MakerUserTiles extends CustomTilemap {
 	public int size = 16;
 	public boolean over;
 	public String layer = MakerTileLayers.BASE;
+	/** 조합 타일 스프라이트 · 레이어 렌더링: 칸 안 오프셋(px) · 불투명도 · 더하기(발광) */
+	public float ox, oy, alpha = 1f;
+	public boolean add;
 	public int[] cells = new int[0], frames = new int[0];
 	public String[] ids = new String[0];
 
 	// ------------------------------------------------------------ 타일 정의 · 층 만들 때 모으기
 
+	/** finish 중인 층 (조합 스프라이트의 "이 층 타일셋") */
+	static Level building;
 	static JsonValue def(String id) {
+		if (id != null && id.startsWith("combo:")) return MakerCombos.spriteDef(building, id);   // 조합 타일의 스프라이트
 		JsonValue w = WorldGraph.world, l = w == null ? null : w.get("userTiles");
 		if (l == null || id == null || id.isEmpty()) return null;
 		int k = id.indexOf('#'); if (k >= 0) id = id.substring(0, k);
@@ -84,6 +90,7 @@ public class MakerUserTiles extends CustomTilemap {
 	public static void finish(Level l) {
 		Map<String, LinkedHashMap<Integer, String>> all = pending.remove(l);
 		if (all == null || all.isEmpty()) return;
+		building = l;
 		try {
 			for (CustomTilemap t : l.customTiles.toArray(new CustomTilemap[0])) if (t instanceof MakerUserTiles) l.customTiles.remove(t);
 			for (CustomTilemap t : l.customWalls.toArray(new CustomTilemap[0])) if (t instanceof MakerUserTiles) l.customWalls.remove(t);
@@ -115,11 +122,12 @@ public class MakerUserTiles extends CustomTilemap {
 				}
 				int sz = Math.max(1, d.getInt("size", 16)); boolean ov = (layerAbove || d.getBoolean("over", false)) && !img.isEmpty();   // 레이어가 above 거나 타일 자체가 over
 				int cols = 1;
-				if (!img.isEmpty()) { Object tx = MakerRuntime.texture(img); if (tx == null) img = ""; else cols = Math.max(1, TextureCache.get(tx).width / sz); }
+				if (!img.isEmpty()) { Object tx = tex(img); if (tx == null) img = ""; else cols = Math.max(1, TextureCache.get(tx).width / sz); }
 				if (img.isEmpty() && d.getString("title", "").isEmpty() && d.getString("desc", "").isEmpty()) continue;   // 그림도 이름도 없음 → 타일맵 필요 없음
-				String gk = layer + "|" + img + "|" + sz + "|" + ov;
+				float[] rd = render(e.getValue(), layer);   // { ox, oy, alpha, add }
+				String gk = layer + "|" + img + "|" + sz + "|" + ov + "|" + rd[0] + "|" + rd[1] + "|" + rd[2] + "|" + rd[3];
 				MakerUserTiles g = groups.get(gk);
-				if (g == null) { g = new MakerUserTiles(); g.image = img; g.size = sz; g.over = ov; g.layer = layer; g.setRect(0, 0, l.width(), l.height()); groups.put(gk, g); lists.put(gk, new java.util.ArrayList<>()); }
+				if (g == null) { g = new MakerUserTiles(); g.image = img; g.size = sz; g.over = ov; g.layer = layer; g.ox = rd[0]; g.oy = rd[1]; g.alpha = rd[2]; g.add = rd[3] > 0; g.setRect(0, 0, l.width(), l.height()); groups.put(gk, g); lists.put(gk, new java.util.ArrayList<>()); }
 				lists.get(gk).add(new int[]{ cell, img.isEmpty() ? -1 : d.getInt("x", 0) + d.getInt("y", 0) * cols });
 				g.idList.add(e.getValue());
 			}
@@ -132,6 +140,25 @@ public class MakerUserTiles extends CustomTilemap {
 			}
 			for (FlowTiles ft : flows.values()) { ft.cells = new int[ft.cellList.size()]; for (int i = 0; i < ft.cells.length; i++) ft.cells[i] = ft.cellList.get(i); MakerCompat.addFirst(l.customTiles, ft); }   // 맨 아래 (다른 타일 · 효과 밑 — 목록이 순서 없는 판에서는 그냥 넣음)
 		} catch (Throwable t) { MakerRuntime.log("사용자 타일 오류: " + t); }
+		finally { building = null; }
+	}
+	/** 그림 경로 → 텍스처: "tex:<TextureCache 키>"(이 층 타일셋) · game: · 프로젝트 파일 */
+	static Object tex(String img) {
+		if (img.startsWith("tex:")) { try { return TextureCache.get(img.substring(4)); } catch (Throwable t) { return null; } }
+		return MakerRuntime.texture(img);
+	}
+	/** 칸 하나의 렌더링 설정: 조합 스프라이트의 ox · oy · alpha · blend + 레이어의 blend */
+	static float[] render(String id, String layer) {
+		float ox = 0, oy = 0, a = 1f, add = 0;
+		try {
+			if (id.startsWith("combo:")) {
+				int h = id.indexOf('#');
+				JsonValue c = MakerCombos.combo(id.substring(6, h)), sp = c == null ? null : c.get("sprites").get(Integer.parseInt(id.substring(h + 1)));
+				if (sp != null) { ox = sp.getFloat("ox", 0); oy = sp.getFloat("oy", 0); a = sp.getFloat("alpha", 1f); if ("add".equals(sp.getString("blend", "normal"))) add = 1; }
+			}
+			if ("add".equals(MakerTileLayers.blend(layer))) add = 1;
+		} catch (Throwable ignored) { }
+		return new float[]{ ox, oy, Math.max(0f, Math.min(1f, a)), add };
 	}
 
 	transient java.util.ArrayList<String> idList = new java.util.ArrayList<>();
@@ -139,10 +166,21 @@ public class MakerUserTiles extends CustomTilemap {
 	// ------------------------------------------------------------ 그리기
 
 	@Override public Tilemap create() {
-		Object tx = image == null || image.isEmpty() ? null : MakerRuntime.texture(image);
+		Object tx = image == null || image.isEmpty() ? null : tex(image);
 		if (tx == null) { texture = MakerPaint.blank(); vis = super.create(); vis.map(new int[tileW * tileH], tileW); vis.visible = false; return vis; }
 		texture = tx;
-		vis = super.create();
+		if (vis != null && vis.alive) vis.killAndErase();
+		final boolean glow = add;
+		vis = new Tilemap(texture, new TextureFilm(texture, SIZE, SIZE)) {
+			@Override protected com.watabou.noosa.NoosaScript script() { return com.watabou.noosa.NoosaScript.get(); }   // 빛을 받음 (CustomTilemap 과 같음)
+			@Override public void draw() {   // 더하기(발광): 아래 그림에 밝기를 더함
+				if (glow) com.watabou.glwrap.Blending.setLightMode();
+				super.draw();
+				if (glow) com.watabou.glwrap.Blending.setNormalMode();
+			}
+		};
+		vis.x = tileX * SIZE + ox; vis.y = tileY * SIZE + oy;
+		if (alpha < 1f) vis.alpha(alpha);
 		try {   // 그림의 한 칸이 16 이 아니면 그 크기로 잘라 화면의 한 칸(16)에 맞춤 (큰 타일셋과 같은 방식)
 			if (size != SIZE) { java.lang.reflect.Field f = Tilemap.class.getDeclaredField("tileset"); f.setAccessible(true); f.set(vis, new TextureFilm(tx, size, size)); }
 		} catch (Throwable e) { MakerRuntime.log("사용자 타일 크기 적용 실패: " + e); }
@@ -267,7 +305,7 @@ public class MakerUserTiles extends CustomTilemap {
 
 	@Override public void storeInBundle(Bundle b) {
 		super.storeInBundle(b);
-		b.put("pdm_img", image); b.put("pdm_size", size); b.put("pdm_over", over); b.put("pdm_cells", cells); b.put("pdm_frames", frames); b.put("pdm_ids", ids); b.put("pdm_layer", layer);
+		b.put("pdm_img", image); b.put("pdm_size", size); b.put("pdm_over", over); b.put("pdm_cells", cells); b.put("pdm_frames", frames); b.put("pdm_ids", ids); b.put("pdm_layer", layer); b.put("pdm_ox", ox); b.put("pdm_oy", oy); b.put("pdm_alpha", alpha); b.put("pdm_add", add);
 	}
 	@Override public void restoreFromBundle(Bundle b) {
 		super.restoreFromBundle(b);
@@ -275,5 +313,6 @@ public class MakerUserTiles extends CustomTilemap {
 		cells = b.contains("pdm_cells") ? b.getIntArray("pdm_cells") : new int[0]; frames = b.contains("pdm_frames") ? b.getIntArray("pdm_frames") : new int[0];
 		ids = b.contains("pdm_ids") ? b.getStringArray("pdm_ids") : new String[0];
 		layer = b.contains("pdm_layer") ? b.getString("pdm_layer") : MakerTileLayers.BASE;
+		ox = b.getFloat("pdm_ox"); oy = b.getFloat("pdm_oy"); alpha = b.contains("pdm_alpha") ? b.getFloat("pdm_alpha") : 1f; add = b.getBoolean("pdm_add");
 	}
 }

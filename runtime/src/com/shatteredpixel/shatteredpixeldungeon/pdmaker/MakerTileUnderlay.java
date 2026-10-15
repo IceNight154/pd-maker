@@ -3,7 +3,9 @@
  *   게임은 칸마다 그림 하나(DungeonTerrainTilemap.getTileVisual)만 그리므로, 풀 · 장식 · 계단 · 조각상처럼 바닥이 그려져 있던 칸의
  *   바닥을 지우면 그 자리에 물 층(지형 타일맵 아래)이 비쳐 보임. → 그 칸의 게임 그림(visual)을 그대로 물어서, 대응표에 있는 밑그림을 먼저 그림.
  *   대응표  기본 LEGACY (원작 타일셋 5종에서 "그 칸 뒤에 그려져 있던 바닥"을 픽셀로 맞춰 본 결과) + tilecombos.json legacy[{ visual, under: [칸 …] }] 로 바꿈 · 추가
- *   켜지는 칸  타일셋 그림에서 그 칸에 투명 픽셀이 있을 때만 (원작처럼 불투명한 타일셋은 아무것도 그리지 않음 — 화면이 예전과 같음)
+ *   그리는 픽셀  "지금 타일셋에서는 투명한데 원작 타일셋(구멍 모양 기준)에서는 불투명한" 픽셀 = 지운 바닥에만 밑그림 (반투명 가장자리 포함).
+ *             원작에서도 투명한 구멍(우물 물 · 연금술 솥 입구 — 물 층이 비치는 자리)은 비워 둠. 원작 타일셋은 아무것도 그리지 않음 — 화면이 예전과 같음
+ *   층을 만들 때 한 번 밑그림 텍스처(타일셋과 같은 크기)를 구워 두고, 칸마다 같은 자리를 그림
  *   순서  물 → 밑그림(under[0], under[1] …) → 지형(원래 그림 — 이제 투명 배경) → customTiles(타일 레이어) …
  *   칸 크기 · 기준점 · 큰 타일셋(32px 칸 등)은 지형 타일맵과 같은 생성자를 거치므로 똑같음 (LevelHooks.hiresTiles)
  *   연결 줄  GameScene.create (지형 타일맵을 넣기 직전) · updateMap() · updateMap(cell)
@@ -60,12 +62,13 @@ public class MakerTileUnderlay extends DungeonTilemap {
 	private static Method visualOf;
 
 	final DungeonTerrainTilemap terrain;
-	final Map<Integer, int[]> under;
-	final int depth;   // under[depth] 를 그림 (0 = 맨 아래)
+	final java.util.Set<Integer> active;   // 밑그림을 그리는 게임 그림 번호
 
-	MakerTileUnderlay(DungeonTerrainTilemap terrain, Map<Integer, int[]> under, int depth) {
+	/** tex = 밑그림 텍스처 (타일셋과 같은 크기 — 칸 v 자리에 v 의 밑그림이 그려져 있음 → 같은 TextureFilm 을 그대로 씀) */
+	MakerTileUnderlay(DungeonTerrainTilemap terrain, java.util.Set<Integer> active, SmartTexture tex) {
 		super(Dungeon.level.tilesTex());
-		this.terrain = terrain; this.under = under; this.depth = depth;
+		this.terrain = terrain; this.active = active;
+		texture = tex;
 		map(Dungeon.level.map, Dungeon.level.width());
 	}
 
@@ -74,26 +77,47 @@ public class MakerTileUnderlay extends DungeonTilemap {
 		live.clear();
 		try {
 			if (!MakerRuntime.isActive() || Dungeon.level == null || tiles == null) return;
-			Map<Integer, int[]> m = split(tiles, table());
-			if (m.isEmpty()) return;
-			int depth = 0; for (int[] u : m.values()) depth = Math.max(depth, u.length);
-			for (int d = 0; d < depth; d++) { MakerTileUnderlay u = new MakerTileUnderlay(tiles, m, d); terrainGroup.add(u); live.add(u); }
-			MakerRuntime.log("분리된 타일셋: 밑그림 " + m.size() + "종 (" + Dungeon.level.tilesTex() + ")");
+			Pixmap src = pixmap(tiles);
+			if (src == null) return;
+			Map<Integer, int[]> table = table();
+			int depth = 0; for (int[] u : table.values()) depth = Math.max(depth, u.length);
+			Pixmap van = vanilla();
+			java.util.Set<Integer> active = new java.util.HashSet<>();
+			List<Pixmap> layers = new ArrayList<>();
+			for (int d = 0; d < depth; d++) layers.add(bake(src, van, table, d, active));
+			if (van != null) van.dispose();
+			if (active.isEmpty()) { for (Pixmap p : layers) p.dispose(); return; }
+			for (Pixmap p : layers) { MakerTileUnderlay u = new MakerTileUnderlay(tiles, active, new SmartTexture(p)); terrainGroup.add(u); live.add(u); }
+			MakerRuntime.log("분리된 타일셋: 밑그림 " + active.size() + "종 (" + Dungeon.level.tilesTex() + ")");
 		} catch (Throwable t) { MakerRuntime.log("밑그림 층 오류: " + t); }
 	}
-	/** 대응표 중 지금 타일셋에서 실제로 투명 픽셀이 있는 칸만 */
-	static Map<Integer, int[]> split(DungeonTerrainTilemap tiles, Map<Integer, int[]> table) {
-		Map<Integer, int[]> out = new HashMap<>();
-		Pixmap pm = pixmap(tiles);
-		if (pm == null) return out;
-		int n = Math.max(1, pm.getWidth() / 16);
+	/** 원작 타일셋 (구멍 모양 기준 — 원작 5종은 이 칸들의 투명 모양이 모두 같음: 우물 물 · 연금술 솥 입구 등 물 층이 비쳐야 하는 자리) */
+	static Pixmap vanilla() {
+		try { return new Pixmap(com.badlogic.gdx.Gdx.files.internal(com.shatteredpixel.shatteredpixeldungeon.Assets.Environment.TILES_SEWERS)); }
+		catch (Throwable t) { return null; }
+	}
+	/** 밑그림 한 장: 대응표의 칸 v 마다, "지금 타일셋에서는 투명한데 원작에서는 불투명한" 픽셀(= 지운 바닥)에만 under[d] 칸의 픽셀을 그림.
+	 *  원작에서도 투명한 구멍(우물 물 · 솥 입구)은 비워 둬서 예전처럼 물 층이 비침. 원작과 투명 모양이 같은 타일셋이면 아무것도 그리지 않음 */
+	static Pixmap bake(Pixmap src, Pixmap van, Map<Integer, int[]> table, int d, java.util.Set<Integer> active) {
+		int W = src.getWidth(), H = src.getHeight(), n = Math.max(1, W / 16), vn = van == null ? 0 : Math.max(1, van.getWidth() / 16);
+		Pixmap out = new Pixmap(W, H, Pixmap.Format.RGBA8888);
+		out.setBlending(Pixmap.Blending.None);
 		for (Map.Entry<Integer, int[]> e : table.entrySet()) {
-			int v = e.getKey(); if (v < 0 || v >= 256 || e.getValue().length == 0) continue;
-			int x0 = (v % 16) * n, y0 = (v / 16) * n;
-			if (x0 + n > pm.getWidth() || y0 + n > pm.getHeight()) continue;
-			boolean clear = false;
-			for (int y = y0; y < y0 + n && !clear; y++) for (int x = x0; x < x0 + n; x++) if ((pm.getPixel(x, y) & 0xFF) < 255) { clear = true; break; }
-			if (clear) out.put(v, e.getValue());
+			int v = e.getKey(); int[] u = e.getValue();
+			if (v < 0 || v >= 256 || d >= u.length || u[d] < 0 || u[d] >= 256) continue;
+			int x0 = (v % 16) * n, y0 = (v / 16) * n, bx = (u[d] % 16) * n, by = (u[d] / 16) * n;
+			if (x0 + n > W || y0 + n > H || bx + n > W || by + n > H) continue;
+			boolean any = false;
+			for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+				if ((src.getPixel(x0 + x, y0 + y) & 0xFF) == 255) continue;                           // 그림이 가린 칸
+				if (van != null) {                                                                      // 원작에서도 투명 = 원래 구멍 → 비움
+					int vx = (v % 16) * vn + x * vn / n, vy = (v / 16) * vn + y * vn / n;
+					if ((van.getPixel(vx, vy) & 0xFF) < 255) continue;
+				}
+				out.drawPixel(x0 + x, y0 + y, src.getPixel(bx + x, by + y));
+				any = true;
+			}
+			if (any) active.add(v);
 		}
 		return out;
 	}
@@ -115,8 +139,7 @@ public class MakerTileUnderlay extends DungeonTilemap {
 	/** 지형 타일맵이 이 칸에 그리는 그림을 그대로 물어봄 (변형 · 이음 규칙도 게임 그대로) → 대응표의 밑그림 */
 	@Override protected int getTileVisual(int pos, int tile, boolean flat) {
 		int v = engineVisual(terrain, pos, tile, flat);
-		int[] u = under.get(v);
-		return u != null && depth < u.length ? u[depth] : -1;
+		return active.contains(v) ? v : -1;   // 밑그림 텍스처의 같은 칸 자리
 	}
 	static int engineVisual(DungeonTerrainTilemap t, int pos, int tile, boolean flat) {
 		try {

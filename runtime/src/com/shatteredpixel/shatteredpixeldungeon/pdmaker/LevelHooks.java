@@ -268,9 +268,16 @@ public class LevelHooks {
 
 	public static void afterCreate(Level level) {
 		if (!MakerRuntime.isActive()) return;
+		String theme = WorldGraph.theme(level instanceof MakerLevel ? ((MakerLevel) level).nodeId : WorldGraph.current());
+		try { afterCreate0(level); }
+		finally {
+			MakerCombos.autogen(level, theme);                // 자동 생성에 등록한 조합 타일 (오브젝트까지 놓인 뒤 — 빈 칸 판단)
+			MakerUserTiles.themeWater(level, theme);          // 테마의 물 = 사용자 타일이면 물 칸마다 효과 · 이름
+			MakerUserTiles.finish(level);                     // 타일 레이어 · 조합 타일 그림 (방 템플릿 · 오브젝트로 놓인 조합까지 모은 뒤 맨 끝에)
+		}
+	}
+	static void afterCreate0(Level level) {
 		WorldGraph.wire(level, false);
-		MakerUserTiles.themeWater(level, WorldGraph.theme(level instanceof MakerLevel ? ((MakerLevel) level).nodeId : WorldGraph.current()));   // 테마의 물 = 사용자 타일이면 물 칸마다 효과 · 이름
-		MakerUserTiles.finish(level);   // 맵 그리기로 칠한 사용자 타일
 		if (!(level instanceof MakerLevel)) {
 			MakerDrops.chestLoot(level);
 			// 노드의 "몬스터 스폰" 을 끄면(noMobs): 게임이 놓은 적 몬스터를 치움 (다시 생기는 것은 MakerRuntime.onFloorEnter 에서 막음)
@@ -319,6 +326,9 @@ public class LevelHooks {
 			case "effect": MakerEffect.place(level, ref, cell); break;
 			case "trap":   // 함정 오브젝트 (방 템플릿 · 혼합 층)
 				MakerTraps.place(level, o, cell);
+				break;
+			case "combo":  // 조합 타일 (방 템플릿 · 혼합 층 · 조합 안의 오브젝트는 제외)
+				MakerCombos.place(level, ref, cell);
 				break;
 			case "event":
 				if (EventTriggers.placeEvent(level, ref, cell)) break;

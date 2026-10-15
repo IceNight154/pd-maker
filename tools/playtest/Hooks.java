@@ -200,6 +200,15 @@ public class Hooks {
 					sb.append(" above=");
 					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customWalls) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t; sb.append(u.layer).append("(").append(u.cells.length).append(") "); }
 					System.out.println(sb);
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos m = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) t; StringBuilder cb = new StringBuilder("[TEST] combos n=" + m.cells.length);
+						for (int k = 0; k < Math.min(6, m.cells.length); k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
+						java.util.Map<String,Integer> tally = new java.util.TreeMap<>(); for (String id : m.ids) tally.merge(id, 1, Integer::sum); cb.append(" by=").append(tally);
+						System.out.println(cb + " lights=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos.lights(lv).size());
+					}
+					StringBuilder gl = new StringBuilder("[TEST] groups");
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t; gl.append(" ").append(u.layer).append(u.add ? "+add" : "").append(u.alpha < 1 ? "@" + u.alpha : "").append(u.ox != 0 || u.oy != 0 ? "(" + u.ox + "," + u.oy + ")" : "").append(":").append(u.image.length() > 30 ? u.image.substring(u.image.length() - 30) : u.image); }
+					System.out.println(gl);
 					StringBuilder tr = new StringBuilder("[TEST] traps");
 					for (com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap t : lv.traps.valueList()) { tr.append(" ").append(t.pos % lv.width()).append(",").append(t.pos / lv.width()).append("=").append(t.getClass().getSimpleName()).append(t.visible ? "" : "(숨김)").append(t.active ? "" : "(작동함)").append("/지형").append(lv.map[t.pos]); }
 					System.out.println(tr);

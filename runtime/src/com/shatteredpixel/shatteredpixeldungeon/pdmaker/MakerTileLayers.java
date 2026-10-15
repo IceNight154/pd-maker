@@ -26,6 +26,7 @@ public class MakerTileLayers {
 			+ "{id:grass,name:\"풀 · 식생\",depth:below,visible:true,solid:false},"
 			+ "{id:wall,name:\"벽 · 구조물\",depth:below,visible:true,solid:true},"
 			+ "{id:walldeco,name:\"벽 장식\",depth:below,visible:true,solid:false},"
+			+ "{id:light,name:\"광원 · 효과\",depth:below,visible:true,solid:false,blend:add},"
 			+ "{id:front,name:\"전경 (캐릭터 위)\",depth:above,visible:true,solid:false}]";
 	private static JsonValue defaults;
 	public static final String BASE = "base";
@@ -50,6 +51,8 @@ public class MakerTileLayers {
 	public static boolean above(String id) { JsonValue d = def(id); return d != null && "above".equals(d.getString("depth", "below")); }
 	public static boolean visible(String id) { JsonValue d = def(id); return d == null || d.getBoolean("visible", true); }
 	public static boolean solid(String id) { JsonValue d = def(id); return d != null && d.getBoolean("solid", false); }
+	/** 레이어 렌더링: normal | add (발광 — 광원 · 효과 레이어) */
+	public static String blend(String id) { JsonValue d = def(id); return d == null ? "normal" : d.getString("blend", "normal"); }
 
 	/** 노드 · 방 데이터에 있는 레이어 id (그리는 순서대로) */
 	public static List<String> layersOf(JsonValue data) {
