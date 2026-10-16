@@ -171,6 +171,7 @@
     { id: 'compose', name: '노드 합성기 (배경 · 오브젝트 그림)', desc: '노드를 이어서 배경 타일 · 오브젝트 스프라이트를 만듭니다 (무늬 · 노이즈 · 그라데이션 · 색 보정 · 외곽선 · 그림자 · 겹치기 …). 결과를 PNG 로 저장해 스프라이트 · 타일셋으로 씁니다' },
     { id: 'motion', name: '모션 랩 (CSS · JS 움직이는 그림)', desc: 'CSS(+HTML) 나 JS(캔버스)로 움직이는 그림을 만들고 픽셀 아트로 구워(격자 시트 PNG · APNG) 화면 필터 층 · 이펙트 알갱이 · 맵 오브젝트 · 아이템 · 노드 합성기에 보냅니다. 화면 필터의 코드 층 · 글자 연출과 같은 굽는 부품을 씁니다' },
     { id: 'filters', name: '화면 필터 (날씨 · 노이즈 · 글리치)', desc: '화면 전체에 덮는 연출(비 · 눈 · 안개 · 밤 · 노이즈 · 주사선 · 글리치 · 번개)을 층으로 쌓아 만들고, 맵 노드 · 방 템플릿 · 그룹에 정하거나 이벤트 명령 "화면 필터"로 바꿉니다. 그림 층은 노드 합성기로 만들 수 있습니다' },
+    { id: 'tilecombos', name: '조합 타일 · 분리 타일셋 밑그림', game: true, desc: '여러 스프라이트(레이어 · 위치 · 순서 · 발광) + 실제 광원 · 이펙트 · 함정을 묶은 조합 타일을 만들어 맵에 놓거나 자동 생성(벽면 광원 장식 등)에 등록합니다. 배경을 투명하게 분리한 타일셋을 예전 일체형 모습 그대로 그리는 밑그림 규칙과, 타일 레이어 "광원 · 효과"(발광)도 이 기능에 딸립니다. 켜면 리소스 목록에 "조합 타일"이, 맵 편집기 오브젝트에 "조합 타일"이 나타납니다' },
     { id: 'sys', name: '시스템', desc: '마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커)' },
     // 캐릭터 편집 화면의 칸 (켜야 보임)
     { id: 'charPortrait', name: '캐릭터: 초상화 · 표정 · 대사창 일러스트', desc: '캐릭터 편집 화면에 초상화·표정 칸을 보입니다 (대사창에 서는 그림)', section: true },
@@ -193,13 +194,13 @@
     const roots = allRoots();
     const box = h('div', { style: { minWidth: '520px', maxWidth: '640px' } });
     const draw = () => {
-      box.replaceChildren(h('p', { class: 'hint' }, '켠 확장 기능만 왼쪽 리소스 목록과 편집 화면에 보입니다. 꺼도 데이터는 지워지지 않고 게임에서도 그대로 동작합니다. 여기서 바로 열 수도 있습니다.'),
+      box.replaceChildren(h('p', { class: 'hint' }, '켠 확장 기능만 왼쪽 리소스 목록과 편집 화면에 보입니다. 꺼도 데이터는 지워지지 않고 게임에서도 그대로 동작합니다 ("게임에도 적용" 표시가 있는 것은 끄면 게임에서도 꺼집니다). 여기서 바로 열 수도 있습니다.'),
         ...EXTENSIONS.map(x => {
           const r = roots.find(n => n.id === x.id);
-          const cb = h('input', { type: 'checkbox', checked: extOn(x.id), onchange: () => { store.edit('project', (cb.checked ? '확장 기능 켜기: ' : '확장 기능 끄기: ') + x.name, p => { p.extensions = Object.assign({}, p.extensions || {}, { [x.id]: cb.checked }); }); drawTree(); draw(); } });
+          const cb = h('input', { type: 'checkbox', checked: extOn(x.id), onchange: () => { store.edit('project', (cb.checked ? '확장 기능 켜기: ' : '확장 기능 끄기: ') + x.name, p => { p.extensions = Object.assign({}, p.extensions || {}, { [x.id]: cb.checked }); }); drawTree(); draw(); if (x.game) PDM.tabs.refresh(); } });
           const kids = r && r.children ? r.children : [];
           return h('div', { style: { border: '1px solid var(--line)', borderRadius: '6px', padding: '8px 10px', margin: '8px 0' } },
-            h('label', { class: 'check fw-bold' }, cb, h('span', {}, x.section ? `${x.name} — 편집 화면에 표시` : `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`)),
+            h('label', { class: 'check fw-bold' }, cb, h('span', {}, x.section ? `${x.name} — 편집 화면에 표시` : `${r && r.icon ? r.icon + ' ' : ''}${x.name} — 리소스 목록에 표시`), x.game ? h('span', { class: 'hint', style: { marginLeft: '6px', color: 'var(--gold, #e6b95c)' } }, '게임에도 적용') : null),
             h('div', { class: 'hint', style: { margin: '2px 0 6px 24px' } }, x.desc),
             ...kids.map(k => {
               const openBtn = n => h('button', { class: 'btn sm', onclick: () => { PDM.tabs.open(n.open); document.querySelectorAll('.modal-foot .pri').forEach(b => b.click()); } }, `${n.icon || ''} ${n.label}`);

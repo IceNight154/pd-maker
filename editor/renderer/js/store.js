@@ -19,7 +19,7 @@
 // ================================================================
 PDM.store = (function () {
   const em = PDM.Emitter();
-  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json', motion: 'motion.json' };
+  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json', motion: 'motion.json', tilecombos: 'maps/tilecombos.json' };
   const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events', prop: 'props' };
   let version = 0;           // 바뀔 때마다 +1 (계산 캐시용)
 
@@ -59,10 +59,13 @@ PDM.store = (function () {
         if (key === 'project') throw new Error('project.json 을 읽지 못했습니다. 프로젝트 폴더가 맞나요?\n' + e.message);
         if (key === 'world') { const dw = PDM.World.defaultWorld(); data.world = dw.world; Object.entries(dw.data).forEach(([id, o]) => { data['node:' + id] = o; dirty.add('node:' + id); }); }
         else data[key] = PDM.defaults[key]();
-        dirty.add(key);
-        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
+        if (key !== 'tilecombos') dirty.add(key);   // 조합 타일(확장 기능)은 쓸 때만 파일을 만듦
+        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion' && key !== 'tilecombos') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
       }
     }
+    // 조합 타일: 예전 이름 combos → list (런타임은 둘 다 읽음)
+    if (data.tilecombos && Array.isArray(data.tilecombos.combos) && !Array.isArray(data.tilecombos.list)) { data.tilecombos.list = data.tilecombos.combos; delete data.tilecombos.combos; dirty.add('tilecombos'); }
+    if (data.tilecombos) { data.tilecombos.list = data.tilecombos.list || []; data.tilecombos.legacy = data.tilecombos.legacy || []; }
     // 마음의 보석 → 마음의 결정 (예전 heart.json / terms.json)
     if (data.heart && PDM.Heart && PDM.Heart.migrate(data.heart)) { dirty.add('heart'); problems.push('마음의 보석을 "마음의 결정"으로 바꿨습니다 (저장하면 적용)'); }
     if (data.terms && data.terms.terms) {
@@ -82,6 +85,7 @@ PDM.store = (function () {
           const before = JSON.stringify(obj);
           data[`${type}:${id}`] = PDM.migrate(type, obj);
           if (type === 'hero' && JSON.stringify(obj) !== before) { dirty.add(`hero:${id}`); problems.push(`영웅 ${id}: 예전 스킬을 새 구조(주문·주문서)로 바꿨습니다 (저장하면 적용)`); }
+          if ((type === 'node' || type === 'room') && PDM.migrateMapData) { const ch = PDM.migrateMapData(obj); if (ch.length) { dirty.add(`${type}:${id}`); problems.push(`${type === 'node' ? '맵' : '방 템플릿'} ${id}: ${ch.join(' · ')} (저장하면 적용)`); } }
         } catch (e) { problems.push(`${folder}/${f.name}: ${e.message}`); }
       }
     }

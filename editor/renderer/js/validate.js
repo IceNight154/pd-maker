@@ -13,6 +13,7 @@ PDM.validate = function () {
     if (kind === 'event') return s.has('event:' + id);
     if (kind === 'prop') return s.has('prop:' + id);
     if (kind === 'effect') return ((s.get('effects') || {}).list || []).some(x => x.id === id);
+    if (kind === 'combo') return ((s.get('tilecombos') || {}).list || []).some(x => x.id === id);
     if (kind === 'trailer') return ((s.get('trailers') || {}).list || []).some(x => x.id === id);
     if (kind === 'quest') return ((s.get('quests') || {}).list || []).some(x => x.id === id);
     if (kind === 'badge') return ((s.get('badges') || {}).list || []).some(x => x.id === id);
@@ -95,14 +96,16 @@ PDM.validate = function () {
       add('warn', where, '시작 노드에서 닿지 않습니다 (이벤트 "맵 이동"으로만 갈 수 있음)', 'world');
     (f.objects || []).forEach((o, i) => {
       const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
-      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect' }[o.type];
+      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' }[o.type];
+      if (o.type === 'combo' && !(PDM.extensions && PDM.extensions.on('tilecombos'))) add('warn', w, '확장 기능 "조합 타일 · 분리 타일셋 밑그림"이 꺼져 있어 게임에 놓이지 않습니다', k);
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);
+      if (o.type === 'trap' && o.ref && PDM.TRAP_BY_ID && !PDM.TRAP_BY_ID[o.ref]) add('warn', w, `함정 "${o.ref}" 은(는) 원작에 없는 함정입니다 (게임 저장소에 그 클래스가 없으면 놓이지 않음)`, k);
       if (o.at && o.at.x != null && f.mode !== 'procedural' && (o.at.x >= f.size.w || o.at.y >= f.size.h)) add('error', w, '맵 밖에 있습니다', k);
       if (o.at && o.at.x != null && f.mode !== 'procedural') {
         const tt = PDM.TERRAIN_BY_ID[(f.layers.terrain || [])[o.at.y * f.size.w + o.at.x]];
-        if (tt && !tt.pass && o.type !== 'event') add('warn', w, `지나갈 수 없는 타일(${tt.name}) 위에 있습니다`, k);
+        if (tt && !tt.pass && o.type !== 'event' && o.type !== 'combo') add('warn', w, `지나갈 수 없는 타일(${tt.name}) 위에 있습니다`, k);
       }
       if (o.type === 'start' && (o.when || 'start') === 'start') starts++;
       cond(o.cond, w, k);
@@ -110,6 +113,23 @@ PDM.validate = function () {
     blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
+  // 조합 타일 (maps/tilecombos.json) — 확장 기능 "tilecombos"를 켠 프로젝트만
+  if (PDM.extensions && PDM.extensions.on('tilecombos')) {
+    const layerIds = new Set((PDM.tileLayers ? PDM.tileLayers() : []).map(l => l.id));
+    ((s.get('tilecombos') || {}).list || []).forEach(c => {
+      const w = `조합 타일 ${c.name || c.id}`;
+      if (!(c.sprites || []).length && !(c.light || {}).on && !c.effect && !(c.objects || []).length) add('warn', w, '스프라이트 · 광원 · 이펙트 · 오브젝트가 하나도 없습니다', 'tilecombos');
+      (c.sprites || []).forEach((sp, i) => {
+        if (sp.layer && !layerIds.has(sp.layer)) add('warn', `${w} › 스프라이트 ${i + 1}`, `레이어 "${sp.layer}" 이(가) 타일 레이어 목록에 없습니다 (맨 위에 그려짐)`, 'tilecombos');
+        if (sp.src === 'image' && !sp.image) add('error', `${w} › 스프라이트 ${i + 1}`, '그림 파일이 비어 있습니다', 'tilecombos');
+      });
+      if (c.effect && !has('effect', c.effect)) add('error', w, `이펙트 "${c.effect}" 없음`, 'tilecombos');
+      (c.objects || []).forEach((o, i) => { if (o.type === 'prop' && !has('prop', o.ref)) add('error', `${w} › 오브젝트 ${i + 1}`, `맵 오브젝트 "${o.ref}" 없음`, 'tilecombos'); });
+      const a = c.autogen || {};
+      if (a.enabled && !(+a.chance > 0)) add('warn', w, '자동 생성이 켜져 있지만 확률이 0 이라 놓이지 않습니다', 'tilecombos');
+      if (a.enabled && a.where === 'terrain' && !(a.terrains || []).length) add('warn', w, '자동 생성 위치가 "지형 지정"인데 지형을 고르지 않았습니다', 'tilecombos');
+    });
+  }
   if (starts > 1) add('warn', '맵', `"게임을 시작할 때" 스폰 위치가 ${starts}개 있습니다 (시작 맵의 첫 번째만 사용)`, 'world');
   // 맵 오브젝트
   s.all('prop').forEach(p => {

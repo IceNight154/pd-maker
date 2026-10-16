@@ -35,7 +35,7 @@ public class MakerRuntime {
 	private static boolean loaded = false;
 	private static FileHandle root = null;
 
-	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects, filters, trailers, badges, quests;
+	public static JsonValue project, terms, story, heart, sounds, title, dialogue, gameitems, textfx, effects, filters, trailers, badges, quests, tilecombos;
 	/** 방 템플릿 (rooms/<id>.json) */
 	public static final Map<String, JsonValue> rooms = new LinkedHashMap<>();
 	public static final Map<String, JsonValue> chars = new LinkedHashMap<>();
@@ -74,6 +74,7 @@ public class MakerRuntime {
 			filters = readOpt(r, "filters.json");   // 화면 필터 (MakerFilter)
 			effects = readOpt(r, "effects.json");   // 이펙트 · 파티클 (MakerEffect)
 			textfx = readOpt(r, "textfx.json");   // 글자 연출 (MakerTextFx)
+			tilecombos = readOpt(r, "maps/tilecombos.json");   // 조합 타일 · 분리 타일셋 밑그림 대응표 (MakerCombos · MakerTileUnderlay)
 			gameitems = readOpt(r, "gameitems.json");   // 게임 아이템 그림 바꾸기 { items: { "spd:<경로>": { sprite } } }
 			for (FileHandle f : list("characters")) if (f.extension().equals("json")) { JsonValue v = r.parse(f); chars.put(v.getString("id", f.nameWithoutExtension()), v); }
 			for (FileHandle f : list("rooms"))      if (f.extension().equals("json")) { JsonValue v = r.parse(f); rooms.put(v.getString("id", f.nameWithoutExtension()), v); }
@@ -171,6 +172,14 @@ public class MakerRuntime {
 
 	public static boolean isActive() { init(); return root != null; }
 	public static FileHandle root() { return root; }
+	/** 확장 기능이 켜져 있는지 (project.json extensions { id: true } — 편집기 "확장 기능" 창. 설정이 없으면 꺼짐) */
+	public static boolean ext(String id) {
+		JsonValue x = project == null ? null : project.get("extensions");
+		return x != null && x.getBoolean(id, false);
+	}
+	/** 확장 기능 "조합 타일 · 분리 타일셋 밑그림" (MakerCombos · MakerTileUnderlay · 광원 · 효과 레이어) */
+	public static final String EXT_TILECOMBOS = "tilecombos";
+	public static boolean tileCombos() { return ext(EXT_TILECOMBOS); }
 
 	// ------------------------------------------------------------ 조회
 

@@ -189,11 +189,13 @@ public class MakerLights extends CustomTilemap {
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) n++;
 			for (CustomTilemap t : l.customTiles) if (t instanceof MakerProp) { JsonValue d = MakerRuntime.props.get(((MakerProp) t).propId), lt = d == null ? null : d.get("light"); if (lt != null && lt.getBoolean("on", false)) n++; }
 			JsonValue al = autoLights(); if (al != null) { int i = 0; for (JsonValue a : al) n += autoCells(l, a, i++).size(); }
+			n += MakerCombos.lights(l).size();
 		} catch (Throwable ignored) { }
 		return n;
 	}
 	static boolean any(Level l) {
 		if (terrainLights() != null || autoLights() != null || anyDynamic()) return true;
+		if (!MakerCombos.lights(l).isEmpty()) return true;   // 조합 타일의 광원
 		try {
 			JsonValue f = WorldGraph.node(WorldGraph.current());
 			if (f != null && f.get("objects") != null) for (JsonValue o : f.get("objects")) if ("light".equals(o.getString("type", ""))) return true;
@@ -427,6 +429,12 @@ public class MakerLights extends CustomTilemap {
 					JsonValue at = o.get("at"); if (at == null || !at.has("x")) continue;
 					Spot s = new Spot(); s.cfg = o; s.cond = o.getString("cond", "").trim();
 					s.x = (off[0] + at.getInt("x") + 0.5f) * 16; s.y = (off[1] + at.getInt("y") + 0.5f) * 16;
+					spots.add(s);
+				}
+				if (l != null) for (Object[] cl : MakerCombos.lights(l)) {   // 조합 타일의 광원 (층에 놓인 자리 — 세이브에 남음)
+					JsonValue lt = (JsonValue) cl[0]; int c = (Integer) cl[1];
+					Spot s = new Spot(); s.cfg = lt; s.cond = lt.getString("cond", "").trim();
+					s.x = (c % l.width() + 0.5f) * 16 + lt.getFloat("ox", 0); s.y = (c / l.width() + 0.5f) * 16 + lt.getFloat("oy", 0);
 					spots.add(s);
 				}
 				areas = terrainLights();

@@ -78,6 +78,8 @@ PDM.defaults = {
   motion() { return { format: 'pdmaker-motion', version: PDM.FORMAT_VERSION, list: [] }; },
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },
+  /** 조합 타일 (maps/tilecombos.json — 런타임 MakerCombos · MakerTileUnderlay). legacy = 분리된 타일셋 밑그림 대응표 (비우면 기본 PDM.TILE_LEGACY_DEFAULT) */
+  tilecombos() { return { format: 'pdmaker-tilecombos', version: PDM.FORMAT_VERSION, legacy: [], list: [] }; },
   textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },
   gameitems() { return { format: 'pdmaker-gameitems', version: PDM.FORMAT_VERSION, items: {} }; },
   sounds() {

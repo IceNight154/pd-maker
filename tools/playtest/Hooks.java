@@ -193,6 +193,43 @@ public class Hooks {
 					com.watabou.noosa.Game.scene().addToFront(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd(dl, null, null));   // 게임 화면 밖(타이틀)에서도
 					break;
 				}
+				case "layerinfo": { // 타일 레이어 타일맵 순서 · 함정 목록 · 칸 판정 (layerinfo,<칸>,<칸>…)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					StringBuilder sb = new StringBuilder("[TEST] layers below=");
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t; sb.append(u.layer).append("(").append(u.cells.length).append(") "); }
+					sb.append(" above=");
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customWalls) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t; sb.append(u.layer).append("(").append(u.cells.length).append(") "); }
+					System.out.println(sb);
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos m = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) t; StringBuilder cb = new StringBuilder("[TEST] combos n=" + m.cells.length);
+						for (int k = 0; k < Math.min(6, m.cells.length); k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
+						java.util.Map<String,Integer> tally = new java.util.TreeMap<>(); for (String id : m.ids) tally.merge(id, 1, Integer::sum); cb.append(" by=").append(tally);
+						System.out.println(cb + " lights=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos.lights(lv).size());
+					}
+					StringBuilder gl = new StringBuilder("[TEST] groups");
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t; gl.append(" ").append(u.layer).append(u.add ? "+add" : "").append(u.alpha < 1 ? "@" + u.alpha : "").append(u.ox != 0 || u.oy != 0 ? "(" + u.ox + "," + u.oy + ")" : "").append(":").append(u.image.length() > 30 ? u.image.substring(u.image.length() - 30) : u.image); }
+					System.out.println(gl);
+					StringBuilder tr = new StringBuilder("[TEST] traps");
+					for (com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap t : lv.traps.valueList()) { tr.append(" ").append(t.pos % lv.width()).append(",").append(t.pos / lv.width()).append("=").append(t.getClass().getSimpleName()).append(t.visible ? "" : "(숨김)").append(t.active ? "" : "(작동함)").append("/지형").append(lv.map[t.pos]); }
+					System.out.println(tr);
+					for (int k = 1; k < p.length; k++) { int c = Integer.parseInt(p[k]); System.out.println("[TEST] cell " + (c % lv.width()) + "," + (c / lv.width()) + " terrain=" + lv.map[c] + " passable=" + lv.passable[c] + " solid=" + lv.solid[c]); }
+					break;
+				}
+				case "presscell": { // presscell,<칸> — 그 칸을 밟은 것처럼 (함정 발동)
+					int c = Integer.parseInt(p[1]); com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.pressCell(c);
+					com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap t = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.traps.get(c);
+					System.out.println("[TEST] pressed " + c + " terrain=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.map[c] + " trap=" + (t == null ? "-" : t.getClass().getSimpleName() + " active=" + t.active) + " blobs=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.blobs.keySet());
+					break;
+				}
+				case "seed": com.shatteredpixel.shatteredpixeldungeon.SPDSettings.customSeed(p[1]); System.out.println("[TEST] seed " + p[1]); break;   // seed,<글자> — 다음 새 게임의 씨앗 (그림 변형 · 생성이 같게)
+				case "revealall": { // 맵 전체를 본 것으로 (화면 비교용)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					for (int i = 0; i < lv.length(); i++) { lv.visited[i] = true; lv.mapped[i] = true; }
+					java.util.Arrays.fill(lv.heroFOV, true);
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.updateFog();
+					System.out.println("[TEST] revealed");
+					break;
+				}
 				case "bgmtest": { // 지금 배경음: 플레이어 · 재생 중 · 켜짐 / music,<참조> — 그 소리를 배경음으로 틀어 봄
 					if (p.length > 1) com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.playBgm(p[1]);
 					java.lang.reflect.Field fpl = com.watabou.noosa.audio.Music.class.getDeclaredField("player"); fpl.setAccessible(true);
