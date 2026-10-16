@@ -13,6 +13,7 @@
  *   그림  스프라이트마다 MakerUserTiles 에 "combo:<id>#<번호>" 로 넣어 레이어 순서대로 그림 (세이브에는 그린 결과가 남음)
  *   참조  맵 · 자동 생성은 조합을 id 로 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그대로.
  *         지운 조합 · 끈 자동 생성은 새 층에 놓이지 않을 뿐 맵 데이터는 그대로 (편집기 검사가 없는 id 를 알려 줌)
+ *   확장 기능 "tilecombos"(project.json extensions)가 꺼져 있으면 놓지도 자동 생성하지도 않음 (MakerRuntime.tileCombos)
  *   이 타일맵(보이지 않음)은 층에 놓인 조합 목록을 세이브에 저장 — 광원(MakerLights)이 여기서 점광원을 만듦
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -85,6 +86,7 @@ public class MakerCombos extends CustomTilemap {
 	}
 	/** 조합 하나를 칸에 놓음 (그림은 MakerUserTiles.finish 가 그림 — 층 만들기 중에 부를 것) */
 	public static boolean place(Level l, String id, int cell) {
+		if (!MakerRuntime.tileCombos()) { MakerRuntime.warnOnce("조합 타일 확장 기능이 꺼져 있어 놓지 않음: " + id); return false; }
 		JsonValue c = combo(id);
 		if (c == null) { MakerRuntime.warnOnce("없는 조합 타일: " + id); return false; }
 		if (cell < 0 || cell >= l.length()) return false;
@@ -112,6 +114,7 @@ public class MakerCombos extends CustomTilemap {
 
 	/** 층을 만든 직후: 자동 생성에 등록한 조합을 조건에 맞는 칸에 (MakerUserTiles.finish 전에) */
 	public static void autogen(Level l, String theme) {
+		if (!MakerRuntime.tileCombos()) return;   // 확장 기능 꺼짐 = 예전 그대로
 		try { autogen0(l, theme); } catch (Throwable t) { MakerRuntime.log("조합 타일 자동 생성 오류: " + t); }   // 프리셋 문제로 층 만들기가 멈추지 않게
 	}
 	static void autogen0(Level l, String theme) {
@@ -199,7 +202,7 @@ public class MakerCombos extends CustomTilemap {
 	/** 이 층에 놓인 조합 중 광원이 켜진 것 → { 조합 광원 설정, 칸 } */
 	public static List<Object[]> lights(Level l) {
 		List<Object[]> out = new ArrayList<>();
-		if (l == null) return out;
+		if (l == null || !MakerRuntime.tileCombos()) return out;
 		for (CustomTilemap t : l.customTiles) if (t instanceof MakerCombos) {
 			MakerCombos m = (MakerCombos) t;
 			for (int i = 0; i < m.ids.length && i < m.cells.length; i++) {

@@ -59,7 +59,7 @@ PDM.store = (function () {
         if (key === 'project') throw new Error('project.json 을 읽지 못했습니다. 프로젝트 폴더가 맞나요?\n' + e.message);
         if (key === 'world') { const dw = PDM.World.defaultWorld(); data.world = dw.world; Object.entries(dw.data).forEach(([id, o]) => { data['node:' + id] = o; dirty.add('node:' + id); }); }
         else data[key] = PDM.defaults[key]();
-        dirty.add(key);
+        if (key !== 'tilecombos') dirty.add(key);   // 조합 타일(확장 기능)은 쓸 때만 파일을 만듦
         if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion' && key !== 'tilecombos') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
       }
     }

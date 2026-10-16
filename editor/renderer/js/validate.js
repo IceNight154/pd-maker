@@ -97,6 +97,7 @@ PDM.validate = function () {
     (f.objects || []).forEach((o, i) => {
       const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
       const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' }[o.type];
+      if (o.type === 'combo' && !(PDM.extensions && PDM.extensions.on('tilecombos'))) add('warn', w, '확장 기능 "조합 타일 · 분리 타일셋 밑그림"이 꺼져 있어 게임에 놓이지 않습니다', k);
       if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
       else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
       if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);
@@ -112,8 +113,8 @@ PDM.validate = function () {
     blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
-  // 조합 타일 (maps/tilecombos.json)
-  {
+  // 조합 타일 (maps/tilecombos.json) — 확장 기능 "tilecombos"를 켠 프로젝트만
+  if (PDM.extensions && PDM.extensions.on('tilecombos')) {
     const layerIds = new Set((PDM.tileLayers ? PDM.tileLayers() : []).map(l => l.id));
     ((s.get('tilecombos') || {}).list || []).forEach(c => {
       const w = `조합 타일 ${c.name || c.id}`;

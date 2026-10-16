@@ -8,6 +8,7 @@
  *   층을 만들 때 한 번 밑그림 텍스처(타일셋과 같은 크기)를 구워 두고, 칸마다 같은 자리를 그림
  *   순서  물 → 밑그림(under[0], under[1] …) → 지형(원래 그림 — 이제 투명 배경) → customTiles(타일 레이어) …
  *   칸 크기 · 기준점 · 큰 타일셋(32px 칸 등)은 지형 타일맵과 같은 생성자를 거치므로 똑같음 (LevelHooks.hiresTiles)
+ *   확장 기능 "tilecombos"(project.json extensions)를 켠 프로젝트에서만 (꺼져 있으면 예전 그대로 — 밑그림 층을 만들지 않음)
  *   연결 줄  GameScene.create (지형 타일맵을 넣기 직전) · updateMap() · updateMap(cell)
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -76,7 +77,7 @@ public class MakerTileUnderlay extends DungeonTilemap {
 	public static void addTo(Group terrainGroup, DungeonTerrainTilemap tiles) {
 		live.clear();
 		try {
-			if (!MakerRuntime.isActive() || Dungeon.level == null || tiles == null) return;
+			if (!MakerRuntime.isActive() || !MakerRuntime.tileCombos() || Dungeon.level == null || tiles == null) return;   // 확장 기능 "tilecombos" 꺼짐 = 밑그림 없음
 			Pixmap src = pixmap(tiles);
 			if (src == null) return;
 			Map<Integer, int[]> table = table();

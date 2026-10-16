@@ -388,7 +388,7 @@
       if (!ui.eraseKind) ui.eraseKind = 'all'; if (ui.port === undefined) ui.port = -1;
       const pickTile = v => { ui.terrain = v; if (!tileTool() || ui.tool === 'pick') ui.tool = 'pen'; drawPalette(); drawTools(); };
       /** 확장 기능이 꺼진 종류는 팔레트에서 숨김 (이 맵에 이미 놓은 것이 있으면 보임) */
-      const typeOn = k => k === 'light' ? kind === 'node' && fl.mode !== 'procedural' : k !== 'prop' || (PDM.extensions && PDM.extensions.on('prop')) || (fl.objects || []).some(o => o.type === 'prop');
+      const typeOn = k => k === 'light' ? kind === 'node' && fl.mode !== 'procedural' : (k !== 'prop' && k !== 'combo') || (PDM.extensions && PDM.extensions.on(k === 'combo' ? 'tilecombos' : 'prop')) || (fl.objects || []).some(o => o.type === k);
       function drawPalette() {
         palette.innerHTML = '';
         if (drawable) {
@@ -666,7 +666,7 @@
               h('button', { class: 'ib danger', title: '레이어 삭제 (칠한 타일은 맵 데이터에 남지만 게임에 그려지지 않음)', onclick: async () => { const n = used(l.id); if (n && !(await PDM.ui.confirm(`「${l.name}」 레이어를 ${n}개 맵에서 쓰고 있습니다. 목록에서 지울까요? (칠한 타일은 남지만 그려지지 않습니다)`))) return; L.splice(i, 1); draw(); } }, '✕'))),
             h('div', { class: 'flex gap-2 mt-3' },
               h('button', { class: 'btn sm', onclick: async () => { const n = await PDM.ui.prompt('새 레이어 이름', '', '예: 그림자 · 길 · 지붕'); if (!n) return; let id = PDM.slugId(n) || 'layer'; while (L.some(x => x.id === id)) id += '_2'; L.push({ id, name: n, depth: 'below', visible: true, solid: false }); draw(); } }, '＋ 레이어 추가'),
-              h('button', { class: 'btn sm', onclick: () => { L = PDM.clone(PDM.TILE_LAYERS_DEFAULT); draw(); } }, '기본 레이어로')));
+              h('button', { class: 'btn sm', onclick: () => { L = PDM.clone(PDM.tileLayersDefault()); draw(); } }, '기본 레이어로')));
         };
         draw();
         const ok = await PDM.ui.modal('타일 레이어 설정', box, [['취소', null], ['적용', () => true, 'pri']]);

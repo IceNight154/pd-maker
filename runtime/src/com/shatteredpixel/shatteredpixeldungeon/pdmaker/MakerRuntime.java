@@ -172,6 +172,14 @@ public class MakerRuntime {
 
 	public static boolean isActive() { init(); return root != null; }
 	public static FileHandle root() { return root; }
+	/** 확장 기능이 켜져 있는지 (project.json extensions { id: true } — 편집기 "확장 기능" 창. 설정이 없으면 꺼짐) */
+	public static boolean ext(String id) {
+		JsonValue x = project == null ? null : project.get("extensions");
+		return x != null && x.getBoolean(id, false);
+	}
+	/** 확장 기능 "조합 타일 · 분리 타일셋 밑그림" (MakerCombos · MakerTileUnderlay · 광원 · 효과 레이어) */
+	public static final String EXT_TILECOMBOS = "tilecombos";
+	public static boolean tileCombos() { return ext(EXT_TILECOMBOS); }
 
 	// ------------------------------------------------------------ 조회
 

@@ -116,7 +116,9 @@ PDM.tileLegacy = () => { const m = new Map(PDM.TILE_LEGACY_DEFAULT.map(e => [e.v
   (((PDM.store && PDM.store.get('tilecombos')) || {}).legacy || []).forEach(e => { if (e && e.visual != null) m.set(+e.visual, Array.isArray(e.under) ? e.under.map(Number) : []); }); return m; };
 /** 원작 타일셋의 원래 구멍 (16×16, 줄마다 비트 = 투명) — 원작 5종 모두 같음. 런타임 MakerTileUnderlay.HOLES 와 같음 */
 PDM.TILE_HOLES = { 18: [0, 0, 0, 0, 0, 0, 8184, 8184, 8184, 8184, 8184, 0, 0, 0, 0, 0], 64: [0, 0, 0, 0, 0, 2016, 8184, 8184, 4080, 960, 0, 0, 0, 0, 0, 0], 120: [2016, 8184, 8184, 4080, 960, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
-PDM.tileLayers = () => { const w = PDM.store && PDM.store.get('world'); const l = w && Array.isArray(w.tileLayers) && w.tileLayers.length ? w.tileLayers : PDM.TILE_LAYERS_DEFAULT; return l; };
+/** 기본 레이어 — "광원 · 효과"(light)는 확장 기능 "tilecombos"를 켠 프로젝트에만 (런타임 MakerTileLayers.defs 와 같음) */
+PDM.tileLayersDefault = () => PDM.TILE_LAYERS_DEFAULT.filter(l => l.id !== 'light' || (PDM.extensions && PDM.extensions.on('tilecombos')));
+PDM.tileLayers = () => { const w = PDM.store && PDM.store.get('world'); const l = w && Array.isArray(w.tileLayers) && w.tileLayers.length ? w.tileLayers : PDM.tileLayersDefault(); return l; };
 
 /** 맵 데이터(노드 · 방 템플릿) 예전 형식 → 지금 형식. 바꿨으면 바꾼 내용 설명 배열, 아니면 [] — store 가 불러올 때 (PDM.migrate)
  *   ① layers.utile (사용자 타일 한 장) → layers.tiles.base

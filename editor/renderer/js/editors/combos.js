@@ -116,6 +116,10 @@
     render(key, ctx) {
       const { F, section, row, field } = PDM.ui;
       const st = ctx.state = ctx.state || { theme: '', sel: -1, replace: -1, hide: new Set(), ctxScene: '' };
+      if (!(PDM.extensions && PDM.extensions.on(K))) return h('div', { class: 'editor' }, h('h2', {}, '🧩 조합 타일'),
+        h('p', { style: { margin: '8px 0 12px' } }, '확장 기능 "조합 타일 · 분리 타일셋 밑그림"이 꺼져 있습니다. 꺼져 있으면 게임에서도 조합 타일 · 자동 생성 · 밑그림 · "광원 · 효과" 레이어를 쓰지 않습니다 (데이터는 그대로 남음).'),
+        h('button', { class: 'btn pri', onclick: () => { store.edit('project', '확장 기능 켜기: 조합 타일', p => { p.extensions = Object.assign({}, p.extensions || {}, { [K]: true }); }); PDM.app.redraw(); PDM.tabs.refresh(); } }, '확장 기능 켜기'),
+        h('button', { class: 'btn ml-3', onclick: () => PDM.extensions.show() }, '확장 기능 창 열기'));
       const all = list();
       ops.take(st);
       if (!all.some(x => x.id === st.id)) st.id = (all[0] || {}).id;

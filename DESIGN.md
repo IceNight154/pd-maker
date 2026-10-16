@@ -119,6 +119,7 @@
 | `compose` | 노드 합성기 | §5.9 |
 | `filters` | 화면 필터 | §5.6 |
 | `motion` | 모션 랩 | §5.10 |
+| `tilecombos` | 조합 타일 · 분리 타일셋 밑그림 | §4.2.2 — **게임에도 적용**: 끄면 런타임도 조합 타일 놓기 · 자동 생성 · 조합 광원 · 밑그림 층 · 기본 "광원 · 효과" 레이어를 쓰지 않음(`MakerRuntime.tileCombos()`), 편집기도 밑그림 · 조합 오브젝트를 숨김. 데이터는 그대로 남음 |
 | `sys` | 시스템 | 마음 시스템 · 용어 관리 · 플러그인 · Java 코드 생성기(이전 메이커) |
 | `charPortrait` · `charHeart` · `charDialogue` · `charBehavior` | 캐릭터 편집 칸 | 초상화 · 표정 / 마음 시스템 / 상황별 대사 / 행동 이벤트 |
 
@@ -235,7 +236,7 @@ MyProject/
 맵 요소를 세 가지로 나눔 — **타일 정의**(무엇: `world.userTiles` 그림 · 칠할 때 지형 · 효과 · 이름) / **타일 레이어**(어디에: 칸 → 타일 id) / **오브젝트 인스턴스**(놓인 것 하나하나: `objects[]` — 위치 · 종류 · 상태).
 
 - **지형** `layers.terrain` = 맨 아래 고정 레이어. 게임 `Level.map` 그대로라 **판정(지나감 · 막힘 · 시야)의 유일한 근거** — 판정 코드는 게임 것 하나뿐(레이어마다 따로 만들지 않음).
-- **사용자 타일 레이어** `layers.tiles { <레이어 id>: [칸 → 타일 id ("" = 없음)] }` — 같은 칸에 레이어마다 다른 타일. 레이어 정의는 모든 맵 공통 `world.tileLayers [{ id, name, depth: below|above, visible, solid }]`(없으면 기본: 기본 타일 · 풀 · 식생 · 벽 · 구조물(solid) · 벽 장식 · 광원 · 효과(`blend: add` — 더하기로 그려 발광) · 전경(above)). 배열 순서 = 그리는 순서.
+- **사용자 타일 레이어** `layers.tiles { <레이어 id>: [칸 → 타일 id ("" = 없음)] }` — 같은 칸에 레이어마다 다른 타일. 레이어 정의는 모든 맵 공통 `world.tileLayers [{ id, name, depth: below|above, visible, solid }]`(없으면 기본: 기본 타일 · 풀 · 식생 · 벽 · 구조물(solid) · 벽 장식 · 광원 · 효과(`blend: add` — 더하기로 그려 발광, 확장 기능 `tilecombos` 를 켰을 때만) · 전경(above)). 배열 순서 = 그리는 순서.
   - 런타임 `MakerTileLayers`(정의 · 읽기 · `putCell`) → `MakerUserTiles.finish` 가 레이어 순서대로 (레이어 · 그림 · 크기) 묶음마다 CustomTilemap 하나를 `customTiles`(below — 지형 위 · 함정 · 아이템 · 캐릭터 아래) / `customWalls`(above — 캐릭터 · 벽 윗면 위)에. 게임 그리기 순서: 물 → 지형 → customTiles → 함정 · 식물 → 아이템 → 캐릭터 → 솟은 지형 · 벽 윗면 → customWalls → 효과 · 가스 · 안개. 타일 자체의 `over` 도 그대로(그 타일만 위로).
   - `visible: false` = 게임에 그리지 않음(효과도, 살펴보기 이름은 남음) · `solid: true` = 층을 만들 때 타일이 있는 칸의 지나갈 수 있는 지형을 게임의 보이지 않는 막힌 장식 `CUSTOM_DECO`(물이면 `CUSTOM_DECO_WTR`)로 — 그림은 그대로, 판정만 막힘.
   - 새 레이어는 데이터만 추가(레이어 설정 창) — 코드 수정 없음. 세이브에는 묶음마다 `pdm_layer` 저장.
@@ -245,6 +246,8 @@ MyProject/
 - 편집기: 팔레트 "타일 레이어"(고른 레이어에 칠함 · 👁 편집기에서만 숨기기 · 칸 수 · "위" "막힘" 표시 · 레이어 설정 창 — 이름 · 높이 · 게임 표시 · 막힘 · 순서 · 추가 · 삭제), 위(above) 레이어는 오브젝트 위에 그림, 지우개 "사용자 타일" = 지금 레이어 · "전부" = 모든 레이어. 오브젝트 "함정"(게임 그림 terrain_features.png 로 고르기 · 그리기, 숨김 = 흐리게 + ?). 지형 팔레트에서 지형 함정은 뺌. 헤드리스 `eval:layerinfo` · `eval:presscell`.
 
 ### 4.2.2 조합 타일 · 분리된 타일셋 밑그림 (`maps/tilecombos.json`)
+
+**확장 기능 `tilecombos`**(§2.3)를 켠 프로젝트에서만 동작 — 끄면 게임 · 편집기 모두 예전 그대로(밑그림 없음 · 조합을 놓지도 자동 생성하지도 않음 · 기본 레이어에 "광원 · 효과" 없음). 이 파일은 조합을 처음 쓸 때 만들어짐.
 
 `{ format: "pdmaker-tilecombos", legacy: [ { visual, under: [칸] } ], list: [ 조합 ] }` — 편집기 "🧩 조합 타일"(`editors/combos.js`), 런타임 `MakerCombos` · `MakerTileUnderlay`. 예전 이름 `combos` 는 편집기가 열 때 `list` 로 바꾸고, 런타임은 둘 다 읽음.
 

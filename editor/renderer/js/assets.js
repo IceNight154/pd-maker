@@ -85,7 +85,7 @@ PDM.assets = (function () {
    *  원작과 같은 타일셋이면 그대로 img. 대응표가 바뀌면 다시 구움 */
   const underCache = new WeakMap();
   function withUnderlay(img) {
-    if (!img || !img.width || !PDM.tileLegacy) return img;
+    if (!img || !img.width || !PDM.tileLegacy || !(PDM.extensions && PDM.extensions.on('tilecombos'))) return img;   // 확장 기능 "조합 타일 · 분리 타일셋 밑그림" 꺼짐 = 게임처럼 그대로
     const tbl = PDM.tileLegacy(), key = JSON.stringify([...tbl]);
     const hit = underCache.get(img); if (hit && hit.key === key) return hit.out;
     const W = img.width, H = img.height, n = Math.max(1, Math.round(W / 16));

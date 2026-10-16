@@ -20,23 +20,28 @@ import java.util.List;
 
 public class MakerTileLayers {
 
+	/** "광원 · 효과" 레이어 — 조합 타일 확장 기능을 켠 프로젝트의 기본 레이어에만 */
+	static final String LIGHT = "{id:light,name:\"광원 · 효과\",depth:below,visible:true,solid:false,blend:add},";
 	/** 기본 레이어 — 편집기 PDM.TILE_LAYERS_DEFAULT 와 같음 */
 	static final String DEFAULT = "["
 			+ "{id:base,name:\"기본 타일\",depth:below,visible:true,solid:false},"
 			+ "{id:grass,name:\"풀 · 식생\",depth:below,visible:true,solid:false},"
 			+ "{id:wall,name:\"벽 · 구조물\",depth:below,visible:true,solid:true},"
 			+ "{id:walldeco,name:\"벽 장식\",depth:below,visible:true,solid:false},"
-			+ "{id:light,name:\"광원 · 효과\",depth:below,visible:true,solid:false,blend:add},"
+			+ LIGHT
 			+ "{id:front,name:\"전경 (캐릭터 위)\",depth:above,visible:true,solid:false}]";
-	private static JsonValue defaults;
+	private static JsonValue defaults, defaultsNoFx;
 	public static final String BASE = "base";
 
 	/** 레이어 정의 목록 (순서 = 그리는 순서) */
 	public static JsonValue defs() {
 		JsonValue w = WorldGraph.world, l = w == null ? null : w.get("tileLayers");
 		if (l != null && l.isArray() && l.size > 0) return l;
-		if (defaults == null) defaults = new JsonReader().parse(DEFAULT);
-		return defaults;
+		if (defaults == null) {
+			defaults = new JsonReader().parse(DEFAULT);
+			defaultsNoFx = new JsonReader().parse(DEFAULT.replace(LIGHT, ""));
+		}
+		return MakerRuntime.tileCombos() ? defaults : defaultsNoFx;   // "광원 · 효과" 레이어는 조합 타일 확장 기능에 딸림
 	}
 	static JsonValue def(String id) {
 		for (JsonValue d : defs()) if (id.equals(d.getString("id", ""))) return d;
