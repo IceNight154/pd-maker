@@ -79,7 +79,8 @@ PDM.defaults = {
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },
   /** 조합 타일 (maps/tilecombos.json — 런타임 MakerCombos · MakerTileUnderlay). legacy = 분리된 타일셋 밑그림 대응표 (비우면 기본 PDM.TILE_LEGACY_DEFAULT) */
-  tilecombos() { return { format: 'pdmaker-tilecombos', version: PDM.FORMAT_VERSION, legacy: [], list: [] }; },
+  //  autogenVersion 2 = 자동 생성 배치가 목록 순서와 상관없음 (새로 만드는 파일만 — 값이 없는 예전 파일은 1 = 예전 배치 그대로, MakerCombos.autogen)
+  tilecombos() { return { format: 'pdmaker-tilecombos', version: PDM.FORMAT_VERSION, autogenVersion: 2, legacy: [], list: [] }; },
   textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },
   gameitems() { return { format: 'pdmaker-gameitems', version: PDM.FORMAT_VERSION, items: {} }; },
   sounds() {

@@ -202,7 +202,7 @@ public class Hooks {
 					System.out.println(sb);
 					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) {
 						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos m = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) t; StringBuilder cb = new StringBuilder("[TEST] combos n=" + m.cells.length);
-						for (int k = 0; k < Math.min(6, m.cells.length); k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
+						for (int k = 0; k < m.cells.length; k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
 						java.util.Map<String,Integer> tally = new java.util.TreeMap<>(); for (String id : m.ids) tally.merge(id, 1, Integer::sum); cb.append(" by=").append(tally);
 						System.out.println(cb + " lights=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos.lights(lv).size());
 					}

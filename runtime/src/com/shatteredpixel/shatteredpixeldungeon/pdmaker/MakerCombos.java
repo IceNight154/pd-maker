@@ -9,6 +9,8 @@
  *     autogen: { enabled, where: wallFace | wall | floor | floorNearWall | grass | water | terrain, terrains: [지형 번호], chance (%), max (0 = 제한 없음),
  *                spacing (칸), themes: [테마 — 비우면 모두], handmade (직접 그린 맵에도) } }
  *   놓기  ① 자동 생성: 층을 만든 직후(LevelHooks.afterCreate) 조건에 맞는 칸을 층 씨앗으로 섞어 확률 · 간격 · 최대 개수대로 (같은 층은 늘 같은 자리)
+ *         배치 방식 tilecombos.json autogenVersion — 1(값 없음 · 예전 파일): 목록 순서대로 처리 · 씨앗에 목록 순번 포함 → 목록 순서를 바꾸면 배치가 바뀜 (예전 결과 그대로 보존)
+ *                                                  2(새 파일 기본): 우선순위(autogen.priority 큰 것 먼저) → id 순으로 처리 · 씨앗은 id 만 → 목록 순서와 상관없음
  *         ② 맵에 직접: 오브젝트 { type: "combo", ref: 조합 id } (직접 그린 맵 · 방 템플릿 · 혼합 층)
  *   그림  스프라이트마다 MakerUserTiles 에 "combo:<id>#<번호>" 로 넣어 레이어 순서대로 그림 (세이브에는 그린 결과가 남음)
  *   참조  맵 · 자동 생성은 조합을 id 로 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그대로.
@@ -131,19 +133,28 @@ public class MakerCombos extends CustomTilemap {
 		if (list == null || l == null) return;
 		boolean handmade = l instanceof MakerLevel;
 		int total = 0, idx = 0;
+		JsonValue tc = MakerRuntime.tilecombos;
+		boolean stable = tc != null && tc.getInt("autogenVersion", 1) >= 2;
+		List<JsonValue> order = new ArrayList<>();
+		for (JsonValue c : list) order.add(c);
+		if (stable) order.sort((a, b) -> {   // 우선순위 큰 것 → id 순 (목록 순서와 상관없이 같은 차례)
+			JsonValue ga = a.get("autogen"), gb = b.get("autogen");
+			int pa = ga == null ? 0 : ga.getInt("priority", 0), pb = gb == null ? 0 : gb.getInt("priority", 0);
+			return pa != pb ? Integer.compare(pb, pa) : a.getString("id", "").compareTo(b.getString("id", ""));
+		});
 		java.util.HashSet<Integer> used = new java.util.HashSet<>();
 		MakerCombos existing = null;
 		for (CustomTilemap t : l.customTiles) if (t instanceof MakerCombos) existing = (MakerCombos) t;
 		if (existing != null) for (int c : existing.cells) used.add(c);
-		for (JsonValue c : list) {
-			idx++;
+		for (JsonValue c : order) {
+			idx++;   // 예전 방식(1)의 씨앗에 쓰는 목록 순번 — order 는 1 이면 목록 그대로
 			JsonValue a = c.get("autogen");
 			if (a == null || !a.getBoolean("enabled", false)) continue;
 			if (handmade && !a.getBoolean("handmade", false)) continue;
 			if (!themeOk(a.get("themes"), theme)) continue;
 			List<Integer> cand = new ArrayList<>();
 			for (int i = 0; i < l.length(); i++) if (!used.contains(i) && fits(l, i, a)) cand.add(i);
-			java.util.Random rnd = new java.util.Random(Dungeon.seedCurDepth() * 31337L + c.getString("id", "").hashCode() * 7L + idx);
+			java.util.Random rnd = new java.util.Random(Dungeon.seedCurDepth() * 31337L + c.getString("id", "").hashCode() * 7L + (stable ? 0 : idx));
 			java.util.Collections.shuffle(cand, rnd);
 			float chance = Math.max(0f, Math.min(100f, a.getFloat("chance", 10f))) / 100f, spacing = Math.max(0f, a.getFloat("spacing", 2f));
 			int max = a.getInt("max", 0), n = 0, w = l.width();

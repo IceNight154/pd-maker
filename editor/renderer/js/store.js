@@ -321,6 +321,8 @@ PDM.store = (function () {
     /** 다른 이름으로 저장: 파일은 이미 복사됐고, 이후 저장은 새 폴더로 */
     relocate(dir) { root = dir; em.emit('load'); },
     isDirty: () => dirty.size > 0 || removed.size > 0,
+    /** 열 때 손상되어 기본값으로 연(아직 저장으로 덮어쓰지 않은) 파일의 프로젝트 기준 경로 — 검사(validate)가 보여 줌 */
+    damaged: () => [...backup].filter(([, why]) => why === '손상').map(([k]) => pdm.relative(root, fileOf(k)).replace(/\\/g, '/')),
     dirtyKeys: () => [...dirty],
     undoLabel: () => (undoStack[undoStack.length - 1] || {}).label,
     redoLabel: () => (redoStack[redoStack.length - 1] || {}).label,

@@ -51,6 +51,22 @@
     if (base.sprites.some(s => s.image === GLOW)) glowImage().then(() => PDM.tabs.refresh(K)).catch(() => { });
     return base;
   }
+  /** 자동 생성 배치 방식 (tilecombos.json autogenVersion — 런타임 MakerCombos.autogen): 1 = 목록 순서를 따름(예전 파일) · 2 = 목록 순서와 상관없음 */
+  const genVersion = () => +((store.get(K) || {}).autogenVersion || 1);
+  const stableGen = () => genVersion() >= 2;
+  function genModeSection() {
+    const { section } = PDM.ui, v2 = stableGen();
+    const sw = async () => {
+      const msg = v2 ? '예전 배치 방식(목록 순서를 따름)으로 되돌릴까요?\n새로 만드는 층의 자동 생성 배치가 바뀔 수 있습니다 (이미 만든 층 · 세이브는 그대로).'
+        : '"목록 순서와 상관없는 배치"로 바꿀까요?\n같은 씨앗이어도 새로 만드는 층의 자동 생성 배치가 한 번 바뀝니다 (이미 만든 층 · 세이브는 그대로). 그 뒤로는 목록 순서를 바꿔도 배치가 바뀌지 않습니다.';
+      if (!(await PDM.ui.confirm(msg))) return;
+      store.edit(K, '자동 생성 배치 방식', r => { r.autogenVersion = v2 ? 1 : 2; });
+    };
+    return section('자동 생성 배치 방식',
+      h('p', { class: 'mb-2' }, v2 ? '✓ 목록 순서와 상관없음 (버전 2) — 조합마다 id 로 씨앗을 정하고, 우선순위 → id 순으로 자리를 잡습니다. 목록을 정렬하거나 순서를 바꿔도 같은 씨앗의 층은 같은 배치입니다.'
+        : '목록 순서를 따름 (버전 1 · 예전 파일) — 씨앗에 목록 순번이 들어가고 앞의 조합이 먼저 자리를 잡습니다. 목록 순서를 바꾸면 새로 만드는 층의 배치가 바뀝니다. 예전에 만든 배치를 그대로 지키려고 자동으로 바꾸지 않습니다.'),
+      h('button', { class: 'btn sm', onclick: sw }, v2 ? '예전 방식(목록 순서)으로 되돌리기' : '목록 순서와 상관없는 배치로 바꾸기'));
+  }
   const ops = PDM.listOps({ K, label: '조합 타일', title: '조합 타일', icon: '🧩', prefix: 'combo', make, presets: PRESETS, objType: 'combo', itemIcon: c => (c.autogen || {}).enabled ? '✦' : '' });
 
   // ---------------- 그림 (편집기 미리보기 · 맵 편집기 공용)
@@ -254,8 +270,9 @@
           terrChecks,
           h('div', { class: 'fl mt-3' }, '테마 (아무것도 고르지 않으면 모든 테마)'), themeChecks,
           F.bool(K, [...AP, 'handmade'], { label: '직접 그린 맵에도 놓기 (기본: 절차 생성 · 혼합 층만)' }),
+          stableGen() ? F.num(K, [...AP, 'priority'], { label: '우선순위 (큰 것이 먼저 자리를 잡음 · 같으면 id 순)', int: true, min: -99, max: 99, def: 0 }) : null,
           h('div', { class: 'hint mt-2' }, '같은 층은 늘 같은 자리에 놓입니다 (층 씨앗). 계단 · 함정 · 아이템 · 식물 칸과 문 · 맵 가장자리는 피합니다. 등록을 끄거나 조합을 지우면 새로 만드는 층에만 영향이 있고, 이미 만들어진 층(세이브)은 그대로입니다. ' +
-            '여러 조합이 같은 칸을 원하면 목록에서 앞에 있는 조합이 먼저 놓입니다.')));
+            (stableGen() ? '여러 조합이 같은 칸을 원하면 우선순위가 큰 조합(같으면 id 순)이 먼저 놓입니다 — 목록 순서는 배치에 영향이 없습니다.' : '여러 조합이 같은 칸을 원하면 목록에서 앞에 있는 조합이 먼저 놓입니다 (예전 배치 방식 — 아래 "자동 생성 배치 방식" 참고).'))));
 
       const u = usageOf(c);
       const usage = h('div', { class: 'hint', style: { marginTop: '6px', maxWidth: '340px' } },
@@ -277,7 +294,7 @@
             section('광원 · 이펙트', lightBox, F.ref(K, [...P, 'effect'], 'effect', { label: '이펙트 (그 칸에서 계속 재생)', empty: '(없음)' })),
             section(`오브젝트 (${(c.objects || []).length})`, objBox),
             section('자동 생성', autoBox))),
-        legacy);
+        genModeSection(), legacy);
     }
   });
 

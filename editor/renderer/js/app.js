@@ -63,7 +63,8 @@
     if (/^(node|room|char|hero|item|event|prop):/.test(t.key) && store.isOpen && !store.has(t.key)) { setTimeout(() => PDM.tabs.close(t.key), 0); return; }   // 지워진 리소스의 탭은 닫음 (그리다 오류 나지 않게)
     t.dispose && t.dispose(); t.dispose = null;
     // ctx 는 탭마다 하나 (ctx.state / ctx.st 에 둔 화면 상태가 다시 그려도 유지됨)
-    const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { t.dispose = fn; }, key: t.key };
+    // onDispose 는 여러 번 불러도 모두 실행 (예전엔 마지막 것만 남아 맵 편집기가 다시 그릴 때마다 창 이벤트 3개가 쌓였음)
+    const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { const prev = t.dispose; t.dispose = prev ? () => { prev(); fn(); } : fn; }, key: t.key };
     let el;
     try {
       el = t.editor.render(t.key, ctx);
@@ -899,14 +900,31 @@
   function redo() { const l = store.redo(); if (l) toast('다시 실행: ' + l); }
 
   // ---------------- 검사 / 테스트 플레이 ----------------
+  /** 검사 결과 한 줄 — 누르면 그 리소스 탭 (맵 칸이 있으면 맵 편집기에서 그 칸을 고름) */
+  function checkLine(r) {
+    const open = () => { if (!r.open) return; if (r.cell && PDM.mapUtil && /^(node|room):/.test(r.open)) PDM.mapUtil.focus(r.open, r.cell); PDM.tabs.open(r.open); };
+    return h('div', { class: 'chk-l log-l ' + (r.level === 'error' ? 'err' : r.level === 'info' ? 'info' : 'warn'), title: [r.kind, r.path && '데이터: ' + r.path, r.fix && '조치: ' + r.fix].filter(Boolean).join('\n'), onclick: open },
+      `${r.level === 'error' ? '✕' : r.level === 'info' ? 'ℹ' : '!'} ${r.kind ? '[' + r.kind + '] ' : ''}${r.where} — ${r.msg}${r.cell ? ` (칸 ${r.cell.x}, ${r.cell.y})` : ''}`,
+      r.fix ? h('div', { class: 'dim', style: { paddingLeft: '18px' } }, '→ ' + r.fix) : null);
+  }
+  /** 검사 (F7): 데이터 참조는 바로(테스트 플레이 전 오류 확인에도 씀), 그림 · 소리 파일은 이어서 비동기로 붙임 */
   function runCheck() {
     const res = PDM.validate();
     const body = $('#checkBody'); body.innerHTML = '';
-    if (!res.length) body.append(h('div', { class: 'log-l ok' }, '문제를 찾지 못했습니다 ✓'));
-    res.forEach(r => body.append(h('div', { class: 'chk-l log-l ' + (r.level === 'error' ? 'err' : r.level === 'info' ? 'info' : 'warn'), onclick: () => r.open && PDM.tabs.open(r.open) }, `${r.level === 'error' ? '✕' : r.level === 'info' ? 'ℹ' : '!'} ${r.where} — ${r.msg}`)));
+    res.forEach(r => body.append(checkLine(r)));
+    const wait = h('div', { class: 'log-l dim' }, '그림 · 소리 파일 확인 중…'); body.append(wait);
     showBottom('check');
+    const run = ++checkRun;
+    (PDM.validateAssets ? PDM.validateAssets() : Promise.resolve({ issues: [] })).then(a => {
+      if (run !== checkRun) return;   // 그사이 다시 검사함
+      wait.remove();
+      a.issues.forEach(r => body.append(checkLine(r)));
+      if (!res.length && !a.issues.length) body.append(h('div', { class: 'log-l ok' }, '문제를 찾지 못했습니다 ✓'));
+      body.append(h('div', { class: 'log-l dim' }, `에셋 경로 ${a.refs}개 중 ${a.refs - a.skippedGame}개 확인 (쓰는 곳 ${a.uses}곳 · ${a.ms}ms)${a.skippedGame ? ` · 게임 저장소가 없어 게임 그림 · 소리 ${a.skippedGame}개는 확인하지 못함 (프로젝트 설정)` : ''}`));
+    }).catch(e => { wait.textContent = '파일 확인 실패: ' + e.message; });
     return res;
   }
+  let checkRun = 0;
   async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
@@ -1065,6 +1083,10 @@
       const m = resKey(active.key); if (m && store.has(active.key)) { PDM.resOps.copy(m[1], m[2]); return; }
       const lo = PDM.listOpsAll[active.key]; if (lo && lo.current) { lo.copy(); return; }
       return false;
+    });
+    K.define('cut', () => {   // 지금 탭 편집기의 ctx.cut (맵 편집기의 영역 · 오브젝트) — 없으면 입력 칸 · 브라우저 기본 동작
+      if (!active || !active.ctx || !active.ctx.cut) return false;
+      return active.ctx.cut();
     });
     K.define('paste', async () => {
       const c = await PDM.clip.get(); if (!c) { toast('복사한 것이 없습니다'); return; }

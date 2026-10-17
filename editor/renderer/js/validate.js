@@ -1,10 +1,12 @@
 // ================================================================
 //  검사 — 끊어진 참조, 조건식 문법 오류, 입구/출구 없는 층 등을 찾습니다.
-//  결과: [{ level: 'error'|'warn', where, msg, open(탭 키) }]
+//  결과: [{ level: 'error'|'warn'|'info', where, msg, open(탭 키), kind(오류 종류)?, fix(권장 조치)?, path(데이터 경로)?, cell { x, y }? }]
+//    error = 게임에서 실제로 문제가 나는 것(없는 참조 · 손상 · 맵 데이터 오류) · warn = 실행은 되지만 빠지거나 바뀌는 것
+//  프로젝트 데이터를 읽기만 함 (고치지 않음). 파일이 실제로 있는지는 PDM.validateAssets (비동기 — 아래)
 // ================================================================
 PDM.validate = function () {
   const s = PDM.store, out = [];
-  const add = (level, where, msg, open) => out.push({ level, where, msg, open });
+  const add = (level, where, msg, open, extra) => out.push(Object.assign({ level, where, msg, open }, extra || {}));
   const story = s.get('story') || {}, heart = s.get('heart') || {};
   const has = (kind, id) => {
     if (!id) return true;
@@ -64,6 +66,44 @@ PDM.validate = function () {
     });
   }
 
+  // 열 때 손상되어 기본값으로 연 파일 (store.load — 파일은 그대로 남아 있음)
+  (s.damaged ? s.damaged() : []).forEach(rel => add('error', rel, '파일이 손상되어 읽지 못했습니다 — 지금은 기본값으로 열려 있습니다', null,
+    { kind: '손상된 파일', fix: `원본은 그대로 남아 있습니다. 텍스트 편집기로 JSON 을 고치고 프로젝트를 다시 열거나, 이 항목을 편집기에서 다시 만들어 저장하세요 (저장하면 손상본은 .pdmaker-backup/ 에 보관).` }));
+
+  // 맵 · 방 템플릿 오브젝트 (노드 · 방 템플릿 공용) — 종류 · 참조 · 좌표 · 칸 · 조건
+  const REF_KIND = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' };
+  function objCheck(f, where, k, isRoom) {
+    let starts = 0;
+    const cells = f.mode !== 'procedural', t = (f.layers || {}).terrain || [], W = (f.size || {}).w, H = (f.size || {}).h;
+    (f.objects || []).forEach((o, i) => {
+      const T = PDM.OBJECT_TYPES[o.type], w = `${where} › 오브젝트 ${i + 1} (${(T || {}).name || o.type}${o.id ? ' · ' + o.id : ''})`, at = o.at && o.at.x != null ? { x: o.at.x, y: o.at.y } : undefined;
+      const X = extra => Object.assign({ path: `objects[${i}]`, cell: at }, extra);
+      if (!T) { add('error', w, `알 수 없는 오브젝트 종류 "${o.type}" — 게임에 놓이지 않습니다`, k, X({ kind: '잘못된 오브젝트 종류', fix: '오브젝트를 지우거나 종류를 다시 고르세요 (플러그인이 만든 종류면 그 플러그인을 켜세요)' })); return; }
+      if (isRoom && (T.nodeOnly || o.type === 'start')) add('warn', w, '이 종류는 직접 그린 노드에서만 쓰입니다 — 방 템플릿에서는 무시됩니다', k, X({ kind: '쓰이지 않는 오브젝트' }));
+      const kind = REF_KIND[o.type];
+      if (o.type === 'combo' && !(PDM.extensions && PDM.extensions.on('tilecombos'))) add('warn', w, '확장 기능 "조합 타일 · 분리 타일셋 밑그림"이 꺼져 있어 게임에 놓이지 않습니다', k, X({ kind: '꺼진 확장 기능', fix: '도구 모음 › 확장 기능에서 켜세요' }));
+      if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k, X({ kind: '빈 참조', fix: '오른쪽 속성 창에서 대상을 고르세요' }));
+      else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k, X({ kind: '없는 참조', fix: '지워졌거나 id 가 바뀐 항목입니다 — 대상을 다시 고르거나 오브젝트를 지우세요' }));
+      if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k, X({ kind: '없는 참조' }));
+      if (o.type === 'trap' && o.ref && PDM.TRAP_BY_ID && !PDM.TRAP_BY_ID[o.ref]) add('warn', w, `함정 "${o.ref}" 은(는) 원작에 없는 함정입니다 (게임 저장소에 그 클래스가 없으면 놓이지 않음)`, k, X({ kind: '모드 함정' }));
+      if (at && cells && (at.x < 0 || at.y < 0 || at.x >= W || at.y >= H)) add('error', w, '맵 밖에 있습니다', k, X({ kind: '좌표 오류', fix: '오브젝트를 맵 안으로 옮기세요' }));
+      else if (at && cells) {
+        const tt = PDM.TERRAIN_BY_ID[t[at.y * W + at.x]];
+        if (tt && !tt.pass && o.type !== 'event' && o.type !== 'combo') add('warn', w, `지나갈 수 없는 타일(${tt.name}) 위에 있습니다`, k, X({ kind: '배치' }));
+      }
+      if (o.type === 'start' && (o.when || 'start') === 'start') starts++;
+      cond(o.cond, w, k);
+    });
+    return starts;
+  }
+  /** 지형 칸 값: -1(빈 칸) 이나 게임 지형 번호만 */
+  function terrainCheck(f, where, k) {
+    const t = (f.layers || {}).terrain; if (!Array.isArray(t)) return;
+    const bad = {}; t.forEach((v, i) => { if (v !== -1 && !PDM.TERRAIN_BY_ID[v]) (bad[v] = bad[v] || []).push(i); });
+    Object.entries(bad).forEach(([v, cells]) => add('error', where, `알 수 없는 지형 번호 ${v} — ${cells.length}칸`, k,
+      { kind: '잘못된 타일 번호', path: 'layers.terrain', cell: { x: cells[0] % f.size.w, y: Math.floor(cells[0] / f.size.w) }, fix: '그 칸을 다른 타일로 다시 칠하세요 (예전 형식 · 손으로 고친 파일?)' }));
+  }
+
   // 맵 그래프
   const wd = s.get('world') || { groups: [], nodes: [], edges: [] };
   const W_ = PDM.World, I = W_.info();
@@ -111,43 +151,45 @@ PDM.validate = function () {
     if (mains.length > 1 && mains.every(e => !(e.weight > 0) && !e.cond)) add('warn', where, '출구 연결이 여러 개인데 무게가 모두 0입니다', 'world');
     if (I.reached[n.id] === undefined && n.id !== wd.start && !f.entranceTo && !(wd.nodes || []).some(x => (s.get('node:' + x.id) || {}).entranceTo === n.id))
       add('warn', where, '시작 노드에서 닿지 않습니다 (이벤트 "맵 이동"으로만 갈 수 있음)', 'world');
-    (f.objects || []).forEach((o, i) => {
-      const w = `${where} › 오브젝트 ${i + 1} (${(PDM.OBJECT_TYPES[o.type] || {}).name || o.type})`;
-      const kind = { npc: 'char', mob: 'char', item: 'item', event: 'event', plate: 'event', prop: 'prop', effect: 'effect', combo: 'combo' }[o.type];
-      if (o.type === 'combo' && !(PDM.extensions && PDM.extensions.on('tilecombos'))) add('warn', w, '확장 기능 "조합 타일 · 분리 타일셋 밑그림"이 꺼져 있어 게임에 놓이지 않습니다', k);
-      if (kind && !o.ref) add('error', w, '대상이 비어 있습니다', k);
-      else if (kind && !has(kind, o.ref)) add('error', w, `"${o.ref}" 을(를) 찾을 수 없습니다`, k);
-      if (o.event && !has('event', o.event)) add('error', w, `이벤트 "${o.event}" 없음`, k);
-      if (o.type === 'trap' && o.ref && PDM.TRAP_BY_ID && !PDM.TRAP_BY_ID[o.ref]) add('warn', w, `함정 "${o.ref}" 은(는) 원작에 없는 함정입니다 (게임 저장소에 그 클래스가 없으면 놓이지 않음)`, k);
-      if (o.at && o.at.x != null && f.mode !== 'procedural' && (o.at.x >= f.size.w || o.at.y >= f.size.h)) add('error', w, '맵 밖에 있습니다', k);
-      if (o.at && o.at.x != null && f.mode !== 'procedural') {
-        const tt = PDM.TERRAIN_BY_ID[(f.layers.terrain || [])[o.at.y * f.size.w + o.at.x]];
-        if (tt && !tt.pass && o.type !== 'event' && o.type !== 'combo') add('warn', w, `지나갈 수 없는 타일(${tt.name}) 위에 있습니다`, k);
-      }
-      if (o.type === 'start' && (o.when || 'start') === 'start') starts++;
-      cond(o.cond, w, k);
-    });
-    if (f.mode !== 'procedural') tileLayerCheck(f, where, k);
+    starts += objCheck(f, where, k, false);
+    if (f.mode !== 'procedural') { terrainCheck(f, where, k); tileLayerCheck(f, where, k); }
     blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
   // 조합 타일 (maps/tilecombos.json) — 확장 기능 "tilecombos"를 켠 프로젝트만
   if (PDM.extensions && PDM.extensions.on('tilecombos')) {
     const layerIds = new Set((PDM.tileLayers ? PDM.tileLayers() : []).map(l => l.id));
+    const gv = (s.get('tilecombos') || {}).autogenVersion;
+    if (gv !== undefined && gv !== 1 && gv !== 2) add('warn', '조합 타일', `자동 생성 배치 방식 ${gv} 을(를) 런타임이 모릅니다 — 2 이상은 "목록 순서와 상관없음"으로 처리됩니다`, 'tilecombos', { kind: '자동 생성 규칙' });
     ((s.get('tilecombos') || {}).list || []).forEach(c => {
       const w = `조합 타일 ${c.name || c.id}`;
       if (!(c.sprites || []).length && !(c.light || {}).on && !c.effect && !(c.objects || []).length) add('warn', w, '스프라이트 · 광원 · 이펙트 · 오브젝트가 하나도 없습니다', 'tilecombos');
       (c.sprites || []).forEach((sp, i) => {
         if (sp.layer && !layerIds.has(sp.layer)) add('warn', `${w} › 스프라이트 ${i + 1}`, `레이어 "${sp.layer}" 이(가) 타일 레이어 목록에 없습니다 (맨 위에 그려짐)`, 'tilecombos');
         if (sp.src === 'image' && !sp.image) add('error', `${w} › 스프라이트 ${i + 1}`, '그림 파일이 비어 있습니다', 'tilecombos');
+        if (sp.src !== 'image' && !(Number.isInteger(+sp.tile) && +sp.tile >= 0 && +sp.tile < 256)) add('error', `${w} › 스프라이트 ${i + 1}`, `타일셋 칸 번호 ${sp.tile} 이(가) 0~255 가 아닙니다 — 게임에서 그려지지 않습니다`, 'tilecombos', { kind: '잘못된 타일 번호', path: `list[${c.id}].sprites[${i}].tile` });
+        if (sp.src === 'image' && sp.image && !(+(sp.size || 16) > 0)) add('error', `${w} › 스프라이트 ${i + 1}`, `칸 크기 ${sp.size} 이(가) 올바르지 않습니다`, 'tilecombos');
       });
+      (c.objects || []).forEach((o, i) => { if (o.type === 'trap' && o.ref && PDM.TRAP_BY_ID && !PDM.TRAP_BY_ID[o.ref]) add('warn', `${w} › 오브젝트 ${i + 1}`, `함정 "${o.ref}" 은(는) 원작에 없는 함정입니다`, 'tilecombos'); if (o.type !== 'trap' && o.type !== 'prop' && !PDM.OBJECT_TYPES[o.type]) add('error', `${w} › 오브젝트 ${i + 1}`, `알 수 없는 오브젝트 종류 "${o.type}"`, 'tilecombos', { kind: '잘못된 오브젝트 종류' }); });
       if (c.effect && !has('effect', c.effect)) add('error', w, `이펙트 "${c.effect}" 없음`, 'tilecombos');
       (c.objects || []).forEach((o, i) => { if (o.type === 'prop' && !has('prop', o.ref)) add('error', `${w} › 오브젝트 ${i + 1}`, `맵 오브젝트 "${o.ref}" 없음`, 'tilecombos'); });
       const a = c.autogen || {};
       if (a.enabled && !(+a.chance > 0)) add('warn', w, '자동 생성이 켜져 있지만 확률이 0 이라 놓이지 않습니다', 'tilecombos');
       if (a.enabled && a.where === 'terrain' && !(a.terrains || []).length) add('warn', w, '자동 생성 위치가 "지형 지정"인데 지형을 고르지 않았습니다', 'tilecombos');
+      const WHERE = ['wallFace', 'wall', 'floor', 'floorNearWall', 'grass', 'water', 'terrain'];   // 런타임 MakerCombos.fits 와 같음
+      if (a.enabled && !WHERE.includes(a.where || 'wallFace')) add('error', w, `자동 생성 위치 "${a.where}" 을(를) 런타임이 모릅니다 — 놓이지 않습니다`, 'tilecombos', { kind: '자동 생성 규칙', fix: '조합 타일 편집기에서 "놓을 곳"을 다시 고르세요' });
+      (a.terrains || []).forEach(v => { if (!PDM.TERRAIN_BY_ID[+v]) add('warn', w, `자동 생성 지형 ${v} 은(는) 없는 지형 번호입니다`, 'tilecombos', { kind: '자동 생성 규칙' }); });
+      const themeIds = new Set([...Object.keys(PDM.THEMES || {}), ...(((s.get('world') || {}).customThemes) || []).map(t => 'custom:' + t.id)]);
+      (a.themes || []).forEach(v => { if (!themeIds.has(v) && !themeIds.has(String(v).toUpperCase())) add('warn', w, `자동 생성 테마 "${v}" 이(가) 없습니다 (지운 사용자 테마?) — 그 테마에서는 놓이지 않습니다`, 'tilecombos', { kind: '자동 생성 규칙' }); });
     });
   }
+  // 사운드 참조 sound:<id> (어느 리소스에서든) — 사운드 목록에 없으면 게임에서 소리가 나지 않음
+  const soundIds = new Set((((s.get('sounds') || {}).sounds) || []).map(x => 'sound:' + x.id)), seenSound = new Set();
+  const walkStr = (v, fn, p) => { if (typeof v === 'string') fn(v, p); else if (Array.isArray(v)) v.forEach((x, i) => walkStr(x, fn, p + '[' + i + ']')); else if (v && typeof v === 'object') Object.entries(v).forEach(([k2, x]) => walkStr(x, fn, p ? p + '.' + k2 : k2)); };
+  s.keys().forEach(k => walkStr(s.get(k), (v, p) => v.split('|').forEach(r => {
+    if (!/^sound:/.test(r) || soundIds.has(r) || seenSound.has(k + r)) return; seenSound.add(k + r);
+    add('error', k, `사운드 "${r.slice(6)}" 이(가) 사운드 목록(audio/sounds.json)에 없습니다 (${p})`, k.includes(':') || k === 'sounds' || k === 'title' || k === 'dialogue' ? k : null, { kind: '없는 사운드 참조', path: p, fix: '사운드 편집기에서 그 소리를 다시 추가하거나, 참조하는 칸에서 다른 소리를 고르세요' });
+  }), ''));
   if (starts > 1) add('warn', '맵', `"게임을 시작할 때" 스폰 위치가 ${starts}개 있습니다 (시작 맵의 첫 번째만 사용)`, 'world');
   // 맵 오브젝트
   s.all('prop').forEach(p => {
@@ -173,7 +215,8 @@ PDM.validate = function () {
     if (leaks) add('warn', where, `테두리에 지나갈 수 있는 타일이 ${leaks}칸 있습니다. 테두리는 벽이나 문으로 두세요`, k);
     if (r.kind === 'special' && doors > 1) add('warn', where, '특수 방은 문이 하나만 연결됩니다 (문 자리 중 하나가 쓰임)', k);
     if (t.includes(7) || t.includes(8)) add('warn', where, '방 템플릿 안의 계단은 장식 바닥으로 바뀝니다', k);
-    (r.objects || []).forEach((o, i) => { if (o.at && (o.at.x >= W || o.at.y >= H)) add('error', where, `오브젝트 ${i + 1} 이(가) 방 밖에 있습니다`, k); });
+    objCheck(r, where, k, true);   // 예전엔 방 템플릿 오브젝트는 좌표만 봤음 — 이제 종류 · 참조 · 조건도
+    terrainCheck(r, where, k);
     tileLayerCheck(r, where, k);
   });
   // 캐릭터
@@ -351,4 +394,51 @@ PDM.validate = function () {
     if (kind === 'armor' && it.armor && it.armor.drMax < it.armor.drMin) add('warn', where, '최대 방어가 최소보다 작습니다', k);
   });
   return out;
+};
+
+/** 에셋 파일 검사 (비동기 — 검사 F7 이 동기 검사 뒤에 이어서 붙임). 프로젝트 데이터의 모든 문자열에서 그림 · 소리 경로를 찾아
+ *  ① 파일이 있는지 ② 이름의 대소문자가 같은지(Windows 는 통과해도 안드로이드 · 리눅스 빌드에서 못 찾음) ③ 확장자만 다른 파일이 있는지
+ *  ④ 절대 경로 · 역슬래시 · 프로젝트 밖(../) 경로인지 확인. 경로마다 한 번, 폴더 목록도 폴더마다 한 번만 읽음. 아무 파일도 고치지 않음.
+ *  경로 규칙(assets.js): "assets/…"(프로젝트 기준) · "game:…" / "builtin:이름"(게임 assets — 프로젝트 assets/game 이 있으면 그것) · "a|b"(여러 개)
+ *  → { issues: [검사 결과 형식], refs: 확인한 경로 수, uses, skippedGame: 게임 저장소가 없어 못 본 수, ms } */
+PDM.validateAssets = async function () {
+  const s = PDM.store, out = [], t0 = Date.now();
+  const add = (level, where, msg, open, extra) => out.push(Object.assign({ level, where, msg, open }, extra || {}));
+  const IMG = /\.(png|jpe?g|gif|webp|apng)$/i, SND = /\.(ogg|mp3|wav)$/i;
+  const isRef = r => r.length < 400 && !/[\n\r]/.test(r) && (/^builtin:[a-z_]+$/i.test(r) || ((IMG.test(r) || SND.test(r)) && !/^(https?|data|tex|res|spd|sound):/i.test(r)));
+  const refs = new Map();   // 경로 → [{ key, path }]
+  const walk = (v, key, p) => {
+    if (typeof v === 'string') { v.split('|').forEach(r => { r = r.trim(); if (r && isRef(r)) { if (!refs.has(r)) refs.set(r, []); refs.get(r).push({ key, path: p }); } }); }
+    else if (Array.isArray(v)) v.forEach((x, i) => walk(x, key, p + '[' + i + ']'));
+    else if (v && typeof v === 'object') Object.entries(v).forEach(([k, x]) => walk(x, key, p ? p + '.' + k : k));
+  };
+  s.keys().forEach(k => walk(s.get(k), k, ''));
+  const openOf = k => (PDM.editorFor ? (PDM.editorFor(k) ? k : null) : (k.includes(':') ? k : null));
+  const lists = new Map();   // 폴더 → 이름 목록 (없는 폴더 = null)
+  const listing = async dir => { if (!lists.has(dir)) { let l = null; try { if (await pdm.exists(dir)) l = (await pdm.list(dir)).filter(f => !f.dir).map(f => f.name); } catch (_) { l = null; } lists.set(dir, l); } return lists.get(dir); };
+  const stem = n => n.replace(/\.[^.]+$/, '').toLowerCase();
+  let skippedGame = 0, uses = 0;
+  for (const [r, us] of refs) {
+    uses += us.length;
+    const u = us[0], more = us.length > 1 ? ` 외 ${us.length - 1}곳` : '', where = `${u.key} › ${u.path}${more}`;
+    const X = extra => Object.assign({ path: u.path, ref: r, uses: us.length }, extra);
+    const isGame = /^(game|builtin):/.test(r), abs0 = /^([A-Za-z]:[\\/]|\/)/.test(r);
+    if (isGame && !s.gameAssetsDir()) { skippedGame++; continue; }
+    if (abs0) add('warn', where, `절대 경로 "${r}" — 다른 PC · 게임 내보내기에서 찾지 못합니다`, openOf(u.key), X({ kind: '경로', fix: '그림 · 소리를 프로젝트 assets/ 안으로 가져와서 다시 고르세요 (그림 관리 · 사운드 편집기)' }));
+    if (!isGame && r.includes('\\')) add('warn', where, `경로에 역슬래시(\\)가 있습니다 "${r}" — Windows 에서만 찾을 수 있습니다`, openOf(u.key), X({ kind: '경로', fix: '경로를 / 로 바꾸세요' }));
+    if (!isGame && !abs0 && /(^|[\\/])\.\.([\\/]|$)/.test(r)) add('warn', where, `프로젝트 밖을 가리키는 경로 "${r}" — 프로젝트 내보내기 · 게임 파일에 들어가지 않습니다`, openOf(u.key), X({ kind: '경로', fix: '파일을 프로젝트 assets/ 안으로 옮기세요' }));
+    const abs = isGame ? PDM.assets.resolvePath(r) : abs0 ? r : s.abs(r.replace(/\\/g, '/'));
+    if (!abs) continue;
+    const dir = pdm.dirname(abs), base = abs.split(/[\\/]/).pop(), names = await listing(dir);
+    if (names && names.includes(base)) continue;
+    let m;
+    if (names && (m = names.find(n => n.toLowerCase() === base.toLowerCase())))
+      add('warn', where, `"${r}" — 실제 파일 이름은 "${m}" (대소문자 다름). Windows 에서는 열리지만 안드로이드 · 리눅스 빌드에서는 찾지 못합니다`, openOf(u.key), X({ kind: '대소문자', fix: `참조를 "${m}" 에 맞추거나 파일 이름을 바꾸세요` }));
+    else if (names && (m = names.find(n => stem(n) === stem(base) && (IMG.test(n) || SND.test(n)))))
+      add('warn', where, `"${r}" 이(가) 없습니다 — 확장자만 다른 "${m}" 이(가) 있습니다`, openOf(u.key), X({ kind: '확장자', fix: `참조를 "${m}" 으로 바꾸세요` }));
+    else if (!names && await pdm.exists(abs)) continue;   // 폴더 목록을 못 읽는 환경 (웹 모드의 일부 서버)
+    else add('warn', where, `${SND.test(r) ? '소리' : '그림'} 파일 "${r}" 이(가) 없습니다 — 게임에서 ${SND.test(r) ? '소리가 나지 않습니다' : '기본 그림으로 보이거나 빠집니다'}`, openOf(u.key),
+      X({ kind: '없는 에셋', fix: isGame ? '게임 저장소(프로젝트 설정)가 맞는지, 다른 판의 게임 파일인지 확인하세요' : '파일을 다시 넣거나(같은 경로) 참조하는 칸에서 다른 파일을 고르세요. 이름을 바꿨다면 그림 관리의 이름 바꾸기를 쓰세요 (쓰는 곳도 함께 바뀜)' }));
+  }
+  return { issues: out, refs: refs.size, uses, skippedGame, dirs: lists.size, ms: Date.now() - t0 };
 };
