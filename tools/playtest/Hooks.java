@@ -650,6 +650,11 @@ public class Hooks {
 					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(cell);
 					break;
 				}
+				case "cutinfo": { // 연출 상태: 이벤트 실행 중 · 화면 어둡게 · 일러스트 번호마다 · 떠 있는 창 · 영웅 자리
+					StringBuilder ws = new StringBuilder(); for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) ws.append(w.getClass().getSimpleName()).append(' ');
+					System.out.println("[TEST] cut " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.debugState() + " windows=[" + ws.toString().trim() + "] hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos);
+					break;
+				}
 				case "adv": case "pick": { // 대사창: 다음(글자 다 보이기 → 선택지 → 닫기) · pick,<n> 선택지 고르기
 					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) {
 						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd d = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w;

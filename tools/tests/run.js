@@ -438,6 +438,72 @@ test('자동 생성 배치 방식: 런타임(MakerCombos)이 버전 1 공식을 
   assert.ok(/for \(JsonValue c : order\) \{\s*idx\+\+;/.test(src), 'idx 는 버전 1 에서 목록 순서대로 하나씩 (꺼진 조합 포함 — 예전과 같음)');
 });
 
+// ------------------------------------------------------------ ⑧ 이벤트 · 연출 (편집기 명령 ↔ 런타임 EventInterpreter · MakerStage)
+
+test('이벤트 명령: 편집기의 모든 명령을 런타임이 처리 · 연출 명령이 멈춤 감시 대상', () => {
+  const { PDM } = env.load();
+  const src = read(path.join(PDMK, 'EventInterpreter.java'));
+  const cases = new Set([...src.matchAll(/case "(\w+)"/g)].map(m => m[1]));
+  eq(Object.keys(PDM.COMMANDS).filter(k => !cases.has(k) && !PDM.COMMANDS[k].plugin), []);
+  const waits = src.match(/UI_WAITS = [^;]*asList\(([^)]*)\)/)[1];
+  ['text', 'choice', 'wait', 'fade', 'illust', 'illustMove', 'waitInput'].forEach(c => assert.ok(waits.includes(`"${c}"`), c));
+  return `명령 ${Object.keys(PDM.COMMANDS).length}개`;
+});
+
+test('일러스트 자리: 편집기 미리보기(PDM.Dialogue.stageLayout) = 런타임 MakerStage 계산', () => {
+  const { PDM } = env.load();
+  const L = PDM.Dialogue.stageLayout, W = 480, H = 270, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≠ ${b}`);
+  // 런타임 MakerStage.show/place 를 그대로 옮긴 기준식
+  const ref = (pos, iw, ih, o = {}) => {
+    const full = pos === 'full', th = full ? H : H * 0.9; let bs, bx, by;
+    if (full) { bs = Math.max(W / iw, H / ih); bx = (W - iw * bs) / 2; by = (H - ih * bs) / 2; } else { bs = th / ih; const w0 = iw * bs; bx = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; by = H - th; }
+    const sc = bs * (o.scale || 1), w0 = iw * bs, h0 = ih * bs, w = iw * sc, h = ih * sc;
+    return { x: bx + (o.ox || 0) + (w0 - w) / 2, y: by + (o.oy || 0) + (h0 - h), w, h };
+  };
+  for (const pos of ['left', 'center', 'right', 'full']) for (const o of [{}, { scale: 0.5 }, { scale: 1.3, ox: 12, oy: -7 }]) {
+    const a = L(pos, W, H, 300, 500, o), b = ref(pos, 300, 500, o); ['x', 'y', 'w', 'h'].forEach(k => near(a[k], b[k]));
+  }
+  // 아래 가운데 기준으로 커지고 작아짐 (서 있는 그림)
+  const a = L('center', W, H, 300, 500, {}), b = L('center', W, H, 300, 500, { scale: 0.5 });
+  near(a.x + a.w / 2, b.x + b.w / 2); near(a.y + a.h, b.y + b.h);
+  const java = read(path.join(PDMK, 'MakerStage.java'));
+  ['H * 0.9f', 'W * 0.04f', 'W * 0.96f - iw', 'img.x = s.baseX + s.ox + (w0 - w) / 2f', 'img.y = s.baseY + s.oy + (h0 - h)', 'k * k * (3 - 2 * k)'].forEach(t => assert.ok(java.includes(t), '런타임 식이 바뀜: ' + t));
+  assert.strictEqual(PDM.Dialogue.ease(0.5), 0.5);
+});
+
+test('명령의 빈 값: 목록 ⚠ · 검사(F7) 경고 — 대사 · 일러스트 그림 · 소리 (배경음 끄기는 소리 없어도 됨)', async () => {
+  const { ctx } = await newProject();
+  const P = ctx.PDM;
+  eq(P.commandProblems({ cmd: 'illust', slot: 1, image: '' }).length, 1);
+  eq(P.commandProblems({ cmd: 'sound', kind: 'bgmStop' }), []);
+  eq(P.commandProblems({ cmd: 'sound', kind: 'se', file: '' }).length, 1);
+  eq(P.commandProblems({ cmd: 'nope' }).length, 1);
+  P.store.edit('project', '확장', p => { p.extensions = { event: true }; });
+  P.store.add('event:ev', { format: 'pdmaker-event', version: 1, id: 'ev', name: 'ev', pages: [{ trigger: 'action', conds: {}, cond: '', commands: [{ cmd: 'illust', slot: 1, image: '' }, { cmd: 'illust', slot: 2, image: 'assets/illustrations/none.png' }, { cmd: 'text', text: '' }] }] });
+  const res = P.validate().filter(r => r.open === 'event:ev');
+  assert.strictEqual(res.filter(r => r.kind === '빈 값').length, 2, res.map(r => r.msg).join(' | '));
+  const a = await P.validateAssets();
+  assert.ok(a.issues.some(r => r.ref === 'assets/illustrations/none.png' && r.kind === '없는 에셋'), '없는 일러스트 그림');
+});
+
+test('연출 이벤트 저장 · 불러오기: 새 칸(크기 · 불투명도 · 움직이기 · 입력 기다리기 · 글자 속도 · 저절로 · 배경음 끄기)이 그대로', async () => {
+  const { ctx, dir } = await newProject();
+  const cmds = [{ cmd: 'illust', slot: 2, image: 'game:splashes/mage.jpg', pos: 'left', fade: 3, scale: 50, alpha: 80, ox: 4, oy: -2, flip: true, wait: true },
+    { cmd: 'text', name: '안내자', text: '첫 줄\n둘째 줄', speed: 'fast', auto: 15 }, { cmd: 'illustMove', slot: 2, pos: 'right', scale: 60, time: 5 },
+    { cmd: 'waitInput' }, { cmd: 'sound', kind: 'bgmStop', fade: 10 }, { cmd: 'illustHide', slot: 0, fade: 3 }];
+  ctx.PDM.store.add('event:cut', { format: 'pdmaker-event', version: 1, id: 'cut', name: '연출', pages: [{ trigger: 'action', conds: {}, cond: '', commands: cmds }] });
+  await ctx.PDM.store.save();
+  const c2 = env.load(); const probs = await c2.PDM.store.load(dir);
+  eq(probs, []);
+  eq(c2.PDM.store.get('event:cut').pages[0].commands, cmds);
+  eq(c2.PDM.store.dirtyKeys(), []);
+  // 요약 글 (목록)
+  const S = k => c2.PDM.COMMANDS[k].sum;
+  assert.ok(S('illust')(cmds[0]).includes('50%') && S('illust')(cmds[0]).includes('대기'));
+  assert.ok(S('text')(cmds[1]).includes('⏱1.5초'));
+  assert.ok(S('sound')(cmds[4]).includes('배경음 끄기'));
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];

@@ -117,6 +117,12 @@ public class EventInterpreter {
 		if (c != null) { c.waitOn = g; c.pauseSeq++; }
 	}
 	static Thread renderThread;
+	/** 상태 한 줄 (자동 테스트 tools/playtest Hooks "cutinfo" · 로그용): 실행 중 · 대기열 · 화면 어둡게 · 일러스트 */
+	public static String debugState() {
+		EventInterpreter c = current;
+		return "busy=" + (c != null) + (c != null ? "(" + c.eventId + ")" : "") + " queue=" + queue.size()
+				+ " fade=" + (fadeBlock == null || fadeBlock.parent == null ? "none" : String.format(java.util.Locale.ROOT, "%.2f", fadeBlock.alpha())) + " stage=" + MakerStage.debugState();
+	}
 
 	// ------------------------------------------------------------ 실행기
 
@@ -196,7 +202,30 @@ public class EventInterpreter {
 	}
 
 	/** 창·타이머로 멈추는 명령 (멈춤 감시 대상) */
-	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade"));
+	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade", "illust", "illustMove", "waitInput"));
+	/** 대사 글자 속도 (글자/초): "" = 대사창 설정(-1) · instant = 바로 · slow 20 · normal 40 · fast 80 · 숫자 */
+	static float textSpeed(String v) {
+		switch (v) { case "": return -1; case "instant": return 0; case "slow": return 20; case "normal": return 40; case "fast": return 80; }
+		try { return Math.max(0, Float.parseFloat(v)); } catch (Exception e) { return -1; }
+	}
+	/** 화면 스레드에서 start 를 한 번 하고, done 이 참이 될 때까지 (프레임마다 확인) 기다렸다가 이어서 — 연출이 끝날 때까지 대기.
+	 *  start 가 false(그림이 없음 등)면 기다리지 않고 바로 이어서. 화면이 바뀌어 사라지면 멈춤 감시가 정리 */
+	void waitUntil(java.util.function.BooleanSupplier start, java.util.function.BooleanSupplier done) {
+		final EventInterpreter self = this;
+		Game.runOnRenderThread(() -> {
+			renderThread = Thread.currentThread();
+			if (self.dead) return;
+			boolean ok;
+			try { ok = Game.scene() != null && start.getAsBoolean(); } catch (Throwable t) { MakerRuntime.log("연출 명령 오류 (" + eventId + "): " + t); ok = false; }
+			if (!ok) { resume(); return; }
+			Gizmo poll = new Gizmo() {
+				boolean fired;
+				@Override public void update() { super.update(); if (!fired && done.getAsBoolean()) { fired = true; active = false; if (parent != null) parent.remove(this); resume(); } }
+			};
+			Game.scene().add(poll);
+			if (current == self) waitingOn(poll);
+		});
+	}
 	static com.watabou.noosa.ColorBlock fadeBlock;
 	/** 캐릭터마다 지금 돌고 있는 이동 경로 (새 경로를 주면 앞의 것을 멈춤) */
 	static final java.util.Map<com.shatteredpixel.shatteredpixeldungeon.actors.Char, Gizmo> routes = new java.util.HashMap<>();
@@ -253,6 +282,8 @@ public class EventInterpreter {
 				MakerDialogue.Line l = MakerDialogue.line(c.getString("speaker", ""), c.getString("face", ""), c.getString("illust", ""), StoryState.expand(c.getString("text", "")));
 				if (!c.getString("name", "").isEmpty()) l.name = c.getString("name", "");
 				if (!c.getString("side", "").isEmpty()) l.side = c.getString("side", "");
+				l.speed = textSpeed(c.getString("speed", ""));   // 이 줄만 글자 속도 (비우면 대사창 설정)
+				l.auto = Math.max(0, c.getInt("auto", 0)) / 10f;  // 다 보인 뒤 저절로 넘기기 (0.1초, 0 = 입력 기다림)
 				showLine(l);
 				return false;
 			}
@@ -456,17 +487,35 @@ public class EventInterpreter {
 				return true;
 			}
 			case "sound": {
+				String kind = c.getString("kind", "se");
+				if ("bgmStop".equals(kind)) { final float sec = Math.max(0, c.getInt("fade", 0)) / 10f; Game.runOnRenderThread(() -> MakerAudio.stopBgm(sec)); return true; }   // 배경음 끄기 (페이드 아웃)
 				String file = c.getString("file", "");
-				if (file.isEmpty()) return true;
-				if ("bgm".equals(c.getString("kind", "se"))) MakerAudio.playBgm(file);
+				if (file.isEmpty()) { MakerRuntime.log("효과음/음악: 소리를 고르지 않아 건너뜀 (" + eventId + ")"); return true; }
+				if ("bgm".equals(kind)) MakerAudio.playBgm(file);
 				else MakerAudio.playSe(file);
 				return true;
 			}
-			case "illust": {
+			case "illust": {   // 일러스트 표시: 번호 · 그림 · 위치 · 페이드 + 크기 % · 불투명도 % · 옮기기 px · 뒤집기 · 끝날 때까지 대기
 				final int slot = c.getInt("slot", 1); final String img = c.getString("image", ""), pos = c.getString("pos", "center");
-				final float fade = c.getInt("fade", 3) / 10f;
-				Game.runOnRenderThread(() -> MakerStage.show(slot, img, pos, fade));
-				return true;
+				final float fade = c.getInt("fade", 3) / 10f, scale = c.getFloat("scale", 100) / 100f, alpha = c.getFloat("alpha", 100) / 100f;
+				final float ox = c.getFloat("ox", 0), oy = c.getFloat("oy", 0); final boolean flip = c.getBoolean("flip", false), wait = c.getBoolean("wait", false);
+				if (!wait) { Game.runOnRenderThread(() -> MakerStage.show(slot, img, pos, fade, scale, alpha, ox, oy, flip)); return true; }
+				waitUntil(() -> MakerStage.show(slot, img, pos, fade, scale, alpha, ox, oy, flip), () -> MakerStage.idle(slot));
+				return false;
+			}
+			case "illustMove": {   // 일러스트 움직이기: 그 번호의 그림을 time 동안 목표 자리 · 크기 · 불투명도로 (비운 값은 그대로)
+				final int slot = c.getInt("slot", 1); final String pos = c.getString("pos", "");
+				final float sec = Math.max(0, c.getInt("time", 5)) / 10f;
+				final float scale = c.getFloat("scale", 0) > 0 ? c.getFloat("scale", 0) / 100f : -1f;                      // 0 · 없음 = 크기 그대로
+				final float alpha = c.has("alpha") && c.get("alpha").isNumber() ? c.getFloat("alpha") / 100f : -1f;         // 없음 = 불투명도 그대로 (0 = 안 보이게)
+				final float ox = c.getFloat("ox", 0), oy = c.getFloat("oy", 0); final boolean wait = c.getBoolean("wait", true);
+				if (!wait) { Game.runOnRenderThread(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec)); return true; }
+				waitUntil(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec), () -> MakerStage.idle(slot));
+				return false;
+			}
+			case "waitInput": {   // 입력 기다리기: 화면을 누르거나 확인 키 (보이는 창 없음)
+				showWindow(() -> new MakerDialogue.WaitWnd(this::resume));
+				return false;
 			}
 			case "illustHide": {
 				final int slot = c.getInt("slot", 0); final float fade = c.getInt("fade", 3) / 10f;

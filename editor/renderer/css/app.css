@@ -67,6 +67,10 @@
   --e-1: 0 1px 2px var(--shadow);
   --e-2: 0 8px 28px var(--shadow);
   --e-3: 0 20px 60px var(--shadow);
+  /* 셸 배치 — 패널 기본 크기 (사용자가 끌어 바꾼 값은 --treeW · --inspW · --bottomH, app.js 가 기억) */
+  --tree-w: 250px; --insp-w: 300px; --bottom-h: 170px; --status-h: 24px; --split: 4px;
+  /* 비활성 */
+  --disabled-opacity: .4;
   /* 모션 */
   --dur-fast: .12s; --dur: .18s; --ease: cubic-bezier(.2, .7, .2, 1);
   /* 포커스 (키보드) */
@@ -234,7 +238,14 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 #toast.show { opacity: 1; transform: translate(-50%, 0); } #toast.bad { border-color: var(--bad); }
 
 /* ---------------- 5. 셸 ---------------- */
-#app { display: grid; grid-template-rows: auto 1fr 4px var(--bottomH, 170px) 24px; height: 100vh; }
+#app { display: grid; grid-template-rows: auto 1fr var(--split) var(--bottomH, var(--bottom-h)) var(--status-h); height: 100vh; }
+/* 접은 패널 (app.js PDM.panels — 상태 줄 버튼 · Ctrl+B / Ctrl+Shift+B / Ctrl+J) */
+/* 좁은 · 낮은 창의 기본 크기 (사용자가 끌어 바꾼 크기 --treeW · --inspW · --bottomH 가 있으면 그것) — 맵 캔버스 자리를 먼저 */
+@media (max-width: 1280px) { :root { --tree-w: 200px; --insp-w: 250px; } }
+@media (max-height: 800px) { :root { --bottom-h: 96px; } }
+/*   접은 칸은 격자에서 빼지 않고(display: none 이면 다른 칸이 그 자리로 밀림) 크기 0 · 안 보이게 · 초점도 받지 않게 */
+#app.no-bottom { grid-template-rows: auto 1fr 0 0 var(--status-h); }
+#app.no-bottom #bottom, #app.no-bottom .split-h, #app.no-tree #tree, #app.no-tree .split-v[data-target=tree], #app.no-insp #inspector, #app.no-insp .split-v[data-target=inspector] { visibility: hidden; overflow: hidden; min-width: 0; min-height: 0; border: 0; }
 #topbar { display: flex; flex-direction: column; background: var(--bg2); border-bottom: 1px solid var(--line); }
 .topline { display: flex; align-items: center; gap: var(--sp-5); padding: var(--sp-1) var(--sp-5) 0; min-height: 32px; }
 .brand { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-lg); white-space: nowrap; }
@@ -252,7 +263,7 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .tb .tbi { width: 17px; height: 17px; }
 .tb:hover:not(:disabled) { background: var(--bg3); border-color: var(--line); }
 .tb:active:not(:disabled) { background: var(--bg4); }
-.tb:disabled { opacity: .35; cursor: default; }
+.tb:disabled { opacity: var(--disabled-opacity); cursor: default; }
 .tb.dirty .tbi { color: var(--gold); }
 .tb.play { background: var(--play-bg); border-color: var(--play-line); color: var(--good); }
 .tb.play:hover:not(:disabled) { background: var(--play-bg); filter: brightness(1.12); border-color: var(--good); }
@@ -267,11 +278,14 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .export-kind.on { border-color: var(--accent); background: var(--accent-soft); }
 .export-kind b { display: block; margin-bottom: var(--sp-1); }
 
-#work { display: grid; grid-template-columns: var(--treeW, 250px) 4px 1fr 4px var(--inspW, 300px); min-height: 0; }
+#work { display: grid; grid-template-columns: var(--treeW, var(--tree-w)) var(--split) minmax(0, 1fr) var(--split) var(--inspW, var(--insp-w)); min-height: 0; }
+#app.no-tree #work { grid-template-columns: 0 0 minmax(0, 1fr) var(--split) var(--inspW, var(--insp-w)); }
+#app.no-insp #work { grid-template-columns: var(--treeW, var(--tree-w)) var(--split) minmax(0, 1fr) 0 0; }
+#app.no-tree.no-insp #work { grid-template-columns: 0 0 minmax(0, 1fr) 0 0; }
 .panel { background: var(--bg2); display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 /* 패널 제목 — 탭 줄과 같은 높이라 세 칸의 윗줄이 맞음 */
 .panel-title { display: flex; align-items: center; gap: var(--sp-3); height: var(--bar-h); flex: none; padding: 0 var(--sp-5); font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--mute); border-bottom: 1px solid var(--line); background: var(--bg2); }
-.panel-title .ib { margin-left: auto; }
+.panel-title .ib { margin-left: auto; } .panel-title .ib + .ib { margin-left: 0; }
 .split-v { background: var(--bg); cursor: col-resize; transition: background var(--dur-fast); } .split-v:hover, .split-h:hover { background: var(--accent2); }
 .split-h { background: var(--bg); cursor: row-resize; transition: background var(--dur-fast); }
 
@@ -324,7 +338,11 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .log-l { white-space: pre-wrap; word-break: break-all; } .log-l.warn { color: var(--warn); } .log-l.err { color: var(--bad); } .log-l.ok { color: var(--good); } .log-l.dim { color: var(--dim); }
 .chk-l { cursor: pointer; padding: var(--sp-1) 0; } .chk-l:hover { color: var(--accent); }
 #status { display: flex; gap: var(--sp-7); align-items: center; padding: 0 var(--sp-5); font-size: var(--fs-xs); color: var(--mute); background: var(--bg2); border-top: 1px solid var(--line); }
-#stDirty.on { color: var(--gold); }
+#stDirty.on { color: var(--gold); } #stDirty.saving { color: var(--info); } #stDirty.fail { color: var(--bad); font-weight: var(--fw-bold); cursor: pointer; }
+#stCtx { color: var(--fg); min-width: 0; font-variant-numeric: tabular-nums; }
+#stPanels { display: inline-flex; gap: var(--sp-1); }
+#stPanels button { height: 18px; padding: 0 var(--sp-3); font-size: var(--fs-2xs); border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--bg3); color: var(--mute); cursor: pointer; }
+#stPanels button:hover { color: var(--fg); border-color: var(--line-strong); } #stPanels button.off { opacity: var(--disabled-opacity); text-decoration: line-through; }
 
 /* ---------------- 6. 시작 화면 (대시보드) ---------------- */
 .welcome { max-width: 1040px; margin: 0 auto; padding: var(--sp-10) var(--sp-9) 60px; }
@@ -395,6 +413,9 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .cmd { display: flex; align-items: center; gap: 6px; padding: 2px 8px 2px calc(8px + var(--d, 0) * 18px); cursor: default; border-left: 3px solid transparent; white-space: nowrap; overflow: hidden; }
 .cmd:hover { background: var(--bg3); } .cmd.sel { background: var(--bg4); border-left-color: var(--accent); }
 .cmd .cg { color: var(--dim); width: 12px; } .cmd .cs { overflow: hidden; text-overflow: ellipsis; }
+.cmd .cn { color: var(--dim); min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; font-size: var(--fs-2xs); flex: none; }   /* 실행 순서 번호 */
+.cmd.bad .cg, .cmd.bad .cs { color: var(--warn); }
+.cmd-bar { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3) var(--sp-2); margin-bottom: var(--sp-2); border-bottom: 1px solid var(--line); font-family: var(--font); }
 .cmd.g-메시지 .cs { color: var(--fg); } .cmd.g-흐름 .cs { color: var(--info); } .cmd.g-데이터 .cs { color: var(--gold); } .cmd.g-마음 .cs { color: var(--pink); }
 .cmd.g-연출 .cs { color: var(--accent); } .cmd.g-캐릭터 .cs { color: var(--good); } .cmd.g-월드 .cs { color: var(--tan); } .cmd.g-스토리 .cs { color: var(--bad); } .cmd.g-확장 .cs { color: var(--mute); } .cmd.g-영웅 .cs { color: var(--warn); }
 .cmd.branch .cs { color: var(--dim); } .cmd.ins { color: var(--dim); font-style: italic; } .cmd.ins:hover { color: var(--accent); }

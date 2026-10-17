@@ -17,7 +17,28 @@
   function showBottom(which) {
     $$('.btab').forEach(b => b.classList.toggle('on', b.dataset.b === which));
     $('#logBody').hidden = which !== 'log'; $('#checkBody').hidden = which !== 'check';
+    PDM.panels.show('bottom');   // 접어 둔 출력 창도 검사 · 빌드 결과는 펼쳐서 보여 줌
   }
+
+  // ---------------- 패널 접기 · 크기 기억 (이 PC 의 화면 설정 — 프로젝트와 상관없음, localStorage "pdm.layout") ----------------
+  //   tree = 리소스 · insp = 속성(인스펙터) · bottom = 출력/검사. 상태 줄 오른쪽 버튼 · 패널 제목의 « » ⌄ · Ctrl+B / Ctrl+Shift+B / Ctrl+J
+  PDM.panels = (function () {
+    const KEY = 'pdm.layout', NAMES = { tree: '리소스', insp: '속성', bottom: '출력' }, VARS = { treeW: '--treeW', inspW: '--inspW', bottomH: '--bottomH' };
+    let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (_) { st = {}; }
+    st.hide = st.hide || {};
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (_) { /* 저장 불가 환경 */ } };
+    const apply = () => {
+      const app = $('#app'); if (!app) return;
+      Object.keys(NAMES).forEach(n => app.classList.toggle('no-' + n, !!st.hide[n]));
+      Object.entries(VARS).forEach(([k, v]) => { if (st[k]) document.documentElement.style.setProperty(v, st[k] + 'px'); });
+      const bar = $('#stPanels'); if (bar) { bar.innerHTML = ''; Object.entries(NAMES).forEach(([n, label]) => bar.append(h('button', { class: st.hide[n] ? 'off' : '', title: `${label} 패널 ${st.hide[n] ? '보이기' : '숨기기'} (${PDM.keys.label({ tree: 'toggleTree', insp: 'toggleInspector', bottom: 'toggleBottom' }[n]) || '단축키 없음'})`, onclick: () => toggle(n) }, label))); }
+    };
+    function toggle(n, on) { st.hide[n] = on === undefined ? !st.hide[n] : !on; save(); apply(); dispatchEvent(new Event('resize')); }
+    return { apply, toggle, show: n => { if (st.hide[n]) toggle(n, true); }, isOpen: n => !st.hide[n], size(k, px) { st[k] = Math.round(px); save(); }, NAMES };
+  })();
+
+  // ---------------- 상태 줄 — 편집기가 지금 상태(도구 · 레이어 · 확대 · 선택)를 한 줄로 (탭을 바꾸면 비움) ----------------
+  PDM.status = { ctx(text, title) { const el = $('#stCtx'); if (!el) return; el.textContent = text || ''; el.title = title || text || ''; } };
 
   // ---------------- 인스펙터 ----------------
   PDM.inspector = {
@@ -119,7 +140,7 @@
     const body = $('#tabbody'); body.innerHTML = ''; body.append(t.el); body.scrollTop = t.scroll || 0;
     if (!t.el.childElementCount) render(t);
     drawTabbar(); markTree();
-    PDM.inspector.clear();
+    PDM.inspector.clear(); PDM.status.ctx('');
     t.editor.onActivate && t.editor.onActivate(t.key);
   }
   function drawTabbar() {
@@ -360,7 +381,8 @@
       { label: chk(PDM.tips.mode === 'inline') + '설명문: 화면에 항상 펼쳐 보기', run: () => PDM.tips.setMode('inline') },
       { label: chk(PDM.tips.mode === 'off') + '설명문: 숨기기 (버튼 도움말만)', run: () => PDM.tips.setMode('off') },
       '-',
-      { label: '출력 창', run: () => showBottom('log') }, { label: '검사 결과', run: () => showBottom('check') }
+      { label: '출력 창', run: () => showBottom('log') }, { label: '검사 결과', run: () => showBottom('check') },
+      '-', ...Object.entries(PDM.panels.NAMES).map(([n, t]) => ({ label: `${t} 패널`, checked: PDM.panels.isOpen(n), hint: PDM.keys.label({ tree: 'toggleTree', insp: 'toggleInspector', bottom: 'toggleBottom' }[n]), run: () => PDM.panels.toggle(n) }))
     ],
     '프로젝트': () => [
       { label: '프로젝트 설정', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
@@ -455,9 +477,13 @@
           '-',
           { label: '단축키 설정…', run: () => PDM.keys.dialog() }], { iconOnly: true, right: true, tip: '설정 — 프로젝트 · build.gradle · 단축키' })));
   }
+  let saveState = '';   // '' · 'saving' · 'fail:<이유>' — 저장 중 · 실패를 상태 줄에 (다음 편집 · 저장까지 남음)
   function updateStatus() {
-    const d = store.isDirty();
-    const el = $('#stDirty'); el.textContent = store.isOpen ? (d ? '● 저장 안 된 변경 있음' : '저장됨') : ''; el.classList.toggle('on', d);
+    const d = store.isDirty(), n = store.isOpen ? store.dirtyKeys().length : 0;
+    const el = $('#stDirty');
+    el.textContent = !store.isOpen ? '' : saveState === 'saving' ? '⟳ 저장 중…' : saveState.startsWith('fail') ? '✕ 저장 실패 — 눌러서 다시 저장 (Ctrl+S)' : d ? `● 저장 안 됨${n ? ` (${n}개)` : ''}` : '✓ 저장됨';
+    el.title = saveState.startsWith('fail') ? saveState.slice(5) : d ? '저장하지 않은 리소스: ' + store.dirtyKeys().slice(0, 12).join(', ') + (n > 12 ? ' …' : '') : '';
+    el.className = saveState === 'saving' ? 'saving' : saveState.startsWith('fail') ? 'fail' : d ? 'on' : '';
     $('#projName').textContent = store.isOpen ? `— ${(store.get('project') || {}).name || ''}` : '';
     document.title = `${d ? '● ' : ''}PDMaker${store.isOpen ? ' — ' + ((store.get('project') || {}).name || '') : ''}`;
   }
@@ -771,8 +797,10 @@
   async function closeProject() { if (!(await guardDirty())) return; PDM.tabs.closeAll(); location.reload(); }
   async function saveAll() {
     if (!store.isOpen) return;
-    try { const s = await store.save(); PDM.log(`저장했습니다 (${s.length}개 파일)`, 'ok'); toast('저장했습니다'); }
-    catch (e) { PDM.log('저장 실패: ' + e.message, 'err'); toast('저장 실패', 'bad'); }
+    saveState = 'saving'; updateStatus();
+    try { const s = await store.save(); saveState = ''; PDM.log(`저장했습니다 (${s.length}개 파일)`, 'ok'); toast('저장했습니다'); }
+    catch (e) { saveState = 'fail:' + e.message; PDM.log('저장 실패: ' + e.message + ' — 저장하지 못한 변경은 그대로 남아 있습니다. 디스크 공간 · 쓰기 권한 · 파일이 다른 프로그램에서 열려 있는지 확인한 뒤 다시 저장하세요.', 'err'); toast('저장 실패 — 상태 줄을 눌러 다시 저장', 'bad'); showBottom('log'); }
+    updateStatus();
   }
   /** 폴더를 옮기면 상대 경로(게임 저장소 등)가 틀어지므로 새 위치 기준으로 다시 계산 */
   function rebasePaths(oldRoot, newRoot) {
@@ -1036,15 +1064,17 @@
       e.preventDefault();
       const right = sp.dataset.right, target = sp.dataset.target, root = document.documentElement;
       const startX = e.clientX, start = $('#' + target).getBoundingClientRect().width;
-      const move = ev => { const w = PDM.clamp(start + (right ? startX - ev.clientX : ev.clientX - startX), 160, 700); root.style.setProperty(target === 'tree' ? '--treeW' : '--inspW', w + 'px'); };
-      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      let w = start;
+      const move = ev => { w = PDM.clamp(start + (right ? startX - ev.clientX : ev.clientX - startX), 160, 700); root.style.setProperty(target === 'tree' ? '--treeW' : '--inspW', w + 'px'); };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); PDM.panels.size(target === 'tree' ? 'treeW' : 'inspW', w); };
       addEventListener('mousemove', move); addEventListener('mouseup', up);
     }));
     $('.split-h').addEventListener('mousedown', e => {
       e.preventDefault();
       const startY = e.clientY, start = $('#bottom').getBoundingClientRect().height;
-      const move = ev => document.documentElement.style.setProperty('--bottomH', PDM.clamp(start + startY - ev.clientY, 60, 600) + 'px');
-      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      let hh = start;
+      const move = ev => { hh = PDM.clamp(start + startY - ev.clientY, 60, 600); document.documentElement.style.setProperty('--bottomH', hh + 'px'); };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); PDM.panels.size('bottomH', hh); };
       addEventListener('mousemove', move); addEventListener('mouseup', up);
     });
   }
@@ -1058,7 +1088,9 @@
 
   // ---------------- 시작 ----------------
   function init() {
-    drawLogo(); splitters(); drawAll(); PDM.inspector.clear();
+    drawLogo(); splitters(); PDM.panels.apply(); drawAll(); PDM.inspector.clear();
+    $$('.pnl-x').forEach(b => b.addEventListener('click', () => PDM.panels.toggle(b.dataset.panel)));
+    $('#stDirty').addEventListener('click', () => { if ($('#stDirty').classList.contains('fail')) saveAll(); });
     $('#stMode').textContent = pdm.isElectron ? 'Electron' : '웹 모드(개발용)';
     $$('.btab').forEach(b => b.addEventListener('click', () => showBottom(b.dataset.b)));
     $('#logClear').addEventListener('click', () => { $('#logBody').innerHTML = ''; $('#checkBody').innerHTML = ''; });
@@ -1072,6 +1104,7 @@
     K.define('exportProject', exportProject); K.define('exportGame', exportGame); K.define('undo', undo); K.define('redo', redo);
     K.define('keySettings', () => K.dialog()); K.define('playtest', () => playtest()); K.define('stopGame', stopGame); K.define('check', runCheck);
     K.define('projectSettings', () => store.isOpen && PDM.tabs.open('project')); K.define('showLog', () => showBottom('log'));
+    K.define('toggleTree', () => PDM.panels.toggle('tree')); K.define('toggleInspector', () => PDM.panels.toggle('insp')); K.define('toggleBottom', () => PDM.panels.toggle('bottom'));
     K.define('closeTab', () => { if (!PDM.ui.closeTop() && active) PDM.tabs.close(active.key); });   // 떠 있는 창 · 메뉴가 먼저, 없으면 지금 탭 (프로그램은 닫지 않음)
     K.define('nextTab', () => PDM.tabs.cycle(1)); K.define('prevTab', () => PDM.tabs.cycle(-1));
     // 복사 · 붙여넣기: 지금 탭 편집기의 ctx.copy/paste(고른 노드 · 오브젝트 · 명령) → 리소스 통째로 → 목록 항목(이펙트 등)

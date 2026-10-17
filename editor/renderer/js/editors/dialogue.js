@@ -235,7 +235,7 @@
     let timer = null, n = 0, isTyping = false;
     const showChoices = () => { if (!choiceEls.length) return; choiceEls.forEach(e => { e.hidden = false; }); select(0); if (arrow) arrow.hidden = true; };
     const finish = () => { if (timer) clearInterval(timer); timer = null; isTyping = false; spans.forEach(s => { s.style.visibility = ''; }); if (arrow) arrow.hidden = !!choiceEls.length; showChoices(); };
-    const speed = +c.typing.speed || 0;
+    const speed = l.speed >= 0 ? l.speed : (+c.typing.speed || 0);   // 이 줄만 글자 속도 (런타임 Line.speed 와 같음)
     if (hasText && speed > 0 && !opts.static) {
       isTyping = true; spans.forEach(s => { s.style.visibility = 'hidden'; }); if (arrow) arrow.hidden = true;
       const t0 = performance.now();
@@ -252,9 +252,11 @@
   /** 클릭해서 넘기며 재생: 글자가 나오는 중이면 다 보이기 → (선택지면 고름) → 닫기. 결과: 고른 번호 또는 undefined */
   function play(stage, l, choices, over) {
     return new Promise(async resolve => {
-      let r = null;
-      const done = v => { stage.removeEventListener('click', onClick); if (r) { r.stop(); r.el.remove(); } resolve(v); };
+      let r = null, autoT = null, ended = false;
+      const done = v => { if (ended) return; ended = true; clearInterval(autoT); stage.removeEventListener('click', onClick); if (r) { r.stop(); r.el.remove(); } resolve(v); };
       r = await render(stage, l, { choices, onChoice: i => done(i) }, over);
+      // 저절로 넘기기 (런타임 Wnd.update 와 같음: 글자가 다 나온 뒤 l.auto 초, 선택지가 있으면 쓰지 않음)
+      if (l.auto > 0 && !choices) { let since = null; autoT = setInterval(() => { if (r.typing()) return; since = since || performance.now(); if (performance.now() - since >= l.auto * 1000) done(undefined); }, 30); }
       function onClick() {
         if (r.typing()) { r.finish(); return; }
         if (r.hasChoices) return;
@@ -264,7 +266,19 @@
     });
   }
 
-  PDM.Dialogue = { cfg, line, render, play, classic: () => cfg().mode === 'window' };
+  /** 이벤트 일러스트 자리 — 런타임 MakerStage.show/place 와 같은 계산 (게임 화면 단위 W×H, 그림 원래 크기 iw×ih).
+   *  pos: left · center · right · full / o: { scale(1 = 100%), ox, oy, flip } → { x, y, w, h, flip } (보이는 사각형 — 왼쪽 위 · 크기) */
+  function stageLayout(pos, W, H, iw, ih, o = {}) {
+    const full = pos === 'full', th = full ? H : H * 0.9;
+    let baseSc, baseX, baseY;
+    if (full) { baseSc = Math.max(W / iw, H / ih); baseX = (W - iw * baseSc) / 2; baseY = (H - ih * baseSc) / 2; }
+    else { baseSc = th / ih; const w0 = iw * baseSc; baseX = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; baseY = H - th; }
+    const scale = o.scale > 0 ? o.scale : 1, sc = baseSc * scale, w0 = iw * baseSc, h0 = ih * baseSc, w = iw * sc, h = ih * sc;
+    return { x: baseX + (+o.ox || 0) + (w0 - w) / 2, y: baseY + (+o.oy || 0) + (h0 - h), w, h, flip: !!o.flip, baseX, baseSc };
+  }
+  /** 런타임 MakerStage.ease 와 같은 곡선 (움직이기) */
+  const ease = k => k * k * (3 - 2 * k);
+  PDM.Dialogue = { cfg, line, render, play, stageLayout, ease, UI_H, classic: () => cfg().mode === 'window' };
 
   // ---------------- 편집기 ----------------
   function previewBox(ctx, st) {

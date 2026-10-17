@@ -39,6 +39,7 @@ PDM.validate = function () {
       const def = PDM.COMMANDS[c.cmd];
       const w = `${where} › 명령 ${i + 1}`;
       if (!def) { add('error', w, `알 수 없는 명령 "${c.cmd}" (플러그인이 꺼져 있나요?)`, open); return; }
+      (PDM.commandProblems ? PDM.commandProblems(c) : []).forEach(m => add('warn', w, `${def.name}: ${m} — 게임에서 아무 일도 하지 않습니다`, open, { kind: '빈 값', fix: '이벤트 편집기에서 그 명령을 눌러 오른쪽 속성 창에서 채우세요' }));
       def.params.forEach(p => {
         if (PARAM_KIND[p.t] && !has(PARAM_KIND[p.t], c[p.k])) add('error', w, `${def.name}: ${p.label} "${c[p.k]}" 을(를) 찾을 수 없습니다`, open);
         if (p.t === 'cond') cond(c[p.k], w, open);

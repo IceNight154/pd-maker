@@ -13,6 +13,8 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 | [docs/ENGINE-AUDIT.md](docs/ENGINE-AUDIT.md) | 게임 메이킹 엔진으로서의 기술 평가 · 문제 목록(P0~P3) · 개선 기록 · 남은 과제 |
 | `node tools/tests/run.js` | 회귀 테스트 (Node 만 — 표 일치 · 저장/불러오기 · 백업 · 영역 편집 · 검사 · 자동 생성 배치 방식) |
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-map.js` | 맵 편집기 UI 테스트 (웹 모드 + Playwright · Chromium) |
+| `NODE_PATH=$(npm root -g) node tools/tests/ui-editor.js` | 편집기 셸(패널 · 상태 줄 · 단축키) · 이벤트 편집기 UI 테스트 |
+| [docs/EDITOR-UX-CUTSCENES.md](docs/EDITOR-UX-CUTSCENES.md) | 3차: 편집기 UI/UX 개선 · 이벤트 연출(대사 · 일러스트 · 페이드 · 소리) 구현 · 게임 안 검증 기록 |
 
 ---
 

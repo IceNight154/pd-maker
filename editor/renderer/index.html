@@ -17,22 +17,22 @@
     <div id="toolbar"></div>
   </header>
   <div id="work">
-    <aside id="tree" class="panel"><div class="panel-title">리소스<button class="ib" id="treeCollapse" title="모두 접기" aria-label="모두 접기">⊟</button></div><div id="treeSearch"></div><div id="treeBody"></div></aside>
+    <aside id="tree" class="panel"><div class="panel-title">리소스<button class="ib" id="treeCollapse" title="모두 접기" aria-label="모두 접기">⊟</button><button class="ib pnl-x" data-panel="tree" title="리소스 패널 숨기기 (Ctrl+B)" aria-label="리소스 패널 숨기기">«</button></div><div id="treeSearch"></div><div id="treeBody"></div></aside>
     <div class="split-v" data-target="tree"></div>
     <main id="center">
       <div id="tabbar"></div>
       <div id="tabbody"></div>
     </main>
     <div class="split-v" data-target="inspector" data-right="1"></div>
-    <aside id="inspector" class="panel"><div class="panel-title" id="inspTitle">인스펙터</div><div id="inspBody"></div></aside>
+    <aside id="inspector" class="panel"><div class="panel-title"><span id="inspTitle" class="truncate">인스펙터</span><button class="ib pnl-x" data-panel="insp" title="속성 패널 숨기기 (Ctrl+Shift+B)" aria-label="속성 패널 숨기기">»</button></div><div id="inspBody"></div></aside>
   </div>
   <div class="split-h"></div>
   <footer id="bottom" class="panel">
-    <div class="panel-title"><span class="btab on" data-b="log">출력</span><span class="btab" data-b="check">검사</span><span class="grow"></span><button class="ib" id="logClear" title="지우기" aria-label="출력 지우기">⌫</button></div>
+    <div class="panel-title"><span class="btab on" data-b="log">출력</span><span class="btab" data-b="check">검사</span><span class="grow"></span><button class="ib" id="logClear" title="지우기" aria-label="출력 지우기">⌫</button><button class="ib pnl-x" data-panel="bottom" title="출력 패널 숨기기 (Ctrl+J)" aria-label="출력 패널 숨기기">⌄</button></div>
     <div id="logBody" class="bbody"></div>
     <div id="checkBody" class="bbody" hidden></div>
   </footer>
-  <div id="status"><span id="stDirty"></span><span id="stAssets"></span><span class="grow"></span><span id="stMode"></span></div>
+  <div id="status"><span id="stDirty"></span><span id="stAssets"></span><span id="stCtx" class="truncate"></span><span class="grow"></span><span id="stPanels"></span><span id="stMode"></span></div>
 </div>
 
 <script src="js/util.js"></script>

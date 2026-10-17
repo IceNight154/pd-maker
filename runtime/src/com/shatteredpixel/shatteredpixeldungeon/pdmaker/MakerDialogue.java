@@ -111,6 +111,8 @@ public class MakerDialogue {
 		public boolean flip;
 		public String[] choices;       // 대사 뒤에 이어서 고르는 선택지 (null = 없음)
 		public String voice = "";      // 캐릭터 목소리 (글자가 나올 때 소리, 캐릭터 편집기)
+		public float speed = -1;       // 이 줄만 글자 속도 (글자/초, 0 = 바로 다 보임, < 0 = 대사창 설정)
+		public float auto = 0;         // 다 보인 뒤 이 초가 지나면 저절로 넘김 (0 = 입력을 기다림, 선택지가 있으면 쓰지 않음)
 	}
 
 	/** 화자(캐릭터 id 또는 $hero) · 표정 · 직접 고른 그림으로 Line 을 채움 */
@@ -401,6 +403,31 @@ public class MakerDialogue {
 
 	// ------------------------------------------------------------ 창
 
+	/** "입력 기다리기" 명령: 화면을 누르거나 확인 · 취소 키를 누를 때까지 (보이는 것 없음 — 그 사이 게임 조작도 막힘). 끝나면 onDone 한 번 */
+	public static class WaitWnd extends Window {
+		Runnable onDone;
+		public WaitWnd(Runnable onDone) {
+			super(0, 0, new NinePatch(TextureCache.createSolid(0x00000000), 0));
+			this.onDone = onDone;
+			shadow.visible = false;
+			int W = PixelScene.uiCamera.width, H = PixelScene.uiCamera.height;
+			resize(W, H);
+			add(new PointerArea(0, 0, W, H) { @Override protected void onClick(PointerEvent event) { hide(); } });
+		}
+		@Override public boolean onSignal(KeyEvent event) {
+			if (!event.pressed) return true;
+			int k = event.code;
+			if (k == Input.Keys.ENTER || k == Input.Keys.SPACE || k == Input.Keys.Z || k == Input.Keys.NUMPAD_ENTER || k == Input.Keys.ESCAPE || k == Input.Keys.BACK) hide();
+			return true;
+		}
+		@Override public void onBackPressed() { hide(); }
+		@Override public void hide() {
+			Runnable r = onDone; onDone = null;
+			if (r != null) r.run();   // 이벤트를 먼저 이어 줌 — 창이 사라진 틈에 "멈춘 이벤트"로 오해받지 않게 (Wnd 와 같음)
+			super.hide();
+		}
+	}
+
 	public static class Wnd extends Window {
 		public final Line line;
 		Runnable onDone; final OnChoice onChoice;
@@ -485,7 +512,7 @@ public class MakerDialogue {
 			JsonValue Lt = lay("text");
 			if (Lt != null) { tx = Lt.getFloat("x") * W; tr = (Lt.getFloat("x") + Lt.getFloat("w", 0.5f)) * W; textY = Lt.getFloat("y") * H; }
 			if (hasText) {
-				speed = f("typing", "speed");
+				speed = l.speed >= 0 ? l.speed : f("typing", "speed");
 				sound = l.voice;                                        // 캐릭터 목소리 → 글자 소리 → 대사창 소리 → 게임 효과음
 				if (sound == null || sound.isEmpty()) sound = s("typing", "sound");
 				if (sound.isEmpty()) sound = sndRef("type");
@@ -621,8 +648,10 @@ public class MakerDialogue {
 			else if (arrow != null) arrow.visible = true;
 		}
 
+		float autoT = 0;
 		@Override public void update() {
 			super.update();
+			if (!typing && !done && line.auto > 0 && choices.isEmpty()) { autoT += Game.elapsed; if (autoT >= line.auto) advance(); }   // 저절로 넘기기 (시간은 실제 지난 시간)
 			if (typing && text != null) {
 				shown += speed * Game.elapsed;
 				int n = (int) shown;

@@ -535,7 +535,18 @@
 
       // ---- 도구 막대 ----
       const tools = h('div', { class: 'map-tools' });
+      /** 상태 줄: 지금 도구 · 칠하는 레이어 · 확대 · 맵 크기 · 선택 (PDM.status — 탭을 바꾸면 비워지고 이 탭으로 오면 다시) */
+      const TOOL_NAMES = { pen: '펜', rect: '사각형', room: '방', fill: '채우기', pick: '스포이드', erase: '지우개', select: '선택', object: '오브젝트 놓기', rand: '무작위 칸', spawn: '스폰 구역', utile: '사용자 타일' };
+      function updCtx() {
+        if (PDM.tabs.active !== key || !PDM.status) return;
+        const L = ui.tool === 'utile' ? ((PDM.tileLayers().find(l => l.id === ui.tileLayer) || {}).name || ui.tileLayer) : '';
+        const sel = selIndexes().length, a = areaOn() ? ui.area : null;
+        PDM.status.ctx([ui.pasteClip ? '붙여넣기 중 — 누른 칸이 왼쪽 위 · Esc 끝' : `도구: ${TOOL_NAMES[ui.tool] || ui.tool}${ui.tool === 'erase' ? ' (' + (ERASE[ui.eraseKind] || '') + ')' : ''}`,
+          L ? `레이어: ${L}` : '', `×${+ui.zoom.toFixed(2)}`, drawable ? `${W}×${H}칸` : '자동 생성 층',
+          a ? `영역 ${a.x1 - a.x0 + 1}×${a.y1 - a.y0 + 1}` : '', sel > 1 || (sel && a) ? `오브젝트 ${sel}개 선택` : sel ? `오브젝트 #${ui.sel} 선택` : ''].filter(Boolean).join('  ·  '));
+      }
       function drawTools() {
+        updCtx();
         tools.innerHTML = '';
         const T = (id, label, tip) => h('button', { class: 'tool' + (ui.tool === id ? ' on' : ''), title: tip || '', onclick: () => { ui.tool = id; drawTools(); drawPalette(); } }, label);
         if (drawable) tools.append(T('pen', '✎ 펜', '타일 그리기 (B)'), T('rect', '▭ 사각형', '끌어서 채운 사각형'), T('room', '▣ 방', '끌어서 벽 두른 방'), T('fill', '▧ 채우기', '(G)'), T('pick', '⊙ 스포이드', '(I)'), T('erase', '⌫ 지우개', '끌어서 지우기 (E) — 무엇을 지울지는 왼쪽 「지우개」에서'));
@@ -1096,7 +1107,7 @@
           return;
         }
         if (ui.pasteClip) {   // 붙여넣기 미리보기: 왼쪽 클릭 = 그 칸을 왼쪽 위로 붙임 (계속 눌러 여러 번) · 오른쪽 클릭 = 끝냄
-          if (e.button === 0 && drawable) commitPaste(x, y); else { ui.pasteClip = null; info.textContent = '붙여넣기 끝'; paint(); }
+          if (e.button === 0 && drawable) commitPaste(x, y); else { ui.pasteClip = null; info.textContent = '붙여넣기 끝'; paint(); updCtx(); }
           return;
         }
         if (e.button === 2) {   // 오브젝트 위에서 우클릭: 끌면 이동, 그냥 놓으면 메뉴
@@ -1346,7 +1357,7 @@
           if (!drawable) { toast('자동 생성 층에는 영역을 붙여 넣을 수 없습니다 (직접 그린 맵 · 혼합 · 방 템플릿에서)', 'bad'); return; }
           if (!A.valid(c.payload)) { toast('붙여 넣을 수 없는 영역 데이터입니다', 'bad'); return; }
           ui.pasteClip = c.payload; ui.hover = hoverCell && inB(hoverCell.x, hoverCell.y) ? hoverCell : null;
-          info.textContent = '붙일 자리(왼쪽 위)를 누르세요 — 계속 누르면 여러 번 붙임 · 오른쪽 클릭 / Esc = 끝'; paint(); return;
+          info.textContent = '붙일 자리(왼쪽 위)를 누르세요 — 계속 누르면 여러 번 붙임 · 오른쪽 클릭 / Esc = 끝'; paint(); updCtx(); return;
         }
         if (c.kind !== 'mapobj' || !c.payload) return false;
         const o = c.payload, at = o.at || {};
@@ -1362,7 +1373,7 @@
         if (document.querySelector('.modal')) return;
         const c = e.ctrlKey || e.metaKey;
         if (e.key === 'Escape' && ui.moveObj >= 0) { ui.moveObj = -1; ui.moveTo = null; cv.style.cursor = ''; info.textContent = '이동 취소'; paint(); return; }
-        if (e.key === 'Escape' && !e.defaultPrevented && ui.pasteClip) { ui.pasteClip = null; info.textContent = '붙여넣기 끝'; paint(); return; }
+        if (e.key === 'Escape' && !e.defaultPrevented && ui.pasteClip) { ui.pasteClip = null; info.textContent = '붙여넣기 끝'; paint(); updCtx(); return; }
         if (e.key === 'Escape' && !e.defaultPrevented && (ui.area || ui.selIds.length)) { clearSel(); paint(); showInspector(); return; }
         if (c && e.code === 'KeyA' && !e.shiftKey && !e.altKey && drawable) {   // Ctrl+A: 맵 전체를 영역으로 (오브젝트도 모두 고름)
           e.preventDefault(); ui.tool = 'select'; ui.area = { x0: 0, y0: 0, x1: W - 1, y1: H - 1 }; selectIds(A.objectsIn(fl, ui.area)); drawTools(); drawPalette(); paint(); showInspector(); return;
@@ -1444,6 +1455,7 @@
         PDM.inspector.show(areaOn() ? '영역 선택' : `오브젝트 ${objs.length}개`, el);
       }
       function showInspector() {
+        updCtx();
         const { F, section, row } = PDM.ui;
         if (areaOn() || multi()) { showSelection(); return; }
         const o = fl.objects && fl.objects[ui.sel];

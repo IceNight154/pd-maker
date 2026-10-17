@@ -28,6 +28,9 @@
     { id: 'prevTab', group: '보기', label: '이전 탭', def: ['Ctrl+Shift+Tab'], scope: 'global', inInput: true },
     { id: 'treeSearch', group: '보기', label: '리소스 검색 칸으로', def: ['Ctrl+Shift+F'], scope: 'global', inInput: true },
     { id: 'showLog', group: '보기', label: '출력 창', def: [], scope: 'global', inInput: true },
+    { id: 'toggleTree', group: '보기', label: '리소스 패널 보이기/숨기기', def: ['Ctrl+B'], scope: 'global' },
+    { id: 'toggleInspector', group: '보기', label: '속성 패널 보이기/숨기기', def: ['Ctrl+Shift+B'], scope: 'global' },
+    { id: 'toggleBottom', group: '보기', label: '출력 패널 보이기/숨기기', def: ['Ctrl+J'], scope: 'global' },
     // 프로젝트
     { id: 'playtest', group: '프로젝트', label: '▶ 테스트 플레이', def: ['F5'], scope: 'global', inInput: true },
     { id: 'stopGame', group: '프로젝트', label: '■ 중지', def: ['Shift+F5'], scope: 'global', inInput: true },
