@@ -10,6 +10,8 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 | [docs/FOLDERS.md](docs/FOLDERS.md) | 폴더 구조 · 프로젝트 `assets/` 표준 폴더 |
 | [runtime/INTEGRATION.md](runtime/INTEGRATION.md) | 런타임을 게임 저장소에 설치하는 방법 |
 | [tools/playtest/README.md](tools/playtest/README.md) | 자동 플레이 테스트 (Linux 개발용) |
+| [docs/ENGINE-AUDIT.md](docs/ENGINE-AUDIT.md) | 게임 메이킹 엔진으로서의 기술 평가 · 문제 목록(P0~P3) · 개선 기록 · 남은 과제 |
+| `node tools/tests/run.js` | 회귀 테스트 (Node 만 — 표 일치 · 저장/불러오기 · 백업 · 검사) |
 
 ---
 

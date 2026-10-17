@@ -358,7 +358,7 @@ ipcMain.handle('game:stop', wrap(() => { stopGame(); return true; }));
 // ---------------- 프로젝트 저장·내보내기·가져오기 (GameMaker 의 Save As · Export/Import Project) ----------------
 const zip = require('./zip');
 /** 프로젝트에 넣지 않는 것: 임시 파일·백업 */
-const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp)$/.test(rel) || /^signing$/.test(rel) || (!isDir && /\.tmp$/.test(rel));   // signing = 안드로이드 서명 키 (게임 파일에 넣지 않음)
+const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp|\.pdmaker-backup)$/.test(rel) || /^signing$/.test(rel) || (!isDir && /\.tmp$/.test(rel));   // signing = 안드로이드 서명 키 (게임 파일에 넣지 않음) · .pdmaker-backup = 편집기가 저장 전에 남긴 원본 백업 (store.js)
 ipcMain.handle('project:copyTo', wrap(({ from, to }) => {
   if (!fs.existsSync(path.join(from, 'project.json'))) throw new Error('프로젝트 폴더가 아닙니다: ' + from);
   if (fs.existsSync(to) && fs.readdirSync(to).length) throw new Error('빈 폴더를 골라 주세요: ' + to);

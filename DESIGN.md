@@ -160,11 +160,14 @@ MyProject/
 ├ audio/sounds.json     사운드 목록
 ├ assets/               그림 · 소리 (표준 폴더: docs/FOLDERS.md — sprites/heroes · sprites/characters/<종류> · sprites/items · fx · portraits/<캐릭터> · illustrations · tiles · title · ui · maps · fonts · filters · compose · audio · game)
 ├ signing/              안드로이드 서명 키 (게임 파일 · APK 에 넣지 않음)
+├ .pdmaker-backup/<시각>/  저장 전에 남긴 원본 (변환 · 손상 · 삭제된 파일 — 최근 20번, 게임 · 내보내기에 넣지 않음)
 └ plugins/<id>/plugin.json
 ```
 
 - 단일 파일은 `store.js SINGLES`, 여러 개짜리는 `PREFIX`(node · room · char · hero · item · event · prop)로 읽고 쓴다. 리소스 키는 `<종류>:<id>`(예 `node:f1`, `item:ember_staff`).
 - 모든 파일에 `format` · `version`. 예전 형식은 에디터가 열 때 바꿈 (예: 5층 단위 장 → 맵 그래프 §4.1, 스킬 → 주문 §6, `kind:"hero"` 캐릭터 → 영웅, 한 겹 이펙트 → 이미터, 마음의 보석 → 결정).
+- **저장 안전장치** (`store.js save`): ① 열 때 바꾼(변환한) 파일 · 손상된 파일 · 지울 파일은 덮어쓰거나 지우기 전에 원본을 `.pdmaker-backup/<시각>/<같은 경로>` 로 복사(처음 한 번, 최근 20개 폴더만 남김) ② 바뀐 파일을 하나씩 쓰기(임시 파일 → 바꿔치기, `main.js fs:writeText`) ③ 다 쓴 뒤에만 지울 파일을 지움. 중간에 실패하면 예외 — 못 쓴 파일 · 못 지운 파일은 "저장 안 됨"으로 남아 다시 저장할 수 있음. 복구: 백업 폴더의 파일을 같은 경로로 되돌려 놓고 다시 열기.
+- **손상된 파일**(있는데 JSON 으로 읽지 못함): 기본값으로 열고 알림 · 파일은 그대로 둠(저장 대상 아님) — 그 항목을 고쳐 저장하면 손상본을 먼저 백업. `world.json` 이 손상되면 기본 맵 그래프로 열되 `maps/nodes/` 의 노드 파일은 덮지 않음(예전에는 기본 노드로 덮어썼음). `project.json` 은 열기를 멈춤. 여러 개짜리(노드 · 캐릭터 …) 파일은 불러오지 않고 그대로 둠.
 - 그림 · 소리 참조: 프로젝트 기준 경로(`assets/…`), 게임 파일 `game:sprites/x.png` · `game:music/x.ogg`, 게임 아이템 시트 `builtin:items`, 소리 목록 `sound:<id>`.
 
 ---
@@ -243,7 +246,7 @@ MyProject/
 - **함정** = 지형이 아니라 오브젝트 `{ type: "trap", ref: "<levels.traps 클래스>", hidden, inactive, at, cond, chance(방 템플릿) }`. 바닥 지형은 그대로 두고, 층을 만들 때 런타임 `MakerTraps.place` 가 게임 함정을 만들어 `Level.setTrap` + 그 칸을 게임 규칙대로 TRAP · SECRET_TRAP · INACTIVE_TRAP — 작동 · 피해 · 애니메이션 · 찾기 · 해제 · 세이브는 게임 코드 그대로. 숨길 수 없는 함정(`canBeHidden = false` — 다트 · 분해 · 낙석 · 음침한)은 숨김을 켜도 보임. 없는 클래스(다른 판)는 경고만. 직접 그린 맵(`MakerLevel.build`) · 방 템플릿 · 혼합 층(`LevelHooks.placeObject`)에서.
   - 그 밖의 특수 요소도 같은 오브젝트 목록: 투명 발판(`plate`) · 맵 오브젝트(`prop` — 스위치 · 문 · 밀기 · 상호작용 · 막힘 상태) · 이벤트 칸 · 광원 · 입구 · 출구, 모두 `cond`(등장 조건).
 - **예전 형식 변환** (`PDM.migrateMapData` — 프로젝트를 열 때 노드 · 방 템플릿마다, 저장하면 적용): `layers.utile` → `layers.tiles.base` · 지형에 칠한 함정(17 숨김 · 18 · 19 작동함) → 바닥(1) + 함정 오브젝트(`WornDartTrap` — 예전엔 게임 함정이 만들어지지 않아 보이지도 작동하지도 않았음). 런타임도 변환 전 데이터를 그대로 읽음(`utile` = base, 지형 함정 → `MakerTraps.legacy`).
-- 편집기: 팔레트 "타일 레이어"(고른 레이어에 칠함 · 👁 편집기에서만 숨기기 · 칸 수 · "위" "막힘" 표시 · 레이어 설정 창 — 이름 · 높이 · 게임 표시 · 막힘 · 순서 · 추가 · 삭제), 위(above) 레이어는 오브젝트 위에 그림, 지우개 "사용자 타일" = 지금 레이어 · "전부" = 모든 레이어. 오브젝트 "함정"(게임 그림 terrain_features.png 로 고르기 · 그리기, 숨김 = 흐리게 + ?). 지형 팔레트에서 지형 함정은 뺌. 헤드리스 `eval:layerinfo` · `eval:presscell`.
+- 편집기: 팔레트 "타일 레이어"(고른 레이어에 칠함 · 👁 편집기에서만 숨기기 · 칸 수 · "위" "막힘" 표시 · 레이어 설정 창 — 이름 · 높이 · 게임 표시 · 막힘 · 순서 · 추가 · 삭제), 위(above) 레이어는 오브젝트 위에 그림, 지우개 "사용자 타일" = 지금 레이어 · "전부" = 모든 레이어. 오브젝트 "함정"(게임 그림 terrain_features.png 로 고르기 · 그리기, 숨김 = 흐리게 + ?). 지형 팔레트에서 지형 함정은 뺌. 검사(`validate.js tileLayerCheck` — 노드 · 방 템플릿): 레이어 칸 수가 맵 크기와 다름(오류) · 레이어 목록에 없는 레이어 · 없는 사용자 타일(칸 수와 함께 — 런타임은 그리지 않고 넘어감). 헤드리스 `eval:layerinfo` · `eval:presscell`.
 
 ### 4.2.2 조합 타일 · 분리된 타일셋 밑그림 (`maps/tilecombos.json`)
 
@@ -260,7 +263,7 @@ MyProject/
   - 빛: 발광 스프라이트(`blend: add` 또는 레이어 `blend: add`)는 빛무리 그림만, `light` 는 실제 점광원(`MakerLights` — 바닥 · 캐릭터를 밝히고 그림자). 층에 놓인 조합 목록은 보이지 않는 CustomTilemap `MakerCombos`(`pdm_combo_ids` · `pdm_combo_cells`)로 세이브에 남고, 광원은 여기서 다시 만듦.
   - 오브젝트: 조합은 정의만 하고 만드는 것은 오브젝트 시스템(`LevelHooks.placeObject` — 함정은 `MakerTraps`, 게임 규칙 그대로). 바닥 타일은 바뀌지 않음.
   - 놓기: ① 맵 오브젝트 `{ type: "combo", ref }` (직접 그린 맵 · 방 템플릿 · 혼합 층) ② 자동 생성 `autogen { enabled, where: wallFace(아래가 바닥인 벽) | wall | floor | floorNearWall | grass | water | terrain, terrains, chance(칸마다 %), max(0 = 제한 없음), spacing(칸, 체비셰프), themes([] = 모두), handmade }` — `LevelHooks.afterCreate` 끝에서 층 씨앗(`Dungeon.seedCurDepth`)으로 후보 칸을 섞어 확률 · 간격 · 최대대로(같은 층은 늘 같은 자리). 계단 · 함정 · 더미 · 식물 칸, 문 · 맵 가장자리는 피함. 목록 앞의 조합이 먼저 자리를 가짐.
-  - 참조 정책: 맵 · 자동 생성은 id 로만 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그린 결과 그대로. 조합을 지우거나 자동 생성을 끄면 새 층에 놓이지 않을 뿐 맵 데이터는 남고, 편집기 검사가 없는 id 를 오류로 알려 줌. id 바꾸기는 맵 오브젝트 참조도 함께 고침(`listOps` `objType: combo`).
+  - 참조 정책: 맵 · 자동 생성은 id 로만 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그린 결과 그대로 (그림 · 오프셋 · 불투명도는 `MakerUserTiles` 묶음에, 광원 설정은 놓을 때 `pdm_combo_lights` 에 복사 — 복사본이 없는 예전 세이브만 지금 정의에서 광원을 찾음). 조합을 지우거나 자동 생성을 끄면 새 층에 놓이지 않을 뿐 맵 데이터는 남고, 편집기 검사가 없는 id 를 오류로 알려 줌. id 바꾸기는 맵 오브젝트 참조도 함께 고침(`listOps` `objType: combo`).
 - 편집기: 목록(● 쓰는 중 = 자동 생성 켜짐 또는 맵에 놓임 / ○ 안 씀) · 새로 만들기(빈 조합 · 벽면 광원 장식 · 바닥 장식 + 함정 · 빛나는 풀) · 복제 · id 바꾸기 · 복사/붙여넣기 · 삭제 · 쓰는 곳, 미리보기(주변 칸 · 테마 타일셋 · 광원), 팔레트(타일셋 칸 · 사용자 타일 · 그림 파일 · 발광 빛무리 그림 `assets/tiles/combo_glow.png`), 스프라이트마다 레이어 · 오프셋 · 불투명도 · 겹치는 방식 · 순서 · 교체 · 복제 · 빼기 · 미리보기에서 숨기기, 광원 · 이펙트 · 지형 · 오브젝트 · 자동 생성, 밑그림 대응표(칸마다 원본 / 밑그림을 깐 모습 비교). 실행 취소는 공용 Ctrl+Z. 맵 편집기 오브젝트 "조합 타일"(팔레트에 조합 그림 · 맵에 3×3 칸으로 그림 · 광원 미리보기). 검사: 없는 조합 id · 빈 조합 · 없는 레이어 · 그림 · 이펙트 · 확률 0. 헤드리스 `eval:layerinfo`(조합 수 · id 별 · 광원 수 · 그림 묶음).
 
 ### 4.3 맵 편집기 (`editors/map.js`)
@@ -1011,6 +1014,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 - **자동 플레이 테스트** (`tools/playtest` — Linux 개발용, `README.md`): 게임 저장소 + 런타임을 헤드리스(Xvfb)로 컴파일 · 실행하고 `Hooks.java` 의 eval 명령으로 상태를 확인 · 덤프 — `godepth` · `leveldump`(타일셋 미리보기 표본) · `roomdump`(방 미리보기 표본) · `droptest` · `goldtest` · `themetest`(테마별 몬스터 · 사용 안 함) · `waterhere` · `shoottest` · `mobhp` · `cellname` · `bagtest` · `usetest` · `throwfx` · `bagfx` · `effect` · `fxspot` · `fxdump` · `textfx` · `tplvar`(방 템플릿 변형) · `throwtest` · `winsize`(세로 화면 점검) 등.
 - **게임 데이터 뽑기** (`tools/data`): `extract_spd_items.py` → `spd-items.js` · `extract_spd_chars.py` → `spd-chars.js`(+ 영웅) · `extract_spd_rooms.py` → `spd-rooms.js` · `gen_terms_java.js` → `DefaultTerms.java`.
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
+- **회귀 테스트** (`tools/tests/run.js` — Node 만 있으면 됨): 편집기 스크립트를 Node `vm` 에 불러(`editor-env.js`, 파일 기능은 임시 폴더) 확인 — 편집기 ↔ 런타임 ↔ 게임 소스 표 일치(밑그림 대응표 · 보존 타일 번호 29종 · 구멍 · 기본 레이어 · 함정), 맵 변환, 저장/불러오기 · 실행 취소, 손상 파일 · 쓰기 실패 · 백업, 검사. `node tools/tests/run.js [이름 일부]`.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.
 
 ---

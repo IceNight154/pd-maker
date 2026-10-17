@@ -47,6 +47,23 @@ PDM.validate = function () {
     });
   }
 
+  // 타일 레이어 데이터 (노드 · 방 템플릿 layers.tiles): 칸 수 · 레이어 목록 · 사용자 타일 정의 — 런타임은 없는 타일을 그리지 않고 넘어감(MakerUserTiles)
+  const layerIdSet = new Set((PDM.tileLayers ? PDM.tileLayers() : []).map(l => l.id));
+  const userTileIds = new Set((((s.get('world') || {}).userTiles) || []).map(t => t.id));
+  function tileLayerCheck(f, where, open) {
+    const T = (f.layers || {}).tiles, n = f.size ? f.size.w * f.size.h : 0;
+    if (!T || typeof T !== 'object') return;
+    Object.entries(T).forEach(([lid, arr]) => {
+      if (!Array.isArray(arr)) { add('error', where, `타일 레이어 "${lid}" 데이터가 배열이 아닙니다 (파일 손상?)`, open); return; }
+      if (!arr.some(Boolean)) return;
+      if (!layerIdSet.has(lid)) add('warn', where, `타일 레이어 "${lid}" 이(가) 레이어 목록에 없습니다 — 게임에서는 맨 위(캐릭터 아래)에 그려집니다 (맵 편집기 "레이어 설정"에서 추가)`, open);
+      if (n && arr.length !== n) add('error', where, `타일 레이어 "${lid}" 의 칸 수(${arr.length})가 맵 크기(${f.size.w}×${f.size.h} = ${n})와 맞지 않습니다`, open);
+      const miss = {};
+      arr.forEach(v => { if (v && !userTileIds.has(String(v).split('#')[0])) miss[v] = (miss[v] || 0) + 1; });
+      Object.entries(miss).forEach(([id, c]) => add('warn', where, `타일 레이어 "${lid}": 없는 사용자 타일 "${id}" ${c}칸 — 게임에서 그려지지 않습니다 (지운 타일이면 지우개로 정리)`, open));
+    });
+  }
+
   // 맵 그래프
   const wd = s.get('world') || { groups: [], nodes: [], edges: [] };
   const W_ = PDM.World, I = W_.info();
@@ -110,6 +127,7 @@ PDM.validate = function () {
       if (o.type === 'start' && (o.when || 'start') === 'start') starts++;
       cond(o.cond, w, k);
     });
+    if (f.mode !== 'procedural') tileLayerCheck(f, where, k);
     blockCheck((f.procedural || {}).blocks, where, k);
     ((f.procedural || {}).rooms || []).forEach((r, i) => { if (!has('room', r.room)) add('error', `${where} › 추가 방 ${i + 1}`, `방 템플릿 "${r.room}" 없음`, k); });
   });
@@ -156,6 +174,7 @@ PDM.validate = function () {
     if (r.kind === 'special' && doors > 1) add('warn', where, '특수 방은 문이 하나만 연결됩니다 (문 자리 중 하나가 쓰임)', k);
     if (t.includes(7) || t.includes(8)) add('warn', where, '방 템플릿 안의 계단은 장식 바닥으로 바뀝니다', k);
     (r.objects || []).forEach((o, i) => { if (o.at && (o.at.x >= W || o.at.y >= H)) add('error', where, `오브젝트 ${i + 1} 이(가) 방 밖에 있습니다`, k); });
+    tileLayerCheck(r, where, k);
   });
   // 캐릭터
   s.all('char').forEach(c => {
