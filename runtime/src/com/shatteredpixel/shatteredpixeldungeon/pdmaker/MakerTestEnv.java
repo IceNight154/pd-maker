@@ -88,10 +88,15 @@ public class MakerTestEnv {
 		try { Object win = Gdx.graphics.getClass().getMethod("getWindow").invoke(Gdx.graphics); win.getClass().getMethod("setSizeLimits", int.class, int.class, int.class, int.class).invoke(win, 1, 1, -1, -1); }
 		catch (Throwable ignored) { /* 데스크톱이 아님 */ }
 		Gdx.graphics.setWindowedMode(w, h);
+		// 자동 테스트 전용: Windows 의 LWJGL3 처럼 창 크기를 바꾸는 그 자리에서 resize → render 를 부름 (Linux xvfb 는 늦게 와서 그대로는 재현되지 않음)
+		if (Boolean.getBoolean("pdmaker.testSyncResize")) { Gdx.app.getApplicationListener().resize(w, h); Gdx.app.getApplicationListener().render(); }
 	}
 	/** F9: 가로 ↔ 세로 — 편집기가 미리 센 돌린 방향(rotated: 그 방향의 창 · 배율 · 안전 영역)과 처음 방향을 오감 (한 번 더 누르면 처음으로) */
-	static boolean turned;
-	public static void rotate() {
+	static boolean turned, rotateAsked;
+	/** F9 · 자동 테스트: 돌리기를 부탁만 함 — 실제로는 Overlay.update 첫머리에서 (키 처리 · 다른 스레드 한가운데서 창 크기를 바꾸면
+	 *  Windows 등에서 그 자리에서 다시 그리며 장면이 바뀌어, 처리 중이던 입력 · 장면이 없어진 채로 이어질 수 있음) */
+	public static void rotate() { rotateAsked = true; }
+	static void doRotate() {
 		JsonValue r = env.get("rotated");
 		if (!env.getBoolean("rotate", true) || r == null || !r.isObject()) { MakerRuntime.log("화면 돌리기: 실행 환경에서 꺼져 있습니다 (휴대폰 환경 · 돌리기 켬에서만)"); return; }
 		turned = !turned;
@@ -181,7 +186,6 @@ public class MakerTestEnv {
 		/** 첫 프레임: (처음 한 번) 창 크기 · 배율 적용, 단추 · 표시 만들기 */
 		void build() {
 			built = true;
-			if (!applied) { applied = true; applyWindow(); }
 			camera = PixelScene.uiCamera;
 			KeyEvent.addKeyListener(keys);
 			PointerEvent.addPointerListener(touches);
@@ -198,6 +202,14 @@ public class MakerTestEnv {
 		}
 		void relabel() { for (Btn b : btns) b.on(b.i < 4 ? !skipping && SPEEDS[b.i] == speed : b.i == 6 && skipping); }
 		@Override public void update() {
+			if (members == null) return;   // 이미 없어진 장면의 것 (아래 창 크기 바꾸기 중에 장면이 바뀐 경우)
+			if (rotateAsked) { rotateAsked = false; doRotate(); return; }   // 창 크기를 바꾸는 프레임은 그것만 (장면이 바뀔 수 있음)
+			if (!applied) {
+				// 창 크기 · 배율은 처음 한 번, 이 프레임에서는 그것만 함. Windows 등에서는 창 크기를 바꾸는 순간 libGDX 가
+				// 그 자리에서 다시 그리며(resize → render) 장면을 새로 만들어 이 Overlay 를 없앰 — 예전엔 그 뒤에 단추를 붙이다
+				// "this.members is null" 로 게임이 멈췄음 (xvfb 에서는 창 크기 변경이 늦게 와서 드러나지 않았음). 단추는 다음 프레임에.
+				applied = true; applyWindow(); return;
+			}
 			if (!built) { if (PixelScene.uiCamera == null) return; build(); }
 			Game.timeScale = speed();   // 매 프레임 (원작이 화면을 바꿀 때 1 로 되돌림)
 			// 입력 순서: 나중에 등록한 것이 먼저 받음(원작 Signal stackMode) — 대사창 · 입력 기다리기 창이 모든 키 · 화면 누름을 먹으므로 매 프레임 맨 앞으로

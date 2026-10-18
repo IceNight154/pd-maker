@@ -16,6 +16,7 @@ node "$HERE/testenv-project.js" "$PROJ" >/dev/null || exit 2
 bash "$HERE/build.sh" "$REPO" "$WORK" "$PROJ" 2>&1 | grep -q BUILD_DONE || { echo "빌드 실패"; exit 2; }
 rm -rf "$OUT"; mkdir -p "$OUT"
 export XVFB_SCREEN="${XVFB_SCREEN:-1800x1800x24}"
+export SYNC_RESIZE="${SYNC_RESIZE-1}"   # 기본: Windows LWJGL3 처럼 창 크기를 바꾸는 그 자리에서 resize → render (SYNC_RESIZE= 로 끄기)
 export TESTENV="$(node "$HERE/testenv.js" phone-port '{"safeArea":"notch","touch":true}')"
 START=(titlescene wait:3 start:WARRIOR wait:4 eval:closewnds wait:1)
 bash "$HERE/run.sh" "$WORK" "$PROJ" "${START[@]}" \
