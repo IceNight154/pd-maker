@@ -240,7 +240,7 @@ public class HeroSelect {
 			img.x = left + (Camera.main.width - left - img.width * k) / 2f;
 			img.y = (Camera.main.height - img.height * k) / 2f;
 		}
-		bg.texture(com.watabou.gltextures.TextureCache.createSolid(0xFF000000 | MakerTheme.or("bg", 0x1d1e20)));
+		bg.texture(com.watabou.gltextures.TextureCache.createSolid(0xFF1d1e20));
 		bg.frame(0, 0, 800, 450);
 		bg.resetColor();
 		PixelScene.align(img);

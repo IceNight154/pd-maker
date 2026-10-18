@@ -179,7 +179,7 @@ public class MakerTalentsPane extends TalentsPane {
 			this.hero = hero; this.sk = sk;
 			hotArea.blockLevel = PointerArea.NEVER_BLOCK;
 			boolean locked = MakerSpells.lockReason(hero, sk) != null;
-			bg = new ColorBlock(SIZE, SIZE, 0xFF000000 | (locked ? MakerTheme.or("disabled", 0x2A2A2A) : MakerTheme.or("button", 0x4A3A6A))); add(bg);
+			bg = new ColorBlock(SIZE, SIZE, locked ? 0xFF2A2A2A : 0xFF4A3A6A); add(bg);
 			icon = MakerSpells.icon(sk); add(icon);
 			if (locked) icon.tint(0, 0, 0, 0.7f);
 			Integer c = MakerSpells.cooldowns.get(sk.getString("id", ""));

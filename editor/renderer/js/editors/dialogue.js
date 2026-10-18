@@ -9,7 +9,7 @@
   const K = 'dialogue';
   const UI_H = 270;                      // 게임 화면 높이(게임 픽셀). 1080p 에서 4배 확대 기준
 
-  const STYLES = { round: '둥근 상자 (색 지정)', game: '게임 창 (원작 창 테두리)', image: '내 그림 (9조각)' };
+  const STYLES = { '': '게임 UI 스킨 (테마 — chrome.png 조각)', round: '둥근 상자 (색 지정)', game: '게임 창 (원작 창 테두리)', image: '내 그림 (9조각)' };
   const NAME_POS = { auto: '일러스트 반대편 (자동)', right: '오른쪽 위', left: '왼쪽 위', text: '글 시작 위치' };
   const SIDES = { left: '왼쪽', right: '오른쪽' };
   const LAYERS = { front: '대사 상자 앞 (겹쳐 보임)', back: '대사 상자 뒤' };
@@ -30,7 +30,7 @@
     const d = PDM.defaults.dialogue(), c = over || store.get(K) || {};
     const out = { mode: c.mode || d.mode };
     ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'text', 'fx', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
-    return PDM.gameTheme ? PDM.gameTheme.resolveDialogue(out) : out;   // 빈 칸 = 게임 UI 테마 (6차 — 런타임 MakerDialogue.s 와 같음)
+    return PDM.gameTheme ? PDM.gameTheme.resolveDialogue(out, d) : out;   // 빈 칸 = 게임 UI 테마 (6차 — 런타임 MakerDialogue.s 와 같음)
   }
 
   /** 화자(캐릭터 id · $hero) · 표정 · 직접 고른 그림 → 한 줄 (게임 MakerDialogue.line 과 같음) */
@@ -207,7 +207,8 @@
     let box = null;
     const boxCss = (x, y, w, hh, fill, alpha, border, rad) => ({ left: px(x), top: px(y), width: px(w), height: px(hh), background: hexA(fill, alpha), border: `${Math.max(1, k)}px solid ${border}`, borderRadius: px(rad) });
     const boxStyle = (x, y, w, hh) => {
-      if (B.style === 'game') return { left: px(x), top: px(y), width: px(w), height: px(hh), background: '#3a3a3a', border: `${Math.max(2, k * 2)}px solid #8c7f65`, boxShadow: `inset 0 0 0 ${Math.max(1, k)}px #1c1c1c`, borderRadius: px(2) };
+      if ((B.style === 'skin' || B.style === 'game') && sk.box) return Object.assign({ left: px(x), top: px(y), width: px(w), height: px(hh) }, PDM.gameTheme.css(sk.box, k));   // 실제 chrome.png 조각 (게임과 같은 9칸 늘림)
+      if (B.style === 'game' || B.style === 'skin') return { left: px(x), top: px(y), width: px(w), height: px(hh), background: '#3a3a3a', border: `${Math.max(2, k * 2)}px solid #8c7f65`, boxShadow: `inset 0 0 0 ${Math.max(1, k)}px #1c1c1c`, borderRadius: px(2) };
       if (B.style === 'image' && B.image) {
         const s = +B.slice || 6, abs = PDM.assets.resolvePath && PDM.assets.resolvePath(B.image);
         return { left: px(x), top: px(y), width: px(w), height: px(hh), borderStyle: 'solid', borderWidth: px(s), borderImage: `url("${el._imgUrl || ''}") ${s} fill / ${px(s)} stretch`, imageRendering: 'pixelated', _abs: abs };
@@ -215,6 +216,10 @@
       return boxCss(x, y, w, hh, B.color, +B.alpha, B.border, +B.radius || 0);
     };
     if (B.style === 'image' && B.image) { const bi = await PDM.assets.load(B.image); el._imgUrl = bi ? bi.src : ''; }
+    // 게임 UI 스킨 (6차): 모양 = 테마면 대사창 · 이름표 · 선택지를 프로젝트 chrome.png 의 조각으로 (런타임 MakerTheme.patch 와 같은 조각)
+    const skinned = B.style === 'skin', SK = c._skin || PDM.gameTheme.DEFAULT.skin, sk = {};
+    if (skinned) for (const u of ['box', 'name', 'choice', 'choiceOn']) sk[u] = await PDM.gameTheme.piece(SK[u]);
+    else if (B.style === 'game') sk.box = await PDM.gameTheme.piece('WINDOW');
     // 그림(스프라이트) — 이름표 · 선택지 · ▼
     const Ch = c.choice, IN = c.indicator;
     const urlOf = async r => { if (!r) return ''; const im = await PDM.assets.load(r); return im ? im.src : ''; };
@@ -242,7 +247,8 @@
       if (N.show && l.name) {
         const nfs = Math.max(5, Math.round((+N.fontSize || 7) * tk));
         const plate = h('div', { class: 'dlg-name', style: Object.assign({ fontSize: px(nfs), color: N.textColor, background: N.color, borderRadius: px(Math.max(2, Math.min(4, +B.radius || 0))), padding: `${px(2.5)} ${px(5)}`, textShadow: outline(k) },
-          nameUrl ? Object.assign(sliceCss(nameUrl, +N.slice || 4), { padding: `${px(Math.max(0, 2.5 - (+N.slice || 4)))} ${px(Math.max(0, 5 - (+N.slice || 4)))}` }) : {}) }, l.name);
+          nameUrl ? Object.assign(sliceCss(nameUrl, +N.slice || 4), { padding: `${px(Math.max(0, 2.5 - (+N.slice || 4)))} ${px(Math.max(0, 5 - (+N.slice || 4)))}` })
+            : skinned && sk.name ? Object.assign(PDM.gameTheme.css(sk.name, k), { padding: `0 ${px(Math.max(0, 5 - sk.name.m[0]))}` }) : {}) }, l.name);
         let np = N.pos || 'auto'; if (np === 'auto') np = ill && side === 'right' ? 'left' : 'right';
         el.append(plate);
         const pw = plate.offsetWidth / k || 40, ph = nfs + 5 + 2;   // 대략
@@ -268,7 +274,7 @@
     let sel = 0;
     const select = i => {
       if (!choiceEls.length) return; sel = (i + choiceEls.length) % choiceEls.length;
-      choiceEls.forEach((e, j) => { e.classList.toggle('on', j === sel); if (e.dataset.imgOn) e.style.borderImageSource = `url("${j === sel ? e.dataset.imgOn : e.dataset.img}")`; });
+      choiceEls.forEach((e, j) => { e.classList.toggle('on', j === sel); if (e._skin) Object.assign(e.style, e._skin[j === sel ? 1 : 0]); else if (e.dataset.imgOn) e.style.borderImageSource = `url("${j === sel ? e.dataset.imgOn : e.dataset.img}")`; });
     };
     if (opts.choices && opts.choices.length) {
       const cfs = +Ch.fontSize > 0 ? Math.max(5, Math.round(+Ch.fontSize * tk)) : fs;
@@ -287,7 +293,8 @@
       opts.choices.forEach((s, i) => {
         const e = mkBox(cx, cy0 + i * (ch + gap), cw, ch, 'dlg-choice');
         if (chUrl) Object.assign(e.style, sliceCss(chUrl, +Ch.slice || 4));
-        e.style.setProperty('--on-bg', chOnUrl ? 'none' : N.color); e.style.setProperty('--on-fg', fgOn); e.style.setProperty('--on-line', IN.color);
+        else if (skinned && sk.choice) { e._skin = [PDM.gameTheme.css(sk.choice, k), PDM.gameTheme.css(sk.choiceOn || sk.choice, k)]; Object.assign(e.style, e._skin[0]); }
+        e.style.setProperty('--on-bg', chOnUrl || e._skin ? 'none' : N.color); e.style.setProperty('--on-fg', fgOn); e.style.setProperty('--on-line', IN.color);
         if (chOnUrl) { e.dataset.img = chUrl; e.dataset.imgOn = chOnUrl; e.dataset.sl = +Ch.slice || 4; }
         if (centered) e.style.justifyContent = 'center';
         e.append(h('span', { style: { paddingLeft: centered ? 0 : px(pad), fontSize: px(cfs), color: fg, textShadow: outline(k) } }, s));
@@ -458,6 +465,8 @@
               F.num(K, ['box', 'padding'], { label: '안쪽 여백', step: 1, min: 0, def: 8, rerender: true })),
             c.box.style === 'round' ? row(col('box', 'color', '배경색'), F.num(K, ['box', 'alpha'], { label: '불투명도', step: 0.02, min: 0, max: 1, def: 0.94, rerender: true }),
               col('box', 'border', '테두리색'), F.num(K, ['box', 'radius'], { label: '모서리 둥글기', int: true, min: 0, max: 12, def: 5, rerender: true })) : null,
+            c.box.style === 'skin' ? h('div', { class: 'hstack wrap' }, h('span', { class: 'hint' }, `게임 UI 스프라이트로 그립니다 — 대사창 ${c._skin.box} · 이름표 ${c._skin.name} · 선택지 ${c._skin.choice}/${c._skin.choiceOn} (프로젝트 chrome.png 의 조각). 이름표 · 선택지에 그림을 직접 넣으면 그 그림이 먼저입니다.`),
+              h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); PDM.tabs.open('theme'); } }, '🎨 게임 UI 테마 열기')) : null,
             c.box.style === 'image' ? row(F.image(K, ['box', 'image'], { label: '상자 그림 (9조각으로 늘림)', sub: 'ui', rerender: true }), F.num(K, ['box', 'slice'], { label: '가장자리 두께 (px)', int: true, min: 0, def: 6, rerender: true })) : null,
             F.bool(K, ['box', 'hideHud'], { label: '대사창·선택지가 떠 있는 동안 다른 UI 숨기기 (상태창·도구 막대·기록·버튼)', def: true, hint: '대화가 끝나면 다시 보입니다. 일러스트와 대사창만 남습니다.' })),
           section('글자 모양',

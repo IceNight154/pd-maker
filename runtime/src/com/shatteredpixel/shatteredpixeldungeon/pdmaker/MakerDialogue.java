@@ -67,18 +67,25 @@ public class MakerDialogue {
 		JsonValue g = d == null ? null : d.get(group);
 		return g != null ? g : defaults.get(group);
 	}
-	/** 빈 칸("")이면 프로젝트 게임 UI 테마를 따르는 칸 (6차 — 우선순위: 대사창 설정 → 테마 → 기본). 예전 프로젝트는 값이 들어 있어 그대로 */
+	/** 빈 칸("")이면 프로젝트 게임 UI 테마를 따르는 칸 (6차 — 우선순위: 대사창 설정 → 테마 → 원작). 예전 프로젝트는 값이 들어 있어 그대로.
+	 *  모양(box.style) 빈 칸 = "skin": 대사창 · 이름표 · 선택지를 게임 UI 스프라이트(chrome.png 9조각 — MakerTheme.patch)로. 글자 색은 테마 글자 색 */
 	static final java.util.Map<String, String> THEMED = new java.util.HashMap<>();
 	static {
-		THEMED.put("box.color", "panel"); THEMED.put("box.border", "border"); THEMED.put("box.textColor", "text"); THEMED.put("box.highlight", "accent");
-		THEMED.put("name.color", "button"); THEMED.put("name.textColor", "text"); THEMED.put("indicator.color", "accent"); THEMED.put("box.style", "@shape");
+		THEMED.put("box.textColor", "text"); THEMED.put("box.highlight", "accent"); THEMED.put("name.textColor", "text"); THEMED.put("indicator.color", "accent");
+		THEMED.put("box.style", "@skin");
 	}
 	static String s(String group, String key) {
 		JsonValue g = cfg(group);
 		String v = g != null && g.has(key) ? g.getString(key, "") : defaults.get(group).getString(key, "");
-		if (v.isEmpty()) { String t = THEMED.get(group + "." + key); if (t != null) return t.equals("@shape") ? (MakerTheme.shape().equals("game") ? "game" : "round") : MakerTheme.hex(t); }
+		if (v.isEmpty()) {
+			String t = THEMED.get(group + "." + key);
+			if (t != null) return t.equals("@skin") ? "skin" : MakerTheme.hex(t);
+			v = defaults.get(group).getString(key, "");   // 테마와 상관없는 칸(둥근 상자의 색 등)을 비웠으면 기본값
+		}
 		return v;
 	}
+	/** 대사창 · 이름표 · 선택지를 게임 UI 스프라이트로 그리는가 (모양 = 테마) */
+	static boolean skinned() { return "skin".equals(s("box", "style")); }
 	static float f(String group, String key) {
 		JsonValue g = cfg(group);
 		try { if (g != null && g.has(key)) return g.getFloat(key); } catch (Exception ignored) { }
@@ -230,15 +237,10 @@ public class MakerDialogue {
 		return tx;
 	}
 
-	/** 둥근 정도: 모양이 테마를 따르면(빈 칸) 테마 모양(square = 0 · round = 테마 radius), 아니면 대사창 설정 */
-	static int boxRadius() {
-		JsonValue g = cfg("box");
-		boolean themed = g != null && g.has("style") && g.getString("style", "").isEmpty();
-		if (!themed) return (int) f("box", "radius");
-		return MakerTheme.shape().equals("square") ? 0 : (int) MakerTheme.radius();
-	}
+	static int boxRadius() { return (int) f("box", "radius"); }
 	static NinePatch boxPatch() {
 		String st = s("box", "style");
+		if (st.equals("skin")) return MakerTheme.patch("box");   // 게임 UI 스프라이트 (프로젝트 chrome.png — 테마가 고른 조각)
 		if (st.equals("game")) return Chrome.get(Chrome.Type.WINDOW);
 		if (st.equals("image") && !s("box", "image").isEmpty()) {
 			Object tx = MakerRuntime.texture(s("box", "image"));
@@ -255,12 +257,14 @@ public class MakerDialogue {
 	}
 	static NinePatch namePatch() {
 		NinePatch p = imagePatch(s("name", "image"), f("name", "slice"));
-		return p != null ? p : platePatch(col("name", "color"), col("name", "color"));
+		if (p != null) return p;
+		return skinned() ? MakerTheme.patch("name") : platePatch(col("name", "color"), col("name", "color"));
 	}
 	static NinePatch choicePatch(boolean on) {
 		NinePatch p = imagePatch(s("choice", on ? "imageOn" : "image"), f("choice", "slice"));
 		if (p == null && on) p = imagePatch(s("choice", "image"), f("choice", "slice"));   // 고른 것 그림이 없으면 같은 그림 (색으로 구분)
 		if (p != null) return p;
+		if (skinned()) return MakerTheme.patch(on ? "choiceOn" : "choice");
 		return on ? platePatch(col("name", "color"), col("indicator", "color")) : boxPatch();
 	}
 	/** 직접 그린 레이아웃 (dialogue.json layout.enabled) 의 영역 — 없으면 null. 좌표는 화면의 비율 0~1 */

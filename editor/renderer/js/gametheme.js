@@ -1,61 +1,100 @@
 // ================================================================
-//  게임 UI 테마 (6차) — 프로젝트의 theme.json. 편집기 자체 색(theme.js · 청록)과는 따로: 게임 안 UI 만.
-//    런타임 MakerTheme 와 같은 토큰 · 기본값 (tools/tests/run.js 가 두 쪽을 비교)
-//    우선순위: UI 요소 직접 지정 → UI 묶음 설정(dialogue.json 등 — 빈 칸 "" = 테마) → 이 테마 → 런타임 기본(예전 모습)
+//  게임 UI 테마 = 프로젝트의 인게임 UI 스프라이트 스킨 (6차) — theme.json + assets/game/interfaces/*.png
+//    스킨 그림: 프로젝트의 assets/game/interfaces/chrome.png · status_pane.png · toolbar.png … (리소스 「UI 그림」에서 바꿈). 없으면 원작 그림.
+//    PDMaker 가 더하는 UI(대사창 · 이름표 · 선택지 · 연출 배속 표시줄)는 chrome.png 의 9조각(원작 Chrome.Type)으로 그림 — 어느 조각을 쓸지 = theme.skin.
+//    글자 색(스프라이트로 정할 수 없는 것만) = theme.colors. 런타임 MakerTheme 와 같은 값 · 같은 조각 좌표 (tools/tests/run.js 가 비교)
+//    우선순위: UI 요소 직접 지정 → UI 묶음 설정(dialogue.json — 빈 칸 = 테마) → 이 테마 → 원작 스프라이트 · 글자 색
+//    편집기 자체 색(theme.js · 청록)과는 따로.
 // ================================================================
 PDM.gameTheme = (function () {
-  /** 토큰 · 설명 (편집 화면 순서) */
-  const TOKENS = [
-    ['bg', '배경', '영웅 선택 화면 같은 전체 바탕'], ['panel', '패널', '대사창 · 배속 표시줄 바탕'], ['border', '테두리', '대사창 테두리'],
-    ['text', '기본 글자', '본문 · 버튼 글자'], ['textDim', '보조 글자', '잠긴 항목 · 설명'], ['accent', '강조', '창 제목 · 강조(**…**) 글자 · ▼ 표시 · 고른 값'],
-    ['button', '버튼', '이름표 · 배속 단추 바탕'], ['buttonOn', '고른 버튼', '고른 배속 단추 바탕 (+ 아래 줄)'], ['disabled', '비활성', '잠긴 특성 칸'],
-    ['warn', '주의', '주의 알림'], ['error', '오류 · 위험', '쓸 수 없는 주문 · 모자란 돈'], ['good', '좋음', '완료한 퀘스트'], ['shadow', '그림자', '글자 그림자 · 어두운 글']];
-  /** 런타임 기본 = 4차까지 코드에 직접 쓰던 색 (MakerTheme.DEF) */
-  const DEFAULT = { format: 'pdmaker-gametheme', version: 1, name: '게임 기본', shape: 'game', radius: 3, padding: 4, fontScale: 1,
-    colors: { bg: '#1d1e20', panel: '#2a2a2a', border: '#8c7f65', text: '#ffffff', textDim: '#888888', accent: '#ffff44', button: '#4a3a6a', buttonOn: '#8a6d1f', disabled: '#666666', warn: '#ff8800', error: '#cc6666', good: '#44ff44', shadow: '#000000' } };
-  const PRESETS = {
-    game: ['게임 기본 (원작 느낌)', {}],
-    dark: ['어두운 슬레이트', { shape: 'round', radius: 4, colors: { bg: '#15181d', panel: '#20252d', border: '#4b5563', text: '#eef1f5', textDim: '#9aa3ad', accent: '#7dd3c0', button: '#2f3742', buttonOn: '#2c6e63', disabled: '#4b5058' } }],
-    light: ['밝은 종이', { shape: 'round', radius: 5, colors: { bg: '#f3efe6', panel: '#fbf8f1', border: '#b9ad94', text: '#2e2a24', textDim: '#6f675a', accent: '#a0461c', button: '#e5dccb', buttonOn: '#c98b3a', disabled: '#cfc6b4', shadow: '#ffffff' } }],
-    parchment: ['양피지', { shape: 'square', radius: 0, colors: { bg: '#2b2014', panel: '#3b2d1c', border: '#a88a55', text: '#f4e6c8', textDim: '#bba98a', accent: '#ffcf5a', button: '#5a4329', buttonOn: '#8a6524', disabled: '#4a3b2a' } }]
+  /** 원작 Chrome.java 의 9조각: [x, y, w, h, 왼 · 위 · 오른 · 아래 여백] (chrome.png 안의 자리) */
+  const CHROME = {
+    WINDOW: [0, 0, 20, 20, 6, 6, 6, 6], WINDOW_SILVER: [86, 0, 22, 22, 7, 7, 7, 7], TOAST: [20, 0, 9, 9, 4, 4, 4, 4],
+    TOAST_TR: [20, 9, 9, 9, 4, 4, 4, 4], GREY_BUTTON_TR: [20, 9, 9, 9, 4, 4, 4, 4], TOAST_TR_HEAVY: [29, 9, 9, 9, 4, 4, 4, 4], TOAST_WHITE: [29, 0, 9, 9, 4, 4, 4, 4],
+    RED_BUTTON: [38, 0, 6, 6, 2, 2, 2, 2], GREY_BUTTON: [38, 6, 6, 6, 2, 2, 2, 2], TAG: [22, 18, 16, 14, 3, 3, 3, 3], GEM: [0, 32, 32, 32, 13, 13, 13, 13],
+    SCROLL: [32, 32, 32, 32, 5, 11, 5, 11], TAB_SET: [64, 0, 20, 20, 6, 6, 6, 6], TAB_SELECTED: [65, 22, 8, 13, 3, 7, 3, 5], TAB_UNSELECTED: [75, 22, 8, 13, 3, 7, 3, 5]
   };
+  const CHROME_NAMES = { WINDOW: '창 (원작 모든 창)', WINDOW_SILVER: '은색 창', TOAST: '알림', TOAST_TR: '반투명 알림 (원작 알림 · 메뉴 단추)', GREY_BUTTON_TR: '반투명 회색 단추 (= 반투명 알림)',
+    TOAST_TR_HEAVY: '진한 반투명 (가방 · 툴팁)', TOAST_WHITE: '흰 칸 (글 입력)', RED_BUTTON: '빨간 단추 (원작 단추)', GREY_BUTTON: '회색 단추', TAG: '태그 (행동 표시)', GEM: '보석 틀', SCROLL: '두루마리 (이야기 창)',
+    TAB_SET: '탭 묶음', TAB_SELECTED: '고른 탭', TAB_UNSELECTED: '안 고른 탭' };
+  /** PDMaker UI 마다 쓸 조각 (런타임 MakerTheme.SKIN 과 같음) */
+  const SKIN_UI = [
+    ['box', '대사창', 'WINDOW'], ['name', '이름표', 'TOAST_TR'], ['choice', '선택지', 'GREY_BUTTON_TR'], ['choiceOn', '고른 선택지', 'RED_BUTTON'],
+    ['bar', '연출 배속 표시줄 바탕', 'TOAST_TR'], ['barBtn', '배속 단추', 'GREY_BUTTON_TR'], ['barBtnOn', '고른 배속 단추', 'RED_BUTTON']];
+  /** 글자 색 (스프라이트로 정할 수 없는 것만) */
+  const TOKENS = [
+    ['text', '기본 글자', '대사 · 이름 · 버튼 글자'], ['textDim', '보조 글자', '잠긴 항목 · 설명'], ['accent', '강조', '창 제목 · 강조(**…**) 글자 · ▼ · 현재 배속'],
+    ['warn', '주의', '주의 알림'], ['error', '오류 · 위험', '쓸 수 없는 주문 · 모자란 돈'], ['good', '좋음', '완료한 퀘스트'], ['shadow', '그림자', '글자 그림자']];
+  /** 기본 = 원작 (런타임 MakerTheme.DEF · SKIN) */
+  const DEFAULT = { format: 'pdmaker-gametheme', version: 2, name: '게임 기본',
+    skin: Object.fromEntries(SKIN_UI.map(([k, , d]) => [k, d])),
+    colors: { text: '#ffffff', textDim: '#888888', accent: '#ffff44', warn: '#ff8800', error: '#cc6666', good: '#44ff44', shadow: '#000000' } };
   const clone = o => JSON.parse(JSON.stringify(o));
   const HEX = /^#[0-9a-f]{6}$/i;
-  /** 저장된 값(없거나 틀려도) → 늘 쓸 수 있는 테마 */
   function normalize(raw) {
     const r = raw && typeof raw === 'object' ? raw : {}, o = clone(DEFAULT);
     if (typeof r.name === 'string') o.name = r.name;
-    if (['game', 'round', 'square'].includes(r.shape)) o.shape = r.shape;
-    const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
-    o.radius = num(r.radius, 0, 12, 3); o.padding = num(r.padding, 0, 24, 4); o.fontScale = num(r.fontScale, 0.5, 2, 1);
-    const c = r.colors || {};
-    Object.keys(o.colors).forEach(k => { if (HEX.test(c[k] || '')) o.colors[k] = c[k].toLowerCase(); });
+    const s = r.skin || {}; Object.keys(o.skin).forEach(k => { if (CHROME[s[k]]) o.skin[k] = s[k]; });
+    const c = r.colors || {}; Object.keys(o.colors).forEach(k => { if (HEX.test(c[k] || '')) o.colors[k] = c[k].toLowerCase(); });
     return o;
   }
-  /** 프로젝트 테마 (없으면 기본) */
   const get = () => normalize(PDM.store && PDM.store.isOpen ? PDM.store.get('theme') : null);
   const color = token => get().colors[token] || DEFAULT.colors[token] || '#ffffff';
-  /** 프리셋 → 테마 값 */
-  const preset = id => { const p = PRESETS[id]; const o = clone(DEFAULT); if (!p) return o; const v = clone(p[1]); Object.assign(o, v, { colors: Object.assign(o.colors, v.colors || {}) }); o.name = p[0]; return o; };
-  /** 대비 (WCAG 상대 휘도 비) */
+
+  // ---- 스프라이트 조각 (편집기 미리보기 — 프로젝트가 바꾼 chrome.png 가 있으면 그것: PDM.assets 'game:' 규칙)
+  let chromeImg = null;
+  /** 프로젝트 chrome.png (있으면) 또는 원작 — PDM.assets 가 경로마다 캐시. 그림이 바뀌면(새로 고침 · 바꾸기) 조각 캐시도 비움 */
+  async function chrome() {
+    const img = PDM.assets ? await PDM.assets.load('game:interfaces/chrome.png').catch(() => null) : null;
+    if (img !== chromeImg) { chromeImg = img; cache.clear(); }
+    return chromeImg;
+  }
+  const cache = new Map();
+  /** 조각 → { url(그 부분만 잘라 낸 PNG), m:[왼,위,오른,아래], center:'#rrggbb'(가운데 색 — 대비 검사), alpha } */
+  async function piece(type) {
+    const img = await chrome(), r = CHROME[type];
+    if (!img || !r) return null;
+    if (cache.has(type)) return cache.get(type);
+    const c = document.createElement('canvas'); c.width = r[2]; c.height = r[3];
+    const g = c.getContext('2d'); g.drawImage(img, r[0], r[1], r[2], r[3], 0, 0, r[2], r[3]);
+    let center = '#000000', alpha = 1;
+    try { const d = g.getImageData(Math.floor(r[2] / 2), Math.floor(r[3] / 2), 1, 1).data; center = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join(''); alpha = d[3] / 255; } catch (_) { /* 다른 출처 그림 */ }
+    const p = { url: c.toDataURL(), m: r.slice(4), center, alpha, type };
+    cache.set(type, p); return p;
+  }
+  /** 9조각 CSS (k = 게임 픽셀 1개의 화면 px) */
+  const css = (p, k) => p ? { background: 'none', border: 'none', borderStyle: 'solid', borderWidth: p.m.map(v => (v * k) + 'px').join(' '), borderImage: `url("${p.url}") ${p.m.join(' ')} fill / ${p.m.map(v => (v * k) + 'px').join(' ')} stretch`, imageRendering: 'pixelated', borderRadius: 0 } : {};
+
+  /** 대비 (WCAG). 반투명 조각은 검은 게임 화면 위에 놓인 색으로 */
   function contrast(a, b) {
     const L = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0); };
     const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   }
-  /** 읽기 쉬운지 볼 짝 [글자, 바탕, 최소 비, 설명] */
-  const PAIRS = [['text', 'panel', 4.5, '본문 / 패널'], ['accent', 'panel', 3, '강조 · 제목 / 패널'], ['text', 'button', 4.5, '버튼 글자 / 버튼'], ['text', 'buttonOn', 3, '버튼 글자 / 고른 버튼'], ['textDim', 'panel', 3, '보조 글자 / 패널'], ['text', 'bg', 4.5, '본문 / 배경']];
-  const checks = t => PAIRS.map(([f, b, min, label]) => { const r = contrast(t.colors[f], t.colors[b]); return { f, b, min, label, ratio: Math.round(r * 10) / 10, ok: r >= min }; });
-  /** dialogue.json 의 빈 칸("")이 따르는 토큰 (런타임 MakerDialogue.THEMED 와 같음) */
-  const DIALOGUE_LINK = { 'box.color': 'panel', 'box.border': 'border', 'box.textColor': 'text', 'box.highlight': 'accent', 'name.color': 'button', 'name.textColor': 'text', 'indicator.color': 'accent', 'box.style': '@shape' };
-  /** 대사창 설정의 빈 칸을 테마 값으로 (편집기 미리보기 — 런타임과 같은 규칙) */
-  function resolveDialogue(c) {
+  const onBlack = (hex, a) => { const n = parseInt(hex.slice(1), 16); return '#' + [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v * a).toString(16).padStart(2, '0')).join(''); };
+  /** 글자 색 ↔ 그 UI 스프라이트 가운데 색 (실제 그림에서 잼) */
+  async function checks(t, pieceOf = piece) {
+    const pairs = [['text', 'box', 4.5, '대사 글자 / 대사창'], ['text', 'name', 4.5, '이름 / 이름표'], ['text', 'choice', 4.5, '선택지 글자 / 선택지'], ['text', 'choiceOn', 3, '선택지 글자 / 고른 선택지'],
+      ['accent', 'box', 3, '강조 / 대사창'], ['accent', 'bar', 3, '현재 배속 / 표시줄'], ['text', 'barBtnOn', 3, '배속 글자 / 고른 배속 단추']];
+    const out = [];
+    for (const [f, ui, min, label] of pairs) {
+      const p = await pieceOf(t.skin[ui]); if (!p) continue;
+      const bg = onBlack(p.center, p.alpha), r = contrast(t.colors[f], bg);
+      out.push({ f, ui, min, label, bg, ratio: Math.round(r * 10) / 10, ok: r >= min });
+    }
+    return out;
+  }
+  /** dialogue.json 의 빈 칸("")이 따르는 것 (런타임 MakerDialogue.THEMED 와 같음 — 글자 색 · 모양 "@skin" = 스프라이트) */
+  const DIALOGUE_LINK = { 'box.textColor': 'text', 'box.highlight': 'accent', 'name.textColor': 'text', 'indicator.color': 'accent', 'box.style': '@skin' };
+  /** 대사창 설정의 빈 칸을 테마로 (편집기 미리보기 — 런타임 MakerDialogue.s 와 같음). 그 밖의 빈 칸 = 기본값 */
+  function resolveDialogue(c, defaults) {
     const t = get();
     Object.entries(DIALOGUE_LINK).forEach(([path, tok]) => {
       const [g, k] = path.split('.'); if (!c[g] || c[g][k] !== '') return;
-      if (tok === '@shape') { c[g][k] = t.shape === 'game' ? 'game' : 'round'; c[g].radius = t.shape === 'square' ? 0 : t.radius; }
-      else c[g][k] = t.colors[tok];
+      c[g][k] = tok === '@skin' ? 'skin' : t.colors[tok];
     });
+    if (defaults) Object.keys(c).forEach(g => { if (c[g] && typeof c[g] === 'object' && defaults[g]) Object.keys(c[g]).forEach(k => { if (c[g][k] === '' && !(g + '.' + k in DIALOGUE_LINK) && typeof defaults[g][k] === 'string' && defaults[g][k] !== '') c[g][k] = defaults[g][k]; }); });
+    c._skin = t.skin;
     return c;
   }
-  return { TOKENS, DEFAULT, PRESETS, normalize, get, color, preset, contrast, checks, DIALOGUE_LINK, resolveDialogue };
+  return { CHROME, CHROME_NAMES, SKIN_UI, TOKENS, DEFAULT, normalize, get, color, chrome, piece, css, contrast, checks, DIALOGUE_LINK, resolveDialogue };
 })();

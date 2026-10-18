@@ -737,23 +737,35 @@ test('설치기: 카메라(PixelScene.PixelCamera.update) · 테마(GameScene.sh
   }
 });
 
-test('게임 UI 테마: 편집기 PDM.gameTheme = 런타임 MakerTheme · 대사창 빈 칸 연결 · 예전 프로젝트는 그대로', async () => {
+test('게임 UI 테마(스프라이트 스킨): 편집기 PDM.gameTheme = 런타임 MakerTheme · 원작 Chrome 조각 · 대사창 빈 칸 연결 · 예전 프로젝트는 그대로', async () => {
   const { PDM } = env.load(), T = PDM.gameTheme;
   const th = read(path.join(PDMK, 'MakerTheme.java')), dl = read(path.join(PDMK, 'MakerDialogue.java'));
   const def = Object.fromEntries([...th.matchAll(/\{ "(\w+)", "(#[0-9a-f]{6})" \}/g)].map(m => [m[1], m[2]]));
   eq(def, T.DEFAULT.colors);
   const link = Object.fromEntries([...dl.matchAll(/THEMED\.put\("([\w.]+)", "(@?\w+)"\)/g)].map(m => [m[1], m[2]]));
   eq(link, T.DIALOGUE_LINK);
-  T.checks(T.DEFAULT).forEach(c => assert.ok(c.ok, '기본 테마 대비: ' + c.label + ' ' + c.ratio));
-  Object.keys(T.PRESETS).forEach(id => T.checks(T.preset(id)).forEach(c => assert.ok(c.ok, `프리셋 ${id} 대비: ${c.label} ${c.ratio}`)));
-  eq(T.normalize({ colors: { text: 'red', accent: '#ABCDEF' }, shape: 'blob', radius: 99 }).colors.accent, '#abcdef');
-  eq([T.normalize({ colors: { text: 'red' } }).colors.text, T.normalize({ shape: 'blob' }).shape, T.normalize({ radius: 99 }).radius], ['#ffffff', 'game', 12]);
+  // 조각 좌표 = 원작 Chrome.java (아래 표는 원작 소스에서 옮김 — 원작이 바뀌면 여기도) · UI 기본 조각 = 런타임 MakerTheme.SKIN
+  const SPD_CHROME = { WINDOW: '0,0,20,20,6', WINDOW_SILVER: '86,0,22,22,7', TOAST: '20,0,9,9,4', TOAST_TR: '20,9,9,9,4', GREY_BUTTON_TR: '20,9,9,9,4', TOAST_TR_HEAVY: '29,9,9,9,4', TOAST_WHITE: '29,0,9,9,4',
+    RED_BUTTON: '38,0,6,6,2', GREY_BUTTON: '38,6,6,6,2', TAG: '22,18,16,14,3', GEM: '0,32,32,32,13', SCROLL: '32,32,32,32,5,11,5,11', TAB_SET: '64,0,20,20,6', TAB_SELECTED: '65,22,8,13,3,7,3,5', TAB_UNSELECTED: '75,22,8,13,3,7,3,5' };
+  Object.entries(SPD_CHROME).forEach(([n, r]) => { const v = r.split(',').map(Number); if (v.length === 5) v.push(v[4], v[4], v[4]); eq(T.CHROME[n], v, n); });
+  eq(Object.keys(T.CHROME).sort(), Object.keys(SPD_CHROME).sort());
+  eq(Object.fromEntries([...th.matchAll(/\{ "(\w+)", "([A-Z_]+)" \}/g)].map(m => [m[1], m[2]])), T.DEFAULT.skin);
+  assert.ok(T.SKIN_UI.every(([, , d]) => T.CHROME[d]) && T.TOKENS.every(([k]) => T.DEFAULT.colors[k]));
+  // 대비: 원작 chrome.png 의 조각 가운데 색(원작 그림에서 잰 값 · 알파)으로 — 기본 글자 색이 모두 읽힘, 어두운 글자는 걸림
+  const CENTER = { WINDOW: ['#3e4039', 1], TOAST_TR: ['#3e4039', 0.6], GREY_BUTTON_TR: ['#3e4039', 0.6], RED_BUTTON: ['#b22a2a', 1], TOAST_WHITE: ['#f2f2f2', 1] };
+  const fake = async n => CENTER[n] ? { center: CENTER[n][0], alpha: CENTER[n][1], m: T.CHROME[n].slice(4), type: n } : null;
+  const ok = await T.checks(T.DEFAULT, fake); eq(ok.length, 7); ok.forEach(c => assert.ok(c.ok, '기본 테마 대비: ' + c.label + ' ' + c.ratio));
+  const dark = await T.checks(T.normalize({ colors: { text: '#202020' } }), fake); assert.ok(dark.some(c => !c.ok && c.f === 'text'), '어두운 글자는 경고');
+  const white = await T.checks(T.normalize({ skin: { box: 'TOAST_WHITE' } }), fake); assert.ok(white.find(c => c.label.startsWith('대사 글자')).ok === false, '흰 조각 + 흰 글자 경고');
+  eq(T.normalize({ colors: { text: 'red', accent: '#ABCDEF' }, skin: { box: 'NOPE', name: 'SCROLL' } }).colors.accent, '#abcdef');
+  eq([T.normalize({ colors: { text: 'red' } }).colors.text, T.normalize({ skin: { box: 'NOPE' } }).skin.box, T.normalize({ skin: { name: 'SCROLL' } }).skin.name], ['#ffffff', 'WINDOW', 'SCROLL']);
   // 새 프로젝트: theme.json 생김 · 대사창 색 = 빈 칸(테마) · 내보낸 게임 배속 표시줄 켬
   const { ctx, dir } = await newProject();
   assert.ok(fs.existsSync(path.join(dir, 'theme.json')), '새 프로젝트 theme.json');
   const dj = json(path.join(dir, 'dialogue.json'));
-  eq([dj.box.color, dj.box.style, dj.name.color], ['', '', '']); eq(json(path.join(dir, 'project.json')).cutsceneSpeed, true);
-  const c = ctx.PDM.Dialogue.cfg(); eq([c.box.color, c.box.style], [T.DEFAULT.colors.panel, 'game']);   // 미리보기도 테마 값
+  eq([dj.box.style, dj.box.textColor, dj.name.textColor, dj.indicator.color], ['', '', '', '']); eq(json(path.join(dir, 'project.json')).cutsceneSpeed, true);
+  const c = ctx.PDM.Dialogue.cfg(); eq([c.box.style, c.box.textColor, c.box.highlight, c._skin.box], ['skin', T.DEFAULT.colors.text, T.DEFAULT.colors.accent, 'WINDOW']);   // 미리보기도 테마 (스프라이트 스킨)
+  assert.ok(c.box.color && c.name.color, '테마와 상관없는 빈 칸 = 기본값');
   // 예전 프로젝트: theme.json · dialogue.json 이 없으면 → 열기 · 저장해도 theme.json 을 만들지 않음, 대사창은 예전 색
   fs.rmSync(path.join(dir, 'theme.json')); fs.rmSync(path.join(dir, 'dialogue.json'));
   const pj = json(path.join(dir, 'project.json')); delete pj.cutsceneSpeed; fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify(pj));

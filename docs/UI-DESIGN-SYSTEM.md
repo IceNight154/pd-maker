@@ -132,9 +132,9 @@
 
 ## 6.5 게임 UI 테마와의 구분 (6차)
 
-이 문서의 토큰(`--accent` 청록 등)은 **편집기 자신**의 색입니다. 게임 안 UI 는 프로젝트마다 다른 **게임 UI 테마**(`theme.json` — 편집기 「🎨 게임 UI 테마」, 런타임 `MakerTheme`)를 따르고, 편집기 색을 게임에 쓰지 않습니다.
-- 게임 UI 테마 미리보기(`.gt-prev`) · 대사창 미리보기(`.dlg`) · 이벤트 미리보기의 카메라 격자(`.scene-world`)는 게임 색을 그대로 그립니다 (편집기 토큰 예외 — 테마를 바꿔도 미리보기는 게임 색).
-- 게임 UI 테마 토큰 · 우선순위 · 적용 대상: `docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md` §1.
+이 문서의 토큰(`--accent` 청록 등)은 **편집기 자신**의 색입니다. 게임 안 UI 는 프로젝트의 **게임 UI 스킨**(인게임 스프라이트 `assets/game/interfaces/*.png` + `theme.json` 의 쓸 조각 · 글자 색 — 편집기 「🎨 게임 UI 테마」, 런타임 `MakerTheme`)을 따르고, 편집기 색을 게임에 쓰지 않습니다.
+- 게임 UI 테마 미리보기(`.gt-prev` · `.gt-patch` — `chrome.png` 조각을 CSS `border-image` 9칸 늘림으로) · 대사창 미리보기(`.dlg`) · 이벤트 미리보기의 카메라 격자(`.scene-world`)는 게임 그림 · 색을 그대로 그립니다 (편집기 토큰 예외 — 편집기 테마를 바꿔도 미리보기는 게임 모습).
+- 게임 UI 스킨 조각 · 글자 색 · 우선순위 · 적용 대상: `docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md` §1.
 - 색 칸 옆 「테마」 칩(`.colorpick .chip`, `aria-pressed`) = 빈 값(위 단계 — 게임 UI 테마)을 따름.
 
 ## 7. 확인

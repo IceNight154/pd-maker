@@ -537,10 +537,15 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .dlg-choice.on span { color: var(--on-fg) !important; }
 /* 게임 UI 테마 편집기 (6차) — 미리보기는 게임 색 그대로 (편집기 토큰을 쓰지 않음) */
 .gt-wrap { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: flex-start; margin-bottom: var(--sp-6); }
-.gt-prev { padding: 12px; border-radius: var(--r-sm); min-width: 280px; max-width: 420px; flex: 1; }
-.gt-btn { display: inline-block; padding: 2px 8px; }
-.gt-bar { display: inline-flex; gap: 4px; align-items: center; padding: 3px 6px; margin-top: 8px; border-radius: 3px; }
-.gt-checks { flex: 1; min-width: 240px; } .gt-check { font-size: var(--fs-sm); margin: 2px 0; }
+.gt-prev { padding: 12px; border-radius: var(--r-sm); min-width: 260px; max-width: 420px; flex: 1; background: #000; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+.gt-patch { box-sizing: border-box; image-rendering: pixelated; }
+.gt-row { display: flex; gap: 4px; align-items: center; } .gt-col { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.gt-sheet { flex: 1; min-width: 240px; overflow-x: auto; } .gt-sheet-img { image-rendering: pixelated; background: repeating-conic-gradient(#333 0 25%, #222 0 50%) 0 0 / 12px 12px; display: block; max-width: 100%; }
+.gt-skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3); }
+.gt-skin { display: flex; gap: var(--sp-3); align-items: flex-end; } .gt-skin > .gt-patch { flex: none; display: flex; align-items: center; justify-content: center; background: #000; }
+.gt-skin > :last-child { flex: 1; min-width: 0; }
+.gt-cap { font-size: var(--fs-sm); color: var(--dim); margin-top: 4px; }
+.gt-checks { margin-top: var(--sp-3); } .gt-check { font-size: var(--fs-sm); margin: 2px 0; }
 /* 이벤트 미리보기의 카메라 연출 바닥 (6차 — 맵 대신 격자, 칸 하나 = 16 게임 픽셀) */
 .scene-world { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 16px 16px; opacity: .5; }
 .dlg-stage { background: radial-gradient(ellipse at 50% 35%, #2a2638, #0b0a10 70%); cursor: pointer; flex: none; }

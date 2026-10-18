@@ -11,7 +11,7 @@
  *   일반 플레이에서는 Game.timeScale = 1 (표시줄을 숨겨도 시간은 바뀌지 않음 — 표시와 시간은 따로).
  *
  *   배속 표시줄: 테스트 플레이(-Dpdmaker.testenv)에서는 늘, 내보낸 게임에서는 project.json "cutsceneSpeed": true 일 때만 (예전 프로젝트 = 없음 = 끔).
- *     "▶ 2x" 현재 배속 · 1x 2x 4x 16x · 스킵 — 프로젝트 게임 UI 테마(MakerTheme) 색. 대사창이 있으면 그 위(이름표 반대쪽), 없으면 화면 아래 가운데
+ *     "▶ 2x" 현재 배속 · 1x 2x 4x 16x · 스킵 — 게임 UI 스프라이트(chrome.png 9조각 — MakerTheme.patch: 바탕 bar · 단추 barBtn · 고른 단추 barBtnOn) + 테마 글자 색. 대사창이 있으면 그 위(이름표 반대쪽), 없으면 화면 아래 가운데
  *     (원작 도구 모음 위) — 안전 영역 안. 키: F6 배속 바꾸기 · F10 스킵 (연출 중에만)
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -166,7 +166,7 @@ public class MakerCutscene {
 		static Bar current;
 		final List<Seg> segs = new ArrayList<>();
 		RenderedTextBlock label;
-		ColorBlock bg;
+		com.watabou.noosa.NinePatch bg;
 		final ColorBlock[] tri = new ColorBlock[3];   // ▶ (게임 글꼴에 ▶ 글자가 없어 점 3줄로 그림)
 		float x0, y0, w, h;
 		int builtVersion = -1;
@@ -193,7 +193,7 @@ public class MakerCutscene {
 			builtVersion = MakerTheme.version;
 			clear(); segs.clear();
 			camera = PixelScene.uiCamera;
-			bg = new ColorBlock(1, 1, 0xFF000000); bg.camera = camera; add(bg);
+			bg = MakerTheme.patch("bar"); bg.camera = camera; add(bg);
 			for (int i = 0; i < 3; i++) { tri[i] = new ColorBlock(1, 5 - i * 2, 0xFFFFFFFF); tri[i].camera = camera; add(tri[i]); }
 			label = PixelScene.renderTextBlock("1x", 6); label.camera = camera; add(label);
 			for (int i = 0; i < SPEEDS.length; i++) segs.add(new Seg(i, SPEEDS[i] + "x"));
@@ -219,7 +219,7 @@ public class MakerCutscene {
 			int text = MakerTheme.c("text"), accent = MakerTheme.c("accent");
 			label.text(skipping ? "16x 스킵" : speed + "x");
 			label.hardlight(accent);
-			float pad = 2, gap = 1, sh = 9;
+			float pad = 3, gap = 1, sh = 10;   // 9조각 테두리(TOAST_TR 4px · 버튼 2px) 안쪽에 글이 들어가게
 			float lw = label.width() + pad * 2 + 5;   // ▶ + 글
 			float total = lw + gap;
 			for (Seg s : segs) { s.w = Math.max(11, s.t.width() + 4); total += s.w + gap; }
@@ -242,7 +242,7 @@ public class MakerCutscene {
 			}
 			x = Math.max(left + 1, Math.min(right - w - 1, x)); y = Math.max(top + 1, Math.min(bottom - h - 1, y));
 			x0 = x; y0 = y;
-			bg.x = x; bg.y = y; bg.size(w, h); bg.hardlight(MakerTheme.c("panel")); bg.alpha(0.85f);
+			bg.x = x; bg.y = y; bg.size(w, h);
 			for (int i = 0; i < 3; i++) { tri[i].x = x + pad + i; tri[i].y = y + h / 2f - (5 - i * 2) / 2f; tri[i].hardlight(accent); PixelScene.align(tri[i]); }
 			label.setPos(x + pad + 5, y + (h - label.height()) / 2f); PixelScene.align(label);
 			float cx = x + lw + gap;
@@ -266,16 +266,18 @@ public class MakerCutscene {
 
 		/** 단추 하나 — 고른 것 = 강조 바탕 + 아래 줄 (색만으로 구분하지 않음) */
 		class Seg {
-			final int i; final String label; final ColorBlock bg, mark; final RenderedTextBlock t; float x, y, w = 11, h;
+			final int i; final String label; final com.watabou.noosa.NinePatch bg, bgOn; final ColorBlock mark; final RenderedTextBlock t; float x, y, w = 11, h;
 			Seg(int i, String label) {
 				this.i = i; this.label = label;
-				bg = new ColorBlock(1, 1, 0xFFFFFFFF); bg.camera = PixelScene.uiCamera; Bar.this.add(bg);
+				bg = MakerTheme.patch("barBtn"); bg.camera = PixelScene.uiCamera; Bar.this.add(bg);
+				bgOn = MakerTheme.patch("barBtnOn"); bgOn.camera = PixelScene.uiCamera; Bar.this.add(bgOn);
 				mark = new ColorBlock(1, 1, 0xFFFFFFFF); mark.camera = PixelScene.uiCamera; Bar.this.add(mark);
 				t = PixelScene.renderTextBlock(label, 5); t.camera = PixelScene.uiCamera; Bar.this.add(t);
 			}
 			void place(float x, float y, float w, float h, boolean on, int text, int accent) {
 				this.x = x; this.y = y; this.w = w; this.h = h;
-				bg.x = x; bg.y = y; bg.size(w, h); bg.hardlight(on ? MakerTheme.c("buttonOn") : MakerTheme.c("button")); bg.alpha(on ? 0.95f : 0.8f);
+				for (com.watabou.noosa.NinePatch p : new com.watabou.noosa.NinePatch[]{ bg, bgOn }) { p.x = x; p.y = y; p.size(w, h); }
+				bg.visible = !on; bgOn.visible = on;
 				mark.x = x + 2; mark.y = y + h - 1; mark.size(w - 4, 1); mark.hardlight(text); mark.visible = on;
 				t.hardlight(text);   // 게임 글꼴은 검은 테두리가 있어 밝은 바탕 + 어두운 글은 뭉개짐 — 글은 늘 본문색, 고른 것은 바탕 + 아래 줄
 				t.setPos(x + (w - t.width()) / 2f, y + (h - t.height()) / 2f); PixelScene.align(t);
