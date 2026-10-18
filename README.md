@@ -18,9 +18,11 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-stability.js` | UI 밀림 회귀 (동작 전후 자리 · 크기 · 스크롤 · 넘침 · 처리기 수) |
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-dialogue.js` | 대사 글꼴 · 연출 탭 · 미리보기 · 테스트 플레이 실행 환경 UI |
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-camera-theme.js` | 스크린/카메라 명령 편집 · 이벤트 미리보기 · 게임 UI 테마 편집 |
+| `NODE_PATH=$(npm root -g) node tools/tests/ui-title.js` | 타이틀 편집기 (목록 · 캔버스 · 속성 · 끌기 · 상태/창 미리보기 · 검사 연결 · 루프 누수 · 손상된 값) |
 | [docs/EDITOR-UX-CUTSCENES.md](docs/EDITOR-UX-CUTSCENES.md) | 3차: 편집기 UI/UX 개선 · 이벤트 연출(대사 · 일러스트 · 페이드 · 소리) 구현 · 게임 안 검증 기록 |
 | [docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md](docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md) | 4차: 메뉴 · 도구 모음 묶음 정리 · 색 체계(차콜 + 청록) · PC · 휴대폰 비율 · 화면 돌림 연출 검사와 고친 버그 |
 | [docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md](docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md) | 6차: 게임 UI 테마 · 연출 중 배속 표시(끝나면 1×) · 이벤트 스크린/카메라 연출(이동 · 팔로우 · 쉐이크 · 리셋) |
+| [docs/EDITOR-TITLE-SCREEN-CUSTOMIZATION.md](docs/EDITOR-TITLE-SCREEN-CUSTOMIZATION.md) | 7차: 타이틀 화면 — 게임과 같은 규칙 · 그림 · 글꼴로 그리는 미리보기, 글 · 그림 · 정보 요소, 버튼 상태 · 효과, 팝업 창, 게임 ↔ 편집기 자리 비교 |
 | [docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md](docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md) | 5차: 프로젝트별 테스트 실행 환경(모바일) · 맵 편집기 묶음 · 타일 레이어 보존 · 대사 글꼴/연출 · 배속/스킵 · UI 밀림 근본 수정 |
 
 ---
@@ -77,7 +79,7 @@ GameMaker 식 IDE 입니다: **메뉴 · 도구 모음 / 리소스 목록 · 탭
 | 기본 | 내용 |
 |---|---|
 | ⚙ 프로젝트 설정 | 게임 이름 · 패키지 · 게임 저장소 연결 · 시작 영웅 · 테스트 플레이 방식 |
-| 🏰 타이틀 화면 | 배경(SPD 4.0 떠오르는 폐허: 방향 · 속도 · 벽 · 조각 레이어 추가/삭제/수정) · 로고 · 버튼 · 음악 · 입자 효과 · "화면을 누르세요" · 하위 페이지(업데이트 · 소식 · 소개 · 후원 · 변경 내역) |
+| 🏰 타이틀 화면 | 왼쪽 요소 목록 · 가운데 실제 비율 캔버스(게임과 같은 배치 규칙 · 그림 · 글꼴, 테스트 플레이 화면 크기, 끌기 · 크기 · 화살표) · 오른쪽 속성. 배경(SPD 4.0 떠오르는 폐허: 방향 · 속도 · 벽 · 조각 레이어) · 로고 · 글 · 그림 · 정보 요소({version} · {saveCount} …) · 버튼(자유 배치 · 상태별 모양 · 효과 · 동작) · 팝업 창(글 · 그림 · 버튼 · 스크롤 · 실제 소리 설정) · 음악 · 입자 · "화면을 누르세요" · 하위 페이지 |
 | 🔤 게임 텍스트 | 게임의 모든 글자(언어별)를 바꿈 |
 | 💬 대사창 | RPG Maker 식 아래 대사창 · 스탠딩 일러스트 · 선택지 모양 · 레이아웃 직접 편집 |
 | 🗺 맵 | 맵 그래프(노드 · 연결 · 그룹) · 맵 편집기 · 방 템플릿 |

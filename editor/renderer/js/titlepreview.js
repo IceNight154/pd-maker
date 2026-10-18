@@ -155,6 +155,7 @@ PDM.titlePreview = (function () {
     { image: 'game:splashes/title/front_small.png', fw: 112, fh: 116, cols: 9, frames: 36, count: 3, speed: 6.26, size: 2.25, dark: 0, spin: 20 }];
   const MOD2_LAYERS = Array.from({ length: 10 }, (_, i) => `game:interfaces/title${i}.png`);
   const MOD2_SPEED = [2 * .10, 4 * .14, 7 * .18, 11 * .22, 16 * .28, 22 * .34, 30 * .42, 40 * .52, 52 * .66, 66 * .82];
+  const arr = v => (Array.isArray(v) ? v : []);
   const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   const archStyleOf = bg => bg.archs === false ? 'none' : (bg.archStyle || 'game');
   function drawBackground(g, t, W, H, tt) {
@@ -300,7 +301,7 @@ PDM.titlePreview = (function () {
     if (g) drawBackground(g, t, W, H, tt);
     const info = infoValues(R, opts);
     // 요소 (뒤)
-    const elems = (Array.isArray(t.elements) ? t.elements : []).filter(e => e && e.visible !== false);
+    const elems = arr(t.elements).filter(e => e && typeof e === 'object' && e.visible !== false);
     const elemGeo = el => {
       const area = el.safe === false ? { x: 0, y: 0, w: W, h: H } : S.safe;
       let L = null, size;
@@ -314,7 +315,7 @@ PDM.titlePreview = (function () {
       const E = elemGeo(el);
       geo.elements.push({ id: el.id, r: [E.r.x, E.r.y, E.r.w, E.r.h], vis: shown, text: E.L ? M.bindText(el.text, info, el.fallback).text : '', size: [E.size.w, E.size.h] });
       if (!g || !shown) return;
-      const fxs = (el.effects || []).map(f => M.fxNorm(f)).filter(f => f.trigger === 'enter' || f.trigger === 'always');
+      const fxs = arr(el.effects).filter(f => f && typeof f === 'object').map(f => M.fxNorm(f)).filter(f => f.trigger === 'enter' || f.trigger === 'always');
       const v = M.fxCombine(fxs.map(f => M.fxValue(f, f.trigger === 'enter' ? (el.show === 'menu' ? opts.gateT || tt : tt) : tt)));
       const a = Math.max(0, Math.min(1, el.alpha ?? 1)) * v.alpha;
       if (E.L) drawText(g, E.L, E.r.tx + v.dx, E.r.y + v.dy, /^#[0-9a-f]{6}$/i.test(el.color || '') ? el.color : '#ffffff', a, zoom);
@@ -383,7 +384,7 @@ PDM.titlePreview = (function () {
       const flags = { hover, focus: forced === 'focus' || opts.focus === e.id, pressed: forced === 'pressed', disabled: forced === 'disabled' || e.disabled };
       const accent = e.id === 'support' && !it.label ? PDM.gameTheme.color('accent') : null;
       const st = M.resolveStyle(bs, e.item, flags, { accent, chrome: PDM.gameTheme.CHROME });
-      const fxs = (it.effects || []).map(f => M.fxNorm(f));
+      const fxs = arr(it.effects).filter(f => f && typeof f === 'object').map(f => M.fxNorm(f));
       const v = M.fxCombine(fxs.map(f => {
         const held = f.trigger === 'hover' ? flags.hover && !flags.disabled : f.trigger === 'focus' ? flags.focus : false;
         if (f.trigger === 'enter') return M.fxValue(f, clock - i * ga.stagger);
@@ -418,7 +419,7 @@ PDM.titlePreview = (function () {
     if (g && (t.hideButton ?? !!PDM.gameTitle4) && revealed) { const s = iconSize(R, 'CHEVRON'); const r = R.icons.CHEVRON, im = want('game:interfaces/icons.png'); if (r && im) { g.save(); g.translate(W / 2, H - 8); g.rotate(Math.PI); g.drawImage(im, r[0], r[1], r[2], r[3], -s[0] / 2, -s[1] / 2, s[0], s[1]); g.restore(); } }
     // 창 (미리보기로 고른 창 하나 + 그 창이 연 창은 없음)
     if (opts.window) {
-      const w = (Array.isArray(t.windows) ? t.windows : []).find(x => x && x.id === opts.window);
+      const w = arr(t.windows).find(x => x && typeof x === 'object' && x.id === opts.window);
       if (w) geo.windows.push(drawWindow(g, t, w, S, R, info, opts));
     }
     return geo;
@@ -431,7 +432,7 @@ PDM.titlePreview = (function () {
     const closeBtn = w.closeButton !== false;
     const ttl = M.bindText(w.title || '', info, '').text;
     const TL = ttl ? textLayout(ttl, 9, ww - pad * 2 - (closeBtn ? 12 : 0), zoom, 'left') : null;
-    const content = Array.isArray(w.content) ? w.content : [];
+    const content = arr(w.content).map(c => c && typeof c === 'object' ? c : {});   // 손상된 칸 = 빈 내용 (자리는 규칙대로 0)
     const made = content.map(c => {
       if (c.type === 'text') { const L = textLayout(String(M.bindText(c.text, info, c.fallback).text).replace(/\\n/g, '\n'), Math.max(5, Math.trunc(+c.size || 7)), cw, zoom, c.align || 'left'); return { L, h: L.h, w: L.w }; }
       if (c.type === 'image') { const im = want(c.image), sc = Math.max(0.01, +c.scale || 1); return im ? { im, h: im.height * sc, w: im.width * sc } : { h: 0, w: 0 }; }
@@ -489,7 +490,7 @@ PDM.titlePreview = (function () {
     const canvas = h('canvas', { class: 'tp-canvas' }), overlay = h('canvas', { class: 'tp-overlay', tabindex: '0' });
     const el = h('div', { class: 'tp-stage' }, canvas, overlay);
     const g = canvas.getContext('2d'), og = overlay.getContext('2d');
-    let lastOpts = null, t = null, opts = {}, S = null, R = res || { icons: {}, labels: {}, settings: {} }, playing = true, stopped = false, raf = 0, t0 = performance.now(), paused = 0, geo = null, lastSize = '';
+    let errShown = false, lastOpts = null, t = null, opts = {}, S = null, R = res || { icons: {}, labels: {}, settings: {} }, playing = true, stopped = false, raf = 0, t0 = performance.now(), paused = 0, geo = null, lastSize = '';
     resources().then(r => { R = r; draw(); });
     function size() {
       const key = `${S.W}x${S.H}x${S.zoom}`; if (key === lastSize) return; lastSize = key;
@@ -503,8 +504,14 @@ PDM.titlePreview = (function () {
       const tt = now();
       g.setTransform(S.zoom, 0, 0, S.zoom, 0, 0); g.imageSmoothingEnabled = false;
       const st = o.getState ? o.getState() : {};
-      lastOpts = Object.assign({ tt, gateT: st.revealAt !== undefined ? tt - st.revealAt : 9, revealed: st.revealed, winT: st.winAt !== undefined ? tt - st.winAt : 9, hover: opts.hoverPt }, opts, st.opts || {});
-      geo = render(g, st.data || t, S, R, lastOpts);
+      try {
+        lastOpts = Object.assign({ tt, gateT: st.revealAt !== undefined ? tt - st.revealAt : 9, revealed: st.revealed, winT: st.winAt !== undefined ? tt - st.winAt : 9, hover: opts.hoverPt }, opts, st.opts || {});
+        geo = render(g, st.data || t, S, R, lastOpts);
+      } catch (e) {   // 손상된 값 등 — 멈추지 않고 알림 (검사 F7 이 이유를 보여 줌)
+        if (!errShown) { console.warn('타이틀 미리보기:', e); errShown = true; }
+        g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = 'rgba(0,0,0,.7)'; g.fillRect(0, 0, canvas.width, 28 * S.zoom / 3); g.fillStyle = '#ff8888'; g.font = `${12 * S.zoom / 3}px sans-serif`; g.fillText('미리보기를 그리지 못했습니다 — 검사(F7)를 보세요: ' + e.message, 6, 18 * S.zoom / 3);
+        return;
+      }
       drawOverlay(st);
     }
     function drawOverlay(st) {

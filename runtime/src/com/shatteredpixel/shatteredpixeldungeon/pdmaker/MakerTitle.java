@@ -99,7 +99,9 @@ public class MakerTitle {
 
 	@SuppressWarnings("unchecked")
 	void build() throws Exception {
-		// 1) 게임이 만든 화면 숨기기 (입력 영역은 없앰)
+		// 1) 새 화면을 먼저 만듦 — 설정이 깨져 만들다 실패하면 원작 타이틀을 숨기지 않고 그대로 둠 (검은 화면이 되지 않게, 7차)
+		Root made = new Root();
+		// 2) 게임이 만든 화면 숨기기 (입력 영역은 없앰)
 		java.lang.reflect.Field f = Group.class.getDeclaredField("members");
 		f.setAccessible(true);
 		for (Gizmo g : new ArrayList<>((ArrayList<Gizmo>) f.get(scene))) {
@@ -110,7 +112,7 @@ public class MakerTitle {
 			hideInputs(g, f);
 		}
 		music();
-		root = new Root();
+		root = made;
 		scene.add(root);
 	}
 	@SuppressWarnings("unchecked")
@@ -198,8 +200,8 @@ public class MakerTitle {
 				} catch (Throwable ignored) { btnHide = null; }   // 이 아이콘이 없는 게임 버전
 			}
 			if (revealed && gateOn) { revealT = 1; btnClock = 0; }
-			com.watabou.input.KeyEvent.addKeyListener(keys);
 			step(0);
+			com.watabou.input.KeyEvent.addKeyListener(keys);   // 다 만든 뒤에 (만들다 실패하면 남지 않게)
 		}
 
 		void buildLogo() {
@@ -288,7 +290,7 @@ public class MakerTitle {
 				boolean gameLabel = label.isEmpty() && en.gameIndex >= 0;
 				if (gameLabel) label = Messages.get(TitleScene.class, KEYS[en.gameIndex]);
 				String accent = "support".equals(en.id) && gameLabel ? String.format("#%06x", MakerTheme.or("accent", 0xFFFF44)) : null;   // 게임처럼 노란 글자
-				final TitleBtn b = new TitleBtn(bsv, en.item, accent, label, it == null ? 9 : Math.max(5, it.getInt("size", 9)), en.disabled);
+				final TitleBtn b = new TitleBtn(bsv, en.item, accent, label, it == null ? 9 : Math.max(5, gi(it, "size", 9)), en.disabled);
 				b.id = en.id;
 				b.click = () -> { idleT = 0; act(en.action, it, en.gameIndex >= 0 ? en.id : null, null); };
 				String icon = it == null ? "" : it.getString("icon", "");
@@ -325,14 +327,14 @@ public class MakerTitle {
 					Object tx = MakerRuntime.texture(e.getString("image", ""));
 					if (tx == null) continue;   // 그림이 없거나 못 읽음 — 건너뜀 (편집기 검사가 알림)
 					Image im = new Image(tx);
-					el.baseScale = Math.max(0.01f, e.getFloat("scale", 1f));
-					im.scale.set(el.baseScale); im.origin.set(im.width / 2f, im.height / 2f); im.angle = e.getFloat("angle", 0);
+					el.baseScale = Math.max(0.01f, gf(e, "scale", 1f));
+					im.scale.set(el.baseScale); im.origin.set(im.width / 2f, im.height / 2f); im.angle = gf(e, "angle", 0);
 					el.sw = im.width * el.baseScale; el.sh = im.height * el.baseScale; el.img = im; add(im);
 				} else if (type.equals("text")) {
 					List<String> bt = MakerTitleModel.bindText(e.getString("text", ""), infoValues(), e.getString("fallback", ""));
 					el.text = bt.get(0);
-					RenderedTextBlock t = PixelScene.renderTextBlock(el.text.replace("\\n", "\n"), Math.max(5, e.getInt("size", 8)));
-					int mw = (int) e.getFloat("w", 0);
+					RenderedTextBlock t = PixelScene.renderTextBlock(el.text.replace("\\n", "\n"), Math.max(5, gi(e, "size", 8)));
+					int mw = (int) gf(e, "w", 0);
 					if (mw > 0) t.maxWidth(mw);
 					String al = e.getString("align", "center");
 					t.align(al.equals("left") ? RenderedTextBlock.LEFT_ALIGN : al.equals("right") ? RenderedTextBlock.RIGHT_ALIGN : RenderedTextBlock.CENTER_ALIGN);
@@ -364,7 +366,7 @@ public class MakerTitle {
 					vals.add(MakerTitleModel.fxValue(el.fx[i], el.tau[i]));
 				}
 				double[] v = MakerTitleModel.fxCombine(vals);
-				float a = (float) Math.max(0, Math.min(1, el.v.getFloat("alpha", 1f))) * (float) v[3] * (1 - hideK);
+				float a = (float) Math.max(0, Math.min(1, gf(el.v, "alpha", 1f))) * (float) v[3] * (1 - hideK);
 				if (el.txt != null) { el.txt.setPos((float) (r[4] + v[0]), (float) (r[1] + v[1])); PixelScene.align(el.txt); el.txt.alpha(a); }
 				if (el.img != null) {
 					float s = el.baseScale * (float) v[2];
@@ -663,7 +665,7 @@ public class MakerTitle {
 		scene.add(w);
 	}
 	static NinePatch windowPatch(JsonValue v) {
-		NinePatch np = MakerDialogue.imagePatch(v.getString("image", ""), v.getFloat("slice", 6));
+		NinePatch np = MakerDialogue.imagePatch(v.getString("image", ""), gf(v, "slice", 6));
 		if (np != null) return np;
 		try { return Chrome.get(Chrome.Type.valueOf(v.getString("skin", "WINDOW"))); } catch (Exception e) { return Chrome.get(Chrome.Type.WINDOW); }
 	}
@@ -684,7 +686,7 @@ public class MakerTitle {
 			this.v = v; this.jv = new JV(v); this.id = v.getString("id", "");
 			JsonValue an = v.get("anim");
 			anim = an == null ? "fade" : an.getString("type", "fade");
-			dur = an == null ? 0.2f : Math.max(0.01f, an.getFloat("duration", 0.2f));
+			dur = an == null ? 0.2f : Math.max(0.01f, gf(an, "duration", 0.2f));
 			// 바깥 누르기: 원작은 늘 닫음 → 설정대로 (입력은 늘 막음 — 뒤 타이틀 버튼이 눌리지 않음)
 			remove(blocker); blocker.destroy();
 			final boolean outside = v.getBoolean("closeOutside", true);
@@ -720,7 +722,7 @@ public class MakerTitle {
 				JsonValue c = content.get(i); String type = c.getString("type", "");
 				sizes[i] = new double[]{ 0, 0 };
 				if (type.equals("text")) {
-					RenderedTextBlock t = PixelScene.renderTextBlock(MakerTitleModel.bindText(c.getString("text", ""), infoValues(), c.getString("fallback", "")).get(0).replace("\\n", "\n"), Math.max(5, c.getInt("size", 7)));
+					RenderedTextBlock t = PixelScene.renderTextBlock(MakerTitleModel.bindText(c.getString("text", ""), infoValues(), c.getString("fallback", "")).get(0).replace("\\n", "\n"), Math.max(5, gi(c, "size", 7)));
 					t.maxWidth(cw);
 					String al = c.getString("align", "left");
 					t.align(al.equals("center") ? RenderedTextBlock.CENTER_ALIGN : al.equals("right") ? RenderedTextBlock.RIGHT_ALIGN : RenderedTextBlock.LEFT_ALIGN);
@@ -728,7 +730,7 @@ public class MakerTitle {
 					sizes[i] = new double[]{ t.height(), t.width() }; made[i] = t;
 				} else if (type.equals("image")) {
 					Object tx = MakerRuntime.texture(c.getString("image", ""));
-					if (tx != null) { Image im = new Image(tx); float sc = Math.max(0.01f, c.getFloat("scale", 1f)); im.scale.set(sc); sizes[i] = new double[]{ im.height * sc, im.width * sc }; made[i] = im; }
+					if (tx != null) { Image im = new Image(tx); float sc = Math.max(0.01f, gf(c, "scale", 1f)); im.scale.set(sc); sizes[i] = new double[]{ im.height * sc, im.width * sc }; made[i] = im; }
 				}
 			}
 			this.sizes = sizes; this.titleH = title == null ? 0 : title.height();
@@ -748,9 +750,9 @@ public class MakerTitle {
 					case "text": { RenderedTextBlock t = (RenderedTextBlock) made[i]; String al = c.getString("align", "left");
 						t.setPos(al.equals("center") ? x + (w - t.width()) / 2f : al.equals("right") ? x + w - t.width() : x, y); PixelScene.align(t); add(t); texts.add(t); textAlpha.add(1f); break; }
 					case "image": if (made[i] != null) { Image im = (Image) made[i]; im.x = x; im.y = y; add(im); statics.add(im); staticAlpha.add(1f); } break;
-					case "divider": { ColorBlock cb = new ColorBlock(w, Math.max(1, c.getInt("thickness", 1)), 0xFF000000 | color(c.getString("color", "#888888"), 0x888888)); cb.x = x; cb.y = y; add(cb); statics.add(cb); staticAlpha.add(1f); break; }
+					case "divider": { ColorBlock cb = new ColorBlock(w, Math.max(1, gi(c, "thickness", 1)), 0xFF000000 | color(c.getString("color", "#888888"), 0x888888)); cb.x = x; cb.y = y; add(cb); statics.add(cb); staticAlpha.add(1f); break; }
 					case "scroll": {
-						RenderedTextBlock t = PixelScene.renderTextBlock(MakerTitleModel.bindText(c.getString("text", ""), infoValues(), "").get(0).replace("\\n", "\n"), Math.max(5, c.getInt("size", 6)));
+						RenderedTextBlock t = PixelScene.renderTextBlock(MakerTitleModel.bindText(c.getString("text", ""), infoValues(), "").get(0).replace("\\n", "\n"), Math.max(5, gi(c, "size", 6)));
 						t.maxWidth((int) w - 2); t.hardlight(color(c.getString("color", "#dddddd"), 0xDDDDDD));
 						com.watabou.noosa.ui.Component box = new com.watabou.noosa.ui.Component();
 						com.shatteredpixel.shatteredpixeldungeon.ui.ScrollPane sp = new com.shatteredpixel.shatteredpixeldungeon.ui.ScrollPane(box);
@@ -767,7 +769,7 @@ public class MakerTitle {
 						if (action.equals("continue") && !hasSaves()) { String ns = c.getString("noSave", "disable"); if (ns.equals("hide")) break; if (ns.equals("newgame")) action = "newgame"; else dis = true; }
 						if (action.equals("quit") && !canQuit()) break;
 						final String act = action;
-						TitleBtn b = new TitleBtn(root.bsv, new JV(c), null, c.getString("label", ""), Math.max(5, c.getInt("size", 9)), dis);
+						TitleBtn b = new TitleBtn(root.bsv, new JV(c), null, c.getString("label", ""), Math.max(5, gi(c, "size", 9)), dis);
 						String icon = c.getString("icon", "");
 						if (!icon.isEmpty() && !icon.equals("NONE")) { try { b.icon(Icons.get(Icons.valueOf(icon))); } catch (Exception ignored) { } }
 						b.click = () -> act(act, c, null, TitleWnd.this);
@@ -864,6 +866,9 @@ public class MakerTitle {
 			return true;
 		}
 	}
+	/** 안전한 숫자 읽기 (7차 — 손으로 고친 파일의 "big" 같은 값이 있어도 멈추지 않고 기본값) */
+	static int gi(JsonValue v, String k, int d) { try { JsonValue c = v == null ? null : v.get(k); return c == null || !c.isNumber() ? (c != null && c.isString() ? (int) Double.parseDouble(c.asString().trim()) : d) : c.asInt(); } catch (Exception e) { return d; } }
+	static float gf(JsonValue v, String k, float d) { try { JsonValue c = v == null ? null : v.get(k); return c == null || !c.isNumber() ? (c != null && c.isString() ? Float.parseFloat(c.asString().trim()) : d) : c.asFloat(); } catch (Exception e) { return d; } }
 	static double[] toD(float[] a) { double[] o = new double[a.length]; for (int i = 0; i < a.length; i++) o[i] = a[i]; return o; }
 
 	// ------------------------------------------------------------ 배경 (타이틀·메뉴 화면 공용)

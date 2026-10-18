@@ -164,6 +164,22 @@ async function makeProject(dir) {
       assert.ok(r0 <= 3, `닫은 뒤 초당 프레임 ${r0}`);
       return `열림 ${r1}/초 · 5번 다시 연 뒤 ${r5}/초 · 닫음 ${r0}/초`;
     });
+    await step('손상된 값: 편집기가 멈추지 않음 · 검사가 오류로 알림 · 미리보기는 쓸 수 있는 것만', async () => {
+      await titleTab();
+      await page.evaluate(() => PDM.store.edit('title', '손상', t => {
+        t.elements = [null, 5, { id: 'e1', type: 'text', text: { a: 1 }, size: 'big', x: 'a', effects: 'x' }, { id: 'e2', type: 'image', image: 'assets/없는그림.png' }, { id: 'e3', type: 'video' }];
+        t.windows = [{ id: 'w', w: 'wide', content: [null, { type: 'button', action: 'window', window: 'missing' }, { type: 'setting', key: 'nope' }, { type: 'zzz' }], anim: 5 }, 'x'];
+        t.buttons.states = { hover: 'x', focus: { skin: 'NOPE', textColor: 'red', alpha: '9' }, weird: {} };
+        t.buttons.items = [{ id: 'play', effects: [{ type: 'bogus', duration: -1, repeat: 'x' }, null], place: 'x' }, { id: 5 }, null, { id: 'c', custom: true, action: 'window', window: 'missing' }];
+      }));
+      await page.waitForTimeout(800);
+      for (const s of ['element:e1', 'window:w', 'content:w:1', 'button:play', 'buttons']) { await page.evaluate(x => PDM.titleEditor.select(x), s); await page.waitForTimeout(250); }
+      const g = await geo(), errs = await page.evaluate(() => PDM.validate().filter(r => r.open === 'title' && r.level === 'error').map(r => r.msg));
+      assert.deepStrictEqual(g.buttons.map(b => b.id), ['play', 'c', 'support', 'rankings', 'journal', 'news', 'changes', 'settings', 'about']);   // 목록에 없는 게임 버튼은 뒤에 (게임과 같은 규칙)
+      ['없는 창 "missing"', '모르는 요소 종류 "video"', '모르는 게임 설정 "nope"', '모르는 내용 종류 "zzz"', '"NOPE"', '"red"'].forEach(m => assert.ok(errs.some(e => e.includes(m)), m + ' — ' + errs.join(' | ')));
+      await page.keyboard.press('Control+z'); await page.waitForTimeout(300);
+      return `검사 오류 ${errs.length}개`;
+    });
     await step('페이지 오류 없음', async () => { assert.deepStrictEqual(errors, []); });
   } finally { await browser.close(); srv.kill(); fs.rmSync(tmp, { recursive: true, force: true }); }
   console.log(results.join('\n'));

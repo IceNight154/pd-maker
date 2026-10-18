@@ -908,6 +908,27 @@ test('타이틀 규칙 (편집기): 상태 우선순위 · 효과 끝 값 · 빠
   return `검사 오류 ${errs.length}개 확인`;
 });
 
+test('타이틀 데이터 호환: 예전 title.json 은 그대로 · 모르는 칸 유지 · 손상된 값에도 규칙 · 검사가 멈추지 않음', async () => {
+  const { ctx, dir } = await newProject(), S = ctx.PDM.store, M = ctx.PDM.titleModel;
+  // 6차까지의 title.json (새 칸 없음) + 모르는 칸 → 열고 저장해도 그대로 (title 을 고치지 않으면 파일을 쓰지 않음)
+  S.edit('title', '예전', t => { t.enabled = true; t.customX = { keep: [1, 2] }; }); await S.save();
+  const file = path.join(dir, 'title.json'), before = read(file);
+  const again = env.load(); await again.PDM.store.load(dir); again.PDM.store.edit('project', 'x', p => { p.author = 'a'; }); await again.PDM.store.save();
+  eq(read(file), before);
+  // 고쳐도 모르는 칸은 남음
+  again.PDM.store.edit('title', '고침', t => { t.buttons.items[0].label = '시작'; t.elements = [M.newElement('text', [])]; }); await again.PDM.store.save();
+  const j = json(file); eq([j.customX, j.buttons.items[0].label, j.elements.length], [{ keep: [1, 2] }, '시작', 1]);
+  // 예전 데이터 = 6차와 같은 버튼 목록 · 배치 (새 칸이 없으면 예전 모습)
+  const old = JSON.parse(before), list = M.buttonList(old.buttons, { hasSaves: false, canQuit: true });
+  eq(list.map(e => e.id), old.buttons.items.map(x => x.id)); eq(list.every(e => !e.disabled && e.action === ''), true);
+  const r = M.buttonRects(old.buttons, list.length, 427, 267, true, { y: 33.575, h: 57 }, old.gate, null);
+  eq(r.slice(0, 3).map(x => x.map(v => Math.round(v))), [[97, 129, 116, 20], [215, 129, 116, 20], [97, 158, 77, 20]]);   // 게임(6차) 96.5,129 · 214.5,129 · 96.5,158 (반올림)
+  // 손상된 값
+  const bad = { elements: 'x', windows: [null, 5, { content: 'x' }, { id: 'w', content: [null, 5, { type: 'button', action: 7 }] }], buttons: { items: [null, 5, { id: 3 }, { id: 'a', states: 'x', effects: [null, 'x', { type: 9 }] }], states: [1, 2], layout: 9 } };
+  assert.doesNotThrow(() => { M.check(bad); M.buttonList(bad.buttons, {}); M.buttonRects(bad.buttons, 3, 427, 267, true, { y: 0, h: 0 }, null, [null, 'x', 5]); M.resolveStyle(bad.buttons, bad.buttons.items[3], { hover: true }); M.fxValue(null, 1); M.fxValue('x', 1); M.windowLayout(bad.windows[2], 427, 267, { x: 0, y: 0, w: 427, h: 267 }, [6, 6, 6, 6], [], 0); });
+  assert.ok(M.check(bad).some(x => x.level === 'error'));
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];

@@ -33,5 +33,10 @@ done
 bash "$HERE/build.sh" "$REPO" "$WORK" "$BASE" 2>&1 | grep -q BUILD_DONE || { echo "빌드 실패 (base)"; exit 2; }
 TESTENV="$(node "$HERE/testenv.js" pc)" bash "$HERE/run.sh" "$WORK" "$BASE" titlescene wait:3 eval:titlehover,-50,-50 wait:0.3 eval:mark,menu eval:titlegeo eval:title eval:wshot,base-pc eval:mark,end > "$OUT/base-pc.log" 2>&1
 for f in "$WORK"/shots/*.png; do [ -e "$f" ] && cp "$f" "$OUT/"; done
+# 손상된 값 (broken) — PC 만: 게임이 멈추지 않고 쓸 수 있는 것만 써서 타이틀을 만드는지
+BROKEN="$WORK/title-proj-broken"; node "$HERE/title-project.js" "$BROKEN" broken >/dev/null || exit 2
+bash "$HERE/build.sh" "$REPO" "$WORK" "$BROKEN" 2>&1 | grep -q BUILD_DONE || { echo "빌드 실패 (broken)"; exit 2; }
+TESTENV="$(node "$HERE/testenv.js" pc)" bash "$HERE/run.sh" "$WORK" "$BROKEN" titlescene wait:3 eval:mark,menu eval:titlegeo eval:titleclick,c wait:0.5 eval:titlegeo eval:wshot,broken-pc eval:mark,end > "$OUT/broken-pc.log" 2>&1
+for f in "$WORK"/shots/*.png; do [ -e "$f" ] && cp "$f" "$OUT/"; done
 NODE_PATH="${NODE_PATH:-$(npm root -g)}" node "$HERE/title-compare.js" "$OUT" "$PROJ" "$BASE" "${ENVS[@]}" | tee "$OUT/compare.txt"
 exit ${PIPESTATUS[0]}

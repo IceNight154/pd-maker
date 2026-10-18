@@ -280,12 +280,12 @@ PDM.validate = function () {
   // 타이틀 화면
   const tt = s.get('title');
   if (tt && tt.enabled !== false) {
-    ((tt.music || {}).tracks || []).forEach(r => { if (r && r !== 'none' && !has('sound', r)) add('error', '타이틀 화면', `음악 "${r}" 이(가) 사운드 목록에 없습니다`, 'title'); });
-    (tt.layers || []).forEach((l, i) => { if (!l.image) add('warn', `타이틀 화면 › 레이어 ${l.name || i + 1}`, '그림이 비어 있습니다', 'title'); });
+    const arr = v => (Array.isArray(v) ? v : []), objs = v => arr(v).filter(x => x && typeof x === 'object');   // 손으로 고친 파일의 null · 숫자 칸은 건너뜀 (7차 — 예전엔 검사가 멈췄음)
+    arr((tt.music || {}).tracks).forEach(r => { if (typeof r === 'string' && r && r !== 'none' && !has('sound', r)) add('error', '타이틀 화면', `음악 "${r}" 이(가) 사운드 목록에 없습니다`, 'title'); });
+    objs(tt.layers).forEach((l, i) => { if (!l.image) add('warn', `타이틀 화면 › 레이어 ${l.name || i + 1}`, '그림이 비어 있습니다', 'title'); });
     if ((tt.logo || {}).mode === 'image' && !tt.logo.image) add('warn', '타이틀 화면 › 로고', '로고 그림이 비어 있습니다', 'title');
     if ((tt.menus || {}).effect && ((tt.background || {}).effect || 'none') === 'none') add('warn', '타이틀 화면 › 메뉴 화면', '"입자 효과도"를 켰지만 배경의 날씨·입자 효과가 없습니다', 'title');
-    ((tt.buttons || {}).items || []).forEach(b => { if (b.action === 'url' && !b.url) add('warn', `타이틀 화면 › 버튼 ${b.label || b.id}`, '주소가 비어 있습니다', 'title'); });
-    if (!((tt.buttons || {}).items || []).some(b => (b.id === 'play' && b.visible !== false) || b.action === 'newgame' || b.action === 'continue')) add('error', '타이틀 화면', '게임을 시작할 버튼이 없습니다 ("던전으로 들어가기"를 숨겼다면 새 게임 동작 버튼을 넣으세요)', 'title');
+    if (!objs((tt.buttons || {}).items).some(b => (b.id === 'play' && b.visible !== false) || b.action === 'newgame' || b.action === 'continue')) add('error', '타이틀 화면', '게임을 시작할 버튼이 없습니다 ("던전으로 들어가기"를 숨겼다면 새 게임 동작 버튼을 넣으세요)', 'title');
     // 7차: 요소 · 버튼 상태 · 효과 · 창 · 정보 칸 · 동작 (PDM.titleModel.check — 결과를 누르면 그 대상을 고름)
     if (PDM.titleModel) PDM.titleModel.check(tt).forEach(x => add(x.level, x.where, x.msg, 'title', { focus: x.sel, kind: '타이틀' }));
   }

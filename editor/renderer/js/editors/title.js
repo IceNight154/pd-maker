@@ -246,7 +246,8 @@
     const presets = Object.entries(M.FX_PRESETS).filter(([, [, f]]) => triggers.includes(f.trigger));
     const add = h('select', { onchange: e => { const k = e.target.value; e.target.value = ''; if (!k) return; store.edit(K, '효과 추가: ' + M.FX_PRESETS[k][0], o => { const a = PDM.deepGet(o, path) || []; a.push(PDM.clone(M.FX_PRESETS[k][1])); PDM.deepSet(o, path, a); }); } },
       h('option', { value: '' }, '+ 효과 넣기 (쉬움)…'), presets.map(([k, [n]]) => h('option', { value: k }, n)));
-    return h('div', { class: 'tp-fx' }, ...(list || []).map((f, i) => {
+    return h('div', { class: 'tp-fx' }, ...(Array.isArray(list) ? list : []).map((f, i) => {
+      if (!f || typeof f !== 'object') return h('div', { class: 'c-warn' }, `효과 ${i + 1}: 올바르지 않은 값 (지우고 다시 넣으세요)`, h('button', { class: 'ib danger', onclick: e => { e.preventDefault(); store.edit(K, '효과 삭제', o => { PDM.deepGet(o, path).splice(i, 1); }); } }, '✕'));
       const P = k => [...path, i, k], n = M.fxNorm(f);
       return h('div', { class: 'li' }, h('div', { class: 'li-body' },
         row(F.select(K, P('trigger'), Object.fromEntries(Object.entries(M.TRIGGERS).filter(([k]) => triggers.includes(k))), { label: '언제', rerender: true }),
@@ -338,7 +339,9 @@
           F.select(K, [...p, 'align'], M.ALIGNS, { label: '정렬', rerender: true }), F.num(K, [...p, 'w'], { label: '줄바꿈 폭 (px, 0 = 한 줄)', min: 0, int: true, def: 0, rerender: true })))
         : row(F.image(K, [...p, 'image'], { label: '그림', sub: 'title', rerender: true }), F.num(K, [...p, 'scale'], { label: '배율', min: 0.05, step: 0.05, def: 1, rerender: true }),
           F.num(K, [...p, 'angle'], { label: '기울기 (도)', step: 5, def: 0, rerender: true })),
-      h('div', { class: 'fl mt-4' }, '위치 (캔버스에서 끌기 · 화살표 키 1px · Shift+화살표 10px)'),
+      h('div', { class: 'fl mt-4 hstack' }, '위치 (캔버스에서 끌기 · 화살표 키 1px · Shift+화살표 10px)',
+        ...[['가로 가운데', { x: 0.5, anchorX: 0.5, offsetX: 0 }], ['세로 가운데', { y: 0.5, anchorY: 0.5, offsetY: 0 }], ['왼쪽 끝', { x: 0, anchorX: 0, offsetX: 0 }], ['오른쪽 끝', { x: 1, anchorX: 1, offsetX: 0 }], ['위 끝', { y: 0, anchorY: 0, offsetY: 0 }], ['아래 끝', { y: 1, anchorY: 1, offsetY: 0 }]]
+          .map(([n, v]) => h('button', { class: 'btn xs', title: '안전 영역 기준', onclick: e => { e.preventDefault(); store.edit(K, '정렬: ' + n, o => { Object.assign(PDM.deepGet(o, p), v); }); } }, n))),
       row(F.num(K, [...p, 'x'], { label: '가로 위치 (0~1)', step: 0.01, def: 0.5, rerender: true }), F.num(K, [...p, 'y'], { label: '세로 위치 (0~1)', step: 0.01, def: 0.5, rerender: true }),
         F.num(K, [...p, 'anchorX'], { label: '기준점 X (0 왼 · 0.5 · 1 오른)', step: 0.5, min: 0, max: 1, def: 0.5, rerender: true }), F.num(K, [...p, 'anchorY'], { label: '기준점 Y', step: 0.5, min: 0, max: 1, def: 0.5, rerender: true })),
       row(F.num(K, [...p, 'offsetX'], { label: '좌우 이동 (px)', step: 1, def: 0, rerender: true }), F.num(K, [...p, 'offsetY'], { label: '위아래 이동 (px)', step: 1, def: 0, rerender: true }),
@@ -347,7 +350,7 @@
   }
   function windowProps(t, S) {
     const { F, row } = PDM.ui; const p = S.path, w = S.item;
-    const content = w.content || [];
+    const content = (Array.isArray(w.content) ? w.content : []).map(c => c && typeof c === 'object' ? c : { type: '?' });
     const addC = h('select', { onchange: e => { const k = e.target.value; e.target.value = ''; if (k) store.edit(K, '창 내용 추가', o => { const x = PDM.deepGet(o, p); x.content = x.content || []; x.content.push(M.newContent(k)); }); } },
       h('option', { value: '' }, '+ 내용 넣기…'), Object.entries(M.CONTENT_TYPES).map(([k, v]) => h('option', { value: k }, v)));
     return h('div', {},
@@ -404,9 +407,9 @@
   }
   function tree(t, issues) {
     const bs = t.buttons || {}, items = Array.isArray(bs.items) ? bs.items : [];
-    const order = items.map(x => x && x.id).filter(Boolean); M.GAME_IDS.forEach(id => { if (!order.includes(id)) order.push(id); });
+    const order = items.map(x => x && typeof x.id === 'string' ? x.id : null).filter(Boolean); M.GAME_IDS.forEach(id => { if (!order.includes(id)) order.push(id); });
     const mark = sel => { const n = issues.filter(x => x.sel === sel && x.level === 'error').length, w = issues.filter(x => x.sel === sel && x.level === 'warn').length; return n ? ` ✕${n}` : w ? ` !${w}` : ''; };
-    const els = Array.isArray(t.elements) ? t.elements : [], wins = Array.isArray(t.windows) ? t.windows : [];
+    const els = (Array.isArray(t.elements) ? t.elements : []).filter(e => e && typeof e === 'object'), wins = (Array.isArray(t.windows) ? t.windows : []).filter(w => w && typeof w === 'object');   // 손상된 칸은 목록에 안 나옴 (검사가 알림)
     const group = (title, ...kids) => h('div', { class: 'tp-group' }, h('div', { class: 'tp-gtitle' }, title), ...kids);
     return h('div', { class: 'tp-tree' },
       group('화면', treeRow('background', '🖼 배경 · 그림 레이어'), treeRow('music', '♪ 음악'), treeRow('logo', '🏷 로고'), treeRow('gate', '👆 "화면을 누르세요"'), treeRow('misc', '⚙ 버전 · 종료 · 감추기')),
@@ -498,9 +501,12 @@
         isBtn ? PDM.ui.field('이 버튼 상태', h('select', { onchange: e => { st.force = e.target.value; ctx.refresh(); } }, [['', '실제 (마우스를 올려 보세요)'], ['normal', '기본'], ['hover', '포인터 오버'], ['focus', '키보드 포커스'], ['pressed', '눌림'], ['disabled', '비활성']].map(([k, v]) => h('option', { value: k, selected: st.force === k }, v)))) : null,
         PDM.ui.field('창 미리보기', h('select', { onchange: e => { st.winShown = e.target.value || null; st.winAt = pv.time; ctx.refresh(); } }, h('option', { value: '' }, '(없음)'), (t.windows || []).map(w => h('option', { value: w.id, selected: st.winShown === w.id }, w.title || w.id)))),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!st.hasSaves, onchange: e => { st.hasSaves = e.target.checked; ctx.refresh(); } }), h('span', {}, '저장된 게임 있음 (예시 값)')),
-        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!st.outlines, onchange: e => { st.outlines = e.target.checked; pv.redraw(); } }), h('span', {}, '편집 윤곽')));
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!st.outlines, onchange: e => { st.outlines = e.target.checked; pv.redraw(); } }), h('span', {}, '편집 윤곽')),
+        PDM.ui.field('보기', h('select', { onchange: e => { st.view = e.target.value; ctx.refresh(); } }, [['fit', '칸에 맞춤'], ['1', '1× (게임 1점 = 1px)'], ['2', '2×'], ['3', '3×'], ['4', '4×']].map(([k, v]) => h('option', { value: k, selected: (st.view || 'fit') === k }, v)))));
       const scr = pv.screen;
-      const center = h('div', { class: 'tp-center' }, tb, pv.el,
+      pv.el.style.width = st.view && st.view !== 'fit' && scr ? (scr.W * +st.view) + 'px' : '';
+      pv.el.style.maxWidth = st.view && st.view !== 'fit' ? 'none' : '';
+      const center = h('div', { class: 'tp-center' }, tb, h('div', { class: 'tp-scroll' }, pv.el),
         h('div', { class: 'hint' }, `${scr ? scr.name : ''} · 실제 게임과 같은 데이터 · 배치 식 · 그림 · 글꼴로 그립니다 (배경 폐허 · 입자는 무작위라 순간 모양은 다름). 편집 윤곽은 게임에 나오지 않습니다.`));
       // 오른쪽 속성
       const selIssues = issues.filter(x => x.sel === sel || (S.kind === 'window' && String(x.sel).startsWith('content:' + S.id + ':')));

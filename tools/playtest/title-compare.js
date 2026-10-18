@@ -58,6 +58,14 @@ const dmax = (a, b) => a && b ? Math.max(...a.map((v, i) => Math.abs(v - b[i])))
     ok(rp && rp.leaving === true && (acts.rapid || []).length === 1, `[${E}] 빠른 연속 클릭 (들어가기 ×2 + 만든 사람) → 동작 1번만: ${(acts.rapid || []).join(', ')}`);
     ok(!errs.length, `[${E}] 게임 오류 없음${errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''}`);
   }
+  // 손상된 값 (broken)
+  { const { seg, acts, errs } = parse(path.join(dir, 'broken-pc.log')); const [m0, m1] = seg.menu || [];
+    if (m0) {
+      ok((m0.buttons || []).map(b => b.id).join(',') === 'play,c,support,rankings,journal,news,changes,settings,about' && (m0.elements || []).length === 1, `[broken · pc] 손상된 값: 쓸 수 있는 버튼(play · c + 목록에 없는 게임 버튼) · 글 요소 1개로 타이틀을 만듦 (없는 그림 · 모르는 종류는 건너뜀)`);
+      ok(m1 && m1.windows.length === 0 && (acts.menu || []).some(a => a === 'window'), '[broken · pc] 없는 창을 여는 버튼 → 아무 창도 안 뜨고 멈추지 않음 (기록에 이유)');
+      ok(!errs.length, '[broken · pc] 게임 오류 없음' + (errs.length ? ': ' + errs.slice(0, 2).join(' | ') : ''));
+    } else ok(false, '[broken · pc] 기록 없음');
+  }
   // ② 편집기 미리보기와 비교
   let chromium; try { ({ chromium } = require('playwright')); } catch (_) { lines.push('(playwright 가 없어 편집기 비교는 건너뜀 — NODE_PATH=$(npm root -g))'); }
   if (chromium) {

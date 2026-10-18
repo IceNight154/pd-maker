@@ -813,6 +813,7 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .tp-tools { display: flex; gap: 1px; flex: none; } .tp-tools .ib { min-width: 20px; height: 20px; padding: 0 3px; font-size: 11px; }
 .tp-tree .btn.add { margin: 2px 6px 4px; }
 .tp-center { min-width: 0; }
+.tp-scroll { overflow: auto; max-height: 80vh; }
 .tp-toolbar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; margin-bottom: 6px; }
 .tp-toolbar .field { margin: 0; }
 .tp-stage { position: relative; width: 100%; max-width: 100%; background: #000; border: 1px solid var(--line); border-radius: var(--r-sm); line-height: 0; }

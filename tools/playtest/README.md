@@ -47,7 +47,7 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
   - `layercells`: 레이어별 칸 → 사용자 타일 id · 칸 지형 (게임이 만든 타일맵 기준 — `compare-layers.js` 로 편집기 저장 배열과 비교)
   - `interact,<캐릭터id>[,menu]`: 다른 스레드에서 말 걸기 · `leavetalk`: 층을 떠나는 순간 대사
   - `tap`: 타이틀 "화면을 누르세요"
-  - `title`: 타이틀 구성 출력
+  - `title`: 타이틀 구성 출력 · `titlegeo`: 타이틀 배치 · 상태 JSON (7차) · `titlewin,<창 id>` · `titlehover,@<버튼 id>` 또는 `titlehover,x,y` · `titleclick,<버튼 id>` · `key,<키 이름 ENTER · ESCAPE · DOWN · TAB …>`
   - `music`: 지금 음악 출력
   - `herowin`: 영웅 창
   - `spells`: 주문 창 · `cast,<n>`: n번째 주문 (가까운 적에게)
@@ -66,6 +66,7 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
 ## 6차 — 연출 배속 · 카메라 연출 · 게임 UI 테마 검사
 
 - `tools/playtest/cutscene-check.sh <게임 저장소> <작업 폴더> [환경…]` — 환경마다(기본 pc · pc-small · phone-land · phone-port · 작은 맵 `small:pc`) 일반 플레이 1× · 카메라 이동/경계/멈춤(영웅이 움직여도) · 취소 · 쉐이크 두 번(오프셋 0 · 밀림 없음) · 1×/4× 이동 시간 · 16× 취소 · 중첩 이벤트 · 오류 명령 · 팔로우/없는 대상/리셋 · 대사 중 표시줄(안전 영역 · 대사창 위) · 화면 돌리기 · 저장 → 불러오기. 기록 `<작업 폴더>/cutscene-check/`.
+- `tools/playtest/title-check.sh <게임 저장소> <작업 폴더> [환경…]` (7차) — 타이틀 검사용 프로젝트(`title-project.js` full · base · broken)를 만들어 환경마다(기본 pc · phone-land · phone-port) 상태 모양 · 키보드 · 창 열기/닫기 · 바깥 누르기 · 연속 클릭 · 비활성 이어하기 · 화면 돌리기 · 손상된 값을 게임에서 확인하고, `title-compare.js` 가 같은 데이터 · 같은 화면 크기의 편집기 미리보기와 자리를 비교. 기록 · 캡처 `<작업 폴더>/title-check/` (`editor-*.png` = 편집기 캔버스)
 - 새 단계: `eval:cam` 카메라 상태 · `eval:cutscene` 연출 상태 · 배속 · 표시줄 · `eval:theme` 게임 UI 테마 · `eval:evcancel` 실행 중 이벤트 취소 · `eval:bartouch,<1x|2x|4x|16x|스킵>` 표시줄을 진짜 마우스로 · `eval:mark,<이름>` 기록 구간 · `eval:drag,…` 누른 채 끌기
 - `SYNC_RESIZE=1` (run.sh): 창 크기를 바꾸는 그 자리에서 resize → render (Windows LWJGL3 흉내) — cutscene-check · testenv-check 의 기본
 
