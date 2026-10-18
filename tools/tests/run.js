@@ -323,6 +323,37 @@ test('잘라내기: 복사본이 맞으면 비움 (지우개 "전부"와 같음)
   assert.throws(() => A.paste(d, { format: 'x' }, 0, 0, {}));
 });
 
+test('레이어 범위 (5차): 레이어만 복사 · 붙여넣기 · 지우기 — 다른 레이어 · 지형 · 오브젝트는 그대로, 빈 칸은 투명, 잠긴 레이어는 안 건드림', () => {
+  const { A } = areaEnv(), d = sampleMap(), before = JSON.parse(JSON.stringify(d));
+  const terrainOf = id => ({ ut_a: 1, ut_b: -1, ut_c: 4 })[id] ?? -1, order = ['base', 'walldeco'];
+  const c = A.copy(d, { x0: 1, y0: 1, x1: 3, y1: 1 }, 'node:m', { layer: 'walldeco' });
+  eq(c.layer, 'walldeco'); eq(c.tiles, { walldeco: ['ut_b', '', 'ut_c'] }); eq(c.objects, []);
+  eq(d, before);                                                       // 복사는 원본을 바꾸지 않음
+  // 같은 레이어에 붙여넣기 (0,3): 빈 칸('')은 투명 → base · 지형 · 오브젝트 그대로, 칠한 칸의 지형은 가장 위 레이어 타일의 지형(ut_c = 4)
+  const res = A.paste(d, c, 0, 3, { key: 'node:m', terrainOf, order });
+  eq(res.cells, 2); eq(d.layers.tiles.base, before.layers.tiles.base);
+  eq([d.layers.tiles.walldeco[15], d.layers.tiles.walldeco[16], d.layers.tiles.walldeco[17]], ['ut_b', '', 'ut_c']);
+  eq(d.layers.terrain[15], 1); eq(d.layers.terrain[17], 4); eq(d.objects, before.objects);
+  // 다른 레이어로 붙여넣기 (opts.layer) · 잠긴 레이어면 거부
+  const d2 = sampleMap(); A.paste(d2, c, 0, 0, { layer: 'base', terrainOf, order }); eq(d2.layers.tiles.base[0], 'ut_b'); eq(d2.layers.tiles.walldeco, sampleMap().layers.tiles.walldeco);
+  assert.throws(() => A.paste(sampleMap(), c, 0, 0, { layer: 'base', locked: new Set(['base']) }), /잠긴/);
+  // 레이어만 지우기: walldeco 만 비움 → (1,1) 의 지형은 남은 base 타일(ut_a = 1)로, (3,1) 은 지형을 가진 타일이 없어 그대로
+  const d3 = sampleMap(); d3.layers.terrain[6] = 4; A.clear(d3, { x0: 0, y0: 0, x1: 4, y1: 3 }, { layer: 'walldeco', terrainOf, order });
+  assert.strictEqual(d3.layers.tiles.walldeco, undefined); eq(d3.layers.tiles.base, sampleMap().layers.tiles.base); eq(d3.layers.terrain[6], 1); eq(d3.layers.terrain[8], 1); eq(d3.objects.length, 4);
+  // 전부 범위 지우기 · 붙여넣기에서도 잠긴 레이어는 그대로
+  const d4 = sampleMap(); A.clear(d4, { x0: 0, y0: 0, x1: 4, y1: 3 }, { locked: new Set(['base']) }); eq(d4.layers.tiles.base, sampleMap().layers.tiles.base); assert.strictEqual(d4.layers.tiles.walldeco, undefined);
+  const full = A.copy(sampleMap(), { x0: 0, y0: 0, x1: 4, y1: 3 }, 'node:m'), d5 = sampleMap(); d5.layers.tiles.base[6] = 'keep';
+  A.paste(d5, full, 0, 0, { key: 'node:m', locked: new Set(['base']) }); eq(d5.layers.tiles.base[6], 'keep');
+});
+
+test('레이어 지형 다시 정하기 (retopTerrain): 가장 위 레이어 중 지형을 가진 타일 — 위 타일을 지우면 아래 타일의 지형으로, 지형 없는 타일은 무시', () => {
+  const { A } = areaEnv(), terrainOf = id => ({ floor: 1, wall: 4, deco: -1 })[id] ?? -1, order = ['base', 'wall', 'front'];
+  const L = { terrain: [9], tiles: { base: ['floor'], wall: ['wall'], front: ['deco'] } };
+  A.retopTerrain(L, 0, { terrainOf, order }); eq(L.terrain[0], 4);          // 벽(위) > 바닥(아래), 장식은 지형 없음
+  L.tiles.wall[0] = ''; A.retopTerrain(L, 0, { terrainOf, order }); eq(L.terrain[0], 1);   // 위 벽을 지우면 아래 바닥의 지형
+  L.tiles.base[0] = ''; A.retopTerrain(L, 0, { terrainOf, order }); eq(L.terrain[0], 1);   // 지형을 가진 타일이 없으면 그대로
+});
+
 test('다중 오브젝트: 영역 안 오브젝트 고르기 · 함께 이동 · 맵 밖이면 아무것도 안 옮김', () => {
   const { A } = areaEnv(), d = sampleMap();
   eq(A.objectsIn(d, { x0: 0, y0: 0, x1: 3, y1: 1 }), ['o1', 'o2']);
@@ -569,6 +600,67 @@ test('색 체계: 편집기 코드가 쓰는 var(--토큰) 이 모두 정의돼 
   ['js/app.js', 'js/audio.js', 'js/commands.js', 'js/editors/map.js', 'js/editors/heart.js', 'js/editors/quests.js', 'js/editors/badges.js', 'js/editors/trailer.js', 'js/editors/combos.js', 'css/app.css']
     .forEach(f => { const t = fs.readFileSync(path.join(dir, f), 'utf8'); if (/#a58bff|#6a45d6|165,\s*139,\s*255/i.test(t.replace(/feeling:.*\n/, ''))) left.push(f); });
   eq(left, []);
+});
+
+// ------------------------------------------------------------ ⑩ 테스트 플레이 실행 환경 (5차 · PDM.testEnv ↔ 런타임 MakerTestEnv ↔ gradle init)
+
+test('실행 환경 설정: 없거나 틀린 값 → 안전한 기본값 (예전 프로젝트 = PC) · 고친 칸 알림', () => {
+  const { PDM } = env.load(), T = PDM.testEnv;
+  eq(T.normalize(undefined).cfg, T.DEFAULT); eq(T.normalize(undefined).fixes, []);
+  eq(T.normalize(null).cfg.env, 'pc'); eq(T.normalize('문자열').cfg.env, 'pc');
+  const r = T.normalize({ env: 'tablet?', uiScale: 99, speed: 3, safeArea: 'moon', custom: { w: 10, h: 'x', dpi: 5000 }, insets: { l: -5, t: 9999 } });
+  eq(r.cfg.env, 'pc'); eq(r.cfg.uiScale, 12); eq(r.cfg.speed, 1); eq(r.cfg.safeArea, 'none');
+  eq(r.cfg.custom, { w: 240, h: 2400, dpi: 800 }); eq(r.cfg.insets, { l: 0, t: 1000, r: 0, b: 0 });
+  eq(r.fixes.sort(), ['custom.dpi', 'custom.h', 'custom.w', 'env', 'safeArea', 'speed', 'uiScale']);
+  [1, 2, 4, 16].forEach(v => eq(T.normalize({ speed: v }).cfg.speed, v));
+  eq(T.normalize({ env: 'phone-port', rotate: false, touch: 1, debug: 0 }).cfg, Object.assign({}, T.DEFAULT, { env: 'phone-port', rotate: false, touch: true, debug: false }));
+});
+
+test('실행 환경 계산: 기기 픽셀 · 배율(게임 PixelScene 식) · 논리 화면 · PC 창 · 안전 영역을 따로 — 돌린 방향도', () => {
+  const { PDM } = env.load(), T = PDM.testEnv;
+  // 게임 PixelScene.create 의 배율 식이 그대로인지 (원작이 바뀌면 이 계산도 바꿔야 함)
+  const ps = read(path.join(GAME, 'scenes', 'PixelScene.java'));
+  ['MIN_WIDTH_L', 'scaleFactor = 2.5f', 'float w = Game.width - insets.left - insets.right', 'maxDefaultZoom = (int)Math.min(w/minWidth, h/minHeight)', 'maxDefaultZoom = Math.max(2, maxDefaultZoom)',
+    'if (defaultZoom < Math.ceil( Game.density * 2 ) || defaultZoom > maxDefaultZoom)', 'GameMath.gate(2, (int)Math.ceil( Game.density * scaleFactor ), maxDefaultZoom)'].forEach(t => assert.ok(ps.includes(t), '게임 배율 식이 바뀜: ' + t));
+  const consts = Object.fromEntries([...ps.matchAll(/static final float (MIN_\w+)\s*=\s*(\d+)/g)].map(m => [m[1], +m[2]]));
+  eq([consts.MIN_WIDTH_L, consts.MIN_HEIGHT_L, consts.MIN_WIDTH_P, consts.MIN_HEIGHT_P], [240, 160, 135, 225]);
+  // 안전 영역이 크면 최대 배율이 줄어듦 (게임과 같이 안전 영역을 뺀 크기로)
+  eq(T.gameZoom(1080, 2340, 420, 0, 0, { l: 0, t: 700, r: 0, b: 0 }), 7); eq(T.gameZoom(1080, 2340, 420, 0, 0, { l: 0, t: 1000, r: 0, b: 0 }), 5);
+  const port = T.resolve({ env: 'phone-port', safeArea: 'notch' });
+  eq([port.device, port.zoom, port.logical, port.window, port.winZoom, port.insets], [[1080, 2340], 7, [154, 334], [462, 1002], 3, [0, 42, 0, 21]]);
+  eq([port.rotated.device, port.rotated.zoom, port.rotated.logical, port.rotated.window], [[2340, 1080], 6, [390, 180], [1170, 540]]);
+  const land = T.resolve({ env: 'phone-land' });
+  eq([land.zoom, land.logical, land.window, land.insets], [6, [390, 180], [1170, 540], [0, 0, 0, 0]]);
+  eq(land.rotated.logical, port.logical);   // 가로를 돌리면 세로와 같은 논리 화면
+  // 직접 넣은 안전 영역: 기기 px → 창 px (창 배율 / 기기 배율), 돌리면 시계 반대로 (위 → 왼쪽)
+  const cu = T.resolve({ env: 'custom', custom: { w: 1080, h: 2400, dpi: 400 }, safeArea: 'custom', insets: { l: 0, t: 100, r: 0, b: 50 } });
+  eq([cu.zoom, cu.winZoom, cu.logical], [7, 3, [154, 342]]);
+  eq(cu.insets, [0, 43, 0, 21]); eq(cu.rotated.insets, [43, 0, 21, 0].map((v, i) => [Math.round(100 * 3 / 6), 0, Math.round(50 * 3 / 6), 0][i]));
+  // 사용자가 고른 UI 배율 — 게임 설정 "화면 배율"처럼 허용 범위 안에서만
+  eq(T.resolve({ env: 'phone-port', uiScale: 6 }).zoom, 6); eq(T.resolve({ env: 'phone-port', uiScale: 2 }).zoom, 7);
+  // PC: 창 = 기기 크기, 배율 자동(0)이면 논리 화면은 미리 세지 않음 · 돌리기 없음
+  const pc = T.resolve(undefined);
+  eq([pc.kind, pc.window, pc.zoom, pc.logical, pc.iface, pc.rotated], ['pc', [1280, 800], 0, null, 2, undefined]);
+  eq(T.resolve({ env: 'pc', uiScale: 2 }).logical, [640, 400]);
+  eq(T.resolve({ env: 'phone-port', rotate: false }).rotated, null);
+  assert.ok(T.describe(port).includes('154×334') && T.describe(pc).includes('자동'));
+});
+
+test('실행 환경 전달: gradle init 스크립트에 그대로(따옴표 · 역슬래시 이스케이프) · 런타임이 읽는 칸 · 배속 값이 같음', () => {
+  const { PDM } = env.load(), init = require(path.join(ROOT, 'editor', 'playtest-init.js'));
+  const r = PDM.testEnv.resolve({ env: 'custom', custom: { w: 1080, h: 2400, dpi: 400 } });
+  r.name = "사용자 '지정' \\ 테스트";   // 이름에 따옴표 · 역슬래시가 있어도
+  const s = init.build('C:\\게임\\내 프로젝트', r);
+  assert.ok(s.includes("systemProperty 'pdmaker.project', 'C:/게임/내 프로젝트'"));
+  const m = s.match(/dbg\.systemProperty 'pdmaker\.testenv', '((?:[^'\\]|\\.)*)'/);
+  assert.ok(m, 'desktop:debug 에도 실행 환경');
+  eq(JSON.parse(m[1].replace(/\\(.)/g, '$1')), J(r));   // groovy 작은따옴표 문자열을 풀면 원래 JSON
+  assert.ok(!init.build('/p', null).includes('pdmaker.testenv'), '실행 환경이 없으면 넘기지 않음 (런타임은 원래대로)');
+  const java = read(path.join(PDMK, 'MakerTestEnv.java'));
+  ['"insets"', '"speed"', '"window"', '"winZoom"', '"iface"', '"rotated"', '"rotate"', '"touch"', '"debug"', '"name"'].forEach(k => assert.ok(java.includes(k), '런타임이 읽지 않는 칸: ' + k));
+  eq(java.match(/SPEEDS = \{([^}]*)\}/)[1].split(',').map(Number), PDM.testEnv.SPEEDS);
+  const main = read(path.join(ROOT, 'editor', 'main.js'));
+  assert.ok(/require\('\.\/playtest-init(\.js)?'\)/.test(main), 'main.js 가 같은 모듈로 init 스크립트를 씀');
 });
 
 // ------------------------------------------------------------ 실행

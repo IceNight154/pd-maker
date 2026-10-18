@@ -134,6 +134,11 @@ PDM.validate = function () {
     if (f.mode === 'handmade') {
       const t = (f.layers || {}).terrain || [];
       if (t.length !== f.size.w * f.size.h) add('error', where, '타일 수가 크기와 맞지 않습니다', k);
+      else {   // 5차: 게임은 맵 가장자리 바깥이 벽이라고 보고 이웃 칸을 셈 — 가장자리가 지나갈 수 있는 칸이면 그 칸의 함정 · 문 등 지형이 바뀔 때 오류 (테스트 플레이에서 발견, 방 템플릿과 같은 검사)
+        const Wd = f.size.w, Hd = f.size.h; let edge = 0;
+        for (let y = 0; y < Hd; y++) for (let x = 0; x < Wd; x++) { if (x && y && x < Wd - 1 && y < Hd - 1) continue; if ((PDM.TERRAIN_BY_ID[t[y * Wd + x]] || {}).pass) edge++; }
+        if (edge) add('warn', where, `맵 가장자리에 지나갈 수 있는 칸이 ${edge}칸 있습니다. 가장자리는 벽 · 빈 칸으로 두세요 (게임이 가장자리 바깥을 벽으로 보고 계산해, 가장자리 칸의 함정 · 문이 바뀔 때 오류가 날 수 있음)`, k);
+      }
       const incoming = (wd.edges || []).some(e => e.to === n.id) || n.id === wd.start;
       if (incoming && !t.includes(7) && !t.includes(37) && !(f.objects || []).some(o => o.type === 'entrance')) add('error', where, '들어오는 연결이 있는데 입구 계단(<)이 없습니다', k);
       const exits = t.filter(v => v === 8 || v === 21 || v === 22).length + (f.objects || []).filter(o => o.type === 'exit').length;

@@ -191,8 +191,7 @@ input[type=color] { height: var(--ctl-h); padding: 1px 2px; border: 1px solid va
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .chip { display: inline-flex; align-items: center; gap: var(--sp-2); height: var(--ctl-h-sm); padding: 0 var(--sp-5); border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--bg3); cursor: pointer; font-size: var(--fs-sm); transition: background var(--dur-fast), border-color var(--dur-fast); }
 .chip:hover { border-color: var(--accent-line); }
-.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); font-weight: var(--fw-med); }
-.chip.on::before { content: '✓'; font-size: var(--fs-2xs); color: var(--accent); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }   /* 5차: ✓ 글자 · 굵기를 더하면 칩 폭이 바뀌어 옆 칩이 밀렸음 → 크기가 그대로인 줄로 표시 */
 
 /* 섹션 (접히는 상자) */
 .sec { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: var(--sp-6); }
@@ -297,6 +296,9 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .tb.stop:not(:disabled) { background: var(--stop-bg); border-color: var(--stop-line); }
 .tb.play:disabled, .tb.stop:disabled { background: transparent; border-color: transparent; }
 .tb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 var(--sp-2); }
+/* 실행 환경 버튼 (5차) — 환경 이름 길이가 달라도 폭이 같게 (옆 버튼이 밀리지 않게) */
+.tb.env-btn { min-width: 9.5em; justify-content: flex-start; } .tb.env-btn > span:not(.drop-caret) { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+.env-dlg { min-width: min(640px, 86vw); } .env-calc { white-space: pre-wrap; font-size: var(--fs-xs); background: var(--bg3); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4) var(--sp-5); margin: var(--sp-4) 0; line-height: 1.6; }
 .drop .drop-caret { font-size: 9px; opacity: .7; margin-left: var(--sp-1); }
 .export-kinds { display: flex; flex-direction: column; gap: var(--sp-3); }
 .export-kind { display: flex; gap: var(--sp-4); align-items: flex-start; padding: var(--sp-4) var(--sp-5); border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; }
@@ -317,7 +319,7 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 /* 리소스 목록 */
 #treeSearch { padding: var(--sp-3); border-bottom: 1px solid var(--line); }
 #treeSearch input[type=text], #treeSearch input[type=search] { height: var(--ctl-h-sm); }
-#treeBody { overflow: auto; flex: 1; padding: var(--sp-2) 0 var(--sp-8); }
+#treeBody { overflow: auto; flex: 1; padding: var(--sp-2) 0 var(--sp-8); scrollbar-gutter: stable; }
 .tn { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--row-h); padding: 0 var(--sp-4) 0 calc(var(--sp-3) + var(--d, 0) * 14px); cursor: pointer; white-space: nowrap; user-select: none; border-left: 2px solid transparent; }
 .tn:hover { background: var(--hover); } .tn.sel { background: var(--accent-soft); border-left-color: var(--accent); }
 .tn .tw { width: 12px; color: var(--dim); font-size: var(--fs-2xs); text-align: center; flex: none; }
@@ -353,7 +355,8 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .editor > h2:first-child + p.hint, .editor > h2:first-child + .hint { font-size: var(--fs-md); color: var(--mute); line-height: var(--lh-loose); margin: 0 0 var(--sp-6); }
 
 /* 인스펙터 · 출력 · 상태 줄 */
-#inspBody { overflow: auto; padding: var(--sp-5); flex: 1; }
+/* 스크롤 칸은 스크롤바 자리를 늘 남김 (5차: 내용 길이가 바뀌어 스크롤바가 생기고 없어질 때 안쪽 폭이 10px 바뀌어 칸 · 타일 격자가 흔들렸음) */
+#inspBody { overflow: auto; padding: var(--sp-5); flex: 1; scrollbar-gutter: stable; }
 #inspBody .empty { padding: var(--sp-5) 0; }
 #inspector .field { margin-bottom: var(--sp-3); }
 #inspector .row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
@@ -363,7 +366,9 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .log-l { white-space: pre-wrap; word-break: break-all; } .log-l.warn { color: var(--warn); } .log-l.err { color: var(--bad); } .log-l.ok { color: var(--good); } .log-l.dim { color: var(--dim); }
 .chk-l { cursor: pointer; padding: var(--sp-1) 0; } .chk-l:hover { color: var(--accent); }
 #status { display: flex; gap: var(--sp-7); align-items: center; padding: 0 var(--sp-5); font-size: var(--fs-xs); color: var(--mute); background: var(--bg2); border-top: 1px solid var(--line); }
-#stDirty.on { color: var(--gold); } #stDirty.saving { color: var(--info); } #stDirty.fail { color: var(--bad); font-weight: var(--fw-bold); cursor: pointer; }
+#stDirty.on { color: var(--gold); } #stDirty.saving { color: var(--info); } #stDirty.fail { color: var(--bad); cursor: pointer; text-decoration: underline; }
+/* 5차: 저장 상태 글(✓ 저장됨 ↔ ● 저장 안 됨 (n개))이 바뀔 때마다 옆 칸이 좌우로 밀렸음 → 칸 폭을 고정 (넘치면 …) · 굵기를 바꾸지 않음 */
+#stDirty, #stAssets { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } #stDirty { width: 15em; } #stAssets { max-width: 28em; }
 #stCtx { color: var(--fg); min-width: 0; font-variant-numeric: tabular-nums; }
 #stPanels { display: inline-flex; gap: var(--sp-1); }
 #stPanels button { height: 18px; padding: 0 var(--sp-3); font-size: var(--fs-2xs); border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--bg3); color: var(--mute); cursor: pointer; }
@@ -411,17 +416,44 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 /* ---------------- 7. 편집기별 ---------------- */
 /* ---- 맵 편집기 ---- */
 .map-wrap { display: grid; grid-template-columns: 180px 1fr; height: 100%; min-height: 0; }
-.palette { border-right: 1px solid var(--line); overflow: auto; padding: 8px; background: var(--bg2); }
+.palette { border-right: 1px solid var(--line); overflow: auto; padding: 8px; background: var(--bg2); scrollbar-gutter: stable; }
 .pal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
 .pal-t { aspect-ratio: 1; border: 2px solid transparent; border-radius: var(--r-xs); cursor: pointer; image-rendering: pixelated; width: 100%; background: #000; }
 .pal-t.on { border-color: var(--accent); } .pal-t:hover { border-color: var(--mute); }
 .map-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+/* 맵 왼쪽 패널 묶음 (5차) — 접는 머리 · 줄 높이가 상태와 상관없이 같음 (선택 표시는 바탕 + 왼쪽 줄 — 굵기 · 테두리 두께를 바꾸지 않음) */
+.pg { border-bottom: 1px solid var(--line); padding-bottom: var(--sp-4); margin-bottom: var(--sp-3); }
+.pg-head { display: flex; align-items: center; gap: var(--sp-3); width: 100%; height: var(--ctl-h-sm); padding: 0 var(--sp-1); border: 0; background: none; color: var(--fg); font-weight: var(--fw-bold); font-size: var(--fs-sm); cursor: pointer; text-align: left; border-radius: var(--r-sm); }
+.pg-head:hover { background: var(--hover); }
+.pg-head .caret { color: var(--dim); width: 12px; flex: none; transition: transform var(--dur) var(--ease); }
+.pg.closed .caret { transform: rotate(-90deg); } .pg.closed .pg-body { display: none; }
+.pg-t { flex: none; } .pg-sub { flex: 1; min-width: 0; color: var(--mute); font-weight: normal; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.pg-body { padding: var(--sp-2) 0 0; }
+.pg-body > .fl { display: block; margin: var(--sp-4) 0 var(--sp-2); }
+.pal-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.pal-row .btn { border-left-width: 3px; }
+.pal-search { height: var(--ctl-h-sm) !important; margin: var(--sp-2) 0; }
+.pal-target { font-size: var(--fs-xs); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: var(--bg3); color: var(--mute); border-left: 3px solid var(--line-strong); }
+.pal-target.layer { color: var(--fg); border-left-color: var(--accent); background: var(--accent-soft); }
+.pal-danger { margin-top: var(--sp-5); padding-top: var(--sp-4); border-top: 1px dashed var(--line); }
+.layer-list { display: grid; gap: 2px; }
+.lay-row { display: flex; align-items: center; gap: var(--sp-1); height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--r-sm); cursor: pointer; box-shadow: inset 2px 0 0 transparent; }
+.lay-row:hover { background: var(--hover); } .lay-row.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.lay-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.lay-row .ib { flex: none; } .lay-row .ib.lk { color: var(--warn); }
+.lay-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-sm); }
+.lay-n { flex: none; min-width: 2.5em; text-align: right; color: var(--dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+/* 도구 막대 묶음 · 숫자 칸 폭 고정 (확대 ×2 → ×1.5 처럼 글자 수가 바뀌어도 옆 버튼이 밀리지 않게) */
+.tool-grp { display: flex; gap: 4px; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--line); }
+.tool:disabled { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.tb-num { display: inline-block; min-width: 4.5em; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .map-tools { display: flex; gap: 4px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; background: var(--bg2); }
 .tool { padding: 4px 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--bg3); cursor: pointer; }
 .map-tools select { width: auto; }
 .map-scroll { flex: 1; overflow: auto; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; position: relative; min-height: 0; }
 .map-scroll canvas { image-rendering: pixelated; display: block; margin: 20px; cursor: crosshair; }
-.map-info { padding: 3px 10px; font-size: var(--fs-xs); color: var(--mute); border-top: 1px solid var(--line); background: var(--bg2); font-family: var(--mono); }
+/* 5차: 높이를 글 내용과 상관없이 고정 — 예전엔 빈 칸(공백만)일 때 7px, 마우스가 맵에 들어와 좌표가 쓰이면 23px(긴 글은 두 줄)이라 맵 화면이 위아래로 흔들렸음 */
+.map-info { flex: none; box-sizing: border-box; height: 24px; line-height: 17px; padding: 3px 10px; font-size: var(--fs-xs); color: var(--mute); border-top: 1px solid var(--line); background: var(--bg2); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chapter-grid { display: grid; gap: 10px; }
 .chap { background: var(--bg2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px; }
 .chap-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

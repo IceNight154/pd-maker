@@ -16,6 +16,10 @@
 //    · 무작위 칸(rand)은 같은 맵 안에서만 (번호가 그 맵의 randSets 를 가리키므로 — 다른 맵이면 빼고 알림)
 //    · 스폰 구역은 받는 맵에 스폰 레이어가 있을 때만(직접 그린 노드)
 //  잘라내기 = 복사에 성공한 뒤 clear (지우개 "전부"와 같은 규칙: 지형 빈 칸 · 모든 레이어 비움 · 스폰 · 무작위 칸 0 · 칸 안 오브젝트 삭제)
+//  레이어 범위 (5차): opts.layer = 레이어 id 면 그 레이어만 — copy 는 그 레이어의 칸만 담고(복사본 layer = id, 지형 · 오브젝트 · 스폰 없음),
+//    paste 는 받는 레이어(opts.layer, 없으면 복사본의 레이어) 칸만 고치고 빈 칸('')은 투명, clear 는 그 레이어만 비움.
+//    레이어 칸을 고치면 그 칸의 지형은 "가장 위 레이어 중 지형을 가진 사용자 타일"로 다시 정함(opts.terrainOf · opts.order — 없으면 지형 그대로)
+//  잠긴 레이어 (opts.locked = Set) 는 전부 범위의 paste · clear 에서도 건드리지 않음
 // ================================================================
 PDM.mapArea = (function () {
   const FORMAT = 'pdmaker-maparea';
@@ -31,13 +35,27 @@ PDM.mapArea = (function () {
   }
   const inRect = (r, x, y) => !!r && x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
 
-  /** 영역 복사 → 복사본 (영역이 맵 밖이면 null). key = 원본 리소스 키 (무작위 칸 번호를 같은 맵에서만 쓰려고) */
-  function copy(d, r, key) {
+  /** 칸 i 의 지형을 레이어로 다시 정함: 그리는 순서(order)의 가장 위 레이어부터 보며 지형을 가진 타일(terrainOf(id) ≥ 0)이 있으면 그 지형. 없으면 그대로 */
+  function retopTerrain(L, i, opts) {
+    if (!opts || !opts.terrainOf || !opts.order || !Array.isArray(L.terrain)) return;
+    for (let k = opts.order.length - 1; k >= 0; k--) {
+      const a = (L.tiles || {})[opts.order[k]], id = a && a[i];
+      if (!id) continue;
+      const t = opts.terrainOf(id);
+      if (t != null && t >= 0) { L.terrain[i] = t; return; }
+    }
+  }
+  /** 영역 복사 → 복사본 (영역이 맵 밖이면 null). key = 원본 리소스 키 (무작위 칸 번호를 같은 맵에서만 쓰려고). opts.layer = 그 레이어만 */
+  function copy(d, r, key, opts = {}) {
     const { w: W, h: H } = sizeOf(d), L = d.layers || {};
     r = r && rect(r.x0, r.y0, r.x1, r.y1, W, H);
     if (!r || !Array.isArray(L.terrain) || L.terrain.length !== W * H) return null;
     const w = r.x1 - r.x0 + 1, h = r.y1 - r.y0 + 1;
     const grab = (arr, empty) => { const out = new Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const v = arr[(r.y0 + y) * W + r.x0 + x]; out[y * w + x] = v === undefined || v === null ? empty : v; } return out; };
+    if (opts.layer) {   // 레이어 하나만: 지형은 "빈 칸"(-1)으로 채워 두고 붙일 때 쓰지 않음
+      const a = (L.tiles || {})[opts.layer];
+      return { format: FORMAT, version: 1, w, h, src: key || '', layer: opts.layer, terrain: new Array(w * h).fill(-1), tiles: { [opts.layer]: Array.isArray(a) && a.length === W * H ? grab(a, '') : new Array(w * h).fill('') }, objects: [] };
+    }
     const out = { format: FORMAT, version: 1, w, h, src: key || '', terrain: grab(L.terrain, -1), tiles: {}, objects: [] };
     Object.entries(L.tiles || {}).forEach(([id, arr]) => { if (Array.isArray(arr) && arr.length === W * H) { const a = grab(arr, ''); if (a.some(Boolean)) out.tiles[id] = a; } });
     if (Array.isArray(L.spawn) && L.spawn.length === W * H) { const a = grab(L.spawn, 0); if (a.some(Boolean)) out.spawn = a; }
@@ -52,6 +70,7 @@ PDM.mapArea = (function () {
     if (c.tiles && Object.values(c.tiles).some(a => !Array.isArray(a) || a.length !== c.w * c.h)) return false;
     if (c.spawn && c.spawn.length !== c.w * c.h) return false;
     if (c.rand && c.rand.length !== c.w * c.h) return false;
+    if (c.layer && !(c.tiles && Array.isArray(c.tiles[c.layer]))) return false;
     return Array.isArray(c.objects || []);
   }
 
@@ -65,6 +84,23 @@ PDM.mapArea = (function () {
     const L = d.layers;
     if (!Array.isArray(L.terrain) || L.terrain.length !== W * H) throw new Error('맵의 지형 데이터가 크기와 맞지 않습니다 (검사 F7)');
     const res = { cells: 0, clippedCells: 0, objects: 0, clippedObjects: 0, skippedTypes: 0, randDropped: false, ids: [] };
+    const locked = opts.locked || new Set();
+    if (c.layer || opts.layer) {   // 레이어 하나만: 받는 레이어(opts.layer, 없으면 원본 레이어)의 칸만 — 빈 칸('')은 투명, 지형 · 다른 레이어 · 오브젝트는 그대로
+      const to = opts.layer || c.layer, src = c.layer ? c.tiles[c.layer] : null;
+      if (!src) throw new Error('레이어 하나만 붙여 넣으려면 레이어를 복사한 것이어야 합니다');
+      if (locked.has(to)) throw new Error('잠긴 레이어에는 붙여 넣을 수 없습니다');
+      L.tiles = L.tiles || {};
+      if (!Array.isArray(L.tiles[to]) || L.tiles[to].length !== W * H) L.tiles[to] = new Array(W * H).fill('');
+      for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) {
+        const v = src[y * c.w + x]; if (!v) continue;
+        const tx = px + x, ty = py + y;
+        if (tx < 0 || ty < 0 || tx >= W || ty >= H) { res.clippedCells++; continue; }
+        const t = ty * W + tx; L.tiles[to][t] = v; retopTerrain(L, t, opts); res.cells++;
+      }
+      if (!L.tiles[to].some(Boolean)) delete L.tiles[to];
+      if (!Object.keys(L.tiles).length) delete L.tiles;
+      return res;
+    }
     const sameMap = !!opts.key && c.src === opts.key;
     const useRand = !!c.rand && sameMap && Array.isArray(L.rand) && L.rand.length === W * H;
     if (c.rand && !useRand) res.randDropped = true;
@@ -81,7 +117,7 @@ PDM.mapArea = (function () {
       if (tx < 0 || ty < 0 || tx >= W || ty >= H) { res.clippedCells++; continue; }
       const t = ty * W + tx;
       L.terrain[t] = v;
-      allLayers.forEach(id => { L.tiles[id][t] = tilesIn[id] ? (tilesIn[id][s] || '') : ''; });
+      allLayers.forEach(id => { if (!locked.has(id)) L.tiles[id][t] = tilesIn[id] ? (tilesIn[id][s] || '') : ''; });
       if (useSpawn) L.spawn[t] = c.spawn[s] || 0;
       if (useRand) L.rand[t] = c.rand[s] || 0;
       res.cells++;
@@ -104,15 +140,25 @@ PDM.mapArea = (function () {
     return res;
   }
 
-  /** 영역 비우기 (잘라내기 · Delete): 지형 빈 칸(-1) · 모든 레이어 '' · 스폰 · 무작위 칸 0 · 칸 안 오브젝트 삭제 → 지운 오브젝트 수 */
-  function clear(d, r) {
+  /** 영역 비우기 (잘라내기 · Delete): 지형 빈 칸(-1) · 모든 레이어 '' · 스폰 · 무작위 칸 0 · 칸 안 오브젝트 삭제 → 지운 오브젝트 수.
+   *  opts.layer = 그 레이어만 비움(지형은 남은 레이어로 다시 정함 · 오브젝트 그대로) · opts.locked = 건드리지 않을 레이어 */
+  function clear(d, r, opts = {}) {
     const { w: W, h: H } = sizeOf(d), L = d.layers || {};
     r = r && rect(r.x0, r.y0, r.x1, r.y1, W, H);
     if (!r) return 0;
+    const locked = opts.locked || new Set();
+    if (opts.layer) {
+      const a = (L.tiles || {})[opts.layer];
+      if (locked.has(opts.layer) || !Array.isArray(a)) return 0;
+      for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) { const i = y * W + x; if (a[i]) { a[i] = ''; retopTerrain(L, i, opts); } }
+      if (!a.some(Boolean)) delete L.tiles[opts.layer];
+      if (L.tiles && !Object.keys(L.tiles).length) delete L.tiles;
+      return 0;
+    }
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) {
       const i = y * W + x;
       if (Array.isArray(L.terrain)) L.terrain[i] = -1;
-      Object.values(L.tiles || {}).forEach(a => { if (Array.isArray(a)) a[i] = ''; });
+      Object.entries(L.tiles || {}).forEach(([id, a]) => { if (Array.isArray(a) && !locked.has(id)) a[i] = ''; });
       if (Array.isArray(L.spawn)) L.spawn[i] = 0;
       if (Array.isArray(L.rand)) L.rand[i] = 0;
     }
@@ -145,5 +191,5 @@ PDM.mapArea = (function () {
       objects: list.map(o => { const c = JSON.parse(JSON.stringify(o)); c.at = Object.assign({}, c.at, { x: o.at.x - x0, y: o.at.y - y0 }); return c; }) };
   }
 
-  return { FORMAT, rect, inRect, copy, copyObjects, valid, paste, clear, objectsIn, moveObjects };
+  return { FORMAT, rect, inRect, copy, copyObjects, valid, paste, clear, objectsIn, moveObjects, retopTerrain };
 })();

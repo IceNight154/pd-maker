@@ -205,9 +205,28 @@ public class EventInterpreter {
 
 	/** 창·타이머로 멈추는 명령 (멈춤 감시 대상) */
 	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade", "illust", "illustMove", "waitInput"));
-	/** 대사 글자 속도 (글자/초): "" = 대사창 설정(-1) · instant = 바로 · slow 20 · normal 40 · fast 80 · 숫자 */
+	/** 이 이벤트의 "대사 스타일" 명령 값 (없으면 null) — 이벤트가 끝나면 사라짐 (다른 이벤트에 넘어가지 않음) */
+	JsonValue style;
+	/** 대사 한 줄에 스타일: 명령 칸 → 이벤트 스타일 → (없으면 Line 기본값 = 대사창 설정) */
+	void styleLine(MakerDialogue.Line l, JsonValue c) {
+		String sp = pick(c, "speed"); l.speed = textSpeed(sp);   // 이 줄만 글자 속도 (비우면 대사창 설정)
+		String v;
+		if (!(v = pick(c, "tracking")).isEmpty()) l.tracking = num(v, Float.NaN);
+		if (!(v = pick(c, "lineGap")).isEmpty()) l.lineGap = num(v, Float.NaN);
+		if (!(v = pick(c, "effect")).isEmpty()) l.effect = v;
+		if (!(v = pick(c, "fxDur")).isEmpty()) l.fxDur = num(v, Float.NaN) / 10f;      // 0.1초
+		if (!(v = pick(c, "fxStrength")).isEmpty()) l.fxStrength = num(v, Float.NaN) / 100f;   // %
+		if (!(v = pick(c, "fxScope")).isEmpty()) l.fxScope = v;
+	}
+	String pick(JsonValue c, String k) {
+		String v = c.has(k) ? c.getString(k, "") : "";
+		if ((v == null || v.isEmpty()) && style != null && style.has(k)) v = style.getString(k, "");
+		return v == null ? "" : v;
+	}
+	static float num(String v, float d) { try { return Float.parseFloat(v); } catch (Exception e) { return d; } }
+	/** 대사 글자 속도 (글자/초): "" = 대사창 설정(-1) · instant = 바로 · slow 20 · normal 40 · fast 80 · veryfast 160 · 숫자 */
 	static float textSpeed(String v) {
-		switch (v) { case "": return -1; case "instant": return 0; case "slow": return 20; case "normal": return 40; case "fast": return 80; }
+		switch (v) { case "": return -1; case "instant": return 0; case "slow": return 20; case "normal": return 40; case "fast": return 80; case "veryfast": return 160; }
 		try { return Math.max(0, Float.parseFloat(v)); } catch (Exception e) { return -1; }
 	}
 	/** 화면 스레드에서 start 를 한 번 하고, done 이 참이 될 때까지 (프레임마다 확인) 기다렸다가 이어서 — 연출이 끝날 때까지 대기.
@@ -269,6 +288,7 @@ public class EventInterpreter {
 			com.watabou.noosa.Gizmo w = waitOn;
 			boolean reshow = windowMaker != null && w instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && (w.parent == null || !w.exists);
 			MakerRuntime.log("화면 크기가 바뀌어 연출을 새 화면으로 옮겼습니다 (" + eventId + "): 진행 중 " + moved + " · 일러스트 " + ills + (reshow ? " · 창 다시 띄움" : ""));
+			if (reshow && w instanceof MakerDialogue.Wnd) ((MakerDialogue.Wnd) w).carryOver();   // 같은 줄이면 나온 글자 · 연출을 이어받음
 			if (reshow) { showWindow(windowMaker); return; }   // rebuilding 은 창을 띄운 뒤 풂
 		} catch (Throwable t) { MakerRuntime.log("화면이 바뀐 뒤 연출 옮기기 오류 (" + eventId + "): " + t); }
 		rebuilding = false;
@@ -330,10 +350,15 @@ public class EventInterpreter {
 				MakerDialogue.Line l = MakerDialogue.line(c.getString("speaker", ""), c.getString("face", ""), c.getString("illust", ""), StoryState.expand(c.getString("text", "")));
 				if (!c.getString("name", "").isEmpty()) l.name = c.getString("name", "");
 				if (!c.getString("side", "").isEmpty()) l.side = c.getString("side", "");
-				l.speed = textSpeed(c.getString("speed", ""));   // 이 줄만 글자 속도 (비우면 대사창 설정)
+				styleLine(l, c);   // 글자 속도 · 간격 · 줄 간격 · 연출: 이 줄 → 이 이벤트의 "대사 스타일" → 대사창 설정 (5차)
 				l.auto = Math.max(0, c.getInt("auto", 0)) / 10f;  // 다 보인 뒤 저절로 넘기기 (0.1초, 0 = 입력 기다림)
 				showLine(l);
 				return false;
+			}
+			case "textStyle": {   // 대사 스타일 (5차): 이 이벤트의 남은 대사에 — 빈 칸은 대사창 설정 그대로. reset = 대사창 설정으로 되돌림
+				if (c.getBoolean("reset", false)) style = null;
+				else style = c;   // 명령 자체를 기억 (이벤트 데이터 — 실행하는 동안 그대로)
+				return true;
 			}
 			case "topic": {
 				String ch = charArg(c, "char");

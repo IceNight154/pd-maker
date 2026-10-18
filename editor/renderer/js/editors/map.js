@@ -247,6 +247,9 @@
   //  층 편집기 (Floor)
   // =============================================================
   const floorUI = {};   // 층마다 도구 상태 유지 { tool, terrain, zoom, objType, objRef, sel }
+  // 왼쪽 패널 묶음 접힘 (5차) — 맵마다가 아니라 이 PC 전체에 기억
+  const PAL_OPEN = (() => { try { return JSON.parse(localStorage.getItem('pdm.mapPalette') || '{}') || {}; } catch (_) { return {}; } })();
+  const savePalOpen = () => { try { localStorage.setItem('pdm.mapPalette', JSON.stringify(PAL_OPEN)); } catch (_) { /* 저장 불가 */ } };
   let focusReq = null;   // 검사 결과를 누름: 다음에 그 맵을 그릴 때 그 칸을 영역으로 고름 (PDM.mapUtil.focus)
 
   /** 안전구역 설정 칸 (맵 노드 · 방 템플릿 공통) — 런타임 MakerSafe */
@@ -371,6 +374,9 @@
       }
       if (!ui.tileLayer || !PDM.tileLayers().some(l => l.id === ui.tileLayer)) ui.tileLayer = (PDM.tileLayers()[0] || { id: 'base' }).id;
       if (!ui.hideLayers) ui.hideLayers = {};   // 편집기에서만 숨긴 레이어 (게임과 상관없음)
+      if (!ui.lockLayers) ui.lockLayers = {};   // 잠근 레이어 (편집기에서만): 칠하기 · 지우개 · 영역 지우기/붙여넣기가 건드리지 않음
+      // 편집 대상 (5차): 'terrain' = 지형(+ 영역 도구는 모든 레이어) · 'layer' = ui.tileLayer 하나 — 그리기 도구 · 지우개 · 영역 복사/붙여넣기/지우기가 이 대상만 고침
+      if (!ui.target) ui.target = ui.tool === 'utile' ? 'layer' : 'terrain';
       if (tilesL && !tilesL[ui.tileLayer]) tilesL[ui.tileLayer] = blankL();
       let utileL = tilesL ? tilesL[ui.tileLayer] : null;
       /** 저장할 모양: 빈 레이어는 빼고 { id: [...] } (없으면 null) */
@@ -399,9 +405,37 @@
       // ---- 팔레트 ----
       const palette = h('div', { class: 'palette' });
       const tileTool = () => ui.tool !== 'object' && ui.tool !== 'select' && ui.tool !== 'spawn' && ui.tool !== 'erase' && ui.tool !== 'rand' && ui.tool !== 'utile';
-      const ERASE = { all: '전부', wall: '벽', floor: '바닥·타일', utile: '사용자 타일', object: '오브젝트', spawn: '스폰 구역', rand: '무작위 칸' };
-      if (!ui.eraseKind) ui.eraseKind = 'all'; if (ui.port === undefined) ui.port = -1;
-      const pickTile = v => { ui.terrain = v; if (!tileTool() || ui.tool === 'pick') ui.tool = 'pen'; drawPalette(); drawTools(); };
+      const ERASE = { all: '전부', wall: '벽', floor: '바닥·타일', utile: '지금 레이어', object: '오브젝트', spawn: '스폰 구역', rand: '무작위 칸' };
+      if (!ui.eraseKind) ui.eraseKind = ui.target === 'layer' ? 'utile' : 'all'; if (ui.port === undefined) ui.port = -1;
+      const onLayer = () => ui.target === 'layer' && !!tilesL;
+      const lockedSet = () => new Set(Object.keys(ui.lockLayers).filter(k => ui.lockLayers[k]));
+      /** 그리는 순서(캐릭터 아래 → 위) — 칸의 지형을 "가장 위 레이어의 타일"로 정할 때 · 그릴 때 (런타임 MakerUserTiles 와 같은 순서) */
+      const drawOrder = () => { const l = LAYERS(); return [...l.filter(x => x.depth !== 'above'), ...l.filter(x => x.depth === 'above')].map(x => x.id); };
+      /** 영역 연산 · 레이어 지형 다시 정하기에 넘길 것 */
+      const layerOpts = () => ({ terrainOf: id => { const t = utDef(id); return t && t.terrain != null ? t.terrain : -1; }, order: drawOrder(), locked: lockedSet() });
+      /** 도구 바꾸기 — 도구 막대 · 단축키 · 팔레트 공용. 편집 대상이 레이어면 펜 · 사각형 · 채우기 · 스포이드는 그 레이어의 사용자 타일로, 지우개는 그 레이어만 */
+      function setTool(t, quiet) {
+        if (['pen', 'rect', 'fill', 'pick'].includes(t) && onLayer()) { ui.tool = 'utile'; ui.utShape = t; }
+        else if (t === 'erase') { ui.tool = 'erase'; if (onLayer()) ui.eraseKind = 'utile'; else if (ui.eraseKind === 'utile') ui.eraseKind = 'all'; }
+        else ui.tool = t;
+        if (!quiet) { drawTools(); drawPalette(); }
+      }
+      /** 편집 대상 바꾸기 (레이어 목록의 줄 · 타일 고르기) — 지금 도구는 같은 종류로 이어짐 */
+      function setTarget(tg, layerId) {
+        if (tg === 'layer' && tilesL) {
+          ui.target = 'layer'; if (layerId) ui.tileLayer = layerId;
+          if (!tilesL[ui.tileLayer]) tilesL[ui.tileLayer] = blankL();
+          utileL = tilesL[ui.tileLayer];
+          if (['pen', 'rect', 'fill', 'pick', 'room'].includes(ui.tool)) { ui.utShape = ui.tool === 'room' ? 'rect' : ui.tool; ui.tool = 'utile'; }
+          if (ui.tool === 'erase') ui.eraseKind = 'utile';
+        } else {
+          ui.target = 'terrain';
+          if (ui.tool === 'utile') ui.tool = ['rect', 'fill', 'pick'].includes(ui.utShape) ? ui.utShape : 'pen';
+          if (ui.tool === 'erase' && ui.eraseKind === 'utile') ui.eraseKind = 'all';
+        }
+      }
+      /** 도구 막대에서 켜진 도구 (레이어 편집 중의 펜 · 사각형 · 채우기 · 스포이드 = 사용자 타일 모양) */
+      const toolOn = t => ui.tool === 'utile' ? ui.utShape === t || (t === 'pen' && !['rect', 'fill', 'pick'].includes(ui.utShape)) : ui.tool === t;
       /** 확장 기능이 꺼진 종류는 팔레트에서 숨김 (이 맵에 이미 놓은 것이 있으면 보임) */
       const typeOn = k => k === 'light' ? kind === 'node' && fl.mode !== 'procedural' : (k !== 'prop' && k !== 'combo') || (PDM.extensions && PDM.extensions.on(k === 'combo' ? 'tilecombos' : 'prop')) || (fl.objects || []).some(o => o.type === k);
       /** 오브젝트 종류의 대상 목록 [[id, 이름]] (팔레트 · 여러 오브젝트 일괄 수정 공용) */
@@ -412,125 +446,168 @@
         if (refKind === 'character' && type === 'mob') opts.push(...['rat', 'gnoll', 'crab', 'slime', 'snake', 'albino'].map(m => ['spd:' + m, `(게임) ${m}`]));
         return opts;
       }
+      // ---- 왼쪽 패널 (5차 재구성): 작업 묶음 — ① 그릴 것(타일 팔레트) ② 타일 레이어(편집 대상) ③ 지우개(지우개 도구일 때만) ④ 오브젝트 ⑤ 구역 · 입구/출구 ⑥ 고급
+      //   묶음은 접을 수 있고 접힘 상태는 이 PC 에 기억(PAL_OPEN). 기능 · 단축키는 예전 그대로 — 위치와 묶음만 바뀜 (docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md §3)
+      function pgroup(id, title, sub, ...kids) {
+        const open = PAL_OPEN[id] !== undefined ? PAL_OPEN[id] : !['adv'].includes(id);
+        const body = h('div', { class: 'pg-body' }, ...kids.filter(Boolean));
+        const el = h('section', { class: 'pg' + (open ? '' : ' closed'), 'data-pg': id },
+          h('button', { class: 'pg-head', type: 'button', 'aria-expanded': String(open), onclick: () => { const o = el.classList.toggle('closed'); PAL_OPEN[id] = !o; savePalOpen(); el.firstChild.setAttribute('aria-expanded', String(!o)); } },
+            h('span', { class: 'caret' }, '▾'), h('span', { class: 'pg-t' }, title), sub ? h('span', { class: 'pg-sub' }, sub) : null), body);
+        return el;
+      }
+      /** 고른 타일을 "최근"에 (8개) */
+      function pushRecent(k, id) { ui.recent = [{ k, id }, ...(ui.recent || []).filter(r => !(r.k === k && r.id === id))].slice(0, 8); }
+      function pickTerrain(v) { ui.terrain = v; pushRecent('t', v); setTarget('terrain'); if (!tileTool() || ui.tool === 'pick') setTool('pen', true); drawPalette(); drawTools(); }
+      function pickUtile(id) { ui.utile = id; if (id) pushRecent('u', id); setTarget('layer', ui.tileLayer); if (ui.tool !== 'utile') setTool(['rect', 'fill'].includes(ui.tool) ? ui.tool : 'pen', true); drawPalette(); drawTools(); }
       function drawPalette() {
         palette.innerHTML = '';
         if (drawable) {
-          palette.append(h('div', { class: 'fl' }, '타일'));
-          const grid = h('div', { class: 'pal-grid' });
-          PDM.TERRAIN.filter(t => !t.legacy).forEach(t => {   // 지형 함정(17 · 18 · 19)은 예전 형식 — 함정은 오브젝트 "함정"으로
-            const cv = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.terrain === t.id && ui.tool !== 'object' && ui.tool !== 'select' ? ' on' : ''), title: `${PDM.terrainName(t, up)} (${t.key}, ${t.id})`,
-              onclick: () => { ui.terrain = t.id; if (ui.tool === 'object' || ui.tool === 'select') ui.tool = 'pen'; drawPalette(); drawTools(); } });
+          const lay = onLayer() ? LAYERS().find(l => l.id === ui.tileLayer) : null;
+          const q = (ui.palQ || '').trim().toLowerCase(), hit = s => !q || String(s).toLowerCase().includes(q);
+          // ① 그릴 것
+          const tgrid = h('div', { class: 'pal-grid' });
+          PDM.TERRAIN.filter(t => !t.legacy && hit(PDM.terrainName(t, up) + ' ' + t.key + ' ' + t.id)).forEach(t => {   // 지형 함정(17 · 18 · 19)은 예전 형식 — 함정은 오브젝트 "함정"으로
+            const on = !onLayer() && ui.terrain === t.id && tileTool();
+            const cv = h('canvas', { width: 16, height: 16, class: 'pal-t' + (on ? ' on' : ''), 'aria-pressed': String(on), title: `${PDM.terrainName(t, up)} (${t.key}, ${t.id}) — 지형에 그림`, onclick: () => pickTerrain(t.id) });
             const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
             PDM.assets.drawTerrain(g, tilesImg, t.id, 0, 0, 16, up);
-            grid.append(cv);
+            tgrid.append(cv);
           });
-          palette.append(grid, h('div', { class: 'hint m-0 mt-2 mb-5' }, ui.terrain === -1 ? '빈 칸 (그리지 않음)' : PDM.terrainName(PDM.TERRAIN_BY_ID[ui.terrain], up)),
-            h('div', { class: 'flex gap-2 wrap mb-4' },
-              h('button', { class: 'btn xs' + (ui.terrain === -1 && tileTool() ? ' pri' : ''), title: '아무것도 그리지 않은 칸 — 맵에 들어가지 않습니다 (게임에서는 막힌 벽)', onclick: () => pickTile(-1) }, '▢ 빈 칸 (지우기)'),
-              h('button', { class: 'btn xs' + (ui.terrain === 0 && tileTool() ? ' pri' : ''), title: '바닥이 없는 칸 — 떨어지면 아래층으로', onclick: () => pickTile(0) }, '▼ 낭떠러지')),
-            h('div', { class: 'fl' }, '지우개'),
-            h('div', { class: 'flex gap-2 wrap' }, ...Object.entries(ERASE).filter(([k]) => (k !== 'spawn' || canSpawn) && (k !== 'rand' || canRand)).map(([k, t]) => h('button', { class: 'btn xs' + (ui.tool === 'erase' && ui.eraseKind === k ? ' pri' : ''), title: k === 'all' ? '타일·오브젝트·스폰 구역을 모두 지웁니다 (끌어서)' : t + '만 지웁니다 (끌어서)', onclick: () => { ui.tool = 'erase'; ui.eraseKind = k; drawPalette(); drawTools(); } }, t))),
-            h('button', { class: 'btn xs danger m-0 mt-3 mb-5', onclick: clearAll }, '🗑 맵 전체 지우기'),
-            kind === 'node' ? h('div', { class: 'fl' }, '입구 · 출구') : '',
-            kind === 'node' ? h('div', { class: 'flex gap-2 wrap' },
-              h('button', { class: 'btn xs' + (ui.terrain === 7 && tileTool() ? ' pri' : ''), onclick: () => pickTile(7) }, `＋ 입구 놓기 (${terrain.filter(v => v === 7).length}개)`),
-              h('button', { class: 'btn xs' + (ui.terrain === 8 && tileTool() ? ' pri' : ''), onclick: () => pickTile(8) }, `＋ 출구 놓기 (${terrain.filter(v => v === 8).length}개)`)) : '',
-            kind === 'node' ? h('div', { class: 'hint m-0 mt-2 mb-5' }, '원하는 자리에 원하는 만큼 놓을 수 있습니다. 「⇱ 선택」 도구로 계단을 누르면 오른쪽에서 위치 수정 · 삭제 · 이어질 맵 지정을 할 수 있고, 끌어서 옮길 수도 있습니다.') : '',
-            kind === 'room' ? h('div', { class: 'hint mb-5 c-gold' }, '테두리에 문 타일을 그리면 그 자리에만 문이 생깁니다 (연결 안 된 자리는 벽).') : '',
-            h('div', { class: 'hint mb-5' }, '맵 크기: 네 모서리의 ◢ 손잡이를 끌어서 조절\n점선 바깥에 그리면 그 칸까지 맵이 넓어집니다'),
-            h('button', { class: 'btn xs mb-5', title: '타일을 그린 영역만 남기고 둘레의 빈 칸을 잘라냅니다 (둘레 한 칸은 남김)', onclick: trimToDrawn }, '✂ 그린 영역에 맞춰 자르기'),
-            h('div', { class: 'fl' }, '타일 그림 (' + themeName(themeOf(fl, kind)) + ')'),
-            h('div', { class: 'flex gap-2 wrap mb-5' },
-              h('button', { class: 'btn xs', title: '지금 고른 타일 한 칸(16×16)의 그림을 고칩니다', onclick: editOneTile }, '✎ 고른 타일'),
-              h('button', { class: 'btn xs', title: '타일셋 전체(256×256)를 고칩니다', onclick: editTileset }, '▦ 타일셋 전체'),
-              h('button', { class: 'btn xs', title: 'PNG 파일을 타일셋으로 불러옵니다 (256×256, 16칸 격자)', onclick: importTileset }, '⤓ PNG 불러오기')));
-          // 타일 레이어: 지형(판정) 위에 순서대로. 고른 레이어에 사용자 타일을 칠함
-          const lays = LAYERS(), cnt = id => ((tilesL || {})[id] || []).filter(Boolean).length;
-          palette.append(h('div', { class: 'fl' }, '타일 레이어 (아래 → 위)'),
-            h('div', { class: 'layer-list', style: { display: 'grid', gap: '2px', marginBottom: '6px' } },
-              h('div', { class: 'hint', style: { padding: '2px 4px' } }, '⛰ 지형 — 바닥 · 벽 · 문 (게임 판정, 위 "타일")'),
-              ...lays.map(l => h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 4px', borderRadius: '4px', background: ui.tileLayer === l.id ? 'var(--accent-soft)' : '', boxShadow: ui.tileLayer === l.id ? 'inset 2px 0 0 var(--accent)' : '', cursor: 'pointer' },
-                  title: `${l.depth === 'above' ? '캐릭터 위에 그림' : '캐릭터 아래에 그림'}${l.solid ? ' · 칠한 칸은 못 지나감' : ''}${l.visible === false ? ' · 게임에서 숨김' : ''} — 누르면 이 레이어에 칠함`,
-                  onclick: e => { if (e.target.tagName === 'BUTTON') return; ui.tileLayer = l.id; if (!tilesL[l.id]) tilesL[l.id] = blankL(); utileL = tilesL[l.id]; ui.tool = 'utile'; drawPalette(); drawTools(); paint(); } },
-                h('button', { class: 'ib', title: '편집기에서만 보이기 / 숨기기 (게임과 상관없음)', onclick: () => { ui.hideLayers[l.id] = !ui.hideLayers[l.id]; drawPalette(); paint(); } }, ui.hideLayers[l.id] ? '◌' : '👁'),
-                h('span', { class: 'grow', style: { fontWeight: ui.tileLayer === l.id ? 700 : 400, opacity: l.visible === false ? .55 : 1 } }, l.name),
-                l.depth === 'above' ? h('span', { class: 'badge', title: '캐릭터 위' }, '위') : null,
-                l.solid ? h('span', { class: 'badge bad', title: '칠한 칸은 못 지나감' }, '막힘') : null,
-                h('span', { class: 'hint' }, String(cnt(l.id) || '')))),
-              h('button', { class: 'btn xs', onclick: layerSettings }, '레이어 설정…')));
-          // 사용자 타일
-          const uts = UT(), ug = h('div', { class: 'pal-grid' });
+          const uts = UT().filter(t => hit((t.name || '') + ' ' + t.id)), ug = h('div', { class: 'pal-grid' });
           uts.forEach(t => {
-            const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'utile' && ui.utile === t.id ? ' on' : ''), title: `${t.name || t.id} — ${t.terrain >= 0 ? '칠하면 지형: ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형은 그대로 (그림만 덮음)'}${t.over ? ' · 캐릭터 위' : ''}`,
-              onclick: () => { ui.tool = 'utile'; ui.utile = t.id; drawPalette(); drawTools(); } });
+            const on = ui.tool === 'utile' && ui.utile === t.id;
+            const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (on ? ' on' : ''), 'aria-pressed': String(on), title: `${t.name || t.id} — ${t.terrain >= 0 ? '칠하면 지형: ' + ((PDM.TERRAIN_BY_ID[t.terrain] || {}).name || t.terrain) : '지형은 그대로 (그림만 덮음)'}${t.over ? ' · 캐릭터 위' : ''} · 지금 레이어에 칠함`,
+              onclick: () => pickUtile(t.id) });
             PDM.drawUserTile(c.getContext('2d'), t, 0, 0, 16, tilesImg);
             ug.append(c);
           });
-          palette.append(h('div', { class: 'fl' }, `사용자 타일 (${uts.length})`),
-            uts.length ? ug : h('div', { class: 'hint' }, '"맵 그림"에서 아무 그림의 한 칸을 타일로 만들어 두면 여기서 골라 칠할 수 있습니다.'),
-            h('div', { class: 'flex gap-2 wrap my-2' },
-              ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형'], ['fill', '▧ 채우기']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.tool === 'utile' && ui.utShape === k ? ' pri' : ''), onclick: () => { ui.utShape = k; ui.tool = 'utile'; if (!ui.utile && uts[0]) ui.utile = uts[0].id; drawPalette(); drawTools(); } }, t)),
-              h('button', { class: 'btn xs' + (ui.tool === 'utile' && !ui.utile ? ' pri' : ''), title: '칠한 사용자 타일만 지움 (지형은 그대로)', onclick: () => { ui.tool = 'utile'; ui.utile = ''; drawPalette(); drawTools(); } }, '지우개'),
-              h('button', { class: 'btn xs', onclick: () => PDM.tabs.open('mapart') }, uts.length ? '관리…' : '＋ 만들기…')),
-            ui.tool === 'utile' ? h('div', { class: 'hint mb-5' }, ui.utile ? `고른 타일: ${(utDef(ui.utile) || {}).name || ui.utile} — 오른쪽 클릭 = 그 칸의 사용자 타일 고르기` : '사용자 타일 지우개 — 칠한 그림만 지우고 지형은 그대로') : h('div', { class: 'mb-5' }));
+          const rec = (ui.recent || []).filter(r => r.k === 't' ? PDM.TERRAIN_BY_ID[r.id] : utDef(r.id)), rg = h('div', { class: 'pal-grid pal-recent' });
+          rec.forEach(r => {
+            const c = h('canvas', { width: 16, height: 16, class: 'pal-t', title: (r.k === 't' ? PDM.terrainName(PDM.TERRAIN_BY_ID[r.id], up) + ' (지형)' : ((utDef(r.id) || {}).name || r.id) + ' (사용자 타일)') + ' — 최근', onclick: () => r.k === 't' ? pickTerrain(r.id) : pickUtile(r.id) });
+            const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+            if (r.k === 't') PDM.assets.drawTerrain(g, tilesImg, r.id, 0, 0, 16, up); else PDM.drawUserTile(g, utDef(r.id), 0, 0, 16, tilesImg);
+            rg.append(c);
+          });
+          const search = h('input', { type: 'search', class: 'pal-search', placeholder: '타일 찾기 (이름 · 번호)', value: ui.palQ || '', 'aria-label': '타일 찾기',
+            oninput: e => { ui.palQ = e.target.value; const pos = e.target.selectionStart; drawPalette(); const n = palette.querySelector('.pal-search'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
+          const what = onLayer() ? (ui.utile ? `▦ ${(utDef(ui.utile) || {}).name || ui.utile}` : '▦ 지우개 (사용자 타일)') : (ui.terrain === -1 ? '빈 칸' : PDM.terrainName(PDM.TERRAIN_BY_ID[ui.terrain], up));
+          palette.append(pgroup('tiles', '그릴 것', what,
+            h('div', { class: 'pal-target' + (onLayer() ? ' layer' : '') }, onLayer() ? `칠할 곳: ▦ 레이어 「${lay ? lay.name : ui.tileLayer}」` : '칠할 곳: ⛰ 지형 (게임 판정)'),
+            search,
+            rec.length && !q ? h('div', { class: 'fl' }, '최근') : null, rec.length && !q ? rg : null,
+            h('div', { class: 'fl' }, '지형 타일'), tgrid,
+            h('div', { class: 'pal-row' },
+              h('button', { class: 'btn xs' + (!onLayer() && ui.terrain === -1 && tileTool() ? ' on' : ''), title: '아무것도 그리지 않은 칸 — 맵에 들어가지 않습니다 (게임에서는 막힌 벽)', onclick: () => pickTerrain(-1) }, '▢ 빈 칸'),
+              h('button', { class: 'btn xs' + (!onLayer() && ui.terrain === 0 && tileTool() ? ' on' : ''), title: '바닥이 없는 칸 — 떨어지면 아래층으로', onclick: () => pickTerrain(0) }, '▼ 낭떠러지')),
+            h('div', { class: 'fl' }, `사용자 타일 (${UT().length})`),
+            uts.length ? ug : h('div', { class: 'hint' }, UT().length ? '찾는 타일이 없습니다.' : '"맵 그림"에서 아무 그림의 한 칸을 타일로 만들어 두면 여기서 골라 칠할 수 있습니다.'),
+            h('div', { class: 'pal-row' },
+              h('button', { class: 'btn xs' + (ui.tool === 'utile' && !ui.utile ? ' on' : ''), title: '지금 레이어에 칠한 사용자 타일만 지움 (지형은 아래 레이어에 맞춤)', onclick: () => pickUtile('') }, '사용자 타일 지우개'),
+              h('button', { class: 'btn xs', onclick: () => PDM.tabs.open('mapart') }, UT().length ? '관리…' : '＋ 만들기…'))));
+          // ② 타일 레이어 — 고른 줄 = 편집 대상 (펜 · 사각형 · 채우기 · 스포이드 · 지우개 · 영역 복사/붙여넣기/지우기가 그 레이어만)
+          const lays = LAYERS(), cnt = id => ((tilesL || {})[id] || []).filter(Boolean).length;
+          const row = (isOn, attrs, ...kids) => h('div', Object.assign({ class: 'lay-row' + (isOn ? ' on' : ''), role: 'button', tabindex: '0', 'aria-pressed': String(isOn) }, attrs), ...kids);
+          palette.append(pgroup('layers', '타일 레이어', onLayer() ? `편집: ${lay ? lay.name : ui.tileLayer}` : '편집: 지형',
+            h('div', { class: 'layer-list' },
+              ...lays.slice().reverse().map(l => {
+                const isOn = onLayer() && ui.tileLayer === l.id, locked = !!ui.lockLayers[l.id];
+                return row(isOn, { title: `${l.depth === 'above' ? '캐릭터 위에 그림' : '캐릭터 아래에 그림'}${l.solid ? ' · 칠한 칸은 못 지나감' : ''}${l.visible === false ? ' · 게임에서 숨김' : ''} — 누르면 이 레이어를 편집`, 'data-layer': l.id,
+                  onclick: e => { if (e.target.closest('button')) return; setTarget('layer', l.id); drawPalette(); drawTools(); paint(); },
+                  onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } } },
+                  h('button', { class: 'ib', title: ui.hideLayers[l.id] ? '편집기에서 보이기 (게임과 상관없음)' : '편집기에서 숨기기 (게임과 상관없음)', 'aria-label': (ui.hideLayers[l.id] ? '보이기: ' : '숨기기: ') + l.name, onclick: () => { ui.hideLayers[l.id] = !ui.hideLayers[l.id]; drawPalette(); paint(); } }, ui.hideLayers[l.id] ? '◌' : '👁'),
+                  h('button', { class: 'ib' + (locked ? ' lk' : ''), title: locked ? '잠금 풀기' : '잠그기 — 지우개 "전부" · 영역 지우기/붙여넣기 · 칠하기에서 이 레이어를 건드리지 않음 (편집기에서만)', 'aria-label': (locked ? '잠금 풀기: ' : '잠그기: ') + l.name, onclick: () => { ui.lockLayers[l.id] = !locked; drawPalette(); } }, locked ? '🔒' : '🔓'),
+                  h('span', { class: 'lay-name', style: { opacity: l.visible === false ? .55 : 1 } }, l.name),
+                  l.depth === 'above' ? h('span', { class: 'badge', title: '캐릭터 위' }, '위') : null,
+                  l.solid ? h('span', { class: 'badge bad', title: '칠한 칸은 못 지나감' }, '막힘') : null,
+                  h('span', { class: 'lay-n' }, String(cnt(l.id) || '')));
+              }),
+              row(!onLayer(), { title: '지형 — 바닥 · 벽 · 문 · 계단 (게임 판정 · 맨 아래). 고르면 펜 · 사각형 · 방 · 채우기가 지형을 그리고, 영역 도구는 모든 레이어를 함께 다룸', 'data-layer': '',
+                onclick: () => { setTarget('terrain'); drawPalette(); drawTools(); paint(); }, onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } } },
+                h('span', { class: 'ib', 'aria-hidden': 'true' }, '⛰'), h('span', { class: 'lay-name' }, '지형 · 전체'), h('span', { class: 'lay-n' }, ''))),
+            h('label', { class: 'check m-0 mt-2', title: '편집하는 레이어만 또렷하게 (편집기 화면만 — 게임과 상관없음)' }, h('input', { type: 'checkbox', checked: !!ui.dimOthers, onchange: e => { ui.dimOthers = e.target.checked; paint(); } }), h('span', {}, '다른 레이어 흐리게')),
+            h('div', { class: 'pal-row' }, h('button', { class: 'btn xs', onclick: layerSettings }, '레이어 설정… (추가 · 삭제 · 순서 · 높이)'))));
+          // ③ 지우개 (지우개 도구일 때만 — 무엇을 지울지)
+          if (ui.tool === 'erase') {
+            const kinds = Object.entries(ERASE).filter(([k]) => (k !== 'spawn' || canSpawn) && (k !== 'rand' || canRand));
+            palette.append(pgroup('erase', '지우개', ERASE[ui.eraseKind],
+              h('div', { class: 'pal-row' }, ...kinds.map(([k, t]) => h('button', { class: 'btn xs' + (ui.eraseKind === k ? ' on' : ''), title: k === 'all' ? '지형 · 잠기지 않은 모든 레이어 · 오브젝트 · 스폰 구역을 모두 지웁니다' : k === 'utile' ? `지금 레이어「${lay ? lay.name : ui.tileLayer}」의 사용자 타일만` : t + '만 지웁니다', onclick: () => { ui.eraseKind = k; if (k === 'utile') setTarget('layer', ui.tileLayer); drawPalette(); drawTools(); } }, k === 'utile' ? '지금 레이어' : t))),
+              h('div', { class: 'hint' }, ui.eraseKind === 'all' ? '⚠ 전부: 아래 레이어의 타일도 함께 지워집니다 (잠근 레이어는 그대로).' : ui.eraseKind === 'utile' ? '고른 레이어만 지웁니다 — 아래 레이어는 그대로.' : '')));
+          }
         }
-        if (canSpawn) {
-          palette.append(h('div', { class: 'fl' }, '몬스터 스폰 구역'),
-            h('div', { class: 'flex gap-2 wrap' }, ...[1, 2, 0].map(v => [v, SPAWN_VALS[v]]).map(([v, [t, c]]) => h('button', { class: 'btn xs' + (ui.tool === 'spawn' && ui.spawnVal === +v ? ' pri' : ''), style: { borderColor: c }, onclick: () => { ui.tool = 'spawn'; ui.spawnVal = +v; ui.showSpawn = true; drawPalette(); drawTools(); paint(); } }, t))),
-            h('div', { class: 'flex gap-2 wrap my-2' }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형'], ['fill', '▧ 방 채우기']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.spawnShape === k ? ' pri' : ''), onclick: () => { ui.spawnShape = k; ui.tool = 'spawn'; ui.showSpawn = true; drawPalette(); drawTools(); paint(); } }, t))),
-            h('div', { class: 'hint mb-5' }, (fl.spawn || {}).enabled ? '초록 = 이 안에서만 몬스터가 생김 · 빨강 = 절대 안 생김. 초록이 없으면 빨강을 뺀 아무 곳.' : '속성의 "몬스터 스폰"을 켜야 게임에서 적용됩니다.'));
-        }
-        if (canRand) {
-          const sets = fl.randSets || [];
-          palette.append(h('div', { class: 'fl' }, '🎲 무작위 칸 (방이 들어갈 때마다 달라짐)'),
-            h('div', { class: 'flex gap-2 wrap' },
-              ...sets.map((st, i) => h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === i + 1 ? ' pri' : ''), style: { borderColor: randColor(i + 1) }, title: (st.opts || []).map(o => (o.t === -2 ? '그대로' : (PDM.TERRAIN_BY_ID[o.t] || {}).name || o.t) + ' ' + (o.w ?? 1)).join(' · ') + ' — 오른쪽 클릭: 이름 바꾸기 · 복제 · 삭제', onclick: () => { ui.tool = 'rand'; ui.randVal = i + 1; ui.showRand = true; drawPalette(); drawTools(); paint(); },
-                oncontextmenu: e => { e.preventDefault(); PDM.ui.menu(e.clientX, e.clientY, randSetMenu(i)); } }, `${i + 1}. ${st.name || '묶음'}`)),
-              sets.length ? h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === 0 ? ' pri' : ''), onclick: () => { ui.tool = 'rand'; ui.randVal = 0; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, '지우개') : null,
-              h('button', { class: 'btn xs add', title: '새 무작위 칸 묶음 — 오른쪽 속성의 "변형"에서 선택지를 정합니다', onclick: () => addRandSet() }, '+ 묶음')),
-            ui.tool === 'rand' && ui.randVal > 0 && sets[ui.randVal - 1] ? h('div', { class: 'btnbar' },
-              h('span', { class: 'hint' }, `고른 묶음 ${ui.randVal}:`),
-              h('button', { class: 'btn xs', onclick: () => renameRandSet(ui.randVal - 1) }, '이름 바꾸기'),
-              h('button', { class: 'btn xs', onclick: () => dupRandSet(ui.randVal - 1) }, '복제'),
-              h('button', { class: 'btn xs', onclick: () => clearRandCells(ui.randVal - 1) }, '칠한 칸 지우기'),
-              h('button', { class: 'btn xs danger', onclick: () => removeRandSet(ui.randVal - 1) }, '삭제')) : '',
-            sets.length ? h('div', { class: 'flex gap-2 wrap my-2' }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.randShape === k ? ' pri' : ''), onclick: () => { ui.randShape = k; ui.tool = 'rand'; ui.showRand = true; drawPalette(); drawTools(); paint(); } }, t))) : null,
-            h('div', { class: 'hint mb-5' }, sets.length ? '칠한 칸은 게임에서 그 묶음의 선택지 중 하나가 됩니다 (예: 물 50 · 풀 50). 오른쪽 "변형"에서 선택지 · 무게 · 칸마다/묶음 전체를 정하고 「🎲 변형 미리보기」로 확인하세요.' : '"+ 묶음"을 눌러 무작위 칸 묶음을 만든 뒤 칸에 칠하세요.'));
-        }
-        palette.append(h('div', { class: 'fl' }, '오브젝트 놓기'));
-        const typeSel = h('select', { onchange: () => { ui.objType = typeSel.value; ui.objRef = ''; ui.tool = 'object'; drawPalette(); drawTools(); } },
-          Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => ((k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))) && typeOn(k)).map(([k, v]) => h('option', { value: k }, v.name)));
+        // ④ 오브젝트
+        const types = Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => ((k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))) && typeOn(k));
         if (!typeOn(ui.objType)) ui.objType = 'npc';
-        typeSel.value = ui.objType;
         const refKind = PDM.OBJECT_TYPES[ui.objType].ref;
         const opts = refOpts(ui.objType);
-        const refSel = h('select', { onchange: () => { ui.objRef = refSel.value; ui.tool = 'object'; drawTools(); } }, opts.map(([v, t]) => h('option', { value: v }, t)));
+        const refSel = h('select', { 'aria-label': '놓을 대상', onchange: () => { ui.objRef = refSel.value; setTool('object'); } }, opts.map(([v, t]) => h('option', { value: v }, t)));
         if (!ui.objRef && opts[0]) ui.objRef = opts[0][0];
         refSel.value = ui.objRef;
-        palette.append(h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', marginBottom: '4px' } },
-          ...Object.entries(PDM.OBJECT_TYPES).filter(([k, v]) => ((k !== 'start' && !v.nodeOnly) || (kind === 'node' && (k === 'start' || fl.mode === 'handmade'))) && typeOn(k)).map(([k, v]) => h('button', { class: 'btn xs' + (ui.tool === 'object' && ui.objType === k ? ' pri' : ''), style: { borderColor: v.color },
-            onclick: () => { if (ui.objType !== k) ui.objRef = ''; ui.objType = k; ui.tool = 'object'; drawPalette(); drawTools(); } }, v.name))));
         const quick = h('div', { class: 'pal-grid mt-3' });
         if (ui.objType === 'prop') store.all('prop').forEach(pr => {
-          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === pr.id ? ' on' : ''), title: pr.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = pr.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
+          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === pr.id ? ' on' : ''), title: pr.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = pr.id; setTool('object'); } });
           if (pr.sprite && pr.sprite.sheet) PDM.assets.load(pr.sprite.sheet).then(img => { if (!img) return; const fw = pr.sprite.frame[0] || 16, fh = pr.sprite.frame[1] || 16, stt = (pr.states || [])[pr.start || 0] || {}, k = Math.min(1, 16 / fw, 16 / fh); const g = c.getContext('2d'); g.imageSmoothingEnabled = false; PDM.assets.drawFrame(g, img, fw, fh, (((pr.sprite.anims || {})[stt.anim] || {}).frames || stt.frames || [])[0] ?? (stt.frame || 0), (16 - fw * k) / 2, 16 - fh * k, k); });
           quick.append(c);
         });
         if (ui.objType === 'trap') PDM.TRAPS.forEach(tp => {
-          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === tp.id ? ' on' : ''), title: tp.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = tp.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
+          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === tp.id ? ' on' : ''), title: tp.name + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = tp.id; setTool('object'); } });
           drawTrap(c.getContext('2d'), tp.id, false, 0, 0, 16); quick.append(c);
         });
         if (ui.objType === 'combo' && PDM.combos) PDM.combos.list().forEach(cb => {
-          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === cb.id ? ' on' : ''), title: (cb.name || cb.id) + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = cb.id; ui.tool = 'object'; drawPalette(); drawTools(); } });
+          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (ui.tool === 'object' && ui.objRef === cb.id ? ' on' : ''), title: (cb.name || cb.id) + ' — 누른 뒤 맵을 클릭해 놓기', onclick: () => { ui.objRef = cb.id; setTool('object'); } });
           const g = c.getContext('2d'); g.imageSmoothingEnabled = false; PDM.combos.drawCombo(g, cb, 0, 0, 16, rawTilesImg); quick.append(c);
         });
-        palette.append(typeSel, refKind ? refSel : '', quick.children.length ? quick : '',
-          ui.objType === 'combo' ? h('div', { class: 'hint my-2' }, '조합 타일: 여러 스프라이트 + 광원 · 오브젝트 묶음을 한 칸에 놓습니다. 만들고 고치는 곳은 리소스 목록의 "조합 타일". ', h('button', { class: 'btn xs', onclick: () => PDM.tabs.open('tilecombos') }, '조합 타일 열기')) : '',
-          ui.objType === 'trap' ? h('div', { class: 'hint my-2' }, '함정은 지형이 아니라 오브젝트입니다 — 바닥 타일 위에 따로 놓이고, 게임의 함정 규칙(밟으면 작동 · 찾기 · 해제)을 그대로 따릅니다. 숨김 · 작동함은 오른쪽에서.') : '',
-          !opts.length && refKind ? h('div', { class: 'hint c-gold' }, '아직 만든 것이 없습니다.') : '',
-          ui.objType === 'prop' ? h('button', { class: 'btn xs mt-3', title: '새 맵 오브젝트(상자·레버·문·장식 등)를 만듭니다', onclick: () => PDM.propUtil && PDM.propUtil.newProp() }, '＋ 새 맵 오브젝트 만들기') : '',
-          h('button', { class: 'btn sm mt-3 w-full' + (ui.tool === 'object' ? ' pri' : ''), onclick: () => { ui.tool = 'object'; drawTools(); drawPalette(); } }, '놓기 도구'),
-          h('div', { class: 'hint mt-5' }, drawable ? '타일: 왼쪽 클릭 그리기 · 오른쪽 클릭 스포이드\n⇱ 선택: 오브젝트 끌어서 옮기기 · 빈 곳에서 끌기 = 영역 (Alt+끌기 = 어디서든) (Ctrl+C/X/V · Delete · Ctrl+A 전체) · Shift/Ctrl+클릭 = 여러 개 · 방향키 = 한 칸씩' : '자동 생성 층은 타일을 그리지 않습니다. 오브젝트는 "배치 규칙"으로 놓입니다.'));
+        palette.append(pgroup('objects', '오브젝트', ui.tool === 'object' ? PDM.OBJECT_TYPES[ui.objType].name : '',
+          h('div', { class: 'pal-row obj-types' }, ...types.map(([k, v]) => h('button', { class: 'btn xs' + (ui.tool === 'object' && ui.objType === k ? ' on' : ''), style: { borderLeftColor: v.color }, title: v.desc || v.name,
+            onclick: () => { if (ui.objType !== k) ui.objRef = ''; ui.objType = k; setTool('object'); } }, v.name))),
+          refKind ? refSel : null, quick.children.length ? quick : null,
+          ui.objType === 'combo' ? h('div', { class: 'hint my-2' }, '조합 타일: 여러 스프라이트 + 광원 · 오브젝트 묶음을 한 칸에 놓습니다. ', h('button', { class: 'btn xs', onclick: () => PDM.tabs.open('tilecombos') }, '조합 타일 열기')) : null,
+          ui.objType === 'trap' ? h('div', { class: 'hint my-2' }, '함정은 지형이 아니라 오브젝트입니다 — 바닥 타일 위에 따로 놓이고, 게임의 함정 규칙을 그대로 따릅니다. 숨김 · 작동함은 오른쪽에서.') : null,
+          !opts.length && refKind ? h('div', { class: 'hint c-gold' }, '아직 만든 것이 없습니다.') : null,
+          ui.objType === 'prop' ? h('button', { class: 'btn xs mt-3', title: '새 맵 오브젝트(상자·레버·문·장식 등)를 만듭니다', onclick: () => PDM.propUtil && PDM.propUtil.newProp() }, '＋ 새 맵 오브젝트 만들기') : null,
+          drawable ? null : h('div', { class: 'hint mt-3' }, '자동 생성 층은 타일을 그리지 않습니다. 오브젝트는 "배치 규칙"으로 놓입니다.')));
+        // ⑤ 구역 · 입구/출구
+        const zone = [];
+        if (drawable && kind === 'node') zone.push(h('div', { class: 'fl' }, '입구 · 출구'),
+          h('div', { class: 'pal-row' },
+            h('button', { class: 'btn xs' + (!onLayer() && ui.terrain === 7 && tileTool() ? ' on' : ''), onclick: () => pickTerrain(7) }, `＋ 입구 (${terrain.filter(v => v === 7).length})`),
+            h('button', { class: 'btn xs' + (!onLayer() && ui.terrain === 8 && tileTool() ? ' on' : ''), onclick: () => pickTerrain(8) }, `＋ 출구 (${terrain.filter(v => v === 8).length})`)),
+          h('div', { class: 'hint' }, '「⇱ 선택」으로 계단을 누르면 오른쪽에서 위치 · 삭제 · 이어질 맵을 정하고 끌어서 옮길 수 있습니다.'));
+        if (drawable && kind === 'room') zone.push(h('div', { class: 'hint c-gold' }, '테두리에 문 타일을 그리면 그 자리에만 문이 생깁니다 (연결 안 된 자리는 벽).'));
+        if (canSpawn) zone.push(h('div', { class: 'fl' }, '몬스터 스폰 구역'),
+          h('div', { class: 'pal-row' }, ...[1, 2, 0].map(v => [v, SPAWN_VALS[v]]).map(([v, [t, c]]) => h('button', { class: 'btn xs' + (ui.tool === 'spawn' && ui.spawnVal === +v ? ' on' : ''), style: { borderLeftColor: c }, onclick: () => { ui.spawnVal = +v; ui.showSpawn = true; setTool('spawn'); paint(); } }, t))),
+          ui.tool === 'spawn' ? h('div', { class: 'pal-row' }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형'], ['fill', '▧ 방 채우기']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.spawnShape === k ? ' on' : ''), onclick: () => { ui.spawnShape = k; ui.showSpawn = true; setTool('spawn'); paint(); } }, t))) : null,
+          h('div', { class: 'hint' }, (fl.spawn || {}).enabled ? '초록 = 이 안에서만 몬스터가 생김 · 빨강 = 절대 안 생김. 초록이 없으면 빨강을 뺀 아무 곳.' : '속성의 "몬스터 스폰"을 켜야 게임에서 적용됩니다.'));
+        if (canRand) {
+          const sets = fl.randSets || [];
+          zone.push(h('div', { class: 'fl' }, '🎲 무작위 칸 (방이 들어갈 때마다 달라짐)'),
+            h('div', { class: 'pal-row' },
+              ...sets.map((st, i) => h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === i + 1 ? ' on' : ''), style: { borderLeftColor: randColor(i + 1) }, title: (st.opts || []).map(o => (o.t === -2 ? '그대로' : (PDM.TERRAIN_BY_ID[o.t] || {}).name || o.t) + ' ' + (o.w ?? 1)).join(' · ') + ' — 오른쪽 클릭: 이름 바꾸기 · 복제 · 삭제', onclick: () => { ui.randVal = i + 1; ui.showRand = true; setTool('rand'); paint(); },
+                oncontextmenu: e => { e.preventDefault(); PDM.ui.menu(e.clientX, e.clientY, randSetMenu(i)); } }, `${i + 1}. ${st.name || '묶음'}`)),
+              sets.length ? h('button', { class: 'btn xs' + (ui.tool === 'rand' && ui.randVal === 0 ? ' on' : ''), onclick: () => { ui.randVal = 0; ui.showRand = true; setTool('rand'); paint(); } }, '지우개') : null,
+              h('button', { class: 'btn xs add', title: '새 무작위 칸 묶음 — 오른쪽 속성의 "변형"에서 선택지를 정합니다', onclick: () => addRandSet() }, '+ 묶음')),
+            ui.tool === 'rand' && ui.randVal > 0 && sets[ui.randVal - 1] ? h('div', { class: 'pal-row' },
+              h('button', { class: 'btn xs', onclick: () => renameRandSet(ui.randVal - 1) }, '이름 바꾸기'),
+              h('button', { class: 'btn xs', onclick: () => dupRandSet(ui.randVal - 1) }, '복제'),
+              h('button', { class: 'btn xs', onclick: () => clearRandCells(ui.randVal - 1) }, '칠한 칸 지우기'),
+              h('button', { class: 'btn xs danger', onclick: () => removeRandSet(ui.randVal - 1) }, '삭제')) : null,
+            sets.length && ui.tool === 'rand' ? h('div', { class: 'pal-row' }, ...[['pen', '✎ 칠하기'], ['rect', '▭ 사각형']].map(([k, t]) => h('button', { class: 'btn xs' + (ui.randShape === k ? ' on' : ''), onclick: () => { ui.randShape = k; ui.showRand = true; setTool('rand'); paint(); } }, t))) : null,
+            h('div', { class: 'hint' }, sets.length ? '칠한 칸은 게임에서 그 묶음의 선택지 중 하나가 됩니다. 오른쪽 "변형"에서 선택지 · 무게를 정하고 「🎲 변형 미리보기」로 확인하세요.' : '"+ 묶음"을 눌러 무작위 칸 묶음을 만든 뒤 칸에 칠하세요.'));
+        }
+        if (zone.length) palette.append(pgroup('zones', '구역 · 입구/출구', '', ...zone));
+        // ⑥ 고급 (기본 접힘) — 자주 쓰지 않는 것 · 되돌리기 어려운 것은 맨 아래 따로
+        if (drawable) palette.append(pgroup('adv', '고급', '',
+          h('div', { class: 'fl' }, '타일 그림 (' + themeName(themeOf(fl, kind)) + ')'),
+          h('div', { class: 'pal-row' },
+            h('button', { class: 'btn xs', title: '지금 고른 타일 한 칸(16×16)의 그림을 고칩니다', onclick: editOneTile }, '✎ 고른 타일'),
+            h('button', { class: 'btn xs', title: '타일셋 전체(256×256)를 고칩니다', onclick: editTileset }, '▦ 타일셋 전체'),
+            h('button', { class: 'btn xs', title: 'PNG 파일을 타일셋으로 불러옵니다 (256×256, 16칸 격자)', onclick: importTileset }, '⤓ PNG 불러오기')),
+          h('div', { class: 'fl' }, '맵 크기'),
+          h('div', { class: 'hint' }, '네 모서리의 ◢ 손잡이를 끌어서 조절 · 점선 바깥에 그리면 그 칸까지 넓어집니다'),
+          h('div', { class: 'pal-row' }, h('button', { class: 'btn xs', title: '타일을 그린 영역만 남기고 둘레의 빈 칸을 잘라냅니다 (둘레 한 칸은 남김)', onclick: trimToDrawn }, '✂ 그린 영역에 맞춰 자르기'),
+            h('button', { class: 'btn xs', onclick: layerSettings }, '레이어 설정…')),
+          h('div', { class: 'pal-danger' }, h('button', { class: 'btn xs danger', onclick: clearAll }, '🗑 맵 전체 지우기…'))));
+        palette.append(h('div', { class: 'hint mt-5' }, drawable ? '왼쪽 클릭 그리기 · 오른쪽 클릭 스포이드 · ⇱ 선택: 끌기 = 영역 (Alt+끌기 = 어디서든) · Ctrl+C/X/V · Delete · Ctrl+A · Shift/Ctrl+클릭 = 여러 개 · 방향키 = 한 칸씩' : ''));
       }
 
       // ---- 도구 막대 ----
@@ -539,7 +616,7 @@
       const TOOL_NAMES = { pen: '펜', rect: '사각형', room: '방', fill: '채우기', pick: '스포이드', erase: '지우개', select: '선택', object: '오브젝트 놓기', rand: '무작위 칸', spawn: '스폰 구역', utile: '사용자 타일' };
       function updCtx() {
         if (PDM.tabs.active !== key || !PDM.status) return;
-        const L = ui.tool === 'utile' ? ((PDM.tileLayers().find(l => l.id === ui.tileLayer) || {}).name || ui.tileLayer) : '';
+        const L = onLayer() ? ((PDM.tileLayers().find(l => l.id === ui.tileLayer) || {}).name || ui.tileLayer) : '';
         const sel = selIndexes().length, a = areaOn() ? ui.area : null;
         PDM.status.ctx([ui.pasteClip ? '붙여넣기 중 — 누른 칸이 왼쪽 위 · Esc 끝' : `도구: ${TOOL_NAMES[ui.tool] || ui.tool}${ui.tool === 'erase' ? ' (' + (ERASE[ui.eraseKind] || '') + ')' : ''}`,
           L ? `레이어: ${L}` : '', `×${+ui.zoom.toFixed(2)}`, drawable ? `${W}×${H}칸` : '자동 생성 층',
@@ -548,18 +625,23 @@
       function drawTools() {
         updCtx();
         tools.innerHTML = '';
-        const T = (id, label, tip) => h('button', { class: 'tool' + (ui.tool === id ? ' on' : ''), title: tip || '', onclick: () => { ui.tool = id; drawTools(); drawPalette(); } }, label);
-        if (drawable) tools.append(T('pen', '✎ 펜', '타일 그리기 (B)'), T('rect', '▭ 사각형', '끌어서 채운 사각형'), T('room', '▣ 방', '끌어서 벽 두른 방'), T('fill', '▧ 채우기', '(G)'), T('pick', '⊙ 스포이드', '(I)'), T('erase', '⌫ 지우개', '끌어서 지우기 (E) — 무엇을 지울지는 왼쪽 「지우개」에서'));
-        tools.append(T('select', '⇱ 선택', '오브젝트 · 입구/출구 계단 선택/이동, 빈 곳에서 끌기 = 영역 선택 (복사 · 잘라내기 · 붙여넣기), Shift/Ctrl+클릭 = 여러 개 (M)'), T('object', '✚ 오브젝트'));
-        if (canRand && (fl.randSets || []).length) tools.append(T('rand', '🎲 무작위 칸', '방이 들어갈 때마다 달라지는 칸 칠하기 (왼쪽에서 묶음 고르기)'));
-        if (canSpawn) tools.append(T('spawn', '☗ 스폰 구역', '몬스터가 생기는 구역 / 안 생기는 구역 칠하기'));
-        if (kind === 'node' && fl.mode === 'handmade') tools.append(h('button', { class: 'tool', title: '맵 전체를 한 장의 그림으로 직접 그립니다 (게임에서는 타일 그림 대신 이 그림이 보임)', onclick: () => { ui.paintMode = true; PDM.tabs.refresh(key); } }, '🖌 맵 세부 그리기'));
+        const K = PDM.keys, kl = id => { const k = K.label('draw.' + id); return k ? ` (${k})` : ''; };
+        const T = (id, label, tip, o = {}) => { const on = toolOn(id); return h('button', { class: 'tool' + (on ? ' on' : ''), 'aria-pressed': String(on), title: tip || '', disabled: !!o.disabled, onclick: () => setTool(id) }, label); };
+        const grp = (label, ...kids) => h('div', { class: 'tool-grp', role: 'group', 'aria-label': label }, ...kids.filter(Boolean));
+        // 묶음: 그리기 | 선택 · 놓기 | 구역 · 모드 | 보기 (5차 — 그리기 도구는 편집 대상(지형 / 고른 레이어)에 그림)
+        const tgt = onLayer() ? `고른 레이어「${(LAYERS().find(l => l.id === ui.tileLayer) || {}).name || ui.tileLayer}」` : '지형';
+        if (drawable) tools.append(grp('그리기', T('pen', '✎ 펜', `${tgt}에 그리기${kl('pen')}`), T('rect', '▭ 사각형', `${tgt}에 끌어서 채운 사각형`), T('room', '▣ 방', onLayer() ? '방은 지형 전용 — 레이어 목록에서 「지형 · 전체」를 고르세요' : '끌어서 벽 두른 방', { disabled: onLayer() }),
+          T('fill', '▧ 채우기', `${tgt} 채우기${kl('fill')}`), T('pick', '⊙ 스포이드', `${tgt}에서 고르기${kl('pick')}`), T('erase', '⌫ 지우개', `끌어서 지우기${kl('erase')} — 무엇을 지울지는 왼쪽 「지우개」`)));
+        tools.append(grp('선택 · 놓기', T('select', '⇱ 선택', `오브젝트 · 계단 선택/이동, 빈 곳에서 끌기 = 영역 (복사 · 잘라내기 · 붙여넣기 — ${onLayer() ? '고른 레이어만' : '지형 + 모든 레이어'}), Shift/Ctrl+클릭 = 여러 개${kl('select')}`), T('object', '✚ 오브젝트', '오브젝트 놓기 — 종류는 왼쪽 「오브젝트」')));
+        tools.append(grp('구역 · 모드', canRand && (fl.randSets || []).length ? T('rand', '🎲 무작위 칸', '방이 들어갈 때마다 달라지는 칸 칠하기 (왼쪽에서 묶음 고르기)') : null,
+          canSpawn ? T('spawn', '☗ 스폰 구역', '몬스터가 생기는 구역 / 안 생기는 구역 칠하기') : null,
+          kind === 'node' && fl.mode === 'handmade' ? h('button', { class: 'tool', title: '맵 전체를 한 장의 그림으로 직접 그립니다 (게임에서는 타일 그림 대신 이 그림이 보임)', onclick: () => { ui.paintMode = true; PDM.tabs.refresh(key); } }, '🖌 세부 그리기') : null));
         tools.append(h('span', { class: 'tb-sep' }),
           h('button', { class: 'tool', title: '축소 (Ctrl+휠)', onclick: () => zoomStep(-1) }, '−'),
-          h('span', { class: 'hint' }, `×${+ui.zoom.toFixed(2)}`),
+          h('span', { class: 'hint tb-num' }, `×${+ui.zoom.toFixed(2)}`),   // 폭 고정 — 숫자 길이가 바뀌어도 옆 버튼이 밀리지 않게
           h('button', { class: 'tool', title: '확대 (Ctrl+휠)', onclick: () => zoomStep(1) }, '+'),
           h('button', { class: 'tool', title: '화면에 맞춤 (Enter)', onclick: () => zoomFit() }, '⛶ 맞춤'),
-          drawable ? h('span', { class: 'hint', title: '펜·지우개 브러쉬 크기 — [ 작게 · ] 크게' }, `브러쉬 ${ui.brush || 1}`) : '',
+          drawable ? h('span', { class: 'hint tb-num', title: '펜·지우개 브러쉬 크기 — [ 작게 · ] 크게' }, `브러쉬 ${ui.brush || 1}`) : '',
           // 보기 켜고 끄기는 한 묶음 버튼으로 (예전: 무작위 표시 · 구역 표시 · 세부 그림 · 계단 번호 · 격자 · 구역 색 버튼이 따로 있었음)
           PDM.ui.dropBtn('👁 보기', () => {
             const tg = (label, on, set, hint) => ({ label, checked: !!on, hint, run: () => { set(); drawTools(); paint(); } });
@@ -711,6 +793,7 @@
       function drawLayer(g, l, s) {
         const arr = tilesL && tilesL[l.id]; if (!arr || ui.hideLayers[l.id]) return;
         g.save(); if (l.visible === false) g.globalAlpha = .35;
+        if (ui.dimOthers && onLayer() && l.id !== ui.tileLayer) g.globalAlpha *= .3;   // 다른 레이어 흐리게 (편집기만)
         for (let i = 0; i < W * H; i++) {
           const t = utDef(arr[i]); if (!t) continue;
           if (!t.image) { if (t.fx || t.gameFx) PDM.drawUserTile(g, t, (i % W) * s, Math.floor(i / W) * s, s, tilesImg).catch(() => { }); continue; }   // 그림 없는 효과 타일: 지형 위에 ✦ (지형은 이미 그림)
@@ -730,6 +813,8 @@
         const c = ui.pasteClip, px = ui.hover.x, py = ui.hover.y;
         g.save(); g.globalAlpha = .6;
         for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) { const v = c.terrain[y * c.w + x]; if (v >= 0 && inB(px + x, py + y)) PDM.assets.drawTerrain(g, tilesImg, v, (px + x) * s, (py + y) * s, s, up); }
+        const lc = c.layer ? c.tiles[c.layer] : onLayer() && !c.objectsOnly ? (c.tiles || {})[ui.tileLayer] : null;   // 레이어 붙여넣기: 칠한 칸 자리
+        if (lc) { g.fillStyle = PDM.alpha(PDM.cssVar('--map-sel', '#4fd8c6'), .35); for (let y = 0; y < c.h; y++) for (let x = 0; x < c.w; x++) if (lc[y * c.w + x] && inB(px + x, py + y)) g.fillRect((px + x) * s, (py + y) * s, s, s); }
         g.globalAlpha = 1;
         (c.objects || []).forEach(o => { const ox = px + ((o.at || {}).x | 0), oy = py + ((o.at || {}).y | 0); if (!inB(ox, oy)) return; g.fillStyle = ((PDM.OBJECT_TYPES[o.type] || {}).color || '#ffffff') + 'cc'; g.fillRect(ox * s + s * .2, oy * s + s * .2, s * .6, s * .6); });
         g.setLineDash([4, 3]); g.strokeStyle = '#ffe28a'; g.lineWidth = 2; g.strokeRect(px * s, py * s, c.w * s, c.h * s); g.setLineDash([]);
@@ -1008,8 +1093,9 @@
         if (drawable && v >= 0 && (k === 'all' || (k === 'wall' && t && !t.pass && v !== 0) || (k === 'floor' && (!t || t.pass || v === 0)))) terrain[i] = -1;
         if (spawnL && (k === 'all' || k === 'spawn')) spawnL[i] = 0;
         if (randL && (k === 'all' || k === 'rand')) randL[i] = 0;
-        if (tilesL && (k === 'all' || ((k === 'wall' || k === 'floor') && terrain[i] < 0))) for (const id in tilesL) tilesL[id][i] = '';   // 전부 · 빈 칸이 된 칸: 모든 레이어
-        else if (utileL && k === 'utile') utileL[i] = '';                                                                        // 사용자 타일: 지금 레이어만
+        const lk = ui.lockLayers;
+        if (tilesL && (k === 'all' || ((k === 'wall' || k === 'floor') && terrain[i] < 0))) { for (const id in tilesL) if (!lk[id]) tilesL[id][i] = ''; }   // 전부 · 빈 칸이 된 칸: 잠기지 않은 모든 레이어
+        else if (utileL && k === 'utile' && !lk[ui.tileLayer] && utileL[i]) { utileL[i] = ''; retop(i); }                     // 지금 레이어만 (지형은 남은 레이어에 맞춤)
         if (k === 'all' || k === 'object') down.objs.add(i);
         paint();
       }
@@ -1041,7 +1127,10 @@
         while (st.length) { const [x, y] = st.pop(); if (!inB(x, y) || terrain[y * W + x] !== t0) continue; terrain[y * W + x] = v; st.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]); }
       }
       /** 사용자 타일 칠하기: 그 칸에 타일 id (+ 타일의 지형) — '' 면 지우기 */
-      function setUtile(i) { const t = utDef(ui.utile); if (utileL[i] === (ui.utile || '') && (!t || t.terrain < 0 || terrain[i] === t.terrain)) return false; utileL[i] = ui.utile || ''; if (t && t.terrain >= 0) terrain[i] = t.terrain; return true; }
+      /** 사용자 타일 칠하기 · 지우기 (지금 레이어만). 칸의 지형 = 가장 위 레이어 중 지형을 가진 타일의 지형 (5차: 예전엔 칠한 타일의 지형으로 덮어써,
+       *  위 레이어 타일을 지워도 그 지형이 남았고 아래 레이어 타일의 지형은 되돌아오지 않았음). 지형을 가진 타일이 하나도 없으면 지형 그대로 */
+      function retop(i) { const L = { terrain, tiles: tilesL }; A.retopTerrain(L, i, layerOpts()); }
+      function setUtile(i) { const v = ui.utile || '', before = terrain[i]; if (utileL[i] === v) { retop(i); return terrain[i] !== before; } utileL[i] = v; retop(i); return true; }
       function commitUtile(label) {
         const tc = terrain.slice();
         withPorts(label, () => store.edit(key, label, r => { r.layers.terrain = tc; putTiles(r); }, { silent: true }));
@@ -1124,7 +1213,8 @@
         }
         if (drawable && e.button === 2 && inB(x, y) && ui.tool !== 'utile') { ui.terrain = terrain[y * W + x]; if (ui.tool === 'object' || ui.tool === 'select') ui.tool = 'pen'; drawPalette(); drawTools(); return; }
         if (ui.tool === 'utile' && utileL && inB(x, y)) {
-          if (e.button === 2) { ui.utile = utileL[y * W + x] || ''; drawPalette(); return; }   // 스포이드
+          if (e.button === 2 || ui.utShape === 'pick') { ui.utile = utileL[y * W + x] || ''; if (ui.utShape === 'pick') ui.utShape = 'pen'; drawPalette(); drawTools(); return; }   // 스포이드 (오른쪽 클릭 · 스포이드 도구)
+          if (ui.lockLayers[ui.tileLayer]) { toast('잠긴 레이어입니다 — 왼쪽 레이어 목록의 🔒 를 눌러 풀 수 있습니다', 'warn'); return; }
           if (ui.utShape === 'rect') { down = 'utrect'; dragRect = [x, y, x, y]; paint(); }
           else if (ui.utShape === 'fill') { utFill(x, y); paint(); commitUtile('사용자 타일 채우기'); }
           else { down = 'utile'; brushCells(x, y).forEach(([bx, by]) => setUtile(by * W + bx)); paint(); }
@@ -1299,7 +1389,9 @@
         const c = ui.pasteClip;
         if (!A.valid(c)) { ui.pasteClip = null; toast('붙여 넣을 수 없는 데이터입니다', 'bad'); paint(); return; }
         let res = null;
-        try { withPorts('영역 붙여넣기', () => store.edit(key, c.objectsOnly ? `오브젝트 ${c.objects.length}개 붙여넣기` : `영역 붙여넣기 ${c.w}×${c.h}`, r => { res = A.paste(r, c, x, y, { key, kind, uid: () => PDM.uid('o') }); })); }
+        // 편집 대상이 레이어면 그 레이어 칸만 붙임 (전체 영역 복사본이면 그중 이 레이어 것만 — 지형 · 다른 레이어 · 오브젝트는 그대로)
+        const layerOnly = onLayer() && !c.objectsOnly, src = layerOnly && !c.layer ? Object.assign({}, c, { layer: ui.tileLayer, tiles: { [ui.tileLayer]: (c.tiles || {})[ui.tileLayer] || new Array(c.w * c.h).fill('') }, objects: [] }) : c;
+        try { withPorts('영역 붙여넣기', () => store.edit(key, c.objectsOnly ? `오브젝트 ${c.objects.length}개 붙여넣기` : layerOnly ? `레이어 붙여넣기 ${c.w}×${c.h}` : `영역 붙여넣기 ${c.w}×${c.h}`, r => { res = A.paste(r, src, x, y, Object.assign({ key, kind, uid: () => PDM.uid('o') }, layerOpts(), layerOnly ? { layer: ui.tileLayer } : c.layer ? { layer: c.layer } : {})); })); }
         catch (err) { toast('붙여넣기 실패: ' + err.message, 'bad'); return; }
         if (!res) return;
         const notes = [res.clippedCells ? `맵 밖 ${res.clippedCells}칸` : '', res.clippedObjects ? `맵 밖 오브젝트 ${res.clippedObjects}개` : '', res.skippedTypes ? `방 템플릿에 놓을 수 없는 오브젝트 ${res.skippedTypes}개` : '', res.randDropped ? '무작위 칸(다른 맵의 묶음 번호)' : ''].filter(Boolean);
@@ -1311,7 +1403,7 @@
       function clearArea(label) {
         const r = ui.area; if (!r) return;
         clearSel();
-        withPorts(label, () => store.edit(key, label, d => { A.clear(d, r); }));
+        withPorts(label, () => store.edit(key, label, d => { A.clear(d, r, Object.assign(layerOpts(), onLayer() ? { layer: ui.tileLayer } : {})); }));   // 레이어 편집 중이면 그 레이어만
       }
       function deleteSelected() {
         const ids = new Set(selIndexes().map(i => fl.objects[i].id).filter(Boolean)); if (!ids.size) return;
@@ -1320,11 +1412,11 @@
       }
       /** 지금 선택을 복사본으로 (영역 → 영역 · 여러 오브젝트 → 오브젝트만). 없으면 null */
       function selectionClip() {
-        if (areaOn()) return A.copy(fl, ui.area, key);
+        if (areaOn()) return A.copy(fl, ui.area, key, onLayer() ? { layer: ui.tileLayer } : {});
         if (multi()) return A.copyObjects(fl, ui.selIds, key);
         return null;
       }
-      const clipLabel = c => c.objectsOnly ? `오브젝트 ${c.objects.length}개` : `맵 영역 ${c.w}×${c.h}${c.objects.length ? ' · 오브젝트 ' + c.objects.length : ''}`;
+      const clipLabel = c => c.objectsOnly ? `오브젝트 ${c.objects.length}개` : c.layer ? `레이어「${(LAYERS().find(l => l.id === c.layer) || {}).name || c.layer}」 영역 ${c.w}×${c.h}` : `맵 영역 ${c.w}×${c.h}${c.objects.length ? ' · 오브젝트 ' + c.objects.length : ''}`;
       /** 고른 것 복제: 복사본을 만들어 붙여넣기 미리보기로 (클립보드는 그대로) */
       function duplicateSelection() {
         const c = selectionClip(); if (!c) return;
@@ -1388,7 +1480,7 @@
         if (K.is(e, 'draw.deselect')) { e.preventDefault(); clearSel(); ui.pasteClip = null; paint(); showInspector(); return; }
         // 도구 · 브러쉬 크기 — 편집 › 단축키 설정 의 "그리기" 키 (스프라이트 편집과 같은 키)
         const tk = K.tool(e, ['pen', 'erase', 'fill', 'pick', 'select']);
-        if (tk && (drawable || tk === 'select')) { e.preventDefault(); ui.tool = tk; drawTools(); drawPalette(); return; }
+        if (tk && (drawable || tk === 'select')) { e.preventDefault(); setTool(tk); return; }   // 편집 대상이 레이어면 그 레이어용 도구로 (setTool)
         if (K.is(e, 'draw.brushDown') || K.is(e, 'draw.brushUp')) { e.preventDefault(); ui.brush = PDM.clamp((ui.brush || 1) + (K.is(e, 'draw.brushUp') ? 1 : -1), 1, 9); drawTools(); return; }
         if (e.key === 'Enter') { e.preventDefault(); zoomFit(); return; }
         if (e.key === 'Delete' && areaOn()) { e.preventDefault(); clearArea('영역 지우기'); return; }

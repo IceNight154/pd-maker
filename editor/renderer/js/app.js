@@ -96,7 +96,7 @@
     // 다시 그릴 때 화면이 밀리지 않게: 그림·미리보기(비동기로 크기가 정해짐)가 아직 작아서 페이지가 잠깐 짧아지면
     // 스크롤 위치가 잘려 위로 밀렸음 → 잠깐 예전 높이를 최소 높이로 잡아 두었다가 풂
     // 안쪽 스크롤 칸(아이템 시트 고르기 등)의 위치도 그대로 — 다시 그리면 맨 위로 돌아가 밀려 보였음
-    const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view';
+    const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view, .palette';
     const inner = active === t ? [...t.el.querySelectorAll(INNER)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const oldH = active === t ? t.el.offsetHeight : 0;
     // 기준점: 방금 누른(포커스된) 칸 — 다시 그린 뒤 같은 자리의 칸이 화면의 같은 높이에 오게 맞춤 (위쪽 칸 높이가 바뀌어도 밀리지 않게)
@@ -134,10 +134,14 @@
     const fix = () => { if (moved) return; const n = find(); if (!n) return; const d = n.getBoundingClientRect().top - a.top; if (Math.abs(d) > 1) body.scrollTop += d; };
     fix(); [30, 120, 400].forEach(ms => setTimeout(fix, ms));   // 그림 · 미리보기가 늦게 커져도 다시 맞춤 (그사이 휠로 움직였으면 그만)
   }
+  /** 탭 안쪽 스크롤 칸들의 위치 (5차): 탭을 바꾸면 그 탭의 화면(t.el)을 문서에서 뗐다가 다시 붙이는데, 브라우저는 뗀 요소의 스크롤을 0 으로 되돌림.
+   *  예전엔 바깥(#tabbody) 위치만 기억해서 맵 편집기 팔레트 · 시트 고르기 같은 안쪽 칸이 탭을 오갈 때마다 맨 위로 튀었음 → 떼기 전에 모두 기억했다가 붙인 뒤 되돌림 */
+  const innerScrolls = root => { const out = []; root.querySelectorAll('*').forEach(e => { if (e.scrollTop || e.scrollLeft) out.push([e, e.scrollTop, e.scrollLeft]); }); return out; };
   function activate(t) {
-    if (active && active !== t) active.scroll = $('#tabbody').scrollTop;
+    if (active && active !== t) { active.scroll = $('#tabbody').scrollTop; active.inner = innerScrolls(active.el); }
     active = t;
     const body = $('#tabbody'); body.innerHTML = ''; body.append(t.el); body.scrollTop = t.scroll || 0;
+    if (t.inner) { t.inner.forEach(([e, top, left]) => { if (t.el.contains(e)) { e.scrollTop = top; e.scrollLeft = left; } }); t.inner = null; }
     if (!t.el.childElementCount) render(t);
     drawTabbar(); markTree();
     PDM.inspector.clear(); PDM.status.ctx('');
@@ -380,6 +384,53 @@
     { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
     '-',
     { label: '단축키 설정…', hint: PDM.keys.label('keySettings'), run: () => PDM.keys.dialog() }];
+  // ---- 실행 환경 (5차) — 프로젝트마다 (project.json testplay). 바꿔도 맵 · 이벤트 데이터는 그대로 ----
+  const envCfg = () => PDM.testEnv.normalize((store.get('project') || {}).testplay).cfg;
+  function setEnv(patch, label) {
+    if (!store.isOpen) return;
+    store.edit('project', label || '실행 환경', p => { p.testplay = Object.assign(PDM.testEnv.normalize(p.testplay).cfg, patch); }, { silent: true });
+    drawToolbar(); toast('실행 환경: ' + PDM.testEnv.describe(PDM.testEnv.resolve(envCfg())), 'ok');
+  }
+  const ENV_ITEMS = () => { const c = envCfg(); return [
+    { head: '실행 환경 (이 프로젝트)' },
+    ...Object.entries(PDM.testEnv.ENV_NAMES).map(([k, n]) => ({ label: n, checked: c.env === k, hint: k === 'custom' ? '' : PDM.testEnv.PRESETS[k].kind === 'pc' ? `${PDM.testEnv.PRESETS[k].w}×${PDM.testEnv.PRESETS[k].h}` : `${PDM.testEnv.PRESETS[k].w}×${PDM.testEnv.PRESETS[k].h} ${PDM.testEnv.PRESETS[k].dpi}dpi`, disabled: !store.isOpen, run: () => k === 'custom' ? envDialog({ env: 'custom' }) : setEnv({ env: k }) })),
+    { head: '시작 배속' },
+    ...PDM.testEnv.SPEEDS.map(v => ({ label: v + '배속', checked: c.speed === v, disabled: !store.isOpen, run: () => setEnv({ speed: v }, '시작 배속') })),
+    '-', { label: '실행 환경 설정… (해상도 · 배율 · 회전 · 안전 영역 · 터치 · 디버그)', disabled: !store.isOpen, run: () => envDialog() }]; };
+  /** 실행 환경 창 — 고칠 때마다 아래에 계산 결과(기기 픽셀 → 논리 화면 → PC 창)를 바로 보여 줌 */
+  async function envDialog(init) {
+    if (!store.isOpen) return;
+    const c = Object.assign(envCfg(), init || {});
+    const out = h('div', { class: 'env-calc mono' });
+    const sel = (k, opts) => { const e = h('select', { onchange: () => { c[k] = e.value; draw(); } }, opts.map(([v, t]) => h('option', { value: v }, t))); e.value = String(c[k]); return e; };
+    const numIn = (get, set, o) => h('input', Object.assign({ type: 'number', value: get(), oninput: e => { set(e.target.value); draw(); } }, o));
+    const chk = (k, t, hint) => h('label', { class: 'check', title: hint || '' }, h('input', { type: 'checkbox', checked: !!c[k], onchange: e => { c[k] = e.target.checked; draw(); } }), h('span', {}, t));
+    const custom = h('div', { class: 'row' }, PDM.ui.field('기기 가로 (px)', numIn(() => c.custom.w, v => { c.custom.w = v; }, { min: 240, max: 8192 })), PDM.ui.field('기기 세로 (px)', numIn(() => c.custom.h, v => { c.custom.h = v; }, { min: 240, max: 8192 })), PDM.ui.field('밀도 (dpi)', numIn(() => c.custom.dpi, v => { c.custom.dpi = v; }, { min: 80, max: 800 })));
+    const insets = h('div', { class: 'row' }, ...['l', 't', 'r', 'b'].map(k => PDM.ui.field({ l: '왼쪽', t: '위', r: '오른쪽', b: '아래' }[k] + ' (기기 px)', numIn(() => c.insets[k], v => { c.insets[k] = v; }, { min: 0, max: 1000 }))));
+    function draw() {
+      const { cfg, fixes } = PDM.testEnv.normalize(c), r = PDM.testEnv.resolve(cfg);
+      custom.hidden = c.env !== 'custom'; insets.hidden = c.safeArea !== 'custom';
+      out.textContent = [PDM.testEnv.describe(r), r.insets.some(Boolean) ? `안전 영역 (PC 창 px): 왼 ${r.insets[0]} · 위 ${r.insets[1]} · 오른 ${r.insets[2]} · 아래 ${r.insets[3]}` : '안전 영역: 없음',
+        `회전 ${r.rotate ? '허용 (게임에서 F9)' : '안 함'} · 터치 표시 ${r.touch ? '켬' : '끔'} · 디버그 정보 ${r.debug ? '켬' : '끔'} · 시작 배속 ${r.speed}배`,
+        fixes.length ? '⚠ 허용 범위 밖 값은 저장할 때 고침: ' + fixes.join(', ') : ''].filter(Boolean).join('\n');
+    }
+    const body = h('div', { class: 'env-dlg' },
+      h('div', { class: 'row' }, PDM.ui.field('실행 환경', sel('env', Object.entries(PDM.testEnv.ENV_NAMES))),
+        PDM.ui.field('UI 배율', sel('uiScale', [['0', '자동 (그 기기에서 게임이 고르는 값)'], ...[2, 3, 4, 5, 6, 7, 8].map(v => [String(v), '×' + v])]), '기기 기준 배율 — 클수록 UI 가 크고 논리 화면이 작아짐'),
+        PDM.ui.field('시작 배속', sel('speed', PDM.testEnv.SPEEDS.map(v => [String(v), v + '배속']))),
+        PDM.ui.field('안전 영역 미리보기', sel('safeArea', [['none', '없음'], ['notch', '노치 · 제스처 바 흉내'], ['custom', '직접 (기기 px)']]))),
+      custom, insets,
+      h('div', { class: 'btnbar' }, chk('rotate', '실행 중 화면 돌리기 허용 (F9)'), chk('touch', '터치 표시 (누른 자리에 원)', '마우스 클릭을 손가락 터치처럼 표시 — 실제 터치 입력 검증은 아님'), chk('debug', '디버그 정보 표시 (환경 · 화면 · 배속 · FPS)')),
+      out,
+      h('p', { class: 'hint' }, 'PC 에서 기기 화면을 흉내 내는 "화면 시뮬레이션"입니다 — 에뮬레이터 · 실제 기기 검증을 대신하지 않습니다 (터치 · 앱 생명주기 · 하드웨어 가속 · 실제 노치는 다름). 웹 모드에서는 저장만 됩니다.'));
+    c.uiScale = String(c.uiScale); c.speed = String(c.speed);
+    draw();
+    const ok = await PDM.ui.modal('실행 환경 설정', body, [['취소', false], ['저장', true, 'pri']]);
+    if (!ok) return;
+    const { cfg } = PDM.testEnv.normalize(Object.assign({}, c, { uiScale: Number(c.uiScale), speed: Number(c.speed) }));
+    setEnv(cfg, '실행 환경 설정');
+  }
+  PDM.testEnvUI = { dialog: envDialog, set: setEnv, items: ENV_ITEMS };
   const CHECK_LABEL = '검사 — 끊어진 참조 · 빠진 그림 · 소리 찾기';
   const MENUS = {
     '파일': () => [
@@ -412,7 +463,7 @@
       { label: CHECK_LABEL, hint: PDM.keys.label('check'), run: runCheck, disabled: !store.isOpen }
     ],
     // 4차: 테스트 플레이 · 빌드를 "프로젝트"에서 따로 (도구 모음의 ▶ 묶음과 같은 목록)
-    '실행': () => RUN_ITEMS(),
+    '실행': () => [...RUN_ITEMS(), '-', ...ENV_ITEMS()],
     '도구': () => [
       { label: '용어 관리', run: () => PDM.tabs.open('terms'), disabled: !store.isOpen },
       { label: '마음 시스템', run: () => PDM.tabs.open('heart'), disabled: !store.isOpen },
@@ -471,6 +522,7 @@
       h('span', { class: 'grow' }),
       grp('검사', tbBtn('check', '검사', runCheck, { disabled: !open, tip: CHECK_LABEL, key: PDM.keys.label('check') })),
       grp('실행', tbBtn('play', '테스트 플레이', () => playtest(), { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장 · 검사 후 게임 실행', key: PDM.keys.label('playtest') }),
+        open ? (() => { const r = PDM.testEnv.resolve((store.get('project') || {}).testplay); const b = tbDrop(r.kind === 'pc' ? 'monitor' : 'phone', r.name + (r.speed > 1 ? ` · ${r.speed}×` : ''), ENV_ITEMS, { tip: '실행 환경 — ' + PDM.testEnv.describe(r) }); b.classList.add('env-btn'); b.dataset.env = r.env; return b; })() : null,
         tbDrop('clean', '빌드', () => RUN_ITEMS(false), { iconOnly: true, tip: '실행 방식 · 컴파일 확인 · 빌드 정리' + webTip() }),
         tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running,   // 실행 중일 때만 (예전: 웹 모드에서는 늘 빨간 버튼이 켜져 있었음)
           tip: '실행 · 빌드 중지', key: PDM.keys.label('stopGame') })),
@@ -959,7 +1011,10 @@
     // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'debug' 기본 = gradle desktop:debug, INDEV 버전 | 'playtest' = PDMaker 테스트 실행)
     if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'debug';
     if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
-    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode }); setRunning(true); }
+    // 실행 환경 (5차): 프로젝트 testplay → 계산한 값을 게임에 (-Dpdmaker.testenv) — 런타임 MakerTestEnv 가 창 크기 · 배율 · 안전 영역 · 배속을 적용
+    const testenv = task === 'play' ? PDM.testEnv.resolve((store.get('project') || {}).testplay) : null;
+    if (testenv) PDM.log('> 실행 환경: ' + PDM.testEnv.describe(testenv), 'dim');
+    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode, testenv }); setRunning(true); }
     catch (e) { PDM.log(e.message, 'err'); toast(e.message, 'bad'); }
   }
   async function playtest(mode) {

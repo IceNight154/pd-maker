@@ -193,6 +193,35 @@ public class Hooks {
 					com.watabou.noosa.Game.scene().addToFront(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd(dl, null, null));   // 게임 화면 밖(타이틀)에서도
 					break;
 				}
+				case "rotate": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.rotate(); System.out.println("[TEST] rotate"); break;   // F9 와 같음 (가로 ↔ 세로)
+				case "testenv": System.out.println("[TEST] testenv " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.debugState()); break;   // 실행 환경 · 배속 상태 (5차)
+				case "speed": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.setSpeed(Integer.parseInt(p[1])); System.out.println("[TEST] speed " + p[1]); break;
+				case "skip": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.toggleSkip(); System.out.println("[TEST] skip " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.skipping()); break;
+				case "complete": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.completeLine(); break;
+				case "next": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.nextLine(); break;
+				case "typing": {   // 떠 있는 대사창의 글자 진행 · 연출 (5차)
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd)
+						System.out.println("[TEST] typing " + ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w).debugTyping());
+					break; }
+				case "layercells": { // 레이어별 칸 → 사용자 타일 id (게임이 실제로 만든 타일맵에서) + 칸 지형 — 편집기 저장 배열과 비교 (tools/playtest/compare-layers.js)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					StringBuilder sb = new StringBuilder("[TEST] layercells w=" + lv.width() + " h=" + lv.height() + " {");
+					java.util.Map<String, java.util.TreeMap<Integer, String>> by = new java.util.TreeMap<>();
+					java.util.List<com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap> all = new java.util.ArrayList<>(lv.customTiles); all.addAll(lv.customWalls);
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : all) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t;
+						java.util.TreeMap<Integer, String> m = by.computeIfAbsent(u.layer + (lv.customWalls.contains(t) ? "@above" : "@below"), k -> new java.util.TreeMap<>());
+						for (int k = 0; k < u.cells.length; k++) m.put(u.cells[k], u.ids[k]);
+					}
+					boolean first = true;
+					for (java.util.Map.Entry<String, java.util.TreeMap<Integer, String>> e : by.entrySet()) {
+						sb.append(first ? "" : ",").append('"').append(e.getKey()).append("\":{"); first = false; boolean f2 = true;
+						for (java.util.Map.Entry<Integer, String> c : e.getValue().entrySet()) { sb.append(f2 ? "" : ",").append('"').append(c.getKey()).append("\":\"").append(c.getValue()).append('"'); f2 = false; }
+						sb.append('}');
+					}
+					sb.append("} map=");
+					for (int k = 0; k < lv.length(); k++) sb.append(k == 0 ? "" : ",").append(lv.map[k]);
+					System.out.println(sb); break; }
 				case "layerinfo": { // 타일 레이어 타일맵 순서 · 함정 목록 · 칸 판정 (layerinfo,<칸>,<칸>…)
 					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
 					StringBuilder sb = new StringBuilder("[TEST] layers below=");

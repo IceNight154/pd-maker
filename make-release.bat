@@ -22,7 +22,7 @@ set "OUT=%CD%\pd-maker-release.zip"
 if exist "%OUT%" del "%OUT%"
 set E=pd-maker/editor
 set PARTS=pd-maker/README.md pd-maker/DESIGN.md pd-maker/start-editor.bat pd-maker/build-exe.bat pd-maker/make-release.bat pd-maker/docs pd-maker/references pd-maker/runtime pd-maker/tools pd-maker/game/shattered-pixel-dungeon-master
-set PARTS=%PARTS% %E%/main.js %E%/preload.js %E%/runtime-installer.js %E%/zip.js %E%/package.json %E%/package-lock.json %E%/renderer %E%/builtin-plugins
+set PARTS=%PARTS% %E%/main.js %E%/preload.js %E%/playtest-init.js %E%/runtime-installer.js %E%/zip.js %E%/package.json %E%/package-lock.json %E%/renderer %E%/builtin-plugins
 if exist "pd-maker\editor\node_modules\electron\dist\electron.exe" set PARTS=%PARTS% %E%/node_modules/electron
 echo Making the zip... (this can take a few minutes)
 tar -a -c -f "%OUT%" --exclude=.git --exclude=.gradle --exclude=.idea --exclude=build --exclude=dist/win-unpacked --exclude=*.pdmaker-backup --exclude=local.properties --exclude=out %PARTS%

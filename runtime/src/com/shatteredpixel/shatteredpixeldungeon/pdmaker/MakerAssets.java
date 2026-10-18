@@ -334,6 +334,7 @@ public class MakerAssets {
 			if (!MakerRuntime.isActive()) return;
 			if (MENU_SCENES.contains(scene.getClass().getSimpleName())) scene.add(new MenuStyler(scene));
 			MakerPages.onSceneCreate(scene);   // 타이틀 하위 페이지 (소식 · 소개 · 지원 · 변경)
+			MakerTestEnv.onSceneCreate(scene);   // 테스트 플레이 실행 환경 · 배속 (5차 — -Dpdmaker.testenv 가 있을 때만)
 			EventInterpreter.sceneCreated(scene);   // 창 크기 · 방향이 바뀌어 같은 층의 게임 화면을 다시 만들면 연출을 옮김
 		} catch (Throwable t) { MakerRuntime.log("메뉴 화면 꾸미기 오류: " + t); }
 	}
