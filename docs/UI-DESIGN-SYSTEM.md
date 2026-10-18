@@ -73,7 +73,7 @@
 |---|---|---|
 | 버튼 | `.btn` + `.pri` `.ghost` `.danger` (`.solid`) `.add` `.on` · 크기 `.sm` `.xs` | 높이는 입력 칸과 같음. 한 화면에 `.pri` 는 하나 |
 | 도구 버튼 | `.tool` (= `.btn` 모양) · 도구 모음 `.tb` (`.icon` `.play` `.stop`) · 아이콘 버튼 `.ib` | 아이콘만 있는 버튼은 `title`(+ `aria-label`) 필수 |
-| 칩 | `.chips > .chip(.on)` | 고르기 · 필터 |
+| 칩 | `.chips > .chip(.on)` | 고르기 · 필터. 켜짐 = 바탕 + 안쪽 아래 줄 (5차: ✓ 글자 · 굵기를 더하던 방식은 폭이 바뀌어 옆 칩이 밀려 없앰) |
 | 입력 칸 | `input` `select` `textarea` · `.field > .fl + 칸 + .hint` · `.row` (가로 묶음) · `.check` | 포커스 = 강조색 테두리 + `--accent-soft` 고리 |
 | 섹션 | `.sec > .sec-head + .sec-body` (`.closed`) | 편집 화면의 기본 묶음 |
 | 상자 | `.box` · `.res-bar` · `.card` | |
@@ -83,6 +83,11 @@
 | 메뉴 · 창 · 알림 | `.ctx` `.ctx-i` (`.chk` 켜고 끄기 ✓ · `.danger` · `.ctx-h` 묶음 제목) · `.modal-bg > .modal > .modal-head/.modal-body/.modal-foot` · `#toast` | 창은 살짝 떠오르며 나타남 · 버튼 순서는 언제나 [취소] [확인/진행] · 켜고 끄는 메뉴 항목은 `checked` 하나로 (글자 앞 ✓ 를 직접 붙이지 않음) |
 | 고르는 카드 | `.selcard(.compact)(.on)` | 퀘스트 · 업적 · 트레일러 장면 · 조합 타일 목록 (예전: 편집기마다 인라인 style) |
 | 단축키 | `<kbd>` | |
+| 접는 묶음 (5차) | `.pg(.closed) > .pg-head(aria-expanded) + .pg-sub + .pg-body` | 맵 팔레트. 접힘 상태는 `localStorage` 에 (다시 열어도 그대로) |
+| 도구 묶음 (5차) | `.tool-grp[role=group][aria-label]` | 맵 도구 줄: 그리기 \| 선택 · 놓기 \| 구역 · 모드. 쓸 수 없는 도구는 `disabled` + 이유를 툴팁에 |
+| 레이어 줄 (5차) | `.layer-list > .lay-row(.on)[aria-pressed]` (`.lay-name` `.lay-n`) | 위 → 아래 순서. 편집 대상 = 테두리 + 굵은 이름 + 위 「칠할 곳」 표시 |
+| 명령 탭 (5차) | `.tabs-cmd > .chip(.on)[role=tab]` · 미리보기 `.dlg-stage.cmd-pv` | 대사 · 대사 스타일 명령의 내용 · 글꼴 · 출력 · 연출 · 미리보기 |
+| 실행 환경 단추 (5차) | `.tb.env-btn` | 고정 폭 11.5em (이름이 바뀌어도 옆 단추가 밀리지 않게, 긴 이름은 … · 전체는 툴팁) |
 
 **세 상태를 구분** (4차): 
 - **주요 동작** `.btn.pri` — 꽉 찬 강조색(`--accent2`) + 흰 글자. 한 화면에 하나.
@@ -90,6 +95,14 @@
 - **위험** `.btn.danger` · 메뉴의 "삭제…" — 평소에도 빨간 글자, hover 때 빨간 바탕. 확인 창(`PDM.ui.confirm`)은 지우기 · 덮어쓰기 글이면 ⚠ + 빨간 "진행" 버튼.
 - **알림** `#toast` — 왼쪽 3px 상태 색 줄 + 기호(i ✓ ! ✕). 실패는 5초 · `role=alert`.
 **포커스**: 키보드로 옮길 때만 `:focus-visible` 고리(강조색 2px). 마우스로 누를 때는 안 보임.
+
+**밀리지 않는 화면** (5차 — `tools/tests/ui-stability.js` 가 검사):
+- 상태에 따라 글이 바뀌는 칸은 **폭 고정**: 상태 줄 `#stDirty` `#stAssets`(15em), 확대 숫자 · 브러쉬 크기 `.tb-num`, 실행 환경 단추. 높이가 내용에 따라 바뀌는 줄은 **높이 고정 + 한 줄 + …** (`.map-info`).
+- 켜짐 · 고름 표시는 **폭을 바꾸지 않는 방법**으로(바탕 · 안쪽 줄 · 테두리) — 글자를 더하거나 굵기를 바꾸지 않음.
+- 스크롤 칸은 `scrollbar-gutter: stable` (스크롤 막대가 생겨도 폭 그대로).
+- 숨김은 `hidden` 속성 — `[hidden] { display: none !important }` 가 `.row` · `.flex` 같은 display 규칙보다 앞섬.
+- 탭을 바꿀 때 안쪽 스크롤은 `activate()` 가 기억했다가 되돌림 (새 스크롤 칸은 `INNER` 목록에 추가).
+- 밀림을 임시 오프셋 · 강제 새로고침으로 감추지 않음.
 
 ## 4. 유틸리티 (편집기 코드의 짧은 배치)
 
@@ -121,4 +134,5 @@
 
 - 웹 모드 + Playwright: 시작 화면 · 프로젝트 설정 · 맵 그래프 · 영웅 · 아이템 · 맵 그리기 · 이벤트 · 대사창을 어두움/밝음 두 방식으로 보고, 리소스 75개 편집 화면을 모두 열어 오류 0.
 - 4차: 색 대비 · 토큰 정의 자동 검사(`run.js`), 메뉴 묶음 · 확인 창 · 알림 · 선택/주요 구분 · 좁은 창 이벤트 화면(`ui-editor.js`), 전후 화면을 같은 창 크기로 촬영(`ui-shots.js`, `docs/images/ux4/`).
+- 5차: 동작 전후 자리 · 크기 · 스크롤 · 넘침 · 처리기 수(`ui-stability.js` 18), 대사 탭 · 실행 환경(`ui-dialogue.js` 8), 전후 화면 `docs/images/ux5/`.
 - 실제 Electron 창(제목 표시줄 · OS 강조색)은 아직 손으로 확인하지 않음. Electron 은 기본값이 "시스템 강조색"이라 Windows · macOS 에서는 OS 강조색이 청록 대신 쓰일 수 있음(보기 → 강조색 → PDMaker 기본).
