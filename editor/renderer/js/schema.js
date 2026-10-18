@@ -233,15 +233,45 @@ PDM.ROUTE_OPS = [
 ];
 PDM.ROUTE_OP = {}; PDM.ROUTE_OPS.forEach(([, l]) => l.forEach(([id, name, ps]) => { PDM.ROUTE_OP[id] = { name: name.replace('…', ''), params: ps || [] }; }));
 PDM.routeOpText = o => { const d = PDM.ROUTE_OP[o.op]; if (!d) return o.op || '?'; const v = d.params.map(([k]) => o[k]).filter(x => x !== undefined && x !== ''); return d.name + (v.length ? ' ' + v.join(', ') : ''); };
+// 대사 스타일 칸 (5차) — 대사 명령 · "대사 스타일" 명령이 함께 씀. 빈 칸 = 다음 단계 값 (대사 → 이벤트 "대사 스타일" → 대사창 설정 → 기본값)
+//   런타임 EventInterpreter.styleLine 이 같은 키를 읽음 (단위: fxDur 0.1초 · fxStrength % · size %)
+const PDM_TEXT_TABS = [['main', '내용'], ['font', '글꼴'], ['out', '출력'], ['fx', '연출'], ['preview', '미리보기']];
+const PDM_TEXT_STYLE = [
+  { k: 'size', t: 'optnum', tab: 'font', label: '글자 크기 % (대사창 글자 크기 기준 · 50~300)', min: 50, max: 300, step: 10 },
+  { k: 'bold', t: 'select', tab: 'font', label: '굵게', options: { on: '굵게', off: '보통' } },
+  { k: 'align', t: 'select', tab: 'font', label: '정렬', options: { left: '왼쪽', center: '가운데' } },
+  { k: 'tracking', t: 'optnum', tab: 'font', label: '글자 간격 더하기 (화면 px · -1~6)', min: -1, max: 6, step: 0.5 },
+  { k: 'lineGap', t: 'optnum', tab: 'font', label: '줄 간격 더하기 (화면 px · -2~12)', min: -2, max: 12, step: 0.5 },
+  { k: 'padding', t: 'optnum', tab: 'font', label: '안쪽 여백 (화면 px · 0~40)', min: 0, max: 40, step: 1 },
+  { k: 'emColor', t: 'optcolor', tab: 'font', label: '강조(**…**) 색' },
+  { k: 'speed', t: 'select', tab: 'out', label: '글자 속도 (기본 = 대사창 설정)', options: { instant: '바로 다 보임', slow: '느리게 (20자/초)', normal: '보통 (40자/초)', fast: '빠르게 (80자/초)', veryfast: '아주 빠르게 (160자/초)' } },
+  { k: 'auto', t: 'number', tab: 'out', label: '저절로 넘기기 (0.1초 — 0 = 입력을 기다림)' },
+  { k: 'effect', t: 'select', tab: 'fx', label: '글자 연출 (글자가 나타날 때)', options: { none: '없음 (그냥 나타남)', fade: '흐리게 → 또렷이', rise: '아래에서 올라옴', drop: '위에서 내려옴', pop: '크게 → 제자리', shake: '떨림 (계속)', wave: '물결 (계속)' } },
+  { k: 'fxDur', t: 'optnum', tab: 'fx', label: '연출 시간 (0.1초 · 1~30)', min: 1, max: 30, step: 1 },
+  { k: 'fxStrength', t: 'optnum', tab: 'fx', label: '연출 세기 % (10~300)', min: 10, max: 300, step: 10 },
+  { k: 'fxScope', t: 'select', tab: 'fx', label: '연출할 글자', options: { all: '모든 글자', em: '강조(**…**) 글자만' } }];
+/** 바꾼 스타일 한 줄 요약 (명령 목록) */
+PDM.textStyleSum = c => {
+  const o = [];
+  if (c.size) o.push(c.size + '%'); if (c.bold) o.push(c.bold === 'on' ? '굵게' : '보통 굵기'); if (c.align) o.push(c.align === 'center' ? '가운데' : '왼쪽');
+  if (c.tracking != null && c.tracking !== '') o.push('자간 ' + c.tracking); if (c.lineGap != null && c.lineGap !== '') o.push('행간 ' + c.lineGap);
+  if (c.padding != null && c.padding !== '') o.push('여백 ' + c.padding); if (c.emColor) o.push('강조색 ' + c.emColor);
+  if (c.cmd === 'textStyle' && c.speed) o.push('속도 ' + c.speed);
+  if (c.effect && c.effect !== 'none') o.push('연출 ' + c.effect + (c.fxScope === 'em' ? '(강조만)' : ''));
+  return o.join(' · ');
+};
 PDM.COMMANDS = {
-  text:      { g: '메시지', name: '대사 표시', params: [
+  text:      { g: '메시지', name: '대사 표시', tabs: PDM_TEXT_TABS, preview: 'line', params: [
                  { k: 'speaker', t: 'charHero', label: '화자' }, { k: 'face', t: 'face', label: '표정' },
                  { k: 'illust', t: 'image', label: '일러스트(선택 — 비우면 캐릭터 초상화)' },
                  { k: 'side', t: 'select', label: '일러스트 위치 (기본 = 대사창 설정)', options: { left: '왼쪽', right: '오른쪽', none: '이번엔 숨김' } },
-                 { k: 'name', t: 'text', label: '이름 바꾸기(선택 — 예: ???)' }, { k: 'text', t: 'textarea', label: '대사 (줄바꿈 = 다음 줄, 창 하나에 들어가지 않으면 대사 명령을 나누세요)' },
-                 { k: 'speed', t: 'select', label: '글자 속도 (기본 = 대사창 설정)', options: { instant: '바로 다 보임', slow: '느리게 (20자/초)', normal: '보통 (40자/초)', fast: '빠르게 (80자/초)' } },
-                 { k: 'auto', t: 'number', label: '저절로 넘기기 (0.1초 — 0 = 입력을 기다림)' }],
-               sum: c => `${c.speaker ? '[' + PDM.refName('character', c.speaker) + (c.face ? ':' + c.face : '') + '] ' : c.name ? '[' + c.name + '] ' : ''}${(c.text || '').replace(/\n/g, ' ⏎ ')}${c.auto ? `  ⏱${c.auto / 10}초` : ''}` },
+                 { k: 'name', t: 'text', label: '이름 바꾸기(선택 — 예: ???)' }, { k: 'text', t: 'textarea', label: '대사 (줄바꿈 = 다음 줄 · **강조** · 창 하나에 들어가지 않으면 대사 명령을 나누세요)' },
+                 ...PDM_TEXT_STYLE],
+               sum: c => `${c.speaker ? '[' + PDM.refName('character', c.speaker) + (c.face ? ':' + c.face : '') + '] ' : c.name ? '[' + c.name + '] ' : ''}${(c.text || '').replace(/\n/g, ' ⏎ ')}${c.auto ? `  ⏱${c.auto / 10}초` : ''}${PDM.textStyleSum(c) ? '  ✎ ' + PDM.textStyleSum(c) : ''}` },
+  textStyle: { g: '메시지', name: '대사 스타일 (이 이벤트의 다음 대사들)', tabs: PDM_TEXT_TABS, preview: 'style', params: [
+                 { k: 'reset', t: 'bool', label: '대사창 설정으로 되돌리기 (켜면 아래 값은 쓰지 않음)' },
+                 ...PDM_TEXT_STYLE.filter(p => p.k !== 'auto')],   // 저절로 넘기기는 대사마다
+               sum: c => c.reset ? '대사 스타일: 대사창 설정으로 되돌림' : '대사 스타일: ' + (PDM.textStyleSum(c) || '(바꾼 것 없음)') },
   choice:    { g: '메시지', name: '선택지', block: 'branches', params: [{ k: 'options', t: 'options', label: '선택지' }],
                sum: c => '선택: ' + (c.options || []).join(' / ') },
   topic:     { g: '메시지', name: '대사 토픽 말하기', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'topic', t: 'topic', label: '토픽' }],

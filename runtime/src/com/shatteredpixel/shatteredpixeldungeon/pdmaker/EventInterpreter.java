@@ -217,6 +217,11 @@ public class EventInterpreter {
 		if (!(v = pick(c, "fxDur")).isEmpty()) l.fxDur = num(v, Float.NaN) / 10f;      // 0.1초
 		if (!(v = pick(c, "fxStrength")).isEmpty()) l.fxStrength = num(v, Float.NaN) / 100f;   // %
 		if (!(v = pick(c, "fxScope")).isEmpty()) l.fxScope = v;
+		if (!(v = pick(c, "size")).isEmpty()) l.sizePct = num(v, Float.NaN);          // 글자 크기 %
+		if (!(v = pick(c, "padding")).isEmpty()) l.padding = num(v, Float.NaN);
+		if (!(v = pick(c, "align")).isEmpty()) l.align = v;
+		if (!(v = pick(c, "emColor")).isEmpty()) l.emColor = v;
+		if (!(v = pick(c, "bold")).isEmpty()) l.bold = v.equals("on") || v.equals("true");   // "" = 설정 그대로 · on · off
 	}
 	String pick(JsonValue c, String k) {
 		String v = c.has(k) ? c.getString(k, "") : "";

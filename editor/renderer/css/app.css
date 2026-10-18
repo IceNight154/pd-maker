@@ -297,7 +297,8 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .tb.play:disabled, .tb.stop:disabled { background: transparent; border-color: transparent; }
 .tb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 var(--sp-2); }
 /* 실행 환경 버튼 (5차) — 환경 이름 길이가 달라도 폭이 같게 (옆 버튼이 밀리지 않게) */
-.tb.env-btn { min-width: 9.5em; justify-content: flex-start; } .tb.env-btn > span:not(.drop-caret) { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8em; }
+/* 실행 환경 단추: 고정 폭 — 이름(PC ↔ 모바일 세로 · 4×)이 바뀌어도 옆 단추가 밀리지 않게 (긴 이름은 … · 전체는 툴팁) */
+.tb.env-btn { width: 11.5em; flex: none; justify-content: flex-start; } .tb.env-btn > span:not(.drop-caret) { flex: 1; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .env-dlg { min-width: min(640px, 86vw); } .env-calc { white-space: pre-wrap; font-size: var(--fs-xs); background: var(--bg3); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-4) var(--sp-5); margin: var(--sp-4) 0; line-height: 1.6; }
 .drop .drop-caret { font-size: 9px; opacity: .7; margin-left: var(--sp-1); }
 .export-kinds { display: flex; flex-direction: column; gap: var(--sp-3); }
@@ -521,6 +522,11 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .dlg > * { position: absolute; box-sizing: border-box; }
 .scene-prev img.dlg-ill { bottom: auto; max-height: none; width: auto; transition: none; }
 .dlg-text { white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+/* 5차: 글자 하나 = span (글자 연출 · 강조 크기). 한중일 글자는 글자마다, 영문 · 숫자 낱말은 빈칸에서 줄바꿈 — 런타임 TypeText.layout 과 같은 규칙 */
+.dlg-text .dlg-ch { display: inline-block; transform-origin: 50% 50%; white-space: pre; }
+.dlg-text .dlg-word { display: inline-block; white-space: nowrap; }
+.cmd-pv { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: var(--r-sm); overflow: hidden; }
+.tabs-cmd { display: flex; flex-wrap: wrap; gap: 4px; }
 .dlg-name { white-space: nowrap; line-height: 1.15; }
 .dlg-arrow { width: 0; height: 0; border-style: solid; animation: dlgBob 1s ease-in-out infinite; }
 @keyframes dlgBob { 50% { transform: translateY(2px); } }

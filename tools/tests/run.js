@@ -663,6 +663,46 @@ test('실행 환경 전달: gradle init 스크립트에 그대로(따옴표 · �
   assert.ok(/require\('\.\/playtest-init(\.js)?'\)/.test(main), 'main.js 가 같은 모듈로 init 스크립트를 씀');
 });
 
+// ------------------------------------------------------------ ⑪ 대사 글꼴 · 연출 (5차 · 편집기 미리보기 ↔ 런타임 MakerDialogue · EventInterpreter)
+
+test('대사 스타일: 편집기 칸 = 런타임이 읽는 칸 · 단위 · 우선순위(대사 → 대사 스타일 → 대사창 설정)', () => {
+  const { PDM } = env.load(), D = PDM.Dialogue;
+  const src = read(path.join(PDMK, 'EventInterpreter.java'));
+  const body = src.slice(src.indexOf('void styleLine('), src.indexOf('String pick(JsonValue c'));
+  const rt = new Set([...body.matchAll(/pick\(c, "(\w+)"\)/g)].map(m => m[1]));
+  const ed = new Set(PDM.COMMANDS.textStyle.params.map(p => p.k).filter(k => k !== 'reset'));
+  eq([...ed].sort(), [...rt].sort());
+  eq(PDM.COMMANDS.text.params.filter(p => p.tab && p.tab !== 'main').map(p => p.k).filter(k => k !== 'auto').sort(), [...rt].sort());
+  ['/ 10f', '/ 100f'].forEach(t => assert.ok(body.includes(t), '단위가 바뀜: ' + t));
+  // 속도 이름표 (런타임 textSpeed)
+  const sp = src.match(/static float textSpeed[\s\S]*?switch \(v\) \{([^}]*)\}/)[1];
+  eq(Object.fromEntries([...sp.matchAll(/case "(\w+)": return (\d+)/g)].map(m => [m[1], +m[2]])), D.SPEEDS);
+  // 우선순위
+  const l = D.styleLine({}, { tracking: 2, effect: '' }, { tracking: 5, effect: 'rise', fxDur: 4, fxStrength: 150, size: 120, bold: 'on', speed: 'veryfast' });
+  eq([l.tracking, l.effect, l.fxDur, l.fxStrength, l.sizePct, l.bold, l.speed], [2, 'rise', 0.4, 1.5, 120, true, 160]);
+  const z = D.styleLine({}, { tracking: 0 }, null); eq(z.tracking, 0);   // 0 도 값 (빈 칸과 다름)
+  eq(D.styleLine({}, {}, null).speed, -1); eq(D.styleLine({}, { speed: 'instant' }, null).speed, 0);
+  // 대사창 설정 → 기본값
+  const s = D.lineStyle({ speed: -1 }, Object.assign(PDM.defaults.dialogue(), { fx: { effect: 'pop', dur: 0.5, scope: 'em' }, text: { tracking: 1 } }));
+  eq([s.effect, s.dur, s.strength, s.emOnly, s.tracking, s.speed], ['pop', 0.5, 1, true, 1, 40]);
+});
+
+test('대사 연출 식 · 기본값: 편집기 PDM.Dialogue.fxAt = 런타임 TypeText.fx · DEFAULTS 같음 · 글자 = grapheme', () => {
+  const { PDM } = env.load(), D = PDM.Dialogue, java = read(path.join(PDMK, 'MakerDialogue.java'));
+  ['e = p * p * (3 - 2 * p)', 'case "rise": dy = 3f * strength * (1 - e); a = e;', 'case "drop": dy = -3f * strength * (1 - e); a = e;', 'case "pop": sc = 1 + 0.8f * strength * (1 - e); a = Math.min(1, e * 2);',
+    'case "shake": dx = 0.7f * strength * (float) Math.sin(now * 40 + k * 2.3f); dy = 0.7f * strength * (float) Math.cos(now * 33 + k * 1.7f);', 'case "wave": dy = 1.2f * strength * (float) Math.sin(now * 6 + k * 0.6f);', 'case "fade": a = e;']
+    .forEach(t => assert.ok(java.includes(t), '런타임 연출 식이 바뀜: ' + t));
+  const f = D.fxAt('rise', 0.125, 1, 0, 0.25, 1); eq([+f.dy.toFixed(4), +f.a.toFixed(4)], [1.5, 0.5]);
+  eq(D.fxAt('pop', 1, 1, 0, 0.25, 1), { dx: 0, dy: 0, sc: 1, a: 1 });
+  // 기본값 (편집기 defaults.dialogue ↔ 런타임 DEFAULTS 문자열)
+  const d = PDM.defaults.dialogue();
+  eq(d.fx, { effect: 'none', dur: 0.25, strength: 1, scope: 'all', emScale: 1 }); eq(d.text.tracking, 0);
+  assert.ok(java.includes('fx:{effect:none,dur:0.25,strength:1,scope:all,emScale:1}') && java.includes('lineSpacing:0,tracking:0'));
+  // 글자 단위: 결합 문자 · 이모지 조합을 쪼개지 않음 (런타임 BreakIterator)
+  eq(D.graphemes('가나👍🏽é'), ['가', '나', '👍🏽', 'é']);
+  assert.ok(java.includes('BreakIterator.getCharacterInstance()'));
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];

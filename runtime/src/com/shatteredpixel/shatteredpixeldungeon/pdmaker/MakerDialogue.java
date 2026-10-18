@@ -117,6 +117,9 @@ public class MakerDialogue {
 		// 5차 — 이 줄만 덮어쓰기 (NaN · null = 이벤트의 "대사 스타일" → 대사창 설정 순서로)
 		public float tracking = Float.NaN, lineGap = Float.NaN, fxDur = Float.NaN, fxStrength = Float.NaN;
 		public String effect, fxScope;
+		public float sizePct = Float.NaN, padding = Float.NaN;   // 글자 크기(대사창 글자 크기의 %) · 안쪽 여백(px)
+		public String align, emColor;                            // 정렬(left · center) · 강조 색(#rrggbb)
+		public Boolean bold;                                     // 굵게 (null = 설정 그대로)
 	}
 
 	/** 화자(캐릭터 id 또는 $hero) · 표정 · 직접 고른 그림으로 Line 을 채움 */
@@ -296,6 +299,7 @@ public class MakerDialogue {
 		float lineExtra = 0;   // 줄 간격 더하기 (text.lineSpacing)
 		float tracking = 0;    // 글자 사이 더하기 (text.tracking, 5차) — 글자 단위로 나눈 대사에만
 		float emScale = 1;     // 강조(**…**) 글자 크기 (fx.emScale)
+		Boolean center;        // 가운데 정렬 (null = 대사창 설정 box.align)
 		boolean[] em = new boolean[0];   // 글자마다 강조 구간인지 (글자 번호 = wordsOf 순서)
 		float[] baseX = new float[0], baseY = new float[0], baseS = new float[0];   // 줄 배치가 정한 자리 · 크기 (글자 연출이 여기서부터 움직임)
 		TypeText(int size) { super(size); }
@@ -305,7 +309,7 @@ public class MakerDialogue {
 			maxWidth(maxW);
 			hardlight(color);
 			setHightlighting(true, hiColor);
-			if ("center".equals(s("box", "align"))) align(CENTER_ALIGN);
+			if (center != null ? center : "center".equals(s("box", "align"))) align(CENTER_ALIGN);
 			if (!perChar) { text(text); total = 0; for (RenderedText w : wordsOf()) total++; return; }
 			// 글자 = 사람이 보는 한 글자(grapheme — 결합 문자 · 이모지 조합을 쪼개지 않음, 5차). "**" · "_" 는 강조 표시 (원작 RenderedTextBlock 규칙)
 			List<String> tk = new ArrayList<>();
@@ -590,9 +594,9 @@ public class MakerDialogue {
 			});
 
 			boolean hasText = !l.text.isEmpty();
-			float margin = f("box", "margin"), pad = f("box", "padding");
+			float margin = f("box", "margin"), pad = !Float.isNaN(l.padding) ? Math.max(0, Math.min(40, l.padding)) : f("box", "padding");
 			final float tk = textScale(W, H);   // 화면 크기에 맞춘 글자 배율
-			int fs = Math.max(5, Math.round(f("box", "fontSize") * tk));
+			int fs = Math.max(5, Math.round(f("box", "fontSize") * (Float.isNaN(l.sizePct) ? 1f : Math.max(0.5f, Math.min(3f, l.sizePct / 100f))) * tk));
 			// 대사창 · 글 · 이름표 · ▼ · 선택지는 안전 영역(노치 · 상태 줄 · 내비게이션 바를 뺀 곳) 안에 — 데스크톱 · 안전 영역이 없는 기기는 화면 전체라 예전과 같음.
 			// 일러스트 · 배경은 화면 전체 (4차: 예전엔 대사창이 내비게이션 바 · 노치 아래로 들어갔음)
 			final float[] sa = safeArea(W, H); final float SX = sa[0], SY = sa[1], SW = sa[2], SH = sa[3];
@@ -656,18 +660,20 @@ public class MakerDialogue {
 				List<float[]> offs = new ArrayList<>(); List<Integer> ocs = new ArrayList<>();   // 옮길 거리 {dx, dy} · 색 (null = 본문 색)
 				if (b("text", "shadow")) { offs.add(new float[]{sx, sy}); ocs.add(col("text", "shadowColor")); }
 				if (b("text", "outline")) { int oc = col("text", "outlineColor"); for (float[] d : new float[][]{{-ow, 0}, {ow, 0}, {0, -ow}, {0, ow}, {-ow, -ow}, {ow, -ow}, {-ow, ow}, {ow, ow}}) { offs.add(d); ocs.add(oc); } }
-				if (b("text", "bold")) { offs.add(new float[]{bd, 0}); ocs.add(null); }
-				int maxW = (int) (tr - tx - (b("text", "bold") ? bd : 0));
+				final boolean bold = l.bold != null ? l.bold : b("text", "bold");
+				final boolean centerText = "center".equals(l.align != null && !l.align.isEmpty() ? l.align : s("box", "align"));
+				final int hi = l.emColor != null && !l.emColor.isEmpty() ? MakerTitle.color(l.emColor, col("box", "highlight")) : col("box", "highlight");
+				if (bold) { offs.add(new float[]{bd, 0}); ocs.add(null); }
+				int maxW = (int) (tr - tx - (bold ? bd : 0));
 				float lineExtra = !Float.isNaN(l.lineGap) ? l.lineGap : f("text", "lineSpacing");
-				text = newText(fs, lineExtra); text.tracking = tracking; text.emScale = emScale;
-				text.set(l.text, maxW, col("box", "textColor"), perChar);
-				boolean centerText = "center".equals(s("box", "align"));
+				text = newText(fs, lineExtra); text.tracking = tracking; text.emScale = emScale; text.center = centerText;
+				text.set(l.text, maxW, col("box", "textColor"), hi, perChar);
 				float textX = centerText ? tx + Math.max(0, (tr - tx) - text.width()) / 2f : tx;
 				for (int oi = 0; oi < offs.size(); oi++) {
 					float[] o = offs.get(oi); Integer occ = ocs.get(oi);
-					TypeText c = newText(fs, lineExtra); c.tracking = tracking; c.emScale = emScale;
+					TypeText c = newText(fs, lineExtra); c.tracking = tracking; c.emScale = emScale; c.center = centerText;
 					int oc = occ == null ? col("box", "textColor") : occ;
-					c.set(l.text, maxW, oc, occ == null ? col("box", "highlight") : oc, perChar);
+					c.set(l.text, maxW, oc, occ == null ? hi : oc, perChar);
 					if (occ != null) c.silhouette(occ);
 					c.setPos(textX + o[0], textY + o[1]);
 					PixelScene.align(c);

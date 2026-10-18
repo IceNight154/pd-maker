@@ -78,7 +78,7 @@
     // 화면 어둡게 / 밝게 (런타임: 화면 위 색 상자 · 대사창 아래)
     const fadeEl = h('div', { style: { position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none', zIndex: 50, background: '#000' } });
     stage.append(fadeEl);
-    const SPEED = { instant: 0, slow: 20, normal: 40, fast: 80 };
+    let style = null;   // "대사 스타일" 명령 (이 이벤트 안에서 이어짐 — 런타임 EventInterpreter.style)
     function portraitOf(charId, face) {
       const c = store.get('char:' + charId); if (!c || !c.portrait) return null;
       const ex = (c.portrait.expressions || []).find(e => e.key === face);
@@ -96,7 +96,7 @@
           case 'text': if (newStyle) {
             const l = PDM.Dialogue.line(c.speaker, c.face, c.illust, c.text || '', faces);
             if (c.name) l.name = c.name; if (c.side) l.side = c.side;
-            if (c.speed in SPEED) l.speed = SPEED[c.speed]; if (+c.auto > 0) l.auto = c.auto / 10;
+            PDM.Dialogue.styleLine(l, c, style); if (+c.auto > 0) l.auto = c.auto / 10;   // 글자 속도 · 글꼴 · 연출: 대사 → 대사 스타일 → 대사창 설정
             const nx = list[li + 1];
             const withChoice = nx && nx.cmd === 'choice' && (nx.options || []).length;
             box.hidden = true;
@@ -135,6 +135,7 @@
           case 'self': state.self[c.key || 'A'] = !!c.value; break;
           case 'illust': { const ok = await setIllust(c.slot || 1, c.image, c.pos, c.fade, c); if (ok && c.wait) await wait((c.fade ?? 3) * 100); break; }
           case 'illustMove': { const p = moveIllust(c.slot || 1, c); if (c.wait !== false) await p; break; }
+          case 'textStyle': style = c.reset ? null : c; log(PDM.COMMANDS.textStyle.sum(c)); break;
           case 'waitInput': log('입력 기다리는 중 — 화면을 누르세요'); await click(); break;
           case 'fade': { const t = Math.max(1, c.time ?? 5) * 100; fadeEl.style.background = c.color || '#000'; fadeEl.style.transition = `opacity ${t}ms linear`; fadeEl.style.opacity = c.op === 'in' ? 0 : 1; if (c.wait !== false) await wait(t); break; }
           case 'sound': {
