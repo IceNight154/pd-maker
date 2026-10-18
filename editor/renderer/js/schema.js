@@ -366,7 +366,7 @@ PDM.COMMANDS = {
                sum: c => `예고편 컷신: ${(((PDM.store.get('trailers') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
   filter:    { g: '연출', name: '화면 필터', params: [{ k: 'mode', t: 'select', label: '동작', options: { set: '이 필터로 바꾸기', map: '맵 설정대로 되돌리기', off: '필터 끄기' } }, { k: 'id', t: 'filter', label: '필터 (바꾸기일 때)' }],
                sum: c => c.mode === 'map' ? '화면 필터: 맵 설정대로' : c.mode === 'off' ? '화면 필터: 끄기' : `화면 필터: ${(((PDM.store.get('filters') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
-  shake:     { g: '연출', name: '화면 흔들림', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
+  shake:     { g: '연출', name: '화면 흔들림 (간단 · 원작 방식 — 기다리지 않음, 자세히는 「스크린 쉐이크」)', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
   effect:    { g: '연출', name: '이펙트 재생', params: [{ k: 'fx', t: 'effect', label: '이펙트' }, { k: 'at', t: 'select', label: '위치', options: { char: '캐릭터 위치', xy: '칸 좌표' } },
                { k: 'target', t: 'charHero', label: '캐릭터 (위치가 캐릭터일 때)' }, { k: 'x', t: 'number', label: 'x (칸 좌표일 때)' }, { k: 'y', t: 'number', label: 'y' }],
                sum: c => `이펙트: ${(((PDM.store.get('effects') || {}).list || []).find(x => x.id === c.fx) || {}).name || c.fx || '?'} @ ${c.at === 'xy' ? `(${c.x || 0}, ${c.y || 0})` : (!c.target || c.target === '$hero' ? '영웅' : PDM.refName('char', c.target))}` },

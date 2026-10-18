@@ -63,6 +63,12 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
   - `fight,<n>`: 싸움
   - …
 
+## 6차 — 연출 배속 · 카메라 연출 · 게임 UI 테마 검사
+
+- `tools/playtest/cutscene-check.sh <게임 저장소> <작업 폴더> [환경…]` — 환경마다(기본 pc · pc-small · phone-land · phone-port · 작은 맵 `small:pc`) 일반 플레이 1× · 카메라 이동/경계/멈춤(영웅이 움직여도) · 취소 · 쉐이크 두 번(오프셋 0 · 밀림 없음) · 1×/4× 이동 시간 · 16× 취소 · 중첩 이벤트 · 오류 명령 · 팔로우/없는 대상/리셋 · 대사 중 표시줄(안전 영역 · 대사창 위) · 화면 돌리기 · 저장 → 불러오기. 기록 `<작업 폴더>/cutscene-check/`.
+- 새 단계: `eval:cam` 카메라 상태 · `eval:cutscene` 연출 상태 · 배속 · 표시줄 · `eval:theme` 게임 UI 테마 · `eval:evcancel` 실행 중 이벤트 취소 · `eval:bartouch,<1x|2x|4x|16x|스킵>` 표시줄을 진짜 마우스로 · `eval:mark,<이름>` 기록 구간 · `eval:drag,…` 누른 채 끌기
+- `SYNC_RESIZE=1` (run.sh): 창 크기를 바꾸는 그 자리에서 resize → render (Windows LWJGL3 흉내) — cutscene-check · testenv-check 의 기본
+
 ## 5차 — 테스트 실행 환경 · 배속 · 스킵 · 대사 연출 검사
 
 - `TESTENV="$(node tools/playtest/testenv.js phone-port '{"safeArea":"notch"}')" tools/playtest/run.sh …` — 편집기 ▶ 테스트 플레이와 같은 실행 환경으로 켬 (`testenv.js <환경> [JSON 덮어쓰기]` = `PDM.testEnv.resolve` 결과). 세로 창은 `XVFB_SCREEN=1800x1800x24`.

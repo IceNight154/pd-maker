@@ -56,6 +56,8 @@
 | 일러스트 숨김 `illustHide` | 원래 있음 | 번호(0 = 전부) · 페이드 |
 | **입력 기다리기** `waitInput` | **새로** | 화면을 누르거나 확인(Enter · Space · Z) · 취소 키 |
 | 화면 어둡게/밝게 `fade` · 흔들림 · 번쩍임 | 원래 있음 (**겹침 순서 고침**) | 시간 · 색 · 대기 |
+| **스크린 이동 · 팔로우 · 쉐이크 · 리셋** `camMove` `camFollow` `camShake` `camReset` | **6차 새로** (묶음 "카메라 / 스크린") | 칸 · 단위 · 기본값: `docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md` §5~9 |
+| **대사 스타일** `textStyle` | 5차 새로 | 글꼴 · 출력 · 연출 탭 (`docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md` §6) |
 | 효과음/음악 `sound` | 원래 있음 + **새 종류** | 효과음 · 배경음 바꾸기 + **배경음 끄기**(`bgmStop` · 페이드 아웃 시간) |
 
 ## 5. 이벤트 데이터 형식 · 저장 위치
