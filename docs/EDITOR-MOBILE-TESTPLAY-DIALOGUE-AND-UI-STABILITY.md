@@ -222,6 +222,13 @@
 - **수정**: 창 크기 · 배율은 그 프레임에서 **그것만** 하고 돌아감(단추는 다음 프레임, 새 장면의 Overlay 가 만듦) · 없어진 Overlay 는 아무것도 하지 않음. F9 화면 돌리기도 같은 이유로 키 처리 중에 바로 하지 않고 다음 Overlay 프레임에서.
 - **재현 · 확인**: 하네스에 `SYNC_RESIZE=1`(`-Dpdmaker.testSyncResize=true` — 창 크기를 바꾼 그 자리에서 resize → render, Windows 동작 흉내)을 넣음. 고치기 전 코드 = 같은 NPE 로 멈춤 / 고친 코드 = 창 462×1002 · UI 154×334 ×3 적용, 두 번 돌리기, 대사 정상. `testenv-check.sh` 는 이제 이 방식이 기본이며 11/11 통과 (끈 방식도 11/11). 실제 Windows 에서는 다시 실행하지 않았음 — 보고해 주신 환경에서 확인이 필요함.
 
+### 8.2 보고 받은 충돌 2 (Windows · 화면을 누른 채 끌 때) — `Cannot read field "current" because "e" is null`
+- **증상**: 실행 환경을 켠 테스트 플레이에서 마우스를 누른 채 움직이면 `MakerTestEnv$Overlay$2.onSignal` 에서 NullPointerException.
+- **원인**: 원작 `PointerEvent.processPointerEvents` 는 누른 포인터가 같은 종류로 이어질 때(끌기) 포인터 신호에 **null** 을 보냄 (원작 `PointerArea` 는 null 을 처리함). 화면 단추 · 터치 표시용 포인터 받기가 null 을 생각하지 않았음. 런타임의 포인터 받기는 이것 하나뿐.
+- **수정**: null 이면 아무것도 하지 않음 (키 받기에도 같은 보호).
+- **재현 · 확인**: 하네스에 진짜 끌기 `eval:drag,x1,y1,x2,y2` (누름 → 프레임에 걸쳐 8번 끌기 → 뗌)를 넣음. 고치기 전 코드 = 같은 NPE (`onSignal` 178/176) / 고친 코드 = 맵 · 배속 단추 · 대사창 위 끌기 모두 오류 없음. `testenv-check.sh` 에 끌기 + "게임 오류 0" 검사(⑥)를 더해 **12/12 통과**.
+- 이번에도 실제 Windows 에서는 다시 실행하지 않았음.
+
 ## 9. 테스트 결과 · 검증 수준
 
 ### 9.1 실행한 명령과 결과 (모두 이번 최종 코드에서)
@@ -234,7 +241,7 @@
 | `… ui-stability.js` | **18 통과** (새로 만듦) |
 | `… ui-dialogue.js` | **8 통과** (새로 만듦 · 세 번 연속 통과) |
 | `tools/playtest/platform-matrix.sh` (10개 환경) | 9.2 |
-| `tools/playtest/testenv-check.sh` | **11 항목 통과** (새로 만듦 — 배속 · 화면 단추 · 스킵 3 · 돌리기 3 · 배치 · 글꼴 2) |
+| `tools/playtest/testenv-check.sh` | **12 항목 통과** (새로 만듦 — 배속 · 화면 단추 · 스킵 3 · 돌리기 3 · 배치 · 글꼴 2 · 게임 오류 0(끌기 포함)) |
 
 ### 9.2 플랫폼 매트릭스 (4차 수정 회귀 — 회전 · 안전 영역 · CJK · 일러스트 · 입력 잠금)
 `JARS=… tools/playtest/platform-matrix.sh <작업 폴더> <프로젝트> pc pc-narrow phone-land phone-port phone-land-insets phone-port-insets phone-land-rot pc-rot pc-rotfade regress` — 이번 최종 런타임으로 실행.

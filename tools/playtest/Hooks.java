@@ -75,6 +75,17 @@ public class Hooks {
 					System.out.println("[TEST] touch " + x + "," + y);
 					break;
 				}
+				case "drag": { // drag,<x1>,<y1>,<x2>,<y2> — 진짜 마우스로 누른 채 끌기 (원작은 끄는 동안 포인터 신호에 null 을 보냄)
+					int x1 = Integer.parseInt(p[1]), y1 = Integer.parseInt(p[2]), x2 = Integer.parseInt(p[3]), y2 = Integer.parseInt(p[4]);
+					com.badlogic.gdx.InputProcessor ip = com.badlogic.gdx.Gdx.input.getInputProcessor();
+					ip.touchDown(x1, y1, 0, 0);
+					new Thread(() -> {   // 끌기는 누름이 한 프레임 처리된 뒤에야 받음(addIfExisting) — 프레임에 걸쳐 나눠 보냄
+						try { for (int k = 1; k <= 8; k++) { Thread.sleep(50); ip.touchDragged(x1 + (x2 - x1) * k / 8, y1 + (y2 - y1) * k / 8, 0); } Thread.sleep(50); ip.touchUp(x2, y2, 0, 0); }
+						catch (InterruptedException ignored) { }
+					}).start();
+					System.out.println("[TEST] drag " + x1 + "," + y1 + " → " + x2 + "," + y2);
+					break;
+				}
 				case "wnds": { // 떠 있는 창 정보 (보이는지 · 카메라 위치)
 					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
 					walk(com.watabou.noosa.Game.scene(), all);

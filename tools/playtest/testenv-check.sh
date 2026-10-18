@@ -7,6 +7,7 @@
 #   ③ 스킵: 선택지에서 멈춤(고르지 않음) · 입력 기다리기에서 멈춤 · 이벤트가 끝나면 스킵 전 배속으로
 #   ④ 화면 돌리기(F9 와 같은 rotate): 세로 154×334 ↔ 가로 390×180 · 안전 영역이 처음으로 돌아옴 · 나온 글자를 이어받음 · 배치 문제 0
 #   ⑤ 줄마다 글꼴(크기 · 정렬 · 굵게 · 강조 색 · 여백) · 대사 스타일 되돌리기 — 배치 문제 0, 캡처
+#   ⑥ 게임 오류 0 (누른 채 끌기 포함 — 원작은 끄는 동안 포인터 신호에 null 을 보냄)
 #   기록 · 캡처: <작업 폴더>/testenv-check/
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$1"; WORK="$2"
@@ -20,6 +21,7 @@ export SYNC_RESIZE="${SYNC_RESIZE-1}"   # 기본: Windows LWJGL3 처럼 창 크�
 export TESTENV="$(node "$HERE/testenv.js" phone-port '{"safeArea":"notch","touch":true}')"
 START=(titlescene wait:3 start:WARRIOR wait:4 eval:closewnds wait:1)
 bash "$HERE/run.sh" "$WORK" "$PROJ" "${START[@]}" \
+  eval:drag,231,400,300,600 wait:1 \
   eval:speed,1 eval:ev,sp wait:1 eval:typing eval:speed,2 eval:next wait:1 eval:typing eval:speed,4 eval:next wait:1 eval:typing eval:speed,16 eval:next wait:1 eval:typing \
   eval:speed,1 eval:closewnds wait:1 eval:ev,sp wait:0.5 eval:typing eval:touch,126,58 wait:0.5 eval:testenv eval:typing eval:closewnds wait:1 \
   eval:speed,2 eval:ev,sk wait:0.3 eval:skip wait:1 eval:typing eval:testenv eval:wshot,skip-choice wait:2 eval:typing eval:pick,1 wait:1 eval:wnds eval:evstate wait:2 eval:evstate eval:wshot,skip-wait \
@@ -56,6 +58,8 @@ ok(/busy=false/.test(ev(l2)[0] || ''), '⑤-0 스킵으로 연출 이벤트를 �
 const big = /text=\[\d+,\d+ (\d+)x(\d+)\]/.exec(lay[2] || ''), base = /text=\[\d+,\d+ (\d+)x(\d+)\]/.exec(lay[3] || '');
 const bx = /text=\[(\d+),/.exec(lay[2] || '');
 ok(big && base && +big[2] > +base[2] && bx && +bx[1] >= 20, `⑤ 줄마다 글자 크기 150% · 여백 16 (글 높이 ${big && big[2]} > 기본 ${base && base[2]} · 글 x ${bx && bx[1]}) · 다음 줄은 기본으로`);
+const all = process.argv.slice(2).map(f => fs.readFileSync(f, 'utf8')).join('\n'), ex = all.split('\n').filter(l => /Exception|Error:/.test(l) && !/ALSA/.test(l));
+ok(ex.length === 0 && l1.some(x => x.startsWith('[TEST] drag')), `⑥ 게임 오류 0 — 누른 채 끌기(원작이 포인터 신호에 null 을 보냄) 포함${ex.length ? ': ' + ex[0] : ''}`);
 console.log(fail ? '\n실패가 있습니다 — 기록: ' + process.argv[2].replace(/run1\.log$/, '') : '\n모두 통과 (화면 시뮬레이션 — 실제 기기 검증 아님)');
 process.exit(fail);
 EOF

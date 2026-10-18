@@ -160,7 +160,7 @@ public class MakerTestEnv {
 		float infoT = 1f, fps, classicT; int frames;
 		final Signal.Listener<KeyEvent> keys = new Signal.Listener<KeyEvent>() {
 			@Override public boolean onSignal(KeyEvent e) {
-				if (!e.pressed) return false;
+				if (e == null || !e.pressed) return false;
 				switch (e.code) {
 					case Input.Keys.F6: cycleSpeed(); relabel(); return true;
 					case Input.Keys.F7: completeLine(); return true;
@@ -175,6 +175,7 @@ public class MakerTestEnv {
 		Integer held = null;   // 단추를 누른 포인터 (떼는 것까지 이 단추가 받음 — 아래 창이 클릭으로 받지 않게)
 		final Signal.Listener<PointerEvent> touches = new Signal.Listener<PointerEvent>() {
 			@Override public boolean onSignal(PointerEvent e) {
+				if (e == null) return false;   // 원작은 누른 채 끌 때(같은 종류가 이어질 때) null 을 보냄 — 예전엔 여기서 NullPointerException
 				float ux = e.current.x / camera.zoom, uy = e.current.y / camera.zoom;
 				if (e.type == PointerEvent.Type.DOWN && env.getBoolean("touch", false)) synchronized (taps) { taps.add(new float[]{ ux, uy, 0 }); }
 				if (e.type == PointerEvent.Type.DOWN) for (Btn b : btns) if (b.hit(ux, uy)) { held = e.id; b.press(); return true; }

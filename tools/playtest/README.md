@@ -35,7 +35,7 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
   - `adv` / `pick,<n>`: 대사창 넘기기 / 선택지 고르기
   - `click,<x>,<y>` / `click,<캐릭터id>`: 맵 칸 누르기(사람이 누른 것처럼) · `tp,<칸>`: 순간이동
   - `press,<글자>` / `slot,<n>` / `buttons`: 화면 버튼 누르기 / 저장 슬롯 누르기 / 버튼 목록 · `savetitle`: 저장하고 타이틀로
-  - `touch,<x>,<y>`: 진짜 마우스 입력처럼 창 좌표 누르기 · `wnds`: 떠 있는 창·카메라·화면 목록 순서
+  - `touch,<x>,<y>`: 진짜 마우스 입력처럼 창 좌표 누르기 · `drag,<x1>,<y1>,<x2>,<y2>`: 누른 채 끌기 (프레임에 걸쳐) · `wnds`: 떠 있는 창·카메라·화면 목록 순서
   - `winsize,<가로>,<세로>`: 창 크기 바꾸기 (최소 크기 제한을 풀어 세로 비율도 됨 · 실행 중에 바꾸면 = 화면 돌림 · 창 크기 조절)
   - `uisize,<0|1|2>`: 인터페이스 크기 (0 = 휴대폰 기본 — 세로 창이면 세로 배치)
   - `insets,<왼>,<위>,<오른>,<아래>`: 안전 영역 흉내 (노치 · 상태 줄 · 내비게이션 바, 화면 px)
@@ -66,7 +66,7 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
 ## 5차 — 테스트 실행 환경 · 배속 · 스킵 · 대사 연출 검사
 
 - `TESTENV="$(node tools/playtest/testenv.js phone-port '{"safeArea":"notch"}')" tools/playtest/run.sh …` — 편집기 ▶ 테스트 플레이와 같은 실행 환경으로 켬 (`testenv.js <환경> [JSON 덮어쓰기]` = `PDM.testEnv.resolve` 결과). 세로 창은 `XVFB_SCREEN=1800x1800x24`.
-- `tools/playtest/testenv-check.sh <게임 저장소> <작업 폴더>` — 검사용 프로젝트(`testenv-project.js`)를 만들어 빌드하고 11항목을 검사: 배속 1 · 2 · 4 · 16 (실제 시간당 글자 수) · 화면 단추 · 스킵(선택지 · 입력 기다리기에서 멈춤, 끝나면 원래 배속) · 화면 돌리기(세로 ↔ 가로 논리 화면 · 안전 영역 · 나온 글자 이어받기) · 배치 문제 0 · 줄마다 글꼴. 기록 · 캡처 = `<작업 폴더>/testenv-check/`.
+- `tools/playtest/testenv-check.sh <게임 저장소> <작업 폴더>` — 검사용 프로젝트(`testenv-project.js`)를 만들어 빌드하고 11항목을 검사(12): 배속 1 · 2 · 4 · 16 (실제 시간당 글자 수) · 화면 단추 · 스킵(선택지 · 입력 기다리기에서 멈춤, 끝나면 원래 배속) · 화면 돌리기(세로 ↔ 가로 논리 화면 · 안전 영역 · 나온 글자 이어받기) · 배치 문제 0 · 줄마다 글꼴. 기록 · 캡처 = `<작업 폴더>/testenv-check/`.
 - `node tools/playtest/compare-layers.js <expected-layers.json> <run.sh 출력 로그>` — `tools/tests/ui-layers.js <폴더>` 가 남긴 편집기 배열과 게임의 `eval:layercells` 출력을 비교.
 - 모두 **PC 화면 시뮬레이션**입니다 (에뮬레이터 · 실제 기기 아님).
 
