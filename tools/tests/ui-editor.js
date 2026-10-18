@@ -174,7 +174,11 @@ async function makeProject(dir) {
       assert.ok(run[0].startsWith('▶ 테스트 플레이') && run.some(l => l.startsWith('■ 중지')) && !proj.some(l => l.includes('테스트 플레이')), '실행 메뉴');
       // 도구 모음 "빌드 ▾" = 실행 메뉴에서 ▶ 테스트 플레이 · 중지를 뺀 것 (같은 이름)
       await page.click('#toolbar button[title^="실행 방식"]'); await page.waitForTimeout(120); const drop = await ctxLabels(); await closeCtx();
-      assert.deepStrictEqual(drop, run.filter(l => !l.startsWith('▶ 테스트 플레이') && !l.startsWith('■ 중지')));
+      const envAt = run.indexOf('#실행 환경 (이 프로젝트)');   // 5차: 실행 메뉴 끝 = 실행 환경 · 시작 배속 (도구 모음에서는 실행 환경 단추)
+      assert.ok(envAt > 0, '실행 메뉴의 실행 환경 묶음');
+      assert.deepStrictEqual(drop, run.slice(0, envAt).filter(l => !l.startsWith('▶ 테스트 플레이') && !l.startsWith('■ 중지')));
+      await page.click('#toolbar .env-btn'); await page.waitForTimeout(120); const envDrop = await ctxLabels(); await closeCtx();
+      assert.deepStrictEqual(envDrop, run.slice(envAt), '실행 환경 단추 ▾ = 실행 메뉴의 실행 환경 묶음 (같은 이름 · 같은 순서)');
       // ⚙ 설정 ▾ ⊇ 프로젝트 메뉴의 설정 3개 · 확장 기능 단독 버튼은 없앰 (설정 ▾ · 프로젝트 메뉴에 있음)
       await page.click('#toolbar button[title^="설정"]'); await page.waitForTimeout(120); const sett = await ctxLabels(); await closeCtx();
       proj.slice(0, 3).forEach(l => assert.ok(sett.includes(l), '설정 ▾ 에 ' + l));

@@ -152,6 +152,12 @@
   function preview(def, obj, ctx, pane) {
     if (!PDM.Dialogue) { pane.append(h('p', { class: 'hint' }, '대사창 미리보기를 쓸 수 없습니다.')); return () => {}; }
     const stage = h('div', { class: 'dlg-stage cmd-pv' }), info = h('p', { class: 'hint mt-2' });
+    // 화면 비율 = 이 프로젝트의 테스트 실행 환경 (휴대폰이면 그 기기의 논리 화면 — 세로면 세로 상자). PC = 16:9
+    const te = PDM.testEnv ? PDM.testEnv.resolve((PDM.store.get('project') || {}).testplay) : null;
+    const ar = te && te.kind === 'phone' ? te.logical : [16, 9];
+    stage.style.aspectRatio = `${ar[0]} / ${ar[1]}`;
+    if (ar[0] < ar[1]) { stage.style.width = Math.round(100 * Math.min(1, 0.62)) + '%'; stage.style.margin = '0 auto'; }
+    const envNote = te ? ` · 화면: ${te.name}${te.kind === 'phone' ? ` ${te.logical[0]}×${te.logical[1]}` : ' 16:9'}` : '';
     let r = null, gen = 0;
     const play = async () => {
       const my = ++gen; if (r) { r.stop(); r.el.remove(); r = null; }
@@ -162,7 +168,7 @@
       const res = await PDM.Dialogue.render(stage, l, {});
       if (my !== gen || !stage.isConnected) { res.stop(); res.el.remove(); return; }
       r = res;
-      info.textContent = PDM.Dialogue.describeLine(l) + (style && obj.cmd !== 'textStyle' ? ' · 이 이벤트의 앞선 "대사 스타일"을 함께 씀' : '');
+      info.textContent = PDM.Dialogue.describeLine(l) + (style && obj.cmd !== 'textStyle' ? ' · 이 이벤트의 앞선 "대사 스타일"을 함께 씀' : '') + envNote;
     };
     pane.append(stage, h('div', { class: 'flex gap-2 mt-2' }, h('button', { type: 'button', class: 'btn sm', onclick: e => { e.preventDefault(); play(); } }, '다시 재생'), h('span', { class: 'hint' }, '누르면 글자를 다 보임 (게임과 같음)')), info);
     stage.addEventListener('click', () => { if (r && r.typing()) r.finish(); });

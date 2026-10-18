@@ -68,6 +68,9 @@ async function makeProject(dir) {
     await step('③ 실행 환경 창: 계산 결과 · 틀린 값은 안전한 값으로', async () => {
       await page.click('.env-btn'); await page.click('.ctx .ctx-i:has-text("실행 환경 설정")'); await page.waitForTimeout(300);
       const calc = await page.textContent('.env-calc'); assert.ok(calc.includes('154×334') && calc.includes('462×1002'), calc);
+      assert.ok(!calc.includes('⚠'), '올바른 설정에 고침 경고가 없음: ' + calc);
+      const vis = await page.evaluate(() => [...document.querySelectorAll('.env-dlg .row')].map(r => r.offsetParent !== null));
+      assert.deepStrictEqual(vis, [true, false, false], '사용자 지정 · 안전 영역 칸은 고를 때만 보임 (hidden)');
       await page.evaluate(() => { PDM.store.edit('project', '시험', p => { p.testplay = Object.assign({}, p.testplay, { speed: 3, uiScale: 99 }); }); });
       const fixed = await page.evaluate(() => PDM.testEnv.normalize(PDM.store.get('project').testplay));
       assert.deepStrictEqual([fixed.cfg.speed, fixed.cfg.uiScale, fixed.fixes.sort()], [1, 12, ['speed', 'uiScale']]);

@@ -408,7 +408,7 @@
     const custom = h('div', { class: 'row' }, PDM.ui.field('기기 가로 (px)', numIn(() => c.custom.w, v => { c.custom.w = v; }, { min: 240, max: 8192 })), PDM.ui.field('기기 세로 (px)', numIn(() => c.custom.h, v => { c.custom.h = v; }, { min: 240, max: 8192 })), PDM.ui.field('밀도 (dpi)', numIn(() => c.custom.dpi, v => { c.custom.dpi = v; }, { min: 80, max: 800 })));
     const insets = h('div', { class: 'row' }, ...['l', 't', 'r', 'b'].map(k => PDM.ui.field({ l: '왼쪽', t: '위', r: '오른쪽', b: '아래' }[k] + ' (기기 px)', numIn(() => c.insets[k], v => { c.insets[k] = v; }, { min: 0, max: 1000 }))));
     function draw() {
-      const { cfg, fixes } = PDM.testEnv.normalize(c), r = PDM.testEnv.resolve(cfg);
+      const { cfg, fixes } = PDM.testEnv.normalize(Object.assign({}, c, { uiScale: Number(c.uiScale), speed: Number(c.speed) })), r = PDM.testEnv.resolve(cfg);   // 고르기 칸은 글자 — 숫자로 (예전: "0" ≠ 0 이라 늘 "고침" 경고)
       custom.hidden = c.env !== 'custom'; insets.hidden = c.safeArea !== 'custom';
       out.textContent = [PDM.testEnv.describe(r), r.insets.some(Boolean) ? `안전 영역 (PC 창 px): 왼 ${r.insets[0]} · 위 ${r.insets[1]} · 오른 ${r.insets[2]} · 아래 ${r.insets[3]}` : '안전 영역: 없음',
         `회전 ${r.rotate ? '허용 (게임에서 F9)' : '안 함'} · 터치 표시 ${r.touch ? '켬' : '끔'} · 디버그 정보 ${r.debug ? '켬' : '끔'} · 시작 배속 ${r.speed}배`,

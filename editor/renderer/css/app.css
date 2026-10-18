@@ -152,6 +152,8 @@ input:disabled, select:disabled, textarea:disabled { opacity: .55; cursor: not-a
 input::placeholder, textarea::placeholder { color: var(--dim); }
 input[type=color] { height: var(--ctl-h); padding: 1px 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg3); cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-4); min-width: 0; }
+/* hidden 속성은 늘 숨김 — .row · .flex 같은 display 규칙이 이겨서 숨긴 칸이 보이던 문제 (5차: 실행 환경 창의 사용자 지정 · 안전 영역 칸, 대사 미리보기의 선택지) */
+[hidden] { display: none !important; }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-4); align-items: start; }
 .cols2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-7); }
 .check { display: inline-flex; align-items: flex-start; gap: var(--sp-3); margin: var(--sp-2) var(--sp-6) var(--sp-4) 0; cursor: pointer; line-height: 1.4; }
