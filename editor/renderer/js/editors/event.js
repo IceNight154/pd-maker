@@ -26,7 +26,25 @@
     const box = h('div', { class: 'scene-box', hidden: true });
     const choices = h('div', { class: 'scene-choices' });
     const logEl = h('div', { class: 'sim-log', style: { width: '640px' } });
-    stage.append(box, choices);
+    // 카메라 연출 미리보기 (6차): 맨 뒤 "월드" 격자를 PDM.camera 식(런타임 MakerCamera 와 같음)으로 옮기고 흔듦 — 맵이 없으니 위치는 처음 자리 기준 상대값
+    const world = h('div', { class: 'scene-world' });
+    stage.append(world, box, choices);
+    const cam = { x: 0, y: 0, ox: 0, oy: 0 };
+    const camDraw = () => { const k = stage.clientHeight / PDM.Dialogue.UI_H; world.style.backgroundSize = `${16 * k}px ${16 * k}px`; world.style.backgroundPosition = `${(-(cam.x + cam.ox) * k).toFixed(1)}px ${(-(cam.y + cam.oy) * k).toFixed(1)}px`; };
+    /** sec 초 동안 프레임마다 f(k, t) — 창을 닫으면 멈춤 (따로 남는 타이머 없음) */
+    const animate = (sec, f) => new Promise(res => { const t0 = performance.now(); const tick = () => { if (closed || !stage.isConnected) return res(); const t = (performance.now() - t0) / 1000, k = sec > 0 ? Math.min(1, t / sec) : 1; f(k, t); camDraw(); if (k < 1) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
+    const camPreview = c => {
+      const C = PDM.camera, P = C.params(c);
+      if (c.cmd === 'camMove') {
+        const to = c.target === 'world' ? { x: +c.x || 0, y: +c.y || 0 } : (c.target || 'tile') === 'tile' ? C.tileToWorld(+c.x || 0, +c.y || 0) : null;
+        if (!to) { log(PDM.COMMANDS.camMove.sum(c) + ' — 미리보기에는 맵 · 캐릭터 자리가 없어 시간만'); return P.wait ? wait(P.sec * 1000) : null; }
+        const fx = cam.x, fy = cam.y, p = animate(P.sec, k => { const e = C.ease(P.ease, k); cam.x = fx + (to.x - fx) * e; cam.y = fy + (to.y - fy) * e; });
+        return P.wait ? p : null;
+      }
+      if (c.cmd === 'camShake') { const p = animate(P.sec, (k, t) => { const o = C.shakeOffset(P.power, P.sec, P.freq, P.decay, P.axis, t); cam.ox = o.x; cam.oy = o.y; }).then(() => { cam.ox = cam.oy = 0; camDraw(); }); return P.wait ? p : null; }
+      if (c.cmd === 'camReset') { cam.ox = cam.oy = 0; const fx = cam.x, fy = cam.y, p = animate(P.sec, k => { const e = C.ease('smooth', k); cam.x = fx * (1 - e); cam.y = fy * (1 - e); }); return P.wait ? p : null; }
+      return null;   // camFollow: 미리보기에는 따라갈 대상이 없음
+    };
     const illusts = {};
     const state = { switches: {}, vars: {}, self: {} };
     let closed = false;
@@ -136,6 +154,7 @@
           case 'illust': { const ok = await setIllust(c.slot || 1, c.image, c.pos, c.fade, c); if (ok && c.wait) await wait((c.fade ?? 3) * 100); break; }
           case 'illustMove': { const p = moveIllust(c.slot || 1, c); if (c.wait !== false) await p; break; }
           case 'textStyle': style = c.reset ? null : c; log(PDM.COMMANDS.textStyle.sum(c)); break;
+          case 'camMove': case 'camFollow': case 'camShake': case 'camReset': { log(PDM.COMMANDS[c.cmd].sum(c)); const p = camPreview(c); if (p) await p; break; }
           case 'waitInput': log('입력 기다리는 중 — 화면을 누르세요'); await click(); break;
           case 'fade': { const t = Math.max(1, c.time ?? 5) * 100; fadeEl.style.background = c.color || '#000'; fadeEl.style.transition = `opacity ${t}ms linear`; fadeEl.style.opacity = c.op === 'in' ? 0 : 1; if (c.wait !== false) await wait(t); break; }
           case 'sound': {

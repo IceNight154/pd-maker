@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$1"; WORK="$2"
 [ -z "$REPO" -o -z "$WORK" ] && { echo "사용: testenv-check.sh <게임 저장소> <작업 폴더>"; exit 2; }
 PROJ="$WORK/testenv-proj"; OUT="$WORK/testenv-check"
-node "$HERE/testenv-project.js" "$PROJ" >/dev/null || exit 2
+node "$HERE/testenv-project.js" "$PROJ" small >/dev/null || exit 2   # 작은 맵 (화면 밖으로 카메라가 안 감)
 bash "$HERE/build.sh" "$REPO" "$WORK" "$PROJ" 2>&1 | grep -q BUILD_DONE || { echo "빌드 실패"; exit 2; }
 rm -rf "$OUT"; mkdir -p "$OUT"
 export XVFB_SCREEN="${XVFB_SCREEN:-1800x1800x24}"
@@ -22,9 +22,9 @@ export TESTENV="$(node "$HERE/testenv.js" phone-port '{"safeArea":"notch","touch
 START=(titlescene wait:3 start:WARRIOR wait:4 eval:closewnds wait:1)
 bash "$HERE/run.sh" "$WORK" "$PROJ" "${START[@]}" \
   eval:drag,231,400,300,600 wait:1 \
-  eval:speed,1 eval:ev,sp wait:1 eval:typing eval:speed,2 eval:next wait:1 eval:typing eval:speed,4 eval:next wait:1 eval:typing eval:speed,16 eval:next wait:1 eval:typing \
-  eval:speed,1 eval:closewnds wait:1 eval:ev,sp wait:0.5 eval:typing eval:touch,126,58 wait:0.5 eval:testenv eval:typing eval:closewnds wait:1 \
-  eval:speed,2 eval:ev,sk wait:0.3 eval:skip wait:1 eval:typing eval:testenv eval:wshot,skip-choice wait:2 eval:typing eval:pick,1 wait:1 eval:wnds eval:evstate wait:2 eval:evstate eval:wshot,skip-wait \
+  eval:ev,sp eval:speed,1 wait:1 eval:typing eval:speed,2 eval:next wait:1 eval:typing eval:speed,4 eval:next wait:1 eval:typing eval:speed,16 eval:next wait:1 eval:typing \
+  eval:evcancel eval:closewnds wait:1 eval:ev,sp wait:0.5 eval:typing eval:bartouch,2x wait:0.5 eval:testenv eval:typing eval:evcancel eval:closewnds wait:1 \
+  eval:ev,sk wait:0.3 eval:speed,2 eval:skip wait:1 eval:typing eval:testenv eval:wshot,skip-choice wait:2 eval:typing eval:pick,1 wait:1 eval:wnds eval:evstate wait:2 eval:evstate eval:wshot,skip-wait \
   eval:touch,231,500 wait:1 eval:evstate eval:testenv > "$OUT/run1.log" 2>&1
 bash "$HERE/run.sh" "$WORK" "$PROJ" "${START[@]}" \
   eval:ev,fx eval:typing eval:rotate wait:1 eval:testenv eval:typing eval:layout eval:wshot,rot-land eval:rotate wait:1 eval:testenv eval:typing eval:layout eval:wshot,rot-back \
@@ -40,12 +40,12 @@ const t1 = typ(l1), r = t1.slice(0, 4).map(s => num(s, 'perRealSec'));
 ok(r.length === 4 && r[1] / r[0] > 1.7 && r[1] / r[0] < 2.3 && r[2] / r[0] > 3.4 && r[2] / r[0] < 4.6 && r[3] / r[0] > 12 && r[3] / r[0] < 20, `① 배속 1 · 2 · 4 · 16× — 실제 1초당 글자 ${r.join(' · ')} (기준 5자/초)`);
 // ② 화면 단추 2×
 const before = t1[4] || '', after = t1[5] || '', e1 = env(l1);
-ok(/speed=2 /.test(e1[0] || '') && /line='1번/.test(after) && !/done=true/.test(after), `② 2× 단추(마우스) → ${(/speed=\S+/.exec(e1[0] || '') || [''])[0]} · 대사 그대로 (${(/shown=\S+/.exec(before) || [''])[0]} → ${(/shown=\S+/.exec(after) || [''])[0]})`);
+ok(/speed=2 /.test(e1[0] || '') && /line='1번/.test(after) && !/done=true/.test(after) && l1.some(x => /bartouch 2x \d/.test(x)), `② 배속 표시줄 2× 단추(진짜 마우스) → ${(/speed=\S+/.exec(e1[0] || '') || [''])[0]} · 대사 그대로 (${(/shown=\S+/.exec(before) || [''])[0]} → ${(/shown=\S+/.exec(after) || [''])[0]})`);
 // ③ 스킵
 const ch = t1[6] || '', ch2 = t1[7] || '', es = ev(l1);
 ok(/choices=2 open=true done=false/.test(ch) && /choices=2 open=true done=false/.test(ch2) && /speed=16\(skip\)/.test(e1[1] || ''), '③-1 스킵: 선택지에서 멈춤 · 2초 뒤에도 고르지 않음 · 16배');
 ok(l1.some(x => /wnd .*WaitWnd/.test(x)) && /busy=true/.test(es[0] || '') && /busy=true/.test(es[1] || ''), '③-2 스킵: 입력 기다리기에서 멈춤 (2초 넘게)');
-ok(/busy=false/.test(es[2] || '') && /speed=2 /.test(e1[2] || '') && !/skip/.test(e1[2] || ''), `③-3 화면을 누르면 이어서 끝까지 · 스킵 끝 → 배속 ${(/speed=\S+/.exec(e1[2] || '') || [''])[0]} (스킵 전 2)`);
+ok(/busy=false/.test(es[2] || '') && /speed=1 /.test(e1[2] || '') && /timeScale=1\.0/.test(e1[2] || '') && !/skip/.test(e1[2] || ''), `③-3 화면을 누르면 이어서 끝까지 · 스킵 끝 → ${(/speed=\S+/.exec(e1[2] || '') || [''])[0]} (6차: 연출이 끝나면 늘 1×)`);
 // ④ 화면 돌리기
 const e2 = env(l2), t2 = typ(l2), lay = l2.filter(x => x.startsWith('[TEST] layout'));
 ok(/ui=390\.0x180\.0|ui=390x180/.test(e2[0] || '') && /landscape=true/.test(e2[0] || '') && /insets=43,0,43,22/.test(e2[0] || ''), '④-1 돌리기 → 가로 390×180 · 안전 영역 43,0,43,22 — ' + (e2[0] || '').replace('[TEST] testenv ', ''));

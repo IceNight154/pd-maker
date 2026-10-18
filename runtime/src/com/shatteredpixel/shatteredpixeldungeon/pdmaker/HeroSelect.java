@@ -240,7 +240,7 @@ public class HeroSelect {
 			img.x = left + (Camera.main.width - left - img.width * k) / 2f;
 			img.y = (Camera.main.height - img.height * k) / 2f;
 		}
-		bg.texture(com.watabou.gltextures.TextureCache.createSolid(0xFF1d1e20));
+		bg.texture(com.watabou.gltextures.TextureCache.createSolid(0xFF000000 | MakerTheme.or("bg", 0x1d1e20)));
 		bg.frame(0, 0, 800, 450);
 		bg.resetColor();
 		PixelScene.align(img);
@@ -299,7 +299,7 @@ public class HeroSelect {
 		static final int W = 120, M = 2;
 		InfoWnd(JsonValue h) {
 			com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock title = PixelScene.renderTextBlock(name(h), 9);
-			title.hardlight(TITLE_COLOR);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44));
 			add(title);
 			title.setPos((W - title.width()) / 2f, M);
 			List<String> texts = new ArrayList<>(); List<Image> icons = new ArrayList<>();
@@ -356,7 +356,7 @@ public class HeroSelect {
 			float leftPortion = Math.max(100, Camera.main.width / 3f);
 			if (heroName != null) {
 				heroName.text(name);
-				heroName.hardlight(Window.TITLE_COLOR);
+				heroName.hardlight(MakerTheme.or("accent", 0xFFFF44));
 				heroName.setPos((leftPortion - heroName.width() - 20) / 2f, heroName.top());
 				PixelScene.align(heroName);
 			}

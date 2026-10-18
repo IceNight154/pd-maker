@@ -95,7 +95,7 @@ public class MakerPages {
 			Archs archs = new Archs(); archs.setSize(w, h); scene.add(archs);
 			ExitButton btnExit = new ExitButton(); btnExit.setPos(w - btnExit.width(), 0); scene.add(btnExit);
 			RenderedTextBlock title = PixelScene.renderTextBlock(p.getString("title", ""), 9);
-			title.hardlight(Window.TITLE_COLOR);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44));
 			title.setPos((w - title.width()) / 2f, (20 - title.height()) / 2f + 2);
 			PixelScene.align(title); scene.add(title);
 			int pw = Math.min(w - 16, PixelScene.landscape() ? 220 : 150);

@@ -25,6 +25,7 @@
         }
         set(o.number ? +s.value : s.value);
         if (p.k === 'speaker' || p.k === 'char') ctx.onCharChange && ctx.onCharChange(s.value);
+        if (p.redraw && ctx.redraw) ctx.redraw();   // 이 칸에 따라 보이는 칸이 바뀜 (p.when)
       });
       return s;
     };
@@ -130,7 +131,7 @@
   /** def.params 를 body 에 그림. def.tabs 가 있으면 탭 줄 + 탭마다 칸. onField(el) = 칸마다 (속성 창이 input/change 를 받음) · ctx.previewOf() = 미리보기에 쓸 이벤트 스타일 */
   function renderParams(def, obj, ctx, body, onField) {
     const fieldOf = p => { const el = PDM.ui.field(p.label, paramInput(obj, p, ctx)); el.dataset.k = p.k; if (onField) onField(el); return el; };
-    if (!def.tabs) { def.params.forEach(p => body.append(fieldOf(p))); return; }
+    if (!def.tabs) { def.params.filter(p => !p.when || p.when(obj)).forEach(p => body.append(fieldOf(p))); return; }   // when = 그 명령 설정에서만 쓰는 칸 (6차)
     let cur = lastTab[obj.cmd] || def.tabs[0][0], stopPv = null;
     const bar = h('div', { class: 'seg tabs-cmd mb-3', role: 'tablist' }), pane = h('div', { class: 'cmd-tab' });
     const show = id => {
@@ -283,7 +284,7 @@
 
     async function insertAt(arrPath, i) {
       const id = await pickCommand(); if (!id) return;
-      const base = { cmd: id };
+      const base = Object.assign({ cmd: id }, PDM.clone(PDM.COMMANDS[id].defaults || {}));   // 새 명령의 기본값 (런타임 기본값과 같게 — 예: 기다림 켬)
       if (opts.defaultSpeaker && (id === 'text')) base.speaker = opts.defaultSpeaker;
       const c = await PDM.editCommandModal(base, true, { styleBefore: () => styleBefore({ arr: arrPath, i }) }); if (!c) return;
       setSel([...arrPath, i]);

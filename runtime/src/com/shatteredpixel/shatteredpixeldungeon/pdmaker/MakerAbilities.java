@@ -112,7 +112,7 @@ public class MakerAbilities {
 			ItemSprite is = new ItemSprite(mask == null ? com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.MASK : mask.image(), null);
 			is.x = 0; is.y = 0; add(is);
 			RenderedTextBlock t = PixelScene.renderTextBlock(mask == null ? "전직" : mask.name(), 9);
-			t.hardlight(TITLE_COLOR); t.setPos(20, (16 - t.height()) / 2f); add(t);
+			t.hardlight(MakerTheme.or("accent", 0xFFFF44)); t.setPos(20, (16 - t.height()) / 2f); add(t);
 			RenderedTextBlock m = PixelScene.renderTextBlock("앞으로 나아갈 길을 하나 고르세요. 한 번 고르면 바꿀 수 없습니다.", 6);
 			m.maxWidth(WIDTH); m.setPos(0, 20); add(m);
 			float pos = m.bottom() + 6;

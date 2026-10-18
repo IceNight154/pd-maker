@@ -205,6 +205,17 @@ public class Hooks {
 					break;
 				}
 				case "rotate": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.rotate(); System.out.println("[TEST] rotate"); break;   // F9 와 같음 (가로 ↔ 세로)
+				case "cam": System.out.println("[TEST] cam " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.debugState() + " hero=" + (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero == null || com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite == null ? "-" : String.format(java.util.Locale.ROOT, "%.1f,%.1f", com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.center().x, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.center().y)) + " heroCell=" + (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero == null ? -1 : com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); break;   // 카메라 상태 (6차)
+				case "bartouch": { // bartouch,<단추 글: 1x 2x 4x 16x 스킵> — 배속 표시줄 단추를 진짜 마우스처럼 누름
+					float[] q = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCutscene.barButton(p[1]);
+					if (q == null) { System.out.println("[TEST] bartouch " + p[1] + " none"); break; }
+					com.badlogic.gdx.InputProcessor ip = com.badlogic.gdx.Gdx.input.getInputProcessor();
+					ip.touchDown((int) q[0], (int) q[1], 0, 0); ip.touchUp((int) q[0], (int) q[1], 0, 0);
+					System.out.println("[TEST] bartouch " + p[1] + " " + (int) q[0] + "," + (int) q[1]); break; }
+				case "mark": System.out.println("[TEST] mark " + p[1]); break;   // 기록 구간 표시 (검사 스크립트)
+				case "cutscene": System.out.println("[TEST] cutscene " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCutscene.debugState()); break;   // 연출 상태 · 배속 · 표시줄 (6차)
+				case "theme": System.out.println("[TEST] theme " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTheme.debugState()); break;   // 게임 UI 테마 (6차)
+				case "evcancel": com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.reset(); System.out.println("[TEST] evcancel"); break;   // 실행 중 이벤트 취소 (불러오기 · 멈춤 정리와 같은 길)
 				case "testenv": System.out.println("[TEST] testenv " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.debugState()); break;   // 실행 환경 · 배속 상태 (5차)
 				case "speed": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.setSpeed(Integer.parseInt(p[1])); System.out.println("[TEST] speed " + p[1]); break;
 				case "skip": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.toggleSkip(); System.out.println("[TEST] skip " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.skipping()); break;

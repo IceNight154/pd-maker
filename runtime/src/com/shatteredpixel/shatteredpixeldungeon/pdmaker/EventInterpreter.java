@@ -103,9 +103,11 @@ public class EventInterpreter {
 		}
 		return current != null;
 	}
+	/** 실행 중인 이벤트 id (없으면 "") — 연출 상태 표시(MakerCutscene) */
+	public static String currentId() { EventInterpreter c = current; return c == null ? "" : c.eventId; }
 	/** 새 게임 · 불러오기 때 (StoryState.reset): 이전 게임의 실행 중·대기 중 이벤트를 모두 버림 */
 	public static synchronized void reset() {
-		if (current != null) current.dead = true;
+		if (current != null) { current.dead = true; MakerCamera.eventEnded(current); }   // 취소 · 멈춤 정리: 그 이벤트의 카메라 연출도 정리 (6차)
 		for (EventInterpreter q : queue) q.dead = true;
 		current = null;
 		queue.clear();
@@ -145,6 +147,7 @@ public class EventInterpreter {
 	void finish() {
 		if (dead) return;
 		current = null;
+		MakerCamera.eventEnded(this);   // 6차: 이 이벤트가 연 카메라 연출 정리 (흔들림 멈춤 · 영웅에게 돌아감)
 		EventInterpreter next = queue.poll();
 		if (next != null) next.start();
 	}
@@ -204,7 +207,7 @@ public class EventInterpreter {
 	}
 
 	/** 창·타이머로 멈추는 명령 (멈춤 감시 대상) */
-	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade", "illust", "illustMove", "waitInput"));
+	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade", "illust", "illustMove", "waitInput", "camMove", "camShake", "camReset"));
 	/** 이 이벤트의 "대사 스타일" 명령 값 (없으면 null) — 이벤트가 끝나면 사라짐 (다른 이벤트에 넘어가지 않음) */
 	JsonValue style;
 	/** 대사 한 줄에 스타일: 명령 칸 → 이벤트 스타일 → (없으면 Line 기본값 = 대사창 설정) */
@@ -589,6 +592,14 @@ public class EventInterpreter {
 				final float ox = c.getFloat("ox", 0), oy = c.getFloat("oy", 0); final boolean wait = c.getBoolean("wait", true);
 				if (!wait) { Game.runOnRenderThread(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec)); return true; }
 				waitUntil(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec), () -> MakerStage.idle(slot));
+				return false;
+			}
+			case "camMove": case "camFollow": case "camShake": case "camReset": {   // 스크린 · 카메라 연출 (6차 — MakerCamera)
+				final JsonValue cc = c; final EventInterpreter self = this;
+				final java.util.function.BooleanSupplier[] done = new java.util.function.BooleanSupplier[1];
+				boolean wait = c.getBoolean("wait", true) && !cmd.equals("camFollow");
+				if (!wait) { Game.runOnRenderThread(() -> { if (!self.dead) MakerCamera.exec(self, cc); }); return true; }
+				waitUntil(() -> { done[0] = MakerCamera.exec(self, cc); return done[0] != null; }, () -> done[0] == null || done[0].getAsBoolean());
 				return false;
 			}
 			case "waitInput": {   // 입력 기다리기: 화면을 누르거나 확인 키 (보이는 창 없음)

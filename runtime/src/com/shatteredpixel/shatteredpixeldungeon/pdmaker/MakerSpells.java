@@ -238,7 +238,7 @@ public class MakerSpells {
 			ItemSprite is = new ItemSprite(book == null ? ItemSpriteSheet.MASTERY : book.image(), null);
 			is.x = 0; is.y = 0; add(is);
 			RenderedTextBlock title = PixelScene.renderTextBlock(info ? "주문 정보" : (book == null ? "주문" : book.name()) + "  " + charge + "/" + maxCharge(), 9);
-			title.hardlight(TITLE_COLOR); title.setPos(20, (16 - title.height()) / 2f); add(title);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44)); title.setPos(20, (16 - title.height()) / 2f); add(title);
 			IconButton toggle = new IconButton(info ? new ItemSprite(book == null ? ItemSpriteSheet.MASTERY : book.image(), null) : com.shatteredpixel.shatteredpixeldungeon.ui.Icons.INFO.get()) {
 				@Override protected void onClick() { hide(); GameScene.show(new WndMakerSpells(book, hero, !info)); }
 			};
@@ -296,14 +296,14 @@ public class MakerSpells {
 			int w = 120;
 			Image ic = MakerSpells.icon(sp); ic.x = 0; ic.y = 0; add(ic);
 			RenderedTextBlock t = PixelScene.renderTextBlock(sp.getString("name", "") + "  (" + tierOf(sp) + "단계)", 9);
-			t.hardlight(TITLE_COLOR); t.setPos(20, (16 - t.height()) / 2f); add(t);
+			t.hardlight(MakerTheme.or("accent", 0xFFFF44)); t.setPos(20, (16 - t.height()) / 2f); add(t);
 			RenderedTextBlock b = PixelScene.renderTextBlock(info(sp), 6);
 			b.maxWidth(w); b.setPos(0, 20); add(b);
 			float y = b.bottom() + 4;
 			final String why = blocked(hero, sp);
 			if (why != null) {
 				RenderedTextBlock r = PixelScene.renderTextBlock("(" + why + ")", 6);
-				r.hardlight(0xCC6666); r.setPos(0, y); add(r); y = r.bottom() + 4;
+				r.hardlight(MakerTheme.or("error", 0xCC6666)); r.setPos(0, y); add(r); y = r.bottom() + 4;
 			}
 			if (withUse) {
 				RedButton use = new RedButton("시전") {

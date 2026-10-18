@@ -288,7 +288,7 @@ public class MakerTitle {
 						if (it != null && !it.getString("action", "").isEmpty()) action(it); else if (gameId != null) gameAction(gameId);
 					}
 				};
-				if ("support".equals(id) && (it == null || it.getString("label", "").isEmpty())) b.textColor(com.shatteredpixel.shatteredpixeldungeon.ui.Window.TITLE_COLOR);   // 게임처럼 노란 글자
+				if ("support".equals(id) && (it == null || it.getString("label", "").isEmpty())) b.textColor(MakerTheme.or("accent", 0xFFFF44));   // 게임처럼 노란 글자
 				String icon = it == null ? "" : it.getString("icon", "");
 				if (icon.isEmpty() && gi >= 0) icon = ICONS[gi];
 				if (!icon.isEmpty() && !icon.equals("NONE")) { try { b.icon(Icons.get(Icons.valueOf(icon))); } catch (Exception ignored) { } }

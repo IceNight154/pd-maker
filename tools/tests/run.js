@@ -658,7 +658,7 @@ test('실행 환경 전달: gradle init 스크립트에 그대로(따옴표 · �
   assert.ok(!init.build('/p', null).includes('pdmaker.testenv'), '실행 환경이 없으면 넘기지 않음 (런타임은 원래대로)');
   const java = read(path.join(PDMK, 'MakerTestEnv.java'));
   ['"insets"', '"speed"', '"window"', '"winZoom"', '"iface"', '"rotated"', '"rotate"', '"touch"', '"debug"', '"name"'].forEach(k => assert.ok(java.includes(k), '런타임이 읽지 않는 칸: ' + k));
-  eq(java.match(/SPEEDS = \{([^}]*)\}/)[1].split(',').map(Number), PDM.testEnv.SPEEDS);
+  eq(read(path.join(PDMK, 'MakerCutscene.java')).match(/SPEEDS = \{([^}]*)\}/)[1].split(',').map(Number), PDM.testEnv.SPEEDS);   // 6차: 배속은 MakerCutscene
   const main = read(path.join(ROOT, 'editor', 'main.js'));
   assert.ok(/require\('\.\/playtest-init(\.js)?'\)/.test(main), 'main.js 가 같은 모듈로 init 스크립트를 씀');
 });
@@ -701,6 +701,77 @@ test('대사 연출 식 · 기본값: 편집기 PDM.Dialogue.fxAt = 런타임 Ty
   // 글자 단위: 결합 문자 · 이모지 조합을 쪼개지 않음 (런타임 BreakIterator)
   eq(D.graphemes('가나👍🏽é'), ['가', '나', '👍🏽', 'é']);
   assert.ok(java.includes('BreakIterator.getCharacterInstance()'));
+});
+
+// ------------------------------------------------------------ ⑫ 6차: 카메라 연출 · 게임 UI 테마 · 연출 배속
+
+test('카메라 연출 식: 편집기 PDM.camera = 런타임 MakerCamera (보간 · 맵 경계 · 흔들림 오프셋 · 잘못된 시간)', () => {
+  const { PDM } = env.load(), C = PDM.camera, java = read(path.join(PDMK, 'MakerCamera.java'));
+  ['case "linear": return k;', 'case "in": return k * k;', 'case "out": return 1 - (1 - k) * (1 - k);', 'default: return k * k * (3 - 2 * k);',
+    'if (map <= view) return map / 2f;', 'return Math.max(view / 2f, Math.min(map - view / 2f, v));', 'return !Float.isFinite(s) || s <= 0 ? 0 : Math.min(60f, s);',
+    'd = shDecay.equals("none") ? 1f : shDecay.equals("smooth") ? (1 - k) * (1 - k) : 1 - k;', 'float w = (float) (Math.PI * 2 * shFreq * shT), amp = shPower * d;',
+    'amp * (float) (0.7 * Math.sin(w) + 0.3 * Math.sin(w * 2.3 + 1.1))', 'amp * (float) (0.7 * Math.sin(w * 1.13 + 2.0) + 0.3 * Math.cos(w * 1.7))', 'if (shT >= shDur) stopShake();']
+    .forEach(t => assert.ok(java.includes(t), '런타임 식이 바뀜: ' + t));
+  eq([C.ease('smooth', 0.5), C.ease('linear', 0.3), C.ease('in', 0.5), C.ease('out', 0.5)], [0.5, 0.3, 0.25, 0.75]);
+  eq([C.clampAxis(40, 427, 640), C.clampAxis(99999, 427, 640), C.clampAxis(300, 427, 320), C.clampAxis(NaN, 427, 640)], [213.5, 426.5, 160, 320]);   // 작은 맵 = 가운데
+  eq([C.safeTime(-1), C.safeTime(NaN), C.safeTime(Infinity), C.safeTime(0), C.safeTime(2)], [0, 0, 0, 0, 2]);
+  eq(C.shakeOffset(6, 0.8, 12, 'linear', 'both', 0.8), { x: 0, y: 0 }); eq(C.shakeOffset(6, 0.8, 12, 'linear', 'x', 0.1).y, 0);   // 끝 = 정확히 0 · 방향
+  assert.ok(Math.abs(C.shakeOffset(6, 0.8, 12, 'none', 'both', 0.013).x) <= 6);
+  eq(C.tileToWorld(2, 3), { x: 40, y: 56 });
+  // 런타임이 읽는 명령 칸 = 편집기 칸
+  ['"target"', '"x"', '"y"', '"ref"', '"ease"', '"wait"', '"time"', '"kind"', '"event"', '"start"', '"smooth"', '"speed"', '"ax"', '"ay"', '"power"', '"freq"', '"decay"', '"axis"', '"mode"', '"follow"']
+    .forEach(k => assert.ok(java.includes('getString(' + k) || java.includes('getFloat(' + k) || java.includes('getBoolean(' + k), '런타임이 읽지 않는 칸: ' + k));
+  ['camMove', 'camFollow', 'camShake', 'camReset'].forEach(id => { const d = PDM.COMMANDS[id]; assert.ok(d && d.g === '카메라 / 스크린', id); if (id !== 'camFollow') assert.notStrictEqual(d.defaults.wait, false, id + ' 기본 = 기다림'); });
+  return '명령 4개 · 식 12줄 일치';
+});
+
+test('설치기: 카메라(PixelScene.PixelCamera.update) · 테마(GameScene.show) 연결 줄이 실제 게임 소스에 붙음', () => {
+  const I = require(path.join(ROOT, 'editor', 'runtime-installer.js'));
+  const need = [['scenes/PixelScene.java', 'MakerCamera.before(this)'], ['scenes/GameScene.java', 'MakerTheme.onShow(wnd)']];
+  for (const [file, text] of need) {
+    const p = I.PATCHES.find(x => x.file === file && x.line.includes(text)); assert.ok(p, file);
+    const src = read(path.join(GAME, file));
+    const m = [].concat(p.anchor).map(a => a.exec(src)).find(Boolean);
+    assert.ok(m, `${file}: 붙일 자리를 찾지 못함 (원작이 바뀜)`);
+    if (file.includes('PixelScene')) assert.ok(src.slice(src.lastIndexOf('class PixelCamera', m.index), m.index).includes('class PixelCamera'), 'PixelCamera 안이어야 함');
+  }
+});
+
+test('게임 UI 테마: 편집기 PDM.gameTheme = 런타임 MakerTheme · 대사창 빈 칸 연결 · 예전 프로젝트는 그대로', async () => {
+  const { PDM } = env.load(), T = PDM.gameTheme;
+  const th = read(path.join(PDMK, 'MakerTheme.java')), dl = read(path.join(PDMK, 'MakerDialogue.java'));
+  const def = Object.fromEntries([...th.matchAll(/\{ "(\w+)", "(#[0-9a-f]{6})" \}/g)].map(m => [m[1], m[2]]));
+  eq(def, T.DEFAULT.colors);
+  const link = Object.fromEntries([...dl.matchAll(/THEMED\.put\("([\w.]+)", "(@?\w+)"\)/g)].map(m => [m[1], m[2]]));
+  eq(link, T.DIALOGUE_LINK);
+  T.checks(T.DEFAULT).forEach(c => assert.ok(c.ok, '기본 테마 대비: ' + c.label + ' ' + c.ratio));
+  Object.keys(T.PRESETS).forEach(id => T.checks(T.preset(id)).forEach(c => assert.ok(c.ok, `프리셋 ${id} 대비: ${c.label} ${c.ratio}`)));
+  eq(T.normalize({ colors: { text: 'red', accent: '#ABCDEF' }, shape: 'blob', radius: 99 }).colors.accent, '#abcdef');
+  eq([T.normalize({ colors: { text: 'red' } }).colors.text, T.normalize({ shape: 'blob' }).shape, T.normalize({ radius: 99 }).radius], ['#ffffff', 'game', 12]);
+  // 새 프로젝트: theme.json 생김 · 대사창 색 = 빈 칸(테마) · 내보낸 게임 배속 표시줄 켬
+  const { ctx, dir } = await newProject();
+  assert.ok(fs.existsSync(path.join(dir, 'theme.json')), '새 프로젝트 theme.json');
+  const dj = json(path.join(dir, 'dialogue.json'));
+  eq([dj.box.color, dj.box.style, dj.name.color], ['', '', '']); eq(json(path.join(dir, 'project.json')).cutsceneSpeed, true);
+  const c = ctx.PDM.Dialogue.cfg(); eq([c.box.color, c.box.style], [T.DEFAULT.colors.panel, 'game']);   // 미리보기도 테마 값
+  // 예전 프로젝트: theme.json · dialogue.json 이 없으면 → 열기 · 저장해도 theme.json 을 만들지 않음, 대사창은 예전 색
+  fs.rmSync(path.join(dir, 'theme.json')); fs.rmSync(path.join(dir, 'dialogue.json'));
+  const pj = json(path.join(dir, 'project.json')); delete pj.cutsceneSpeed; fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify(pj));
+  const old = env.load(); await old.PDM.store.load(dir); await old.PDM.store.save();
+  assert.ok(!fs.existsSync(path.join(dir, 'theme.json')), '예전 프로젝트에 theme.json 을 만들면 안 됨');
+  eq(json(path.join(dir, 'dialogue.json')).box.color, '#ffffff'); eq(json(path.join(dir, 'project.json')).cutsceneSpeed, undefined);
+  // 테마를 고치면 그때 파일이 생기고 저장 · 다시 열기 후 그대로
+  old.PDM.store.edit('theme', '테마', t => { t.colors.accent = '#123456'; }); await old.PDM.store.save();
+  const again = env.load(); await again.PDM.store.load(dir); eq(again.PDM.gameTheme.get().colors.accent, '#123456');
+});
+
+test('연출 배속: 런타임 상태 모델 — 끝 · 취소 · 오류 = 1× · 표시와 시간은 따로 · 중첩은 실제 실행 상태로', () => {
+  const cs = read(path.join(PDMK, 'MakerCutscene.java')), ei = read(path.join(PDMK, 'EventInterpreter.java'));
+  ['if (!a && wasActive) {', 'speed = 1; skipping = false;', 'public static int timeScale() { return wasActive ? (skipping ? 16 : speed) : 1; }', 'Game.timeScale = timeScale();',
+    'if (EventInterpreter.busy())', 'MakerCamera.animating()', 'windowKind()', 'tokens.values()', 'if (e == null || !visible) return false;']
+    .forEach(t => assert.ok(cs.includes(t), '상태 모델이 바뀜: ' + t));
+  assert.ok(!/Game\.timeScale\s*=/.test(read(path.join(PDMK, 'MakerTestEnv.java'))), 'Game.timeScale 은 MakerCutscene 한 곳에서만');
+  assert.ok(ei.includes('MakerCamera.eventEnded(this)') && ei.includes('MakerCamera.eventEnded(current)'), '이벤트 끝 · 취소 때 카메라 정리');
 });
 
 // ------------------------------------------------------------ 실행

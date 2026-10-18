@@ -133,7 +133,7 @@ public class MakerBadges {
 		Wnd() {
 			int w = PixelScene.landscape() ? 200 : 126;
 			RenderedTextBlock title = PixelScene.renderTextBlock(MakerRuntime.term("badge.list", "배지"), 9);
-			title.hardlight(TITLE_COLOR); title.setPos(2, 2); add(title);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44)); title.setPos(2, 2); add(title);
 			float y = title.bottom() + 4; int n = 0, got = 0;
 			JsonValue l = list();
 			if (l != null) for (JsonValue b : l) {
@@ -145,7 +145,7 @@ public class MakerBadges {
 				im.x = 2; im.y = y; if (!on) { im.brightness(0.25f); }
 				add(im);
 				RenderedTextBlock nm = PixelScene.renderTextBlock(hid ? "???" : StoryState.expand(b.getString("name", "")), 7);
-				if (on) nm.hardlight(0xFFFF44); nm.maxWidth(w - 22); nm.setPos(20, y); add(nm);
+				if (on) nm.hardlight(MakerTheme.or("accent", 0xFFFF44)); nm.maxWidth(w - 22); nm.setPos(20, y); add(nm);
 				RenderedTextBlock ds = PixelScene.renderTextBlock(hid ? MakerRuntime.term("badge.hidden", "아직 얻지 못한 배지") : StoryState.expand(b.getString("desc", "")), 6);
 				ds.maxWidth(w - 22); ds.setPos(20, nm.bottom() + 1); if (!on) ds.alpha(0.6f); add(ds);
 				y = Math.max(y + 18, ds.bottom() + 4); n++; if (on) got++;

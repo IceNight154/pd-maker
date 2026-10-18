@@ -36,14 +36,16 @@ PDM.ui = (function () {
   /** 색: 색 고르기 + #rrggbb 입력 */
   F.color = (key, path, o = {}) => {
     const cur = get(key, path) ?? o.def ?? '';
+    const inh = o.inherit;   // 6차: { label, value, hint } — 빈 칸 = 위 단계(게임 UI 테마)를 따름
     const norm = v => /^#[0-9a-f]{6}$/i.test(v) ? v : /^#[0-9a-f]{3}$/i.test(v) ? '#' + v.slice(1).split('').map(c => c + c).join('') : '#000000';
-    const pick = h('input', { type: 'color', value: norm(cur), class: 'swatch' });
-    const txt = h('input', { type: 'text', value: cur, class: 'mono', placeholder: '#rrggbb', style: { width: '84px' } });
+    const pick = h('input', { type: 'color', value: norm(cur === '' && inh ? inh.value : cur), class: 'swatch' });
+    const txt = h('input', { type: 'text', value: cur, class: 'mono', placeholder: inh ? `${inh.label} ${inh.value}` : '#rrggbb', style: { width: inh ? '120px' : '84px' } });
     const set = v => { commit(key, path, v, o.label, o.rerender); o.onchange && o.onchange(v); };
     pick.addEventListener('input', () => { txt.value = pick.value; });
     pick.addEventListener('change', () => set(pick.value));
     txt.addEventListener('change', () => { const v = txt.value.trim(); pick.value = norm(v); set(v); });
     const wrap = h('div', { class: 'colorpick' }, pick, txt);
+    if (inh) wrap.append(h('button', { type: 'button', class: 'chip' + (cur === '' ? ' on' : ''), title: (inh.hint || '') + ' — 누르면 이 칸을 비워 그 값을 따름', 'aria-pressed': String(cur === ''), onclick: e => { e.preventDefault(); txt.value = ''; pick.value = norm(inh.value); set(''); } }, inh.label));
     return o.label ? field(o.label, wrap, o.hint) : wrap;
   };
   F.textarea = (key, path, o = {}) => {

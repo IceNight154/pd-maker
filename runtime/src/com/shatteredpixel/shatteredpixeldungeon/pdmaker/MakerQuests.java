@@ -213,7 +213,7 @@ public class MakerQuests {
 		Log() {
 			int w = PixelScene.landscape() ? 200 : 126;
 			RenderedTextBlock title = PixelScene.renderTextBlock(T("quest.log", "퀘스트"), 9);
-			title.hardlight(TITLE_COLOR); title.setPos(2, 2); add(title);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44)); title.setPos(2, 2); add(title);
 			float y = title.bottom() + 4; int n = 0, done = 0;
 			JsonValue l = list();
 			if (l != null) for (JsonValue q : l) {
@@ -222,7 +222,7 @@ public class MakerQuests {
 				if (st != 1) continue;
 				if (y > PixelScene.uiCamera.height * 0.8f - 30) break;
 				RenderedTextBlock nm = PixelScene.renderTextBlock(name(q) + (ready(id) ? "  (" + T("quest.ok", "달성") + ")" : ""), 7);
-				nm.hardlight(ready(id) ? 0x44FF44 : 0xFFFF44); nm.maxWidth(w - 4); nm.setPos(2, y); add(nm);
+				nm.hardlight(ready(id) ? MakerTheme.or("good", 0x44FF44) : MakerTheme.or("accent", 0xFFFF44)); nm.maxWidth(w - 4); nm.setPos(2, y); add(nm);
 				RenderedTextBlock ds = PixelScene.renderTextBlock(objLines(id, q, true).trim(), 6);
 				ds.maxWidth(w - 8); ds.setPos(6, nm.bottom() + 1); add(ds);
 				y = ds.bottom() + 5; n++;

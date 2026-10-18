@@ -30,7 +30,7 @@
     const d = PDM.defaults.dialogue(), c = over || store.get(K) || {};
     const out = { mode: c.mode || d.mode };
     ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'text', 'fx', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
-    return out;
+    return PDM.gameTheme ? PDM.gameTheme.resolveDialogue(out) : out;   // 빈 칸 = 게임 UI 테마 (6차 — 런타임 MakerDialogue.s 와 같음)
   }
 
   /** 화자(캐릭터 id · $hero) · 표정 · 직접 고른 그림 → 한 줄 (게임 MakerDialogue.line 과 같음) */
@@ -432,7 +432,9 @@
       const chk = h('input', { type: 'checkbox', checked: st.choices, onchange: () => { st.choices = chk.checked; pv.draw(false); } });
       const preset = (id) => h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const [label, make] = PRESETS[id]; if (await PDM.ui.confirm(`대사창을 "${label}" 모양으로 바꿀까요? (되돌리기로 복구할 수 있습니다)`)) store.edit(K, '대사창 모양: ' + label, o => { const p = make(); Object.keys(o).forEach(k2 => delete o[k2]); Object.assign(o, p); }); } }, PRESETS[id][0]);
       const classic = c.mode === 'window';
-      const col = (g, k2, label) => F.color(K, [g, k2], { label, rerender: true, def: (c[g] || {})[k2] });
+      const raw = store.get(K) || {};
+      const col = (g, k2, label) => { const tok = PDM.gameTheme.DIALOGUE_LINK[g + '.' + k2];   // 테마를 따를 수 있는 칸: "테마" 단추 (빈 칸 = 테마)
+        return F.color(K, [g, k2], { label, rerender: true, def: ((raw[g] || {})[k2]) ?? (c[g] || {})[k2], inherit: tok ? { label: '테마', value: PDM.gameTheme.color(tok), hint: `게임 UI 테마의 「${(PDM.gameTheme.TOKENS.find(t => t[0] === tok) || [])[1]}」` } : null }); };
       return h('div', { class: 'page' },
         h('h1', {}, '💬 대사창'),
         h('p', { class: 'lead' }, '이벤트의 "대사 표시"·선택지가 게임에서 어떻게 보일지 정합니다. 화면 아래에 넓은 대사 상자가 뜨고, 말하는 캐릭터의 일러스트(캐릭터 편집기 → 초상화/일러스트)가 옆에 섭니다. 주인공이 말할 때는 영웅과 연결된 캐릭터의 일러스트를 씁니다.'),

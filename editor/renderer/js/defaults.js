@@ -47,8 +47,15 @@ PDM.defaults = {
         items: order.map(id => ({ id, label: '', visible: true, icon: '' })) },
       version: { visible: true, text: '' }, exit: { visible: true } };
   },
-  /** 대사창 (dialogue.json) — 게임 MakerDialogue.DEFAULTS 와 같음 */
-  dialogue() {
+  /** 게임 UI 테마 (theme.json — 6차) = 런타임 기본 (MakerTheme.DEF) */
+  theme() { return JSON.parse(JSON.stringify(PDM.gameTheme.DEFAULT)); },
+  /** 대사창 (dialogue.json) — 게임 MakerDialogue.DEFAULTS 와 같음. themed = 새 프로젝트: 색 · 모양 칸을 비워 게임 UI 테마를 따름 (6차) */
+  dialogue(o = {}) {
+    const d = this._dialogue();
+    if (o.themed) Object.keys(PDM.gameTheme.DIALOGUE_LINK).forEach(p => { const [g, k] = p.split('.'); d[g][k] = ''; });
+    return d;
+  },
+  _dialogue() {
     return { format: 'pdmaker-dialogue', version: PDM.FORMAT_VERSION, mode: 'box',
       box: { style: 'round', color: '#ffffff', alpha: 0.94, border: '#b9b4c8', radius: 5, textColor: '#3a3448', fontSize: 8, height: 0.27, margin: 4, padding: 8, image: '', slice: 6, highlight: '#d0602a', align: 'left', hideHud: true },
       name: { show: true, pos: 'auto', color: '#3c3a48', textColor: '#ffffff', fontSize: 7, image: '', slice: 4 },

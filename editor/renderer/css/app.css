@@ -535,6 +535,14 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .dlg-choice { display: flex; align-items: center; pointer-events: auto; cursor: pointer; }
 .dlg-choice.on { background: var(--on-bg) !important; border-color: var(--on-line) !important; }
 .dlg-choice.on span { color: var(--on-fg) !important; }
+/* 게임 UI 테마 편집기 (6차) — 미리보기는 게임 색 그대로 (편집기 토큰을 쓰지 않음) */
+.gt-wrap { display: flex; gap: var(--sp-6); flex-wrap: wrap; align-items: flex-start; margin-bottom: var(--sp-6); }
+.gt-prev { padding: 12px; border-radius: var(--r-sm); min-width: 280px; max-width: 420px; flex: 1; }
+.gt-btn { display: inline-block; padding: 2px 8px; }
+.gt-bar { display: inline-flex; gap: 4px; align-items: center; padding: 3px 6px; margin-top: 8px; border-radius: 3px; }
+.gt-checks { flex: 1; min-width: 240px; } .gt-check { font-size: var(--fs-sm); margin: 2px 0; }
+/* 이벤트 미리보기의 카메라 연출 바닥 (6차 — 맵 대신 격자, 칸 하나 = 16 게임 픽셀) */
+.scene-world { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: 16px 16px; opacity: .5; }
 .dlg-stage { background: radial-gradient(ellipse at 50% 35%, #2a2638, #0b0a10 70%); cursor: pointer; flex: none; }
 .dlg-prev-wrap { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin: 8px 0 12px; }
 .dlg-prev-ctl { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 6px; }

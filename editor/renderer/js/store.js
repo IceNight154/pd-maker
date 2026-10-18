@@ -9,6 +9,7 @@
 //    heart          → heart/heart.json
 //    title          → title.json          (타이틀 화면)
 //    dialogue       → dialogue.json       (대사창)
+//    theme          → theme.json          (게임 UI 테마 — 6차, 없으면 예전 모습 · 고칠 때만 파일을 만듦)
 //    node:<id>      → maps/nodes/<id>.json (노드 한 개의 맵)
 //    room:<id>      → rooms/<id>.json
 //    char:<id>      → characters/<id>.json
@@ -19,7 +20,7 @@
 // ================================================================
 PDM.store = (function () {
   const em = PDM.Emitter();
-  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json', motion: 'motion.json', tilecombos: 'maps/tilecombos.json' };
+  const SINGLES = { project: 'project.json', terms: 'terms.json', world: 'maps/world.json', story: 'story/story.json', heart: 'heart/heart.json', sounds: 'audio/sounds.json', title: 'title.json', dialogue: 'dialogue.json', theme: 'theme.json', gameitems: 'gameitems.json', textfx: 'textfx.json', effects: 'effects.json', texts: 'texts.json', compose: 'compose.json', filters: 'filters.json', trailers: 'trailers.json', badges: 'badges.json', quests: 'quests.json', motion: 'motion.json', tilecombos: 'maps/tilecombos.json' };
   const PREFIX = { node: 'maps/nodes', room: 'rooms', char: 'characters', hero: 'heroes', item: 'items', event: 'events', prop: 'props' };
   let version = 0;           // 바뀔 때마다 +1 (계산 캐시용)
 
@@ -53,7 +54,9 @@ PDM.store = (function () {
   /** 불러올 때 고친(변환한) 키: 저장 대상 + 저장하기 전에 원본 백업 */
   function migrated(key, why) { dirty.add(key); if (!backup.has(key)) backup.set(key, why || '변환'); }
 
+  let missing = new Set();   // 열 때 파일이 없어 기본값으로 채운 한 파일짜리 리소스 (저장하면 지움) — 6차: 게임 UI 테마 화면 안내
   async function load(dir) {
+    missing = new Set();
     root = dir; data = {}; dirty = new Set(); removed = new Set(); backup = new Map(); backupDir = ''; undoStack = []; redoStack = [];
     const problems = [];
     let legacy = null;
@@ -65,8 +68,9 @@ PDM.store = (function () {
         if (key === 'project') throw new Error('project.json 이 없습니다. 프로젝트 폴더가 맞나요?\n' + p);
         if (key === 'world') { const dw = PDM.World.defaultWorld(); data.world = dw.world; Object.entries(dw.data).forEach(([id, o]) => { data['node:' + id] = o; dirty.add('node:' + id); }); }
         else data[key] = PDM.defaults[key]();
-        if (key !== 'tilecombos') dirty.add(key);   // 조합 타일(확장 기능)은 쓸 때만 파일을 만듦
-        if (key !== 'title' && key !== 'dialogue' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion' && key !== 'tilecombos') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
+        missing.add(key);
+        if (key !== 'tilecombos' && key !== 'theme') dirty.add(key);   // 조합 타일(확장 기능) · 게임 UI 테마(6차 — 예전 프로젝트의 모습이 바뀌지 않게)는 쓸 때만 파일을 만듦
+        if (key !== 'title' && key !== 'dialogue' && key !== 'theme' && key !== 'gameitems' && key !== 'textfx' && key !== 'effects' && key !== 'texts' && key !== 'compose' && key !== 'filters' && key !== 'trailers' && key !== 'badges' && key !== 'quests' && key !== 'motion' && key !== 'tilecombos') problems.push(`${rel} 이(가) 없어서 기본값으로 만들었습니다`);
         continue;
       }
       try { data[key] = await readJSON(p); }
@@ -203,7 +207,7 @@ PDM.store = (function () {
       if (data[key]) {
         try { await pdm.writeText(fileOf(key), JSON.stringify(data[key], null, 2) + '\n'); }
         catch (e) { em.emit('dirty'); throw new Error(`${pdm.relative(root, fileOf(key))} 저장 실패: ${e.message}${saved.length ? ` (먼저 ${saved.length}개는 저장됨)` : ''}`); }
-        saved.push(key);
+        saved.push(key); missing.delete(key);
       }
       dirty.delete(key);
     }
@@ -218,12 +222,14 @@ PDM.store = (function () {
 
   /** 새 프로젝트: 샘플 폴더의 파일을 전부 복사하거나, 빈 기본값으로 만듭니다 */
   async function createNew(dir, name) {
+    missing = new Set();
     root = dir; data = {}; dirty = new Set(); removed = new Set(); backup = new Map(); backupDir = ''; undoStack = []; redoStack = [];
     for (const key of Object.keys(SINGLES)) data[key] = PDM.defaults[key]();
     data.project.name = name || data.project.name;
     // 새 프로젝트는 원작 게임처럼: 원작 가운데 대사창, 마음 창 버튼 없음 (필요하면 켜면 됨)
     data.project.heartButton = false;
-    if (data.dialogue) data.dialogue.mode = 'window';
+    if (data.dialogue) data.dialogue = Object.assign(PDM.defaults.dialogue({ themed: true }), { mode: 'window' });   // 6차: 대사창 색 · 모양은 게임 UI 테마를 따름 (빈 칸)
+    data.project.cutsceneSpeed = true;   // 6차: 연출 중 배속 표시줄 (내보낸 게임에도 — 프로젝트 설정에서 끌 수 있음)
     if (data.title) data.title.enabled = false;      // 타이틀 화면: 게임 원래 그대로 (켜면 꾸미기)
     // 게임 저장소: PDMaker 폴더 안 game/shattered-pixel-dungeon-master (원작 기준)
     try { const P = await pdm.paths(); if (P && P.gameRepo) data.project.gameRepo = pdm.relative(dir, P.gameRepo).replace(/\\/g, '/'); } catch (_) { /* 무시 */ }
@@ -315,6 +321,8 @@ PDM.store = (function () {
     get version() { return version; },
     get: key => data[key],
     has: key => !!data[key],
+    /** 열 때 파일이 없어 기본값으로 채웠고 아직 저장하지 않았는지 */
+    wasMissing: key => missing.has(key),
     keys: type => type ? keysOf(type) : Object.keys(data),
     all: type => keysOf(type).map(k => data[k]),
     fileOf, load, save, createNew, edit, add, remove, rename, undo, redo, transaction,

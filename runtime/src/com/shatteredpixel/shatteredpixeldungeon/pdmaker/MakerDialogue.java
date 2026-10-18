@@ -67,10 +67,17 @@ public class MakerDialogue {
 		JsonValue g = d == null ? null : d.get(group);
 		return g != null ? g : defaults.get(group);
 	}
+	/** 빈 칸("")이면 프로젝트 게임 UI 테마를 따르는 칸 (6차 — 우선순위: 대사창 설정 → 테마 → 기본). 예전 프로젝트는 값이 들어 있어 그대로 */
+	static final java.util.Map<String, String> THEMED = new java.util.HashMap<>();
+	static {
+		THEMED.put("box.color", "panel"); THEMED.put("box.border", "border"); THEMED.put("box.textColor", "text"); THEMED.put("box.highlight", "accent");
+		THEMED.put("name.color", "button"); THEMED.put("name.textColor", "text"); THEMED.put("indicator.color", "accent"); THEMED.put("box.style", "@shape");
+	}
 	static String s(String group, String key) {
 		JsonValue g = cfg(group);
-		if (g != null && g.has(key)) return g.getString(key, "");
-		return defaults.get(group).getString(key, "");
+		String v = g != null && g.has(key) ? g.getString(key, "") : defaults.get(group).getString(key, "");
+		if (v.isEmpty()) { String t = THEMED.get(group + "." + key); if (t != null) return t.equals("@shape") ? (MakerTheme.shape().equals("game") ? "game" : "round") : MakerTheme.hex(t); }
+		return v;
 	}
 	static float f(String group, String key) {
 		JsonValue g = cfg(group);
@@ -223,6 +230,13 @@ public class MakerDialogue {
 		return tx;
 	}
 
+	/** 둥근 정도: 모양이 테마를 따르면(빈 칸) 테마 모양(square = 0 · round = 테마 radius), 아니면 대사창 설정 */
+	static int boxRadius() {
+		JsonValue g = cfg("box");
+		boolean themed = g != null && g.has("style") && g.getString("style", "").isEmpty();
+		if (!themed) return (int) f("box", "radius");
+		return MakerTheme.shape().equals("square") ? 0 : (int) MakerTheme.radius();
+	}
 	static NinePatch boxPatch() {
 		String st = s("box", "style");
 		if (st.equals("game")) return Chrome.get(Chrome.Type.WINDOW);
@@ -230,7 +244,8 @@ public class MakerDialogue {
 			Object tx = MakerRuntime.texture(s("box", "image"));
 			if (tx != null) return new NinePatch(tx, (int) Math.max(0, f("box", "slice")));
 		}
-		return new NinePatch(rounded(col("box", "color"), f("box", "alpha"), col("box", "border"), (int) f("box", "radius")), (int) f("box", "radius") + 1);
+		int rad = boxRadius();
+		return new NinePatch(rounded(col("box", "color"), f("box", "alpha"), col("box", "border"), rad), rad + 1);
 	}
 	/** 그림 9조각 (없거나 못 읽으면 null) */
 	static NinePatch imagePatch(String ref, float slice) {
@@ -261,7 +276,7 @@ public class MakerDialogue {
 		return v.isEmpty() ? col(fbGroup, fbKey) : MakerTitle.color(v, col(fbGroup, fbKey));
 	}
 	static NinePatch platePatch(int fill, int border) {
-		int r = Math.max(2, Math.min(4, (int) f("box", "radius")));
+		int r = Math.max(2, Math.min(4, boxRadius()));
 		return new NinePatch(rounded(fill, 1f, border, r), r + 1);
 	}
 
@@ -482,7 +497,7 @@ public class MakerDialogue {
 				com.watabou.noosa.Gizmo g = member(sc, i);
 				if (g == null || g == this || !g.visible) continue;
 				if (g.camera != PixelScene.uiCamera) continue;
-				if (g instanceof Window || g instanceof MakerStage || g instanceof MakerFilter.Host || g instanceof MakerTestEnv.Overlay) continue;   // 화면 필터(날씨 등) · 테스트 플레이 단추는 대사 중에도 그대로
+				if (g instanceof Window || g instanceof MakerStage || g instanceof MakerFilter.Host || g instanceof MakerTestEnv.Overlay || g instanceof MakerCutscene.Bar) continue;   // 화면 필터(날씨 등) · 테스트 플레이 단추는 대사 중에도 그대로
 				g.visible = false;
 				hidden.add(g);
 			}
@@ -833,7 +848,7 @@ public class MakerDialogue {
 			realT += Game.elapsed / Math.max(0.0001f, Game.timeScale);
 			if (typing) typedRealT = realT;
 			// 테스트 플레이 스킵 (MakerTestEnv): 글자를 다 보이고 잠깐 뒤 넘김 — 선택지는 열기만 (고르지 않음)
-			if (MakerTestEnv.skipping() && !done) {
+			if (MakerCutscene.skipping() && !done) {
 				complete();
 				if (choices.isEmpty()) { skipT += Game.elapsed / Math.max(0.0001f, Game.timeScale); if (skipT >= 0.05f) { hide(); return; } }
 			}

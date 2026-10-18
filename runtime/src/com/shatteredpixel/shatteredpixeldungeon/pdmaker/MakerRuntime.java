@@ -153,6 +153,8 @@ public class MakerRuntime {
 		java.io.File[] c = f.listFiles(); if (c != null) for (java.io.File x : c) deleteTree(x);
 		f.delete();
 	}
+	/** 프로젝트 안 파일 (없거나 프로젝트를 못 찾으면 null) — 6차: 게임 UI 테마(theme.json)를 실행 중에 다시 읽을 때 */
+	static FileHandle projectFile(String rel) { return root == null ? null : root.child(rel); }
 	private static JsonValue readOpt(JsonReader r, String rel) {
 		FileHandle f = root.child(rel);
 		return f.exists() ? r.parse(f) : null;
