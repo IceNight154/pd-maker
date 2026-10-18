@@ -786,6 +786,128 @@ test('연출 배속: 런타임 상태 모델 — 끝 · 취소 · 오류 = 1× �
   assert.ok(ei.includes('MakerCamera.eventEnded(this)') && ei.includes('MakerCamera.eventEnded(current)'), '이벤트 끝 · 취소 때 카메라 정리');
 });
 
+// ------------------------------------------------------------ 7차: 타이틀 화면
+/** 타이틀 공통 규칙 검사 입력 (편집기 · 런타임에 똑같이 넣음) */
+function titleCases(M) {
+  const C = [];
+  const bsList = [{}, { style: 'RED_BUTTON' }, { style: 'NOPE', states: { hover: { bright: 1.5, textColor: '#00FF00' }, disabled: { alpha: 0.4, skin: 'TOAST' }, pressed: { dy: 2, scale: 1.1 } } },
+    { states: { normal: { skin: 'TOAST_TR', textColor: '#123456', slice: 3 }, focus: { skin: 'BAD' } } }];
+  const itemList = [null, { id: 'x', states: { hover: { textColor: '#ff0000', alpha: 3 }, normal: { image: 'img/b.png', slice: '6' } } }, { id: 'y', states: { disabled: { textAlpha: 0.5 }, focus: { bright: '' } } }];
+  for (const bs of bsList) for (const item of itemList) for (let f = 0; f < 16; f++) {
+    const flags = { hover: !!(f & 1), focus: !!(f & 2), pressed: !!(f & 4), disabled: !!(f & 8) };
+    C.push({ fn: 'style', bs, item, flags, accent: f === 3 ? '#ffff44' : null });
+  }
+  const fxs = Object.values(M.FX_PRESETS).map(x => x[1]).concat([{ type: 'move', dir: 'left', from: 10, to: -5, duration: 0.4, delay: 0.2, repeat: 2, yoyo: true, ease: 'back' },
+    { type: 'shake', dir: 'y', from: 4, to: 1, duration: 0.5, repeat: 1, freq: 7 }, { type: 'fade', duration: -3, repeat: 'x', ease: 'nope' }, { type: 'bogus' }, {}]);
+  for (const fx of fxs) for (const tau of [0, 0.03, 0.1, 0.2, 0.35, 0.5, 0.8, 1, 1.3, 2.7, 9]) C.push({ fn: 'fx', fx, tau });
+  for (const fx of fxs.slice(4, 8)) for (const [tau, active, dt] of [[0, true, 0.1], [0.3, false, 0.05], [5, false, 0.1], [0.02, false, 0.1], [2, true, 0.016]]) C.push({ fn: 'held', fx, tau, active, dt });
+  const lb = [{}, { items: [{ id: 'play', visible: false }, { id: 'c', custom: true, action: 'continue' }, { id: 'h', action: 'continue', noSave: 'hide' }, { id: 'n', action: 'continue', noSave: 'newgame' },
+    { id: 'q', action: 'quit' }, { id: 'z', action: 'close' }, { id: 'about', enabled: false }, { id: 'plain' }, { id: 'w', action: 'window', window: 'a' }, { id: 'c' }] }];
+  for (const bs of lb) for (const hasSaves of [false, true]) for (const canQuit of [false, true]) C.push({ fn: 'list', bs, hasSaves, canQuit });
+  const screens = [[427, 267, true], [480, 300, true], [390, 180, true], [154, 334, false], [135, 292, false]];
+  const lays = [{}, { layout: 'grid', columns: 3, firstWide: true, height: 18.7, gap: '4' }, { layout: 'column', width: 0, top: 0.5 }, { layout: 'grid', columns: 2, width: 300, offsetX: -7.5 },
+    { layout: 'free', height: 20, width: 100 }, { layout: 'game', top: 0.3, height: 16, width: 200 }, { layout: 'grid', height: '' }];
+  const places = [{ x: 0.2, y: 0.8, w: 60, h: 22 }, null, { x: '', y: 0.1 }, { w: 0, h: 30 }, 'bad'];
+  for (const [W, H, land] of screens) for (const bs of lays) for (const gate of [{}, { enabled: true }, { enabled: true, logoAfter: 'up' }]) for (const n of [1, 5, 8]) {
+    C.push({ fn: 'rects', bs, n, W, H, land, logo: { y: 33.5, h: land ? 57 : 100 }, gate, places: bs.layout === 'free' ? places : null });
+  }
+  for (const [W, H] of screens) for (const lg of [{}, { y: 0.3, offsetX: 5, offsetY: -3 }, { y: '' }]) for (const gate of [{}, { enabled: true }]) C.push({ fn: 'logo', lg, gate, W, H, size: { w: 240, h: 57 } });
+  const area = [[0, 0, 427, 267], [12, 30, 130, 280]];
+  for (const el of [{ type: 'text', x: 0, y: 1, anchorX: 0, anchorY: 1, offsetX: 3, offsetY: -2, align: 'left' }, { type: 'text', w: 100, align: 'right', x: 0.5 }, { type: 'text', w: 100, align: 'center' },
+    { type: 'image', w: 100, x: '0.25', y: 0.75, anchorX: 1 }, { type: 'text', x: 'abc' }]) for (const a of area) C.push({ fn: 'el', el, area: a, size: { w: 40, h: 9 } });
+  for (const el of [{}, { visible: false }, { show: 'gate' }, { show: 'menu' }, { show: '' }]) for (const gate of [false, true]) C.push({ fn: 'shown', el, gate });
+  for (const [text, vals, fallback] of [['v{version} · {saveCount}개', { version: '4.0.0', saveCount: '2' }, ''], ['마지막: {lastHero} {lastDepth}층', { lastHero: null }, '저장 없음'], ['{nope} {version}', { version: '1' }, 'x'], ['$1 \\ {date}', { date: '2026-01-02' }, ''], ['', {}, 'f']])
+    C.push({ fn: 'bind', text, vals, fallback });
+  const win = M.sample({ buttons: { items: [] } }).windows;
+  const wins = win.concat([{ id: 'a', w: 30, h: 400, offsetX: -500, offsetY: 900, closeButton: false, padding: 0, content: [{ type: 'image', align: 'right' }, { type: 'space', h: -3 }, { type: 'setting', key: 'sfxVol' }, { type: 'button', w: 500, align: 'left' }] },
+    { id: 'b', title: '', closeButton: false, content: [] }, { id: 'c', w: 'wide', h: 10, offsetX: 3.9, content: [{ type: 'text', gap: 0 }, { type: 'divider', thickness: 3 }, { type: 'scroll', h: 2 }] }]);
+  for (const w of wins) for (const [W, H] of screens) for (const titleH of [0, 11]) {
+    const sizes = (w.content || []).map((c, i) => [c.type === 'image' ? 30 : 9 + i, c.type === 'image' ? 50 : 0]);
+    C.push({ fn: 'win', win: w, W, H, safe: W < H ? [0, 20, W, H - 30] : [0, 0, W, H], margins: [6, 6, 6, 6], sizes, titleH });
+  }
+  return C;
+}
+/** 편집기 식으로 같은 입력 계산 (출력 모양은 자바 검사 프로그램과 같게) */
+function titleRunJS(M, c) {
+  const fxA = v => [v.dx, v.dy, v.scale, v.alpha, v.bright];
+  switch (c.fn) {
+    case 'style': { const o = M.resolveStyle(c.bs, c.item, c.flags, { accent: c.accent, chrome: PDMG.gameTheme.CHROME }); return { skin: o.skin, image: o.image, slice: o.slice, textColor: o.textColor, textAlpha: o.textAlpha, alpha: o.alpha, scale: o.scale, bright: o.bright, dy: o.dy }; }
+    case 'fx': return fxA(M.fxValue(c.fx, c.tau));
+    case 'held': return M.heldStep(c.tau, c.active, c.dt, c.fx);
+    case 'list': return M.buttonList(c.bs, { hasSaves: c.hasSaves, canQuit: c.canQuit }).map(e => ({ id: e.id, gameIndex: e.gameIndex, disabled: e.disabled, action: e.action }));
+    case 'rects': return M.buttonRects(c.bs, c.n, c.W, c.H, c.land, c.logo, c.gate, c.places);
+    case 'logo': { const r = M.logoRect(c.lg, c.gate, c.W, c.H, c.size); return [r.x, r.y, r.w, r.h]; }
+    case 'el': { const r = M.elementRect(c.el, { x: c.area[0], y: c.area[1], w: c.area[2], h: c.area[3] }, c.size); return [r.x, r.y, r.w, r.h, r.tx]; }
+    case 'shown': return M.elementShown(c.el, c.gate);
+    case 'bind': { const r = M.bindText(c.text, c.vals, c.fallback); return [r.text, ...r.missing.map(k => 'missing:' + k), ...r.unknown.map(k => 'unknown:' + k)]; }
+    case 'win': { const L = M.windowLayout(c.win, c.W, c.H, { x: c.safe[0], y: c.safe[1], w: c.safe[2], h: c.safe[3] }, c.margins, c.sizes.map(s => ({ h: s[0], w: s[1] })), c.titleH);
+      const R = r => r ? [r.x, r.y, r.w, r.h] : null;
+      return { x: L.x, y: L.y, w: L.w, h: L.h, chrome: R(L.chrome), items: L.items.map(R), title: R(L.title), close: R(L.close), overflow: L.overflow, tooTall: L.tooTall }; }
+  }
+}
+let PDMG = null;
+/** 숫자는 1e-6 안이면 같음 */
+function near(a, b, p) {
+  if (typeof a === 'number' && typeof b === 'number') { if (Math.abs(a - b) > 1e-6) throw new Error(`${p}: 편집기 ${a} ≠ 런타임 ${b}`); return; }
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') { if (a !== b) throw new Error(`${p}: 편집기 ${JSON.stringify(a)} ≠ 런타임 ${JSON.stringify(b)}`); return; }
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) throw new Error(`${p}: 칸 수 다름 ${JSON.stringify(a)} / ${JSON.stringify(b)}`);
+  ka.forEach(k => near(a[k], b[k], p + '.' + k));
+}
+test('타이틀 공통 규칙: 편집기 PDM.titleModel = 런타임 MakerTitleModel (실제로 자바를 실행해 같은 입력 비교 — 상태 · 효과 · 버튼 목록 · 배치 · 요소 · 정보 칸 · 창)', () => {
+  const { execFileSync } = require('child_process');
+  const { PDM } = env.load(); PDMG = PDM; const M = PDM.titleModel;
+  const cases = titleCases(M), js = cases.map(c => titleRunJS(M, c));
+  let javac = true; try { execFileSync('javac', ['-version'], { stdio: 'ignore' }); } catch (_) { javac = false; }
+  if (!javac) return 'javac 가 없어 자바 쪽 비교는 건너뜀 (편집기 쪽 계산만 함) — JDK 를 설치하면 비교함';
+  const out = tmp();
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(__dirname, 'TitleModelCheck.java')], { stdio: 'pipe' });
+  const res = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'TitleModelCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
+  eq(res.length, cases.length);
+  cases.forEach((c, i) => near(J(js[i]), res[i], `#${i} ${c.fn} ${JSON.stringify(c).slice(0, 160)}`));
+  const n = fn => cases.filter(c => c.fn === fn).length;
+  return `${cases.length}개 입력 모두 같음 (상태 ${n('style')} · 효과 ${n('fx')} · 동안 ${n('held')} · 목록 ${n('list')} · 배치 ${n('rects')} · 로고 ${n('logo')} · 요소 ${n('el') + n('shown')} · 정보 ${n('bind')} · 창 ${n('win')})`;
+});
+
+test('타이틀 규칙 (편집기): 상태 우선순위 · 효과 끝 값 · 빠른 재시작 누적 없음 · 이어하기 · 정보 칸 · 창 · 검사', () => {
+  const { PDM } = env.load(), M = PDM.titleModel;
+  // 비활성이 오버 · 눌림보다 우선 (오버 모양이 덮지 못함), 눌림이 포커스보다 우선
+  const bs = { states: { hover: { textColor: '#00ff00', alpha: 0.9 }, disabled: { textColor: '#555555' }, focus: { bright: 2 }, pressed: { bright: 0.5 } } };
+  eq(M.resolveStyle(bs, null, { hover: true, disabled: true }).textColor, '#555555');
+  eq(M.resolveStyle(bs, null, { hover: true, disabled: true }).alpha, 0.9);   // 비활성에 없는 칸은 아래 상태(오버) 값
+  eq(M.resolveStyle(bs, null, { focus: true, pressed: true }).bright, 0.5);
+  eq(M.resolveStyle({}, null, {}).skin, 'GREY_BUTTON_TR'); eq(M.resolveStyle({}, null, { pressed: true }).bright, 1.2); eq(M.resolveStyle({}, null, { disabled: true }).textAlpha, 0.3);   // 원작 StyledButton 과 같음
+  // 효과: 끝나면 정확히 끝 값, 흔들림 끝 = 0, 번갈아 짝수 번 = 처음 값
+  eq(M.fxValue(M.FX_PRESETS.slideUp[1], 10).dy, 0); eq(M.fxValue(M.FX_PRESETS.fadeIn[1], 10).alpha, 1); eq(M.fxValue(M.FX_PRESETS.fadeIn[1], 0).alpha, 0);
+  assert.ok(Math.abs(M.fxValue(M.FX_PRESETS.clickShake[1], 10).dx) < 1e-9);
+  eq(M.fxValue({ type: 'scale', from: 1, to: 2, duration: 1, repeat: 1, yoyo: true, ease: 'linear' }, 5).scale, 1);
+  // "동안" 효과를 짧게 수백 번 켜고 꺼도 시간이 한 바퀴를 넘지 않음 (누적 없음)
+  const hv = M.FX_PRESETS.hoverGrow[1]; let tau = 0;
+  for (let i = 0; i < 500; i++) { tau = M.heldStep(tau, true, 0.05, hv); tau = M.heldStep(tau, false, 0.01, hv); }
+  assert.ok(tau <= 0.15 + 1e-9, 'tau ' + tau); eq(M.fxValue(hv, M.heldStep(tau, false, 1, hv)).scale, 1);
+  // 이어하기: 저장 없음 → 흐리게 / 숨김 / 새 게임, 저장 있으면 그대로
+  const items = [{ id: 'c', custom: true, action: 'continue' }, { id: 'h', custom: true, action: 'continue', noSave: 'hide' }, { id: 'n', custom: true, action: 'continue', noSave: 'newgame' }];
+  const L0 = M.buttonList({ items }, { hasSaves: false, canQuit: true }), L1 = M.buttonList({ items }, { hasSaves: true, canQuit: true });
+  eq(L0.filter(e => !M.GAME_IDS.includes(e.id)).map(e => [e.id, e.disabled, e.action]), [['c', true, 'continue'], ['n', false, 'newgame']]);
+  eq(L1.filter(e => !M.GAME_IDS.includes(e.id)).map(e => [e.id, e.disabled, e.action]), [['c', false, 'continue'], ['h', false, 'continue'], ['n', false, 'continue']]);
+  eq(M.buttonList({ items: [{ id: 'q', action: 'quit' }] }, { canQuit: false }).some(e => e.id === 'q'), false);
+  // 정보 칸: 없는 값 → 대체 문구, 모르는 이름 → 그대로 + 검사 오류
+  eq(M.bindText('마지막 {lastHero}', {}, '저장 없음').text, '저장 없음'); eq(M.bindText('{version}', { version: '4.0.0' }).text, '4.0.0'); eq(M.bindText('{nope}', {}).unknown, ['nope']);
+  // 창: 화면보다 크면 표시 · 이동해도 화면 안
+  const L = M.windowLayout({ w: 120, offsetX: 999, content: [{ type: 'space', h: 500 }] }, 427, 267, { x: 0, y: 0, w: 427, h: 267 }, [6, 6, 6, 6], [{ h: 0, w: 0 }], 0);
+  eq([L.chrome.x + L.chrome.w <= 425, L.tooTall], [true, true]);
+  // 검사: 없는 창 · 닫을 수 없는 창 · 모르는 정보 칸 · 겹친 id · 잘못된 색
+  const t = M.sample({ buttons: { items: [] } });
+  eq(M.check(t).filter(x => x.level === 'error'), []);
+  t.buttons.items.push({ id: 'credits', custom: true, action: 'window', window: 'nope' });
+  t.elements.push({ id: 'e1', type: 'text', text: '{nope}', color: 'red' });
+  t.windows.push({ id: 'trap', closeButton: false, closeEsc: false, closeOutside: false, content: [{ type: 'text', text: 'x' }] });
+  const errs = M.check(t).filter(x => x.level === 'error').map(x => x.msg);
+  ['없는 창 "nope"', '닫을 방법이 없는 창', '없는 정보 칸 {nope}', 'id "credits" 가 겹칩니다', '"red" 이(가) 올바른 색'].forEach(m => assert.ok(errs.some(e => e.includes(m)), m + ' — ' + errs.join(' | ')));
+  assert.ok(M.check(t).every(x => typeof x.sel === 'string'), '검사 결과마다 편집기에서 고를 대상');
+  return `검사 오류 ${errs.length}개 확인`;
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];

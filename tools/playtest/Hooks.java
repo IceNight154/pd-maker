@@ -830,6 +830,17 @@ public class Hooks {
 				case "action": System.out.println("[TEST] action " + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action); break;
 				case "title": System.out.println("[TEST] title buttons " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.describe()); break;
 				case "tap": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.tap(); break;
+				case "titlegeo": System.out.println("[TEST] titlegeo " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.geo()); break;   // 7차: 타이틀 배치 · 상태 JSON
+				case "titlewin": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.openWin(p[1]); System.out.println("[TEST] titlewin " + p[1]); break;
+				case "titlehover": if (p[1].startsWith("@")) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.hoverOn(p[1].substring(1)); System.out.println("[TEST] titlehover " + p[1]); break; }
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.hover(p.length > 2 ? new float[]{ Float.parseFloat(p[1]), Float.parseFloat(p[2]) } : null); System.out.println("[TEST] titlehover " + (p.length > 2 ? p[1] + "," + p[2] : "off")); break;
+				case "titleclick": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.click(p[1]); System.out.println("[TEST] titleclick " + p[1]); break;
+				case "key": { // key,<libGDX 키 이름: ENTER · ESCAPE · DOWN · TAB …> — 진짜 키처럼 (누름 → 뗌, 입력 처리기로)
+					int kc = com.badlogic.gdx.Input.Keys.valueOf(p[1].equals("ESCAPE") ? "Escape" : p[1].substring(0, 1) + p[1].substring(1).toLowerCase().replace("_", " "));
+					if (kc < 0) kc = (int) com.badlogic.gdx.Input.Keys.class.getField(p[1]).getInt(null);
+					com.watabou.input.KeyEvent.addKeyEvent(new com.watabou.input.KeyEvent(kc, true));
+					com.watabou.input.KeyEvent.addKeyEvent(new com.watabou.input.KeyEvent(kc, false));
+					System.out.println("[TEST] key " + p[1] + " " + kc); break; }
 				case "talk": for (int i = 0; i < 12; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");
 					com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.onFloorLeave(com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth);
 					for (int i = 0; i < 5; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");

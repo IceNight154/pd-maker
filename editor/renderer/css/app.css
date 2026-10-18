@@ -687,8 +687,8 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .spd-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
 .spd-list code { font-size: var(--fs-xs); padding: 1px 5px; border-radius: var(--r-xs); background: var(--bg2); border: 1px solid var(--line); }
 .spd-list code.mod2 { border-color: var(--gold); }
-.title-prev-wrap { margin: 8px 0 12px; }
-.title-prev { display: block; image-rendering: pixelated; border: 1px solid var(--line); border-radius: var(--r-sm); background: #000; margin-top: 4px; }
+
+
 
 /* ---------- 그림 관리 ---------- */
 .spr-tools { display: flex; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
@@ -725,8 +725,8 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .lay-handle { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; border-radius: 2px; cursor: nwse-resize; border: 1px solid #111; }
 .lay-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 2px 0; }
 .lay-tools .btn.on { outline: 2px solid var(--accent); }
-.title-lay-wrap { position: relative; display: inline-block; line-height: 0; }
-.title-lay-wrap canvas { display: block; }
+
+
 
 /* 검색되는 목록 칸 (combo) */
 .combo { display: flex; gap: 2px; align-items: center; width: 100%; }
@@ -799,3 +799,27 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .c-mute, .muted { color: var(--mute); } .c-dim { color: var(--dim); } .c-bad { color: var(--bad); } .c-warn { color: var(--warn); } .c-good { color: var(--good); } .c-gold { color: var(--gold); } .c-accent { color: var(--accent); }
 .truncate { overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- 타이틀 편집 (7차): 왼쪽 목록 · 가운데 캔버스 · 오른쪽 속성 ---- */
+.title-page { max-width: none; }
+.tp-layout { display: grid; grid-template-columns: minmax(170px, 210px) minmax(360px, 1.5fr) minmax(260px, 1fr); gap: var(--sp-4); align-items: start; }
+@media (max-width: 1250px) { .tp-layout { grid-template-columns: minmax(160px, 200px) 1fr; } .tp-props { grid-column: 1 / -1; max-height: none; } }
+@media (max-width: 700px) { .tp-layout { grid-template-columns: 1fr; } }
+.tp-tree { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg2); padding: 4px; max-height: 78vh; overflow: auto; position: sticky; top: 0; }
+.tp-group { margin-bottom: 6px; } .tp-gtitle { font-size: var(--fs-sm); color: var(--dim); padding: 4px 6px 2px; font-weight: 600; }
+.tp-row { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--fs-sm); min-height: 24px; }
+.tp-row:hover { background: var(--bg3); } .tp-row.sel { background: var(--accent-soft); outline: 1px solid var(--accent); } .tp-row.off .tp-label { opacity: .55; }
+.tp-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-tools { display: flex; gap: 1px; flex: none; } .tp-tools .ib { min-width: 20px; height: 20px; padding: 0 3px; font-size: 11px; }
+.tp-tree .btn.add { margin: 2px 6px 4px; }
+.tp-center { min-width: 0; }
+.tp-toolbar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end; margin-bottom: 6px; }
+.tp-toolbar .field { margin: 0; }
+.tp-stage { position: relative; width: 100%; max-width: 100%; background: #000; border: 1px solid var(--line); border-radius: var(--r-sm); line-height: 0; }
+.tp-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.tp-stage .tp-overlay { outline: none; cursor: crosshair; } .tp-stage .tp-overlay:focus-visible { box-shadow: 0 0 0 2px var(--accent) inset; }
+.tp-props { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg2); padding: 8px 10px; max-height: 78vh; overflow: auto; }
+.tp-props h3 { margin: 0 0 6px; font-size: var(--fs-md, 14px); }
+.tp-issues { margin-bottom: 8px; font-size: var(--fs-sm); }
+.tp-states details, .tp-fx .li { margin: 2px 0; }
+.tp-list { margin: 4px 0; }

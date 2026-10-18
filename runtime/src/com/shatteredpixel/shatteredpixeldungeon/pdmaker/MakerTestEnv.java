@@ -168,12 +168,14 @@ public class MakerTestEnv {
 		}
 		@Override public void update() {
 			if (members == null) return;   // 이미 없어진 장면의 것 (아래 창 크기 바꾸기 중에 장면이 바뀐 경우)
-			if (rotateAsked) { rotateAsked = false; doRotate(); return; }   // 창 크기를 바꾸는 프레임은 그것만 (장면이 바뀔 수 있음)
+			// 창 크기 바꾸기는 장면 update 밖에서 (다음 프레임 첫머리 — Gdx.app.postRunnable): Windows 처럼 그 자리에서 다시 그리면 장면이 바뀌는데,
+			// update 안에서 바꾸면 super.update() 뒤에 제 멤버를 도는 장면(영웅 선택 HeroSelectScene 등)이 없어진 멤버로 "this.members is null" (7차에서 찾음)
+			if (rotateAsked) { rotateAsked = false; Gdx.app.postRunnable(MakerTestEnv::doRotate); return; }
 			if (!applied) {
 				// 창 크기 · 배율은 처음 한 번, 이 프레임에서는 그것만 함. Windows 등에서는 창 크기를 바꾸는 순간 libGDX 가
 				// 그 자리에서 다시 그리며(resize → render) 장면을 새로 만들어 이 Overlay 를 없앰 — 예전엔 그 뒤에 단추를 붙이다
 				// "this.members is null" 로 게임이 멈췄음 (xvfb 에서는 창 크기 변경이 늦게 와서 드러나지 않았음). 단추는 다음 프레임에.
-				applied = true; applyWindow(); return;
+				applied = true; Gdx.app.postRunnable(MakerTestEnv::applyWindow); return;
 			}
 			if (!built) { if (PixelScene.uiCamera == null) return; build(); }
 			// 입력 순서: 나중에 등록한 것이 먼저 받음(원작 Signal stackMode) — 대사창 · 입력 기다리기 창이 모든 키 · 화면 누름을 먹으므로 매 프레임 맨 앞으로

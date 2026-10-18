@@ -982,7 +982,7 @@
   // ---------------- 검사 / 테스트 플레이 ----------------
   /** 검사 결과 한 줄 — 누르면 그 리소스 탭 (맵 칸이 있으면 맵 편집기에서 그 칸을 고름) */
   function checkLine(r) {
-    const open = () => { if (!r.open) return; if (r.cell && PDM.mapUtil && /^(node|room):/.test(r.open)) PDM.mapUtil.focus(r.open, r.cell); PDM.tabs.open(r.open); };
+    const open = () => { if (!r.open) return; if (r.cell && PDM.mapUtil && /^(node|room):/.test(r.open)) PDM.mapUtil.focus(r.open, r.cell); PDM.tabs.open(r.open); const ed = PDM.editorFor(r.open); if (r.focus && ed && ed.focus) ed.focus(r.focus); };   // focus = 편집기 안에서 고를 대상 (7차: 타이틀 요소)
     return h('div', { class: 'chk-l log-l ' + (r.level === 'error' ? 'err' : r.level === 'info' ? 'info' : 'warn'), title: [r.kind, r.path && '데이터: ' + r.path, r.fix && '조치: ' + r.fix].filter(Boolean).join('\n'), onclick: open },
       `${r.level === 'error' ? '✕' : r.level === 'info' ? 'ℹ' : '!'} ${r.kind ? '[' + r.kind + '] ' : ''}${r.where} — ${r.msg}${r.cell ? ` (칸 ${r.cell.x}, ${r.cell.y})` : ''}`,
       r.fix ? h('div', { class: 'dim', style: { paddingLeft: '18px' } }, '→ ' + r.fix) : null);

@@ -286,6 +286,8 @@ PDM.validate = function () {
     if ((tt.menus || {}).effect && ((tt.background || {}).effect || 'none') === 'none') add('warn', '타이틀 화면 › 메뉴 화면', '"입자 효과도"를 켰지만 배경의 날씨·입자 효과가 없습니다', 'title');
     ((tt.buttons || {}).items || []).forEach(b => { if (b.action === 'url' && !b.url) add('warn', `타이틀 화면 › 버튼 ${b.label || b.id}`, '주소가 비어 있습니다', 'title'); });
     if (!((tt.buttons || {}).items || []).some(b => (b.id === 'play' && b.visible !== false) || b.action === 'newgame' || b.action === 'continue')) add('error', '타이틀 화면', '게임을 시작할 버튼이 없습니다 ("던전으로 들어가기"를 숨겼다면 새 게임 동작 버튼을 넣으세요)', 'title');
+    // 7차: 요소 · 버튼 상태 · 효과 · 창 · 정보 칸 · 동작 (PDM.titleModel.check — 결과를 누르면 그 대상을 고름)
+    if (PDM.titleModel) PDM.titleModel.check(tt).forEach(x => add(x.level, x.where, x.msg, 'title', { focus: x.sel, kind: '타이틀' }));
   }
   s.all('hero').forEach(hr => {
     const k = 'hero:' + hr.id, where = `영웅 ${hr.name}`;
@@ -407,6 +409,14 @@ PDM.validate = function () {
  *  ④ 절대 경로 · 역슬래시 · 프로젝트 밖(../) 경로인지 확인. 경로마다 한 번, 폴더 목록도 폴더마다 한 번만 읽음. 아무 파일도 고치지 않음.
  *  경로 규칙(assets.js): "assets/…"(프로젝트 기준) · "game:…" / "builtin:이름"(게임 assets — 프로젝트 assets/game 이 있으면 그것) · "a|b"(여러 개)
  *  → { issues: [검사 결과 형식], refs: 확인한 경로 수, uses, skippedGame: 게임 저장소가 없어 못 본 수, ms } */
+/** title.json 안 경로 → 타이틀 편집기에서 고를 대상 (7차) */
+function titleFocus(p) {
+  const t = PDM.store.get('title') || {}, m = /^(elements|windows)\[(\d+)\](?:\.content\[(\d+)\])?/.exec(p || ''), b = /^buttons\.items\[(\d+)\]/.exec(p || '');
+  if (b) return 'button:' + (((t.buttons || {}).items || [])[+b[1]] || {}).id;
+  if (!m) return /^logo/.test(p || '') ? 'logo' : /^(background|layers)/.test(p || '') ? 'background' : null;
+  const x = (t[m[1]] || [])[+m[2]] || {};
+  return m[1] === 'elements' ? 'element:' + x.id : m[3] !== undefined ? `content:${x.id}:${m[3]}` : 'window:' + x.id;
+}
 PDM.validateAssets = async function () {
   const s = PDM.store, out = [], t0 = Date.now();
   const add = (level, where, msg, open, extra) => out.push(Object.assign({ level, where, msg, open }, extra || {}));
@@ -427,7 +437,7 @@ PDM.validateAssets = async function () {
   for (const [r, us] of refs) {
     uses += us.length;
     const u = us[0], more = us.length > 1 ? ` 외 ${us.length - 1}곳` : '', where = `${u.key} › ${u.path}${more}`;
-    const X = extra => Object.assign({ path: u.path, ref: r, uses: us.length }, extra);
+    const X = extra => Object.assign({ path: u.path, ref: r, uses: us.length }, u.key === 'title' ? { focus: titleFocus(u.path) } : {}, extra);
     const isGame = /^(game|builtin):/.test(r), abs0 = /^([A-Za-z]:[\\/]|\/)/.test(r);
     if (isGame && !s.gameAssetsDir()) { skippedGame++; continue; }
     if (abs0) add('warn', where, `절대 경로 "${r}" — 다른 PC · 게임 내보내기에서 찾지 못합니다`, openOf(u.key), X({ kind: '경로', fix: '그림 · 소리를 프로젝트 assets/ 안으로 가져와서 다시 고르세요 (그림 관리 · 사운드 편집기)' }));
