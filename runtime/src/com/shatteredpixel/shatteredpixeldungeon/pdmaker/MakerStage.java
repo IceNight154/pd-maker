@@ -6,6 +6,7 @@
  *     alpha  불투명도 % (기본 100) · ox oy 위치 옮기기(화면 단위 px, 오른쪽 · 아래 +) · flip 좌우 뒤집기
  *   번호가 큰 그림이 앞(위)에 그려짐. 같은 번호에 다시 표시하면 앞 그림은 페이드 아웃되며 바뀜(교체).
  *   움직이기(move): 지금 모습에서 목표(위치 · 크기 · 불투명도)까지 time 초 동안 — 시간은 Game.elapsed 로 재서 프레임 수와 상관없음
+ *   크기 기준: 화면 높이의 90% — 단, 그림 폭이 화면 폭을 넘지 않게 (세로 화면에서 가로로 긴 그림)
  *   게임 화면 위, 대사창 아래에 그려집니다. 다른 층으로 옮기거나 화면이 바뀌면 사라집니다(세이브에 남지 않음).
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -51,6 +52,7 @@ public class MakerStage extends Group {
 		float baseX, baseY, baseSc;
 		/** 지금 값 — 크기 %(1 = 100%) · 옮기기 · 불투명도(0~1) */
 		public float scale = 1f, ox, oy, alpha = 1f; public boolean flip;
+		String pos = "center"; boolean full;   // 자리 (화면 크기가 바뀌면 다시 계산)
 		Tween tw;
 	}
 	static class Tween { float t, dur, s0, s1, x0, x1, y0, y1, a0, a1, bx0, bx1; }
@@ -67,15 +69,19 @@ public class MakerStage extends Group {
 		float th = full ? H : H * 0.9f;
 		Image img = MakerDialogue.illustImage(ref, th);
 		if (img == null) { MakerRuntime.warnOnce("일러스트 그림을 찾지 못했습니다: " + ref + " (검사 F7 의 에셋 확인)"); return false; }
+		// 화면보다 넓어지지 않게 (4차: 세로 화면에서 가로로 긴 그림이 화면 폭의 3배가 되어 대부분 잘렸음 — 가로 화면 · 세로로 긴 그림은 그대로)
+		if (!full) th = Math.min(th, W * img.height / img.width);
 		Slot s = new Slot();
 		s.img = img; s.ref = ref; s.dur = Math.max(0.01f, fadeSec);
+		s.pos = pos == null ? "center" : pos; s.full = full;
 		if (full) {
 			s.baseSc = Math.max(W / img.width, H / img.height);
 			s.baseX = (W - img.width * s.baseSc) / 2f; s.baseY = (H - img.height * s.baseSc) / 2f;
 		} else {
 			s.baseSc = th / img.height;
 			float iw = img.width * s.baseSc;
-			s.baseX = baseX(pos, W, iw); s.baseY = H - th;
+			// 서 있는 그림 = 아래에 붙임. 폭 때문에 줄어든 그림(세로 화면 · 가로로 긴 그림)은 화면 세로 가운데 — 아래에 붙이면 대사창에 다 가려졌음
+			s.baseX = baseX(pos, W, iw); s.baseY = th < H * 0.9f - 0.5f ? (H - th) / 2f : H - th;
 		}
 		s.scale = scale > 0 ? scale : 1f; s.alpha = clamp01(alpha); s.ox = ox; s.oy = oy; s.flip = flip;
 		img.alpha(0);
@@ -110,10 +116,25 @@ public class MakerStage extends Group {
 		t.x0 = s.ox; t.x1 = dx; t.y0 = s.oy; t.y1 = dy;
 		t.a0 = s.alpha; t.a1 = alpha >= 0 ? clamp01(alpha) : s.alpha;
 		t.bx0 = s.baseX; t.bx1 = s.baseX;
-		if (pos != null && !pos.isEmpty() && !"full".equals(pos)) t.bx1 = baseX(pos, PixelScene.uiCamera.width, s.img.width * s.baseSc);
+		if (pos != null && !pos.isEmpty() && !"full".equals(pos)) { t.bx1 = baseX(pos, PixelScene.uiCamera.width, s.img.width * s.baseSc); s.pos = pos; }   // 자리: 다시 만들 때(rebuild)는 목표 자리로
 		if (s.t < s.dur) s.t = s.dur;   // 나타나는 중이면 끝난 것으로 (불투명도는 움직이기가 맡음)
 		s.tw = t;
 		return true;
+	}
+	/** 창 크기 · 화면 방향이 바뀌어 화면을 다시 만든 뒤 (EventInterpreter.rebuild): 남아 있던 그림을 새 화면 크기에 맞춰 같은 번호 · 자리 · 크기 · 불투명도로 다시 놓음.
+	 *  움직이는 중이던 것은 목표 모습으로, 사라지는 중이던 것은 버림. 다시 놓은 수 */
+	static int rebuild() {
+		MakerStage old = stage;
+		if (old == null || (old.parent != null && owner == Game.scene())) return 0;
+		java.util.List<Map.Entry<Integer, Slot>> prev = new java.util.ArrayList<>(old.slots.entrySet());
+		stage = null;
+		int n = 0;
+		for (Map.Entry<Integer, Slot> e : prev) {
+			Slot s = e.getValue(); Tween t = s.tw;
+			float sc = t != null ? t.s1 : s.scale, a = t != null ? t.a1 : s.alpha, ox = t != null ? t.x1 : s.ox, oy = t != null ? t.y1 : s.oy;
+			if (show(e.getKey(), s.ref, s.full ? "full" : s.pos, 0.01f, sc, a, ox, oy, s.flip)) n++;
+		}
+		return n;
 	}
 	/** 이 번호의 그림이 나타나기 · 움직이기를 끝냈는지 (명령의 "끝날 때까지 대기") */
 	public static boolean idle(int slot) {
@@ -129,6 +150,27 @@ public class MakerStage extends Group {
 		for (Map.Entry<Integer, Slot> e : st.slots.entrySet()) { Slot s = e.getValue();
 			b.append(String.format(java.util.Locale.ROOT, "%d:%s a=%.2f sc=%.2f x=%.1f y=%.1f%s%s ", e.getKey(), s.ref, s.img.alpha(), s.scale, s.img.x, s.img.y, s.flip ? " flip" : "", s.tw != null ? " moving" : "")); }
 		return b.append("fading=").append(st.fading.size()).append("]").toString();
+	}
+	/** 배치 (자동 테스트 "layout"): 번호마다 화면에 그려지는 사각형 (뒤집기 반영) */
+	public static String debugLayout() {
+		MakerStage st = peek(); if (st == null) return "";
+		StringBuilder b = new StringBuilder();
+		for (Map.Entry<Integer, Slot> e : st.slots.entrySet()) { float[] q = rect(e.getValue()); b.append(String.format(java.util.Locale.ROOT, "%d=[%.0f,%.0f %.0fx%.0f] ", e.getKey(), q[0], q[1], q[2], q[3])); }
+		return b.toString().trim();
+	}
+	static float[] rect(Slot s) { float w = s.img.width * Math.abs(s.img.scale.x), h = s.img.height * s.img.scale.y; return new float[]{s.flip ? s.img.x - w : s.img.x, s.img.y, w, h}; }
+	/** 화면에 절반도 안 보이는 일러스트 · 화면보다 넓어 양쪽이 잘리는 일러스트 (full 제외) */
+	public static java.util.List<String> layoutProblems() {
+		java.util.List<String> out = new java.util.ArrayList<>();
+		MakerStage st = peek(); if (st == null) return out;
+		float W = PixelScene.uiCamera.width;
+		for (Map.Entry<Integer, Slot> e : st.slots.entrySet()) { Slot s = e.getValue(); float[] q = rect(s);
+			if (s.full) continue;
+			float vis = Math.max(0, Math.min(W, q[0] + q[2]) - Math.max(0, q[0]));
+			if (vis < q[2] * 0.5f) out.add("일러스트 " + e.getKey() + "번이 절반 넘게 화면 밖 x=" + Math.round(q[0]) + " 폭 " + Math.round(q[2]) + " / 화면 " + Math.round(W));
+			else if (q[0] < -0.5f && q[0] + q[2] > W + 0.5f) out.add("일러스트 " + e.getKey() + "번이 화면보다 넓어 양쪽이 잘림 폭 " + Math.round(q[2]) + " / 화면 " + Math.round(W));
+		}
+		return out;
 	}
 	/** 숨기기 (0 = 전부) */
 	public static void hide(int slot, float fadeSec) {

@@ -223,7 +223,7 @@
           await pdm.writeDataURL(store.abs(out), c.toDataURL('image/png')); PDM.assets.invalidate(out);
           setB('배지 그림 (다른 이름으로 저장)', x => { x.image = out; });
         }
-        mine.append(h('div', { id: 'badge-' + b.id, style: { border: '1px solid ' + (st.id === b.id ? 'var(--acc, #a58bff)' : 'var(--line)'), borderRadius: '8px', padding: '8px 10px', marginBottom: '8px', display: 'flex', gap: '10px', alignItems: 'flex-start' } },
+        mine.append(h('div', { id: 'badge-' + b.id, class: 'selcard' + (st.id === b.id ? ' on' : ''), style: { display: 'flex', gap: '10px', alignItems: 'flex-start' } },
           h('div', { class: 'flex-none ta-center' }, iconBtn),
           h('div', { class: 'grow' },
             row(F.text(K, [...p, 'name'], { label: `이름 (id: ${b.id})`, rerender: true }), F.text(K, [...p, 'desc'], { label: '설명 (얻는 방법)' })),

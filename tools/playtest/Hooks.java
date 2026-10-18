@@ -607,8 +607,43 @@ public class Hooks {
 					System.out.println(sb.append(" npcs=").append(n)); break; }
 				case "killmob": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs.toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob[0])) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) { m.die(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break; } break; }
 				case "pickgold": new com.shatteredpixel.shatteredpixeldungeon.items.food.Food().doPickUp(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break;
-				case "winsize": { // winsize,<가로>,<세로> — 창 크기 바꾸기 (세로 화면 = 모바일 흉내)
-					com.badlogic.gdx.Gdx.graphics.setWindowedMode(Integer.parseInt(p[1]), Integer.parseInt(p[2])); break; }
+				case "winsize": { // winsize,<가로>,<세로> — 창 크기 바꾸기 (세로 화면 = 휴대폰 비율 흉내 · 실행 중에 바꾸면 화면 돌림 · 창 크기 조절과 같은 경로: Game.resize → 화면 다시 만들기)
+					// 데스크톱 판의 최소 창 크기(720×400)를 풀어야 세로 비율이 됨
+					try { ((com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics) com.badlogic.gdx.Gdx.graphics).getWindow().setSizeLimits(1, 1, -1, -1); } catch (Throwable t) { System.out.println("[TEST] size limits: " + t); }
+					com.badlogic.gdx.Gdx.graphics.setWindowedMode(Integer.parseInt(p[1]), Integer.parseInt(p[2]));
+					System.out.println("[TEST] window " + p[1] + "x" + p[2]); break; }
+				case "uisize": { // uisize,<0|1|2> — 게임 설정 "인터페이스 크기" (0 = 휴대폰 기본 · 세로 화면이면 세로 배치, 1·2 = 데스크톱 기본 큰 UI → 늘 가로 배치) 바꾸고 화면 다시 만들기
+					com.shatteredpixel.shatteredpixeldungeon.SPDSettings.interfaceSize(Integer.parseInt(p[1]));
+					com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon.seamlessResetScene();
+					System.out.println("[TEST] interfaceSize " + p[1]); break; }
+				case "insets": { // insets,<왼>,<위>,<오른>,<아래> (화면 px) — 노치 · 상태 줄 · 내비게이션 바 흉내 (데스크톱은 원래 0). 원작 Window · GameScene 이 쓰는 getSafeInsets 를 바꾸고 화면을 다시 만듦
+					final float il = Float.parseFloat(p[1]), it = Float.parseFloat(p[2]), ir = Float.parseFloat(p[3]), ib = Float.parseFloat(p[4]);
+					com.watabou.noosa.Game.platform = new com.shatteredpixel.shatteredpixeldungeon.desktop.DesktopPlatformSupport() {
+						@Override public com.watabou.utils.RectF getSafeInsets(int level) { return new com.watabou.utils.RectF(il, it, ir, ib); } };
+					com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon.seamlessResetScene();
+					System.out.println("[TEST] insets " + il + "," + it + "," + ir + "," + ib); break; }
+				case "layout": { // 연출 화면 배치 검사: 대사창 · 글 · 이름표 · ▼ · 선택지 · 일러스트가 화면(그리고 안전 영역) 밖으로 나가는지 — 결과 한 줄 + 문제 목록
+					StringBuilder sb = new StringBuilder();
+					com.watabou.noosa.Camera uc = com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene.uiCamera;
+					sb.append("screen=").append(com.watabou.noosa.Game.width).append('x').append(com.watabou.noosa.Game.height).append(" ui=").append(uc.width).append('x').append(uc.height).append(" z").append(uc.zoom);
+					sb.append(" landscape=").append(com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene.landscape());
+					int probs = 0;
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd d = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w;
+						sb.append(" dlg{").append(d.debugLayout()).append('}');
+						for (String pr : d.layoutProblems()) { System.out.println("[TEST] LAYOUT-PROBLEM " + pr); probs++; }
+					}
+					String st = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerStage.debugLayout();
+					sb.append(" stage{").append(st).append('}');
+					for (String pr : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerStage.layoutProblems()) { System.out.println("[TEST] LAYOUT-PROBLEM " + pr); probs++; }
+					System.out.println("[TEST] layout " + sb + " problems=" + probs);
+					break; }
+				case "wshot": { // wshot,<이름> — 게임 창만 찍기 (xvfb 화면보다 창이 작을 때 · 창 자리를 GLFW 에서 읽어 잘라냄)
+					com.badlogic.gdx.backends.lwjgl3.Lwjgl3Window win = ((com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics) com.badlogic.gdx.Gdx.graphics).getWindow();
+					final String geo = com.badlogic.gdx.Gdx.graphics.getWidth() + "x" + com.badlogic.gdx.Gdx.graphics.getHeight() + "+" + win.getPositionX() + "+" + win.getPositionY();
+					final String name = p[1];
+					new Thread(() -> { try { Thread.sleep(250); new ProcessBuilder("import", "-display", System.getenv("DISPLAY"), "-window", "root", "-crop", geo, "+repage", PlayTest.outDir + "/" + name + ".png").inheritIO().start().waitFor(); System.out.println("[TEST] wshot " + name + " " + geo); } catch (Exception e) { e.printStackTrace(); } }).start();
+					break; }
 				case "godepth": { // godepth,<깊이> — 원작 던전의 그 깊이로
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.RETURN;
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnDepth = Integer.parseInt(p[1]);
@@ -651,8 +686,9 @@ public class Hooks {
 					break;
 				}
 				case "cutinfo": { // 연출 상태: 이벤트 실행 중 · 화면 어둡게 · 일러스트 번호마다 · 떠 있는 창 · 영웅 자리
-					StringBuilder ws = new StringBuilder(); for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) ws.append(w.getClass().getSimpleName()).append(' ');
-					System.out.println("[TEST] cut " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.debugState() + " windows=[" + ws.toString().trim() + "] hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos);
+					StringBuilder ws = new StringBuilder(); for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) ws.append(w.getClass().getName().replaceAll("^.*\\.", "")).append(w.visible ? "" : "(hidden)").append(' ');
+					String line = ""; for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) line = " line='" + ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w).line.text + "'";
+					System.out.println("[TEST] cut " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.debugState() + " windows=[" + ws.toString().trim() + "]" + line + " hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos);
 					break;
 				}
 				case "adv": case "pick": { // 대사창: 다음(글자 다 보이기 → 선택지 → 닫기) · pick,<n> 선택지 고르기

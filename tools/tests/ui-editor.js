@@ -162,6 +162,72 @@ async function makeProject(dir) {
       ['keydown', 'keyup', 'pointermove', 'pointerup', 'mousemove', 'mouseup'].forEach(t => assert.strictEqual(b[t] || 0, a[t] || 0, `${t}: ${a[t]} → ${b[t]}`));
       return Object.entries(b).map(([k, v]) => `${k} ${v}`).join(' · ');
     });
+    // ---------------- 4차: 기능 묶음 · 공통 UI 규칙 · 색 체계 ----------------
+    const ctxLabels = () => page.evaluate(() => [...document.querySelectorAll('.ctx .ctx-i, .ctx .ctx-h')].map(e => (e.classList.contains('ctx-h') ? '#' : '') + [...e.childNodes].filter(n => n.nodeType === 3 || (n.tagName !== 'SMALL' && !n.classList.contains('ctx-ck'))).map(n => n.textContent).join('').trim()));
+    const closeCtx = () => page.keyboard.press('Escape');
+    await step('메뉴 묶음: 실행 메뉴 따로 · 같은 항목은 한 곳 목록 (메뉴 막대 = 도구 모음 ▾) · 게임 내보내기 중복 없음', async () => {
+      const bar = await page.$$eval('#menubar .mb', els => els.map(e => e.textContent));
+      assert.deepStrictEqual(bar, ['파일', '편집', '보기', '프로젝트', '실행', '도구', '플러그인', '도움말']);
+      const menu = async name => { await page.click(`#menubar .mb:has-text("${name}")`); await page.waitForTimeout(120); const l = await ctxLabels(); await closeCtx(); return l; };
+      const file = await menu('파일'), proj = await menu('프로젝트'), run = await menu('실행');
+      assert.ok(file.some(l => l.startsWith('게임 파일 내보내기')) && !proj.some(l => l.startsWith('게임 파일 내보내기')), '게임 파일 내보내기는 파일 메뉴에만');
+      assert.ok(run[0].startsWith('▶ 테스트 플레이') && run.some(l => l.startsWith('■ 중지')) && !proj.some(l => l.includes('테스트 플레이')), '실행 메뉴');
+      // 도구 모음 "빌드 ▾" = 실행 메뉴에서 ▶ 테스트 플레이 · 중지를 뺀 것 (같은 이름)
+      await page.click('#toolbar button[title^="실행 방식"]'); await page.waitForTimeout(120); const drop = await ctxLabels(); await closeCtx();
+      assert.deepStrictEqual(drop, run.filter(l => !l.startsWith('▶ 테스트 플레이') && !l.startsWith('■ 중지')));
+      // ⚙ 설정 ▾ ⊇ 프로젝트 메뉴의 설정 3개 · 확장 기능 단독 버튼은 없앰 (설정 ▾ · 프로젝트 메뉴에 있음)
+      await page.click('#toolbar button[title^="설정"]'); await page.waitForTimeout(120); const sett = await ctxLabels(); await closeCtx();
+      proj.slice(0, 3).forEach(l => assert.ok(sett.includes(l), '설정 ▾ 에 ' + l));
+      assert.ok(!(await page.$('#toolbar button[title^="확장 기능"]')), '확장 기능 단독 버튼');
+      // 검사: 메뉴 · 도구 모음 같은 이름
+      const tip = await page.getAttribute('#toolbar button[title^="검사"]', 'title');
+      assert.ok(tip.startsWith(proj[proj.length - 1]), `${tip} / ${proj[proj.length - 1]}`);
+      return `메뉴: ${bar.join(' · ')} — 실행 ${run.length}줄 = 도구 모음 ▶ · 빌드 ▾ · ■`;
+    });
+    await step('보기 메뉴: 켜고 끄는 항목은 모두 ✓ 표시 한 가지 방식 (예전: 테마는 글자 앞 ✓, 패널은 따로)', async () => {
+      await page.click('#menubar .mb:has-text("보기")'); await page.waitForTimeout(120);
+      const r = await page.evaluate(() => ({ heads: [...document.querySelectorAll('.ctx .ctx-h')].map(e => e.textContent), checked: [...document.querySelectorAll('.ctx .ctx-i.chk')].filter(e => e.querySelector('.ctx-ck').textContent === '✓').map(e => e.textContent), textMarks: [...document.querySelectorAll('.ctx .ctx-i')].filter(e => /^\s*✓|^ /.test(e.childNodes[e.childNodes.length - (e.querySelector('small') ? 2 : 1)].textContent)).length }));
+      await closeCtx();
+      assert.deepStrictEqual(r.heads, ['테마', '강조색', '설명문']);
+      assert.strictEqual(r.textMarks, 0, '글자 속 ✓');
+      assert.ok(r.checked.length >= 5, '켜진 항목: 패널 3 + 테마 1 + 강조색 1 + 설명문 1');
+      return '켜진 항목: ' + r.checked.join(' · ');
+    });
+    await step('확인 창: 지우기는 빨간 버튼 + ⚠ · 그 밖은 주요(강조) 버튼 · Esc = 취소', async () => {
+      const ask = async msg => { const p = page.evaluate(m => PDM.ui.confirm(m), msg); await page.waitForSelector('.modal'); const r = await page.evaluate(() => ({ title: document.querySelector('.modal-head').textContent, ok: document.querySelector('.modal-foot .btn:last-child').className, ico: !!document.querySelector('.modal .confirm-ico'), role: document.querySelector('.modal').getAttribute('role') })); await page.keyboard.press('Escape'); return Object.assign(r, { result: await p }); };
+      const del = await ask('리소스를 삭제할까요?'), save = await ask('저장할까요?');
+      assert.ok(/danger/.test(del.ok) && del.ico && del.result === false, JSON.stringify(del));
+      assert.ok(/pri/.test(save.ok) && !save.ico && save.result === false, JSON.stringify(save));
+      assert.strictEqual(del.role, 'dialog');
+      return `지우기: "${del.title}" · 일반: "${save.title}"`;
+    });
+    await step('알림: 성공 · 실패 모양(기호 + 상태 색 줄) · 실패는 화면 읽기 프로그램에 바로 알림', async () => {
+      const r = await page.evaluate(() => { const out = {}; for (const k of ['ok', 'bad', 'good', '']) { toast('시험 ' + k, k); const e = document.querySelector('#toast'), cs = getComputedStyle(e, '::before'); out[k || 'info'] = { cls: e.className, role: e.getAttribute('role'), mark: cs.content, line: getComputedStyle(e).borderLeftColor }; } return out; });
+      assert.strictEqual(r.bad.role, 'alert'); assert.strictEqual(r.ok.role, 'status');
+      assert.strictEqual(r.good.cls, r.ok.cls, "'good' = 'ok'");
+      assert.notStrictEqual(r.bad.line, r.ok.line); assert.notStrictEqual(r.bad.mark, r.ok.mark);
+      return `성공 ${r.ok.mark} · 실패 ${r.bad.mark} · 안내 ${r.info.mark}`;
+    });
+    await step('선택 상태 ≠ 주요 버튼: 켜진 도구는 옅은 바탕 + 줄, 주요 버튼만 꽉 찬 강조색 · 키보드 포커스 고리', async () => {
+      await page.evaluate(k => PDM.tabs.open(k), P.node); await page.waitForTimeout(500);
+      const r = await page.evaluate(() => {
+        const on = document.querySelector('.map-tools .tool.on, .map-tools .btn.on'), pri = Object.assign(document.createElement('button'), { className: 'btn pri', textContent: 'x' });
+        document.body.append(pri); const a = getComputedStyle(on), b = getComputedStyle(pri); const o = { onBg: a.backgroundColor, onShadow: a.boxShadow, onColor: a.color, priBg: b.backgroundColor, priColor: b.color }; pri.remove(); return o; });
+      assert.notStrictEqual(r.onBg, r.priBg); assert.ok(/inset/.test(r.onShadow), '선택 줄'); assert.notStrictEqual(r.onColor, r.priColor);
+      await page.focus('#toolbar button'); await page.keyboard.press('Tab');
+      const ring = await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle + ' ' + getComputedStyle(document.activeElement).outlineWidth);
+      assert.ok(/solid 2px/.test(ring), '포커스 고리 ' + ring);
+      return `선택 ${r.onBg} + 줄 · 주요 ${r.priBg} · 포커스 ${ring}`;
+    });
+    await step('좁은 창(1100×700): 이벤트 실행 내용이 눌리지 않고 아래로 내려감', async () => {
+      await page.setViewportSize({ width: 1100, height: 700 }); await page.waitForTimeout(200);
+      await page.evaluate(() => PDM.tabs.open('event:ev')); await page.waitForTimeout(500);
+      const w = await page.evaluate(() => Math.round(document.querySelector('.cmdlist').getBoundingClientRect().width));
+      const cnt = await page.evaluate(() => { const e = [...document.querySelectorAll('.cmd-bar span')].pop(); return e.getBoundingClientRect().height; });
+      await page.setViewportSize({ width: 1400, height: 900 });
+      assert.ok(w >= 360, '명령 목록 너비 ' + w); assert.ok(cnt < 24, '"명령 n개" 한 줄 ' + cnt);
+      return `명령 목록 너비 ${w}px (예전 230px 안팎)`;
+    });
     await step('페이지 오류 없음', async () => { assert.deepStrictEqual(errors, []); });
   } finally { await browser.close(); srv.kill(); fs.rmSync(tmp, { recursive: true, force: true }); }
   console.log(results.join('\n'));

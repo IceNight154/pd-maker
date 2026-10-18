@@ -449,7 +449,7 @@
           palette.append(h('div', { class: 'fl' }, '타일 레이어 (아래 → 위)'),
             h('div', { class: 'layer-list', style: { display: 'grid', gap: '2px', marginBottom: '6px' } },
               h('div', { class: 'hint', style: { padding: '2px 4px' } }, '⛰ 지형 — 바닥 · 벽 · 문 (게임 판정, 위 "타일")'),
-              ...lays.map(l => h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 4px', borderRadius: '4px', background: ui.tileLayer === l.id ? 'var(--accent-bg, rgba(165,139,255,.18))' : '', cursor: 'pointer' },
+              ...lays.map(l => h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 4px', borderRadius: '4px', background: ui.tileLayer === l.id ? 'var(--accent-soft)' : '', boxShadow: ui.tileLayer === l.id ? 'inset 2px 0 0 var(--accent)' : '', cursor: 'pointer' },
                   title: `${l.depth === 'above' ? '캐릭터 위에 그림' : '캐릭터 아래에 그림'}${l.solid ? ' · 칠한 칸은 못 지나감' : ''}${l.visible === false ? ' · 게임에서 숨김' : ''} — 누르면 이 레이어에 칠함`,
                   onclick: e => { if (e.target.tagName === 'BUTTON') return; ui.tileLayer = l.id; if (!tilesL[l.id]) tilesL[l.id] = blankL(); utileL = tilesL[l.id]; ui.tool = 'utile'; drawPalette(); drawTools(); paint(); } },
                 h('button', { class: 'ib', title: '편집기에서만 보이기 / 숨기기 (게임과 상관없음)', onclick: () => { ui.hideLayers[l.id] = !ui.hideLayers[l.id]; drawPalette(); paint(); } }, ui.hideLayers[l.id] ? '◌' : '👁'),
@@ -853,20 +853,20 @@
           if (o.type === 'light') PDM.drawLightPreview(g, x + s / 2, y + s / 2, o, s, { block: lightBlock });
           if (o.type === 'combo') { const cb = (PDM.combos ? PDM.combos.list() : []).find(c => c.id === o.ref), lt = cb && cb.light; if (lt && lt.on) PDM.drawLightPreview(g, x + s / 2 + (+lt.ox || 0) * s / 16, y + s / 2 + (+lt.oy || 0) * s / 16, Object.assign({ color: '#ffe9a8', k: 3, z: 10, range: 4 }, lt), s, lt.shadow === false ? {} : { block: lightBlock }); }   // 광원: 게임과 같은 감쇠 · 그림자로 미리보기
           const on = isSel(i); g.strokeStyle = on ? '#fff' : col; g.lineWidth = on ? 2 : 1; g.strokeRect(x + 1, y + 1, s - 2, s - 2);
-          if (on && multi()) { g.strokeStyle = '#5fd6ff'; g.lineWidth = 1; g.strokeRect(x - 1.5, y - 1.5, s + 3, s + 3); }   // 여러 개 고름: 바깥 테두리
+          if (on && multi()) { g.strokeStyle = PDM.cssVar('--map-area', '#5fd6ff'); g.lineWidth = 1; g.strokeRect(x - 1.5, y - 1.5, s + 3, s + 3); }   // 여러 개 고름: 바깥 테두리
           if (!drawable) { g.fillStyle = '#ccc'; g.font = '10px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top'; g.fillText(PDM.PLACE_RULES[(o.at && o.at.rule) || 'random'] || '', x + s / 2, y + s + 2); }
         });
         // 캐릭터 위(above) 타일 레이어 — 오브젝트 위에 (게임에서 캐릭터를 가리는 전경)
         if (drawable && tilesL && ui.showUtile !== false) LAYERS().filter(l => l.depth === 'above').forEach(l => drawLayer(g, l, s));
         if (dragRect) {
           const [a, b, c, d] = dragRect, rx = Math.min(a, c) * s, ry = Math.min(b, d) * s, rw = (Math.abs(c - a) + 1) * s, rh = (Math.abs(d - b) + 1) * s;
-          g.strokeStyle = down === 'spawnrect' ? SPAWN_VALS[ui.spawnVal][1] : down === 'randrect' ? (ui.randVal ? randColor(ui.randVal) : '#9a93ad') : down === 'area' ? '#5fd6ff' : '#a58bff'; g.lineWidth = 2;
+          g.strokeStyle = down === 'spawnrect' ? SPAWN_VALS[ui.spawnVal][1] : down === 'randrect' ? (ui.randVal ? randColor(ui.randVal) : '#9a93ad') : down === 'area' ? PDM.cssVar('--map-area', '#5fd6ff') : PDM.cssVar('--map-sel', '#4fd8c6'); g.lineWidth = 2;
           if (down === 'area') g.setLineDash([6, 4]); g.strokeRect(rx, ry, rw, rh); g.setLineDash([]);
         }
         if (areaOn() && down !== 'area') {   // 고른 영역
           const r = ui.area, rx = r.x0 * s, ry = r.y0 * s, rw = (r.x1 - r.x0 + 1) * s, rh = (r.y1 - r.y0 + 1) * s;
-          g.save(); g.fillStyle = 'rgba(95,214,255,.10)'; g.fillRect(rx, ry, rw, rh); g.setLineDash([6, 4]); g.strokeStyle = '#5fd6ff'; g.lineWidth = 2; g.strokeRect(rx, ry, rw, rh); g.setLineDash([]);
-          g.font = 'bold 11px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillStyle = '#5fd6ff'; g.fillText(`${r.x1 - r.x0 + 1} × ${r.y1 - r.y0 + 1}`, rx + 2, ry - 2); g.restore();
+          const AREA = PDM.cssVar('--map-area', '#5fd6ff'); g.save(); g.fillStyle = PDM.alpha(AREA, .10); g.fillRect(rx, ry, rw, rh); g.setLineDash([6, 4]); g.strokeStyle = AREA; g.lineWidth = 2; g.strokeRect(rx, ry, rw, rh); g.setLineDash([]);
+          g.font = 'bold 11px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillStyle = AREA; g.fillText(`${r.x1 - r.x0 + 1} × ${r.y1 - r.y0 + 1}`, rx + 2, ry - 2); g.restore();
         }
         if (drawable && ui.pasteClip && ui.hover) drawPasteGhost(g, s);
         if (drawable && ui.port >= 0 && isStair(terrain[ui.port])) {   // 고른 계단
@@ -876,10 +876,10 @@
         }
         if (drawable) {   // 크기 조절 손잡이 (네 모서리)
           const R = down && down.resize ? down.rect : null;
-          if (R) { g.fillStyle = 'rgba(165,139,255,.14)'; g.fillRect(R[0] * s, R[1] * s, R[2] * s, R[3] * s); g.strokeStyle = '#a58bff'; g.lineWidth = 2; g.setLineDash([6, 4]); g.strokeRect(R[0] * s, R[1] * s, R[2] * s, R[3] * s); g.setLineDash([]);
+          const SEL = PDM.cssVar('--map-sel', '#4fd8c6'); if (R) { g.fillStyle = PDM.alpha(SEL, .14); g.fillRect(R[0] * s, R[1] * s, R[2] * s, R[3] * s); g.strokeStyle = SEL; g.lineWidth = 2; g.setLineDash([6, 4]); g.strokeRect(R[0] * s, R[1] * s, R[2] * s, R[3] * s); g.setLineDash([]);
             g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(`${R[2]} × ${R[3]}`, R[0] * s + 4, R[1] * s - 4); }
           CORNERS.forEach(([cx, cy]) => { const hx = (R ? R[0] + (cx ? R[2] : 0) : cx * W) * s, hy = (R ? R[1] + (cy ? R[3] : 0) : cy * H) * s;
-            g.fillStyle = '#a58bff'; g.strokeStyle = '#fff'; g.lineWidth = 1; g.fillRect(hx - 6, hy - 6, 12, 12); g.strokeRect(hx - 5.5, hy - 5.5, 11, 11); });
+            g.fillStyle = SEL; g.strokeStyle = '#fff'; g.lineWidth = 1; g.fillRect(hx - 6, hy - 6, 12, 12); g.strokeRect(hx - 5.5, hy - 5.5, 11, 11); });
         }
         g.restore();
       }

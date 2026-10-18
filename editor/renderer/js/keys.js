@@ -32,9 +32,9 @@
     { id: 'toggleInspector', group: '보기', label: '속성 패널 보이기/숨기기', def: ['Ctrl+Shift+B'], scope: 'global' },
     { id: 'toggleBottom', group: '보기', label: '출력 패널 보이기/숨기기', def: ['Ctrl+J'], scope: 'global' },
     // 프로젝트
-    { id: 'playtest', group: '프로젝트', label: '▶ 테스트 플레이', def: ['F5'], scope: 'global', inInput: true },
-    { id: 'stopGame', group: '프로젝트', label: '■ 중지', def: ['Shift+F5'], scope: 'global', inInput: true },
-    { id: 'check', group: '프로젝트', label: '검사 (끊어진 참조 찾기)', def: ['F7'], scope: 'global', inInput: true },
+    { id: 'playtest', group: '실행', label: '▶ 테스트 플레이', def: ['F5'], scope: 'global', inInput: true },
+    { id: 'stopGame', group: '실행', label: '■ 중지', def: ['Shift+F5'], scope: 'global', inInput: true },
+    { id: 'check', group: '프로젝트', label: '검사 — 끊어진 참조 · 빠진 그림 · 소리 찾기', def: ['F7'], scope: 'global', inInput: true },
     { id: 'projectSettings', group: '프로젝트', label: '프로젝트 설정 열기', def: [], scope: 'global', inInput: true },
     // 그리기 (맵 편집기 · 스프라이트 편집기 공용)
     { id: 'draw.pen', group: '그리기 (맵 · 스프라이트 편집)', label: '펜 / 브러쉬', def: ['B'], scope: 'draw' },

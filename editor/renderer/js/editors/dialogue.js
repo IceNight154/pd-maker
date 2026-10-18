@@ -123,7 +123,8 @@
       const img = await PDM.assets.load(l.illust);
       if (img) {
         const Li = LR('illust');
-        const th = H * (Li ? Li.h : (+I.height || 0.92)) * (l.scale > 0 ? l.scale : 1);
+        let th = H * (Li ? Li.h : (+I.height || 0.92)) * (l.scale > 0 ? l.scale : 1);
+        if (!Li) th = Math.min(th, W * img.height / img.width);   // 화면보다 넓어지지 않게 (런타임과 같음 — 세로 화면)
         iw = th * img.width / img.height;
         const baseX = Li ? Li.x * W : bx;                 // 왼쪽 기준 (오른쪽에 서면 좌우 대칭)
         ix = side === 'right' ? W - baseX - iw - l.offX * H / 100 : baseX + l.offX * H / 100;
@@ -269,10 +270,10 @@
   /** 이벤트 일러스트 자리 — 런타임 MakerStage.show/place 와 같은 계산 (게임 화면 단위 W×H, 그림 원래 크기 iw×ih).
    *  pos: left · center · right · full / o: { scale(1 = 100%), ox, oy, flip } → { x, y, w, h, flip } (보이는 사각형 — 왼쪽 위 · 크기) */
   function stageLayout(pos, W, H, iw, ih, o = {}) {
-    const full = pos === 'full', th = full ? H : H * 0.9;
+    const full = pos === 'full', th = full ? H : Math.min(H * 0.9, W * ih / iw);   // 화면보다 넓어지지 않게 (세로 화면 · 가로로 긴 그림)
     let baseSc, baseX, baseY;
     if (full) { baseSc = Math.max(W / iw, H / ih); baseX = (W - iw * baseSc) / 2; baseY = (H - ih * baseSc) / 2; }
-    else { baseSc = th / ih; const w0 = iw * baseSc; baseX = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; baseY = H - th; }
+    else { baseSc = th / ih; const w0 = iw * baseSc; baseX = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; baseY = th < H * 0.9 - 0.5 ? (H - th) / 2 : H - th; }   // 폭 때문에 줄면 세로 가운데 (런타임과 같음)
     const scale = o.scale > 0 ? o.scale : 1, sc = baseSc * scale, w0 = iw * baseSc, h0 = ih * baseSc, w = iw * sc, h = ih * sc;
     return { x: baseX + (+o.ox || 0) + (w0 - w) / 2, y: baseY + (+o.oy || 0) + (h0 - h), w, h, flip: !!o.flip, baseX, baseSc };
   }

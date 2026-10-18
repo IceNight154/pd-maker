@@ -325,9 +325,60 @@ public class MakerDialogue {
 			float r = ((color >> 16) & 0xFF) / 255f, g = ((color >> 8) & 0xFF) / 255f, b = (color & 0xFF) / 255f;
 			for (RenderedText w : words) { if (w == null) continue; w.rm = w.gm = w.bm = 0; w.ra = r; w.ga = g; w.ba = b; }
 		}
-		/** 게임 줄 배치 뒤에 줄마다 lineExtra 씩 아래로 */
+		int align = LEFT_ALIGN;
+		@Override public synchronized void align(int a) { align = a; super.align(a); }
+		/** 원작의 빈칸 · 줄바꿈 표시 (RenderedTextBlock 의 private 상수 — 줄 배치를 직접 하려고 읽음) */
+		static final RenderedText SPACE_, NEWLINE_;
+		static {
+			RenderedText sp = null, nl = null;
+			try {
+				java.lang.reflect.Field f = RenderedTextBlock.class.getDeclaredField("SPACE"); f.setAccessible(true); sp = (RenderedText) f.get(null);
+				f = RenderedTextBlock.class.getDeclaredField("NEWLINE"); f.setAccessible(true); nl = (RenderedText) f.get(null);
+			} catch (Throwable t) { MakerRuntime.log("대사 줄 배치: 원작 글 상자 구조가 달라 원작 배치를 씁니다 (" + t + ")"); }
+			SPACE_ = sp; NEWLINE_ = nl;
+		}
+		static boolean cjk(RenderedText w) {
+			String t = w.text(); if (t == null || t.isEmpty()) return false;
+			Character.UnicodeScript sc = Character.UnicodeScript.of(t.codePointAt(0));
+			return sc == Character.UnicodeScript.HAN || sc == Character.UnicodeScript.HIRAGANA || sc == Character.UnicodeScript.KATAKANA
+					|| (t.codePointAt(0) >= 0x3000 && t.codePointAt(0) <= 0x303F) || (t.codePointAt(0) >= 0xFF00 && t.codePointAt(0) <= 0xFFEF);
+		}
+		/** 줄 배치 — 원작(RenderedTextBlock.layout)과 같은 규칙이되 두 가지를 고침 (4차 · 게임에서 발견):
+		 *   ① 글자마다 나누어 그리는 대사(글자가 하나씩 나오는 효과)는 빈칸까지를 한 낱말로 묶는데, 빈칸 없이 이어진 글(일본어 · 중국어 · 긴 주소)이
+		 *      대사창 폭보다 길면 앞 글자들이 한 줄에 하나씩 세로로 쌓였음 → 한 줄보다 긴 낱말은 글자 단위로 자름
+		 *   ② 한자 · 가나 · 전각 문장 부호는 어디서든 줄을 바꿀 수 있게 (원작은 게임 언어가 중국어 · 일본어일 때만 그렇게 함)
+		 *   그 밖(빈칸이 있는 한국어 · 영어)은 원작과 같은 자리에 놓임 + 줄 간격(lineExtra) */
 		@Override protected synchronized void layout() {
-			super.layout();
+			if (SPACE_ == null || NEWLINE_ == null || words == null) { super.layout(); applyLineExtra(); return; }
+			float x = this.x, y = this.y, lh = 0; nLines = 1;
+			List<List<RenderedText>> lines = new ArrayList<>(); List<RenderedText> cur = new ArrayList<>(); lines.add(cur);
+			int maxW = maxWidth();
+			width = 0;
+			for (int i = 0; i < words.size(); i++) {
+				RenderedText w = words.get(i);
+				if (w == SPACE_) { x += 1.667f; continue; }
+				if (w == NEWLINE_) { y += lh + 2f; x = this.x; nLines++; cur = new ArrayList<>(); lines.add(cur); continue; }
+				if (w.height() > lh) lh = w.height();
+				float full = w.width();
+				if (!cjk(w)) for (int j = i + 1; j < words.size() && words.get(j) != SPACE_ && words.get(j) != NEWLINE_ && !cjk(words.get(j)); j++) full += words.get(j).width() - 0.667f;
+				if (full > maxW) full = w.width();   // ① 한 줄보다 긴 낱말: 이 글자만 보고 넘침을 판단
+				if ((x - this.x) + full - 0.001f > maxW && !cur.isEmpty()) { y += lh + 2f; x = this.x; nLines++; cur = new ArrayList<>(); lines.add(cur); }
+				w.x = x; w.y = y; PixelScene.align(w);
+				x += w.width(); cur.add(w);
+				if (x - this.x > width) width = x - this.x;
+				x -= 0.667f;
+			}
+			height = (y - this.y) + lh;
+			if (align == CENTER_ALIGN || align == RIGHT_ALIGN) for (List<RenderedText> line : lines) {
+				if (line.isEmpty()) continue;
+				RenderedText last = line.get(line.size() - 1);
+				float lw = last.width() + last.x - this.x;
+				for (RenderedText t : line) { t.x += align == CENTER_ALIGN ? (width - lw) / 2f : width - lw; PixelScene.align(t); }
+			}
+			applyLineExtra();
+		}
+		/** 줄마다 lineExtra 씩 아래로 */
+		void applyLineExtra() {
 			if (lineExtra == 0 || words == null) return;
 			java.util.TreeSet<Integer> ys = new java.util.TreeSet<>();
 			for (RenderedText w : words) if (w.parent == this) ys.add(Math.round(w.y * 100));
@@ -411,7 +462,7 @@ public class MakerDialogue {
 			this.onDone = onDone;
 			shadow.visible = false;
 			int W = PixelScene.uiCamera.width, H = PixelScene.uiCamera.height;
-			resize(W, H);
+			resize(W, H); pinToScreen(this);
 			add(new PointerArea(0, 0, W, H) { @Override protected void onClick(PointerEvent event) { hide(); } });
 		}
 		@Override public boolean onSignal(KeyEvent event) {
@@ -421,12 +472,25 @@ public class MakerDialogue {
 			return true;
 		}
 		@Override public void onBackPressed() { hide(); }
+		@Override public void offset(int xOffset, int yOffset) { }   // 화면 전체 창 — 가방 창 옆으로 밀리지 않게 (Wnd 와 같음)
 		@Override public void hide() {
 			Runnable r = onDone; onDone = null;
 			if (r != null) r.run();   // 이벤트를 먼저 이어 줌 — 창이 사라진 틈에 "멈춘 이벤트"로 오해받지 않게 (Wnd 와 같음)
 			super.hide();
 		}
 	}
+
+	/** 안전 영역 (ui 좌표: x, y, w, h) — 노치 · 상태 줄 · 내비게이션 바를 뺀 곳. 데스크톱은 화면 전체 (원작 GameScene 과 같은 getSafeInsets(INSET_ALL)) */
+	static float[] safeArea(float W, float H) {
+		com.watabou.utils.RectF in;
+		try { in = Game.platform.getSafeInsets(com.watabou.utils.PlatformSupport.INSET_ALL).scale(1f / PixelScene.uiCamera.zoom); }
+		catch (Throwable t) { in = new com.watabou.utils.RectF(); }
+		return new float[]{in.left, in.top, Math.max(1, W - in.left - in.right), Math.max(1, H - in.top - in.bottom)};
+	}
+
+	/** 화면 전체 창의 카메라를 화면 (0,0) 에 — 원작 Window 는 내비게이션 바만큼 줄인 곳의 가운데에 두어, 안전 영역이 위아래 · 좌우로 다르면 창 전체가 반만큼 밀렸음.
+	 *  이렇게 하면 창 안 좌표 = 화면 좌표(uiCamera)라서 안전 영역(safeArea)을 그대로 쓸 수 있음 */
+	static void pinToScreen(Window w) { w.camera.x = 0; w.camera.y = 0; }
 
 	public static class Wnd extends Window {
 		public final Line line;
@@ -436,6 +500,7 @@ public class MakerDialogue {
 		TypeText text;
 		final List<TypeText> deco = new ArrayList<>();   // 그림자 · 외곽선 · 굵게 사본
 		Image arrow;
+		NinePatch plate; RenderedTextBlock nameText; Image illImg;   // 이름표 · 일러스트 (배치 검사 debugLayout 용)
 		TypeText newText(int fs, float lineExtra) {
 			TypeText t = new TypeText(fs * PixelScene.defaultZoom);
 			t.zoom(1 / (float) PixelScene.defaultZoom);
@@ -456,7 +521,7 @@ public class MakerDialogue {
 			this.line = l; this.onDone = onDone; this.onChoice = onChoice;
 			shadow.visible = false;
 			W = PixelScene.uiCamera.width; H = PixelScene.uiCamera.height;
-			resize(W, H);
+			resize(W, H); pinToScreen(this);
 
 			snd("open");
 			HudHider.hold();
@@ -468,10 +533,13 @@ public class MakerDialogue {
 			float margin = f("box", "margin"), pad = f("box", "padding");
 			final float tk = textScale(W, H);   // 화면 크기에 맞춘 글자 배율
 			int fs = Math.max(5, Math.round(f("box", "fontSize") * tk));
-			float bh = Math.max(fs * 3 + pad * 2, H * f("box", "height"));
-			float bx = margin, bw = W - margin * 2, by = H - margin - bh;
+			// 대사창 · 글 · 이름표 · ▼ · 선택지는 안전 영역(노치 · 상태 줄 · 내비게이션 바를 뺀 곳) 안에 — 데스크톱 · 안전 영역이 없는 기기는 화면 전체라 예전과 같음.
+			// 일러스트 · 배경은 화면 전체 (4차: 예전엔 대사창이 내비게이션 바 · 노치 아래로 들어갔음)
+			final float[] sa = safeArea(W, H); final float SX = sa[0], SY = sa[1], SW = sa[2], SH = sa[3];
+			float bh = Math.max(fs * 3 + pad * 2, SH * f("box", "height"));
+			float bx = SX + margin, bw = SW - margin * 2, by = SY + SH - margin - bh;
 			JsonValue Lb = lay("box");
-			if (Lb != null) { bx = Lb.getFloat("x") * W; by = Lb.getFloat("y") * H; bw = Math.max(20, Lb.getFloat("w", 0.9f) * W); bh = Math.max(12, Lb.getFloat("h", 0.27f) * H); }
+			if (Lb != null) { bx = SX + Lb.getFloat("x") * SW; by = SY + Lb.getFloat("y") * SH; bw = Math.max(20, Lb.getFloat("w", 0.9f) * SW); bh = Math.max(12, Lb.getFloat("h", 0.27f) * SH); }
 
 			// 일러스트
 			Image ill = null;
@@ -482,6 +550,7 @@ public class MakerDialogue {
 				float th = H * (Li != null ? Li.getFloat("h", 0.9f) : f("illust", "height")) * (l.scale <= 0 ? 1 : l.scale);
 				ill = illustImage(l.illust, th);
 				if (ill != null) {
+					if (Li == null) th = Math.min(th, W * ill.height / ill.width);   // 화면보다 넓어지지 않게 (세로 화면 · 가로로 긴 그림 — 편집기 미리보기와 같음)
 					float sc = th / ill.height;
 					ill.scale.set(sc);
 					ill.flipHorizontal = l.flip;
@@ -491,6 +560,7 @@ public class MakerDialogue {
 					ill.y = (Li != null ? Li.getFloat("y", 1f) * H : H) - th + l.offY * H / 100f;
 				}
 			}
+			illImg = ill;
 			boolean front = !"back".equals(s("illust", "layer"));
 			if (ill != null && !front) add(ill);
 
@@ -510,7 +580,7 @@ public class MakerDialogue {
 			}
 
 			JsonValue Lt = lay("text");
-			if (Lt != null) { tx = Lt.getFloat("x") * W; tr = (Lt.getFloat("x") + Lt.getFloat("w", 0.5f)) * W; textY = Lt.getFloat("y") * H; }
+			if (Lt != null) { tx = SX + Lt.getFloat("x") * SW; tr = SX + (Lt.getFloat("x") + Lt.getFloat("w", 0.5f)) * SW; textY = SY + Lt.getFloat("y") * SH; }
 			if (hasText) {
 				speed = l.speed >= 0 ? l.speed : f("typing", "speed");
 				sound = l.voice;                                        // 캐릭터 목소리 → 글자 소리 → 대사창 소리 → 게임 효과음
@@ -557,9 +627,10 @@ public class MakerDialogue {
 					float px = np.equals("left") ? bx + pad : np.equals("text") ? tx : bx + bw - pad - pw;
 					float py = by - ph + 2;
 					JsonValue Ln = lay("name");
-					if (Ln != null) { px = Ln.getFloat("x") * W; py = Ln.getFloat("y") * H; }
+					if (Ln != null) { px = SX + Ln.getFloat("x") * SW; py = SY + Ln.getFloat("y") * SH; }
 					plate.x = px; plate.y = py; plate.size(pw, ph);
 					add(plate);
+					this.plate = plate; this.nameText = nt;
 					nt.setPos(px + 5, py + (ph - nt.height()) / 2f);
 					PixelScene.align(nt);
 					add(nt);
@@ -572,7 +643,7 @@ public class MakerDialogue {
 					arrow.x = bx + (bw - arrow.width()) / 2f;
 					arrowY = by + bh - arrow.height() - 3;
 					JsonValue La = lay("indicator");
-					if (La != null) { arrow.x = La.getFloat("x") * W; arrowY = La.getFloat("y") * H; }
+					if (La != null) { arrow.x = SX + La.getFloat("x") * SW; arrowY = SY + La.getFloat("y") * SH; }
 					arrow.y = arrowY;
 					arrow.visible = !typing;
 					add(arrow);
@@ -586,18 +657,18 @@ public class MakerDialogue {
 				String cp = s("choice", "pos");
 				List<RenderedTextBlock> labels = new ArrayList<>();
 				for (String c : l.choices) { RenderedTextBlock t = PixelScene.renderTextBlock(c, cfs); labels.add(t); cw = Math.max(cw, t.width()); }
-				float minW = W * (f("choice", "width") > 0 ? f("choice", "width") : 0.22f);
+				float minW = SW * (f("choice", "width") > 0 ? f("choice", "width") : 0.22f);
 				float contentW = cw + pad * 2 + 6;
-				cw = Math.min(W - margin * 2, Math.max(contentW, minW));
+				cw = Math.min(SW - margin * 2, Math.max(contentW, minW));
 				float ch = cfs + 8, gap = 2;
 				float total = l.choices.length * ch + (l.choices.length - 1) * gap;
-				float bottom = hasText ? by - (b("name", "show") && !l.name.isEmpty() ? 14 : 4) : H - margin;
+				float bottom = hasText ? by - (b("name", "show") && !l.name.isEmpty() ? 14 : 4) : SY + SH - margin;
 				float cy = bottom - total;
-				if (cp.equals("middle")) cy = Math.max(margin, Math.min(bottom - total, (bottom - total) / 2f));   // 대사창 위 공간의 가운데
+				if (cp.equals("middle")) cy = Math.max(SY + margin, Math.min(bottom - total, SY + (bottom - SY - total) / 2f));   // 대사창 위 공간의 가운데
 				float rightEdge = ill != null && side.equals("right") ? Math.max(bx + cw, ill.x - 4) : bx + bw;   // 오른쪽 일러스트를 가리지 않게
-				float cx = cp.equals("left") ? bx : (cp.equals("center") || cp.equals("middle")) ? (W - cw) / 2f : rightEdge - cw;
+				float cx = cp.equals("left") ? bx : (cp.equals("center") || cp.equals("middle")) ? SX + (SW - cw) / 2f : rightEdge - cw;
 				JsonValue Lc = lay("choices");
-				if (Lc != null) { cx = Lc.getFloat("x") * W; cy = Lc.getFloat("y") * H; cw = Math.min(W - cx, Math.max(contentW, Lc.getFloat("w", 0.4f) * W)); }
+				if (Lc != null) { cx = SX + Lc.getFloat("x") * SW; cy = SY + Lc.getFloat("y") * SH; cw = Math.min(SX + SW - cx, Math.max(contentW, Lc.getFloat("w", 0.4f) * SW)); }
 				for (int i = 0; i < l.choices.length; i++) {
 					Choice c = new Choice(i, labels.get(i), pad, cp.equals("middle") || cp.equals("center"));
 					c.setRect(cx, cy + i * (ch + gap), cw, ch);
@@ -692,6 +763,39 @@ public class MakerDialogue {
 			if (r != null) r.run();
 			super.hide();
 			HudHider.letGo();
+		}
+
+		// ---- 배치 검사 (자동 테스트 tools/playtest "layout") — 화면 크기 · 비율 · 안전 영역마다 잘리는 것이 없는지 ----
+		static String r(float x, float y, float w, float h) { return String.format(java.util.Locale.ROOT, "[%.0f,%.0f %.0fx%.0f]", x, y, w, h); }
+		public String debugLayout() {
+			StringBuilder b = new StringBuilder();
+			if (box != null) b.append("box=").append(r(box.x, box.y, box.width(), box.height()));
+			if (text != null) b.append(" text=").append(r(text.left(), text.top(), text.width(), text.height()));
+			if (plate != null) b.append(" name=").append(r(plate.x, plate.y, plate.width(), plate.height()));
+			if (illImg != null) b.append(" ill=").append(r(illImg.x, illImg.y, illImg.width(), illImg.height()));
+			if (arrow != null) b.append(" arrow=").append(r(arrow.x, arrowY, arrow.width(), arrow.height()));
+			for (Choice c : choices) b.append(" choice").append(c.index).append('=').append(r(c.left(), c.top(), c.width(), c.height()));
+			return b.toString();
+		}
+		/** 화면 밖 · 안전 영역(노치 · 내비게이션 바) 침범 · 글이 대사창을 넘침 · 이름표/선택지가 화면 밖 — 없으면 빈 목록. 일러스트는 화면 밖으로 조금 나가도 됨(배경 그림) — 절반 넘게 나가면 문제 */
+		public java.util.List<String> layoutProblems() {
+			java.util.List<String> out = new java.util.ArrayList<>();
+			float[] sa = safeArea(W, H);
+			float e = 0.5f;
+			java.util.function.BiConsumer<String, float[]> in = (n, q) -> {
+				if (q[0] < -e || q[1] < -e || q[0] + q[2] > W + e || q[1] + q[3] > H + e) out.add(n + " 화면 밖 " + r(q[0], q[1], q[2], q[3]) + " 화면 " + W + "x" + H);
+				else if (q[0] < sa[0] - e || q[1] < sa[1] - e || q[0] + q[2] > sa[0] + sa[2] + e || q[1] + q[3] > sa[1] + sa[3] + e) out.add(n + " 안전 영역 침범 " + r(q[0], q[1], q[2], q[3]) + " 안전 " + r(sa[0], sa[1], sa[2], sa[3]));
+			};
+			if (box != null) in.accept("대사창", new float[]{box.x, box.y, box.width(), box.height()});
+			if (text != null && box != null) {
+				in.accept("대사 글", new float[]{text.left(), text.top(), text.width(), text.height()});
+				if (lay("text") == null && text.top() + text.height() > box.y + box.height() + e) out.add("대사 글이 대사창 아래로 넘침 (글 " + Math.round(text.height()) + " / 창 " + Math.round(box.height()) + ")");
+				if (text.width() < 40) out.add("대사 글 폭이 너무 좁음 " + Math.round(text.width()));
+			}
+			if (plate != null) in.accept("이름표", new float[]{plate.x, plate.y, plate.width(), plate.height()});
+			for (Choice c : choices) in.accept("선택지 " + (c.index + 1), new float[]{c.left(), c.top(), c.width(), c.height()});
+			if (illImg != null) { float vis = Math.max(0, Math.min(W, illImg.x + illImg.width()) - Math.max(0, illImg.x)); if (vis < illImg.width() * 0.5f) out.add("일러스트가 절반 넘게 화면 밖 " + r(illImg.x, illImg.y, illImg.width(), illImg.height())); }
+			return out;
 		}
 
 		/** 화면 전체를 쓰는 창이라 가방 창 옆으로 밀리지 않게 (GameScene.show 가 창 위치를 옮기려 함) */

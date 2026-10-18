@@ -3,6 +3,11 @@
 // ================================================================
 window.PDM = window.PDM || {};
 
+/** 디자인 토큰(CSS 변수) 값 읽기 — 캔버스처럼 CSS 를 쓸 수 없는 곳에서 (테마가 바뀌면 다음 그리기부터 반영). 없으면 fallback */
+PDM.cssVar = (name, fallback) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; } catch (_) { return fallback; } };
+/** '#rrggbb' + 불투명도 → rgba() (토큰 색을 캔버스에 옅게 칠할 때) */
+PDM.alpha = (hex, a) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim()); if (!m) return hex; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
 /** h('div', {class:'x', onclick:fn}, ...children) — 간단한 DOM 생성기 */
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -52,13 +57,17 @@ function deepSet(obj, path, value) {
 }
 
 let _toastTimer = null;
+/** 짧은 알림 — kind: '' 안내 · 'ok'(= 'good') 성공 · 'warn' 주의 · 'bad' 실패. 모양: 왼쪽 상태 색 줄 + 기호(✓ ! ✕) — 색만으로 구분하지 않음.
+ *  실패는 읽을 시간을 더 줌 (5초) · 화면 읽기 프로그램에 알림 (role=status / alert) */
 function toast(msg, kind) {
   let el = $('#toast');
-  if (!el) { el = h('div', { id: 'toast' }); document.body.append(el); }
+  if (!el) { el = h('div', { id: 'toast', 'aria-live': 'polite' }); document.body.append(el); }
+  const k = kind === 'good' ? 'ok' : (kind || '');
   el.textContent = msg;
-  el.className = 'show ' + (kind || '');
+  el.setAttribute('role', k === 'bad' ? 'alert' : 'status');
+  el.className = 'show ' + k;
   clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.className = ''; }, 2600);
+  _toastTimer = setTimeout(() => { el.className = k; }, k === 'bad' ? 5000 : 2600);
 }
 
 /** 간단한 이벤트 발행기 */

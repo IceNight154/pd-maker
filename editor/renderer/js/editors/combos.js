@@ -214,7 +214,7 @@
         PDM.assets.themeTiles(themeKey(st.theme), true).then(raw => spriteSrc(sp, raw)).then(r => { if (!r) return; const g = tc.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(r.img, r.sx, r.sy, r.sz, r.sz, 0, 0, 32, 32); });
         const vis = h('input', { type: 'checkbox', checked: !st.hide.has(i), title: '미리보기에서 보이기 (저장되지 않음)', onchange: () => { if (vis.checked) st.hide.delete(i); else st.hide.add(i); ctx.refresh(); } });
         const n = sp.src === 'image' ? `그림 ${sp.image || '(없음)'}${sp.size && sp.size !== 16 ? ` · ${sp.size}px` : ''} [${sp.x || 0}, ${sp.y || 0}]` : `타일셋 칸 ${sp.tile ?? 0}`;
-        return h('div', { style: { border: '1px solid ' + (st.sel === i ? 'var(--acc, #a58bff)' : 'var(--line)'), borderRadius: '8px', padding: '6px 8px', marginBottom: '6px' }, onclick: e => { if (e.target.closest('input,select,button')) return; st.sel = st.sel === i ? -1 : i; ctx.refresh(); } },
+        return h('div', { class: 'selcard compact' + (st.sel === i ? ' on' : ''), onclick: e => { if (e.target.closest('input,select,button')) return; st.sel = st.sel === i ? -1 : i; ctx.refresh(); } },
           h('div', { class: 'hstack gap-3' }, vis, tc, h('b', {}, `${i + 1}.`), h('span', { class: 'hint grow' }, n),
             h('button', { class: 'ib', title: '먼저 그림 (같은 레이어 안에서 아래로)', disabled: i === 0, onclick: () => edit('스프라이트 순서', x => { [x.sprites[i - 1], x.sprites[i]] = [x.sprites[i], x.sprites[i - 1]]; }) }, '↑'),
             h('button', { class: 'ib', title: '나중에 그림 (같은 레이어 안에서 위로)', disabled: i === c.sprites.length - 1, onclick: () => edit('스프라이트 순서', x => { [x.sprites[i + 1], x.sprites[i]] = [x.sprites[i], x.sprites[i + 1]]; }) }, '↓'),

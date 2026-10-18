@@ -59,7 +59,7 @@
         const chk = (k, label, dis) => { const i = h('input', { type: 'checkbox', checked: !!obj[k], disabled: !!dis }); i.onchange = () => { obj[k] = i.checked; redraw(); }; return h('label', { class: 'check', style: dis ? { opacity: .5 } : {} }, i, label); };
         const redraw = () => {
           lb.innerHTML = '';
-          [...list, null].forEach((o, i) => lb.append(h('div', { style: { padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap', background: i === selI ? 'var(--accent)' : (i % 2 ? 'var(--bg2)' : ''), color: i === selI ? '#fff' : '' },
+          [...list, null].forEach((o, i) => lb.append(h('div', { style: { padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap', background: i === selI ? 'var(--accent-soft)' : (i % 2 ? 'var(--bg2)' : ''), boxShadow: i === selI ? 'inset 2px 0 0 var(--accent)' : '' },
             onclick: () => { selI = i; redraw(); }, ondblclick: () => { if (o) { list.splice(i, 1); selI = Math.min(i, list.length); redraw(); } } }, '◇ ' + (o ? PDM.routeOpText(o) : ''))));
           detail.innerHTML = '';
           const o = list[selI];

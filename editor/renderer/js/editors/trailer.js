@@ -125,7 +125,7 @@
           : s.type === 'credit' ? h('div', {}, F.textarea ? F.textarea(K, [...sp(i), 'lines'], { label: '크레딧 (여러 줄)', rows: 3 }) : F.text(K, [...sp(i), 'lines'], { label: '크레딧' }),
             row(F.text(K, [...sp(i), 'date'], { label: '날짜 글 (예: 2026. 12. 24 공개)' }), F.text(K, [...sp(i), 'countdown'], { label: '남은 날 표시 — 기준일 (YYYY-MM-DD · 비우면 없음)', hint: '플레이하는 날 기준으로 D-12 · D-DAY 처럼 나옵니다. 지나면 안 나옵니다.' })))
           : F.text(K, [...sp(i), 'text'], { label: '문구' });
-        return h('div', { style: { border: '1px solid ' + (i === st.scene ? 'var(--acc, #a58bff)' : 'var(--line)'), borderRadius: '8px', padding: '8px 10px', marginBottom: '8px' }, onclick: () => { if (st.scene !== i) { st.scene = i; st.playing = false; ctx.refresh(); } } },
+        return h('div', { class: 'selcard' + (i === st.scene ? ' on' : ''), onclick: () => { if (st.scene !== i) { st.scene = i; st.playing = false; ctx.refresh(); } } },
           h('div', { class: 'hstack mb-3' }, h('b', { class: 'grow' }, `${i + 1}. ${TYPES[s.type] || s.type}`),
             h('button', { class: 'ib', title: '앞으로', disabled: i === 0, onclick: e => { e.stopPropagation(); st.scene = i - 1; edit('장면 순서', x => { [x.scenes[i - 1], x.scenes[i]] = [x.scenes[i], x.scenes[i - 1]]; }); } }, '↑'),
             h('button', { class: 'ib', title: '뒤로', disabled: i === t.scenes.length - 1, onclick: e => { e.stopPropagation(); st.scene = i + 1; edit('장면 순서', x => { [x.scenes[i + 1], x.scenes[i]] = [x.scenes[i], x.scenes[i + 1]]; }); } }, '↓'),

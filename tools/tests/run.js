@@ -452,22 +452,25 @@ test('이벤트 명령: 편집기의 모든 명령을 런타임이 처리 · 연
 
 test('일러스트 자리: 편집기 미리보기(PDM.Dialogue.stageLayout) = 런타임 MakerStage 계산', () => {
   const { PDM } = env.load();
-  const L = PDM.Dialogue.stageLayout, W = 480, H = 270, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≠ ${b}`);
+  const L = PDM.Dialogue.stageLayout, near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≠ ${b}`);
+  for (const [W, H] of [[480, 270], [270, 585]]) {   // 가로 화면 · 세로 화면(휴대폰)
   // 런타임 MakerStage.show/place 를 그대로 옮긴 기준식
   const ref = (pos, iw, ih, o = {}) => {
-    const full = pos === 'full', th = full ? H : H * 0.9; let bs, bx, by;
-    if (full) { bs = Math.max(W / iw, H / ih); bx = (W - iw * bs) / 2; by = (H - ih * bs) / 2; } else { bs = th / ih; const w0 = iw * bs; bx = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; by = H - th; }
+    const full = pos === 'full', th = full ? H : Math.min(H * 0.9, W * ih / iw); let bs, bx, by;
+    if (full) { bs = Math.max(W / iw, H / ih); bx = (W - iw * bs) / 2; by = (H - ih * bs) / 2; } else { bs = th / ih; const w0 = iw * bs; bx = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; by = th < H * 0.9 - 0.5 ? (H - th) / 2 : H - th; }
     const sc = bs * (o.scale || 1), w0 = iw * bs, h0 = ih * bs, w = iw * sc, h = ih * sc;
     return { x: bx + (o.ox || 0) + (w0 - w) / 2, y: by + (o.oy || 0) + (h0 - h), w, h };
   };
-  for (const pos of ['left', 'center', 'right', 'full']) for (const o of [{}, { scale: 0.5 }, { scale: 1.3, ox: 12, oy: -7 }]) {
-    const a = L(pos, W, H, 300, 500, o), b = ref(pos, 300, 500, o); ['x', 'y', 'w', 'h'].forEach(k => near(a[k], b[k]));
+  for (const [iw, ih] of [[300, 500], [1920, 1080]]) for (const pos of ['left', 'center', 'right', 'full']) for (const o of [{}, { scale: 0.5 }, { scale: 1.3, ox: 12, oy: -7 }]) {
+    const a = L(pos, W, H, iw, ih, o), b = ref(pos, iw, ih, o); ['x', 'y', 'w', 'h'].forEach(k => near(a[k], b[k]));
+    if (pos !== 'full' && !o.scale) assert.ok(a.w <= W + 1e-6, `${W}×${H} ${pos} ${iw}×${ih}: 폭 ${a.w} 이 화면보다 넓음`);
   }
   // 아래 가운데 기준으로 커지고 작아짐 (서 있는 그림)
   const a = L('center', W, H, 300, 500, {}), b = L('center', W, H, 300, 500, { scale: 0.5 });
   near(a.x + a.w / 2, b.x + b.w / 2); near(a.y + a.h, b.y + b.h);
+  }
   const java = read(path.join(PDMK, 'MakerStage.java'));
-  ['H * 0.9f', 'W * 0.04f', 'W * 0.96f - iw', 'img.x = s.baseX + s.ox + (w0 - w) / 2f', 'img.y = s.baseY + s.oy + (h0 - h)', 'k * k * (3 - 2 * k)'].forEach(t => assert.ok(java.includes(t), '런타임 식이 바뀜: ' + t));
+  ['H * 0.9f', 'th = Math.min(th, W * img.height / img.width)', 's.baseY = th < H * 0.9f - 0.5f ? (H - th) / 2f : H - th', 'W * 0.04f', 'W * 0.96f - iw', 'img.x = s.baseX + s.ox + (w0 - w) / 2f', 'img.y = s.baseY + s.oy + (h0 - h)', 'k * k * (3 - 2 * k)'].forEach(t => assert.ok(java.includes(t), '런타임 식이 바뀜: ' + t));
   assert.strictEqual(PDM.Dialogue.ease(0.5), 0.5);
 });
 
@@ -502,6 +505,70 @@ test('연출 이벤트 저장 · 불러오기: 새 칸(크기 · 불투명도 ·
   assert.ok(S('illust')(cmds[0]).includes('50%') && S('illust')(cmds[0]).includes('대기'));
   assert.ok(S('text')(cmds[1]).includes('⏱1.5초'));
   assert.ok(S('sound')(cmds[4]).includes('배경음 끄기'));
+});
+
+// ------------------------------------------------------------ ⑨ 디자인 토큰 (4차 · 색 체계)
+const CSS = () => fs.readFileSync(path.join(ROOT, 'editor/renderer/css/app.css'), 'utf8');
+/** css 의 토큰 묶음 → { 이름: 값 } (color-mix(in srgb, A p%, B) 는 계산) */
+function tokens(block) {
+  const raw = {}; for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) raw[m[1]] = m[2].trim();
+  return raw;
+}
+function themeTokens(theme) {
+  const css = CSS(), dark = tokens(css.slice(css.indexOf(':root {'), css.indexOf(':root[data-theme="light"]')));
+  if (theme === 'dark') return dark;
+  const ls = css.indexOf(':root[data-theme="light"]'); return Object.assign({}, dark, tokens(css.slice(ls, css.indexOf('}', ls))));
+}
+function rgbOf(v, T, depth = 0) {
+  if (depth > 6) throw new Error('토큰 순환: ' + v);
+  v = v.trim();
+  if (/^#[0-9a-f]{3}$/i.test(v)) v = '#' + [...v.slice(1)].map(c => c + c).join('');
+  let m = /^#([0-9a-f]{6})$/i.exec(v); if (m) { const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+  m = /^var\((--[\w-]+)\)$/.exec(v); if (m) { if (!(m[1] in T)) throw new Error('없는 토큰: ' + m[1]); return rgbOf(T[m[1]], T, depth + 1); }
+  m = /^color-mix\(in srgb,\s*(.+?)\s+(\d+)%,\s*(.+)\)$/.exec(v);
+  if (m) { if (m[3].trim() === 'transparent') return null; const a = rgbOf(m[1], T, depth + 1), b = rgbOf(m[3], T, depth + 1), t = +m[2] / 100; return a.map((x, i) => x * t + b[i] * (1 - t)); }
+  return null;
+}
+const lumi = c => { const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+const contrast = (a, b) => { const x = lumi(a), y = lumi(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+
+test('색 체계: 글자 · 상태 색 대비 (패널 · 작업 공간 · 입력 칸 바탕) — 어두운 · 밝은 테마 모두 4.5:1 이상, 강조색 테두리 3:1 이상', () => {
+  const out = [];
+  for (const th of ['dark', 'light']) {
+    const T = themeTokens(th), C = n => rgbOf(`var(${n})`, T);
+    for (const fg of ['--fg', '--mute', '--dim', '--accent', '--good', '--bad', '--warn', '--info', '--gold'])
+      for (const bg of ['--bg', '--bg2', '--bg3']) {
+        const r = contrast(C(fg), C(bg));
+        assert.ok(r >= 4.5, `${th}: ${fg} / ${bg} = ${r.toFixed(2)} (4.5 미만)`);
+      }
+    const onAcc = contrast(C('--on-accent'), C('--accent2'));
+    assert.ok(onAcc >= 4.5, `${th}: 주요 버튼 글자 --on-accent / --accent2 = ${onAcc.toFixed(2)}`);
+    const sel = contrast(C('--accent'), C('--bg2'));
+    assert.ok(sel >= 3, `${th}: 선택 테두리 --accent / --bg2 = ${sel.toFixed(2)}`);
+    // 분류 색은 글자로 쓰임 → 4.5:1
+    for (let i = 1; i <= 6; i++) { const r = contrast(C('--cat-' + i), C('--bg2')); assert.ok(r >= 4.5, `${th}: --cat-${i} = ${r.toFixed(2)}`); }
+    out.push(`${th}: 보조 글자(--dim) ${contrast(C('--dim'), C('--bg2')).toFixed(1)}:1 · 주요 버튼 ${onAcc.toFixed(1)}:1 · 강조 ${sel.toFixed(1)}:1`);
+  }
+  // 보라 기운이 없는 중성 바탕 (R·G·B 차이가 작고, 파랑이 빨강보다 지나치게 크지 않음)
+  for (const th of ['dark', 'light']) { const T = themeTokens(th); for (const n of ['--bg', '--bg2', '--bg3', '--bg4', '--line']) { const [r, g, b] = rgbOf(`var(${n})`, T); assert.ok(Math.max(r, g, b) - Math.min(r, g, b) <= 14 && !(b > g + 4 && r > g + 2), `${th} ${n} 이 중성색이 아님: ${[r, g, b].map(Math.round)}`); } }
+  return out.join(' · ');
+});
+
+test('색 체계: 편집기 코드가 쓰는 var(--토큰) 이 모두 정의돼 있음 (예전: --acc · --accent-bg 가 없어 늘 보라 기본값)', () => {
+  const css = CSS(), defined = new Set([...css.matchAll(/(--[\w-]+)\s*:/g)].map(m => m[1]));
+  // 코드가 그때그때 넣는 변수 (요소 style 로 설정)
+  ['--d', '--treeW', '--inspW', '--bottomH', '--i', '--w', '--h', '--x', '--y', '--c', '--k', '--on-bg', '--on-line', '--on-fg'].forEach(n => defined.add(n));
+  const dir = path.join(ROOT, 'editor/renderer'), bad = [];
+  const scan = (f, txt) => { for (const m of txt.matchAll(/var\((--[\w-]+)/g)) if (!defined.has(m[1])) bad.push(`${f}: ${m[1]}`); };
+  scan('app.css', css);
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).forEach(e => { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.js$/.test(e.name) && !/motion-presets|motion\.js|textfx|filter\.js/.test(e.name)) scan(path.relative(dir, p), fs.readFileSync(p, 'utf8')); });
+  walk(path.join(dir, 'js'));
+  eq([...new Set(bad)], []);
+  // 편집기 UI 의 옛 보라 직접 값이 남지 않음 (게임 그림 · 모션 예제 · 색 팔레트 같은 "게임 콘텐츠 색"은 예외)
+  const left = [];
+  ['js/app.js', 'js/audio.js', 'js/commands.js', 'js/editors/map.js', 'js/editors/heart.js', 'js/editors/quests.js', 'js/editors/badges.js', 'js/editors/trailer.js', 'js/editors/combos.js', 'css/app.css']
+    .forEach(f => { const t = fs.readFileSync(path.join(dir, f), 'utf8'); if (/#a58bff|#6a45d6|165,\s*139,\s*255/i.test(t.replace(/feeling:.*\n/, ''))) left.push(f); });
+  eq(left, []);
 });
 
 // ------------------------------------------------------------ 실행

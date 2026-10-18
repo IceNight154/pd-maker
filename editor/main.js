@@ -17,7 +17,7 @@ let gameProc = null;
 function settingsFile() { return path.join(app.getPath('userData'), 'pdmaker-settings.json'); }
 function readSettings() { try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch (_) { return {}; } }
 function writeSettings(o) { try { fs.mkdirSync(path.dirname(settingsFile()), { recursive: true }); fs.writeFileSync(settingsFile(), JSON.stringify(o, null, 2)); } catch (_) { /* 무시 */ } }
-const bgFor = dark => dark ? '#17151d' : '#f3f2f7';
+const bgFor = dark => dark ? '#131518' : '#f1f3f5';   // 창이 뜨는 순간의 바탕 = css --bg (테마 토큰과 같게)
 /** OS 강조색 (Windows·macOS) → '#rrggbb', 없으면 null */
 function accentColor() {
   try { const c = systemPreferences.getAccentColor && systemPreferences.getAccentColor(); return c ? '#' + String(c).slice(0, 6) : null; } catch (_) { return null; }

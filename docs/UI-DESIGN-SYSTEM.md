@@ -4,7 +4,8 @@
 눈으로 보기: `editor/renderer/styleguide.html` (브라우저로 열거나 웹 모드 서버에서 — 어둡게/밝게 전환 가능).
 
 - 성격: **작업 도구(Operate)**. 촘촘하고 줄이 맞는 IDE. 꾸밈보다 "어디에 뭐가 있는지 바로 아는 것"이 먼저.
-- 세계관이 빌려주는 것: 보라 강조색 · 픽셀 로고 · 게임 그림 미리보기의 어두운 무대(`--stage`). 컨트롤 모양은 표준 웹 컨트롤 그대로.
+- 세계관이 빌려주는 것: 픽셀 로고 · 게임 그림 미리보기의 어두운 무대(`--stage`). 컨트롤 모양은 표준 웹 컨트롤 그대로.
+- 색 (4차 개편): **중성 차콜 표면 + 청록 강조색 하나**. 예전 보라 기운의 바탕 · 보라 강조색을 바꿈 — 맵 타일 · 게임 그림이 UI 색에 묻히지 않게 바탕은 채도 없이, 강조색은 "주요 동작 · 선택 · 포커스"에만. 근거 · 전후 화면: `docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md`.
 - 기준 자료: Impeccable(Operate 모드 · craft floor · extract 절차), UI/UX Pro Max(`--density 8` 데이터 밀집 대시보드 · 포커스 · 대비 · 이모지 아이콘 금지 · 모션 줄이기).
 
 ## 1. 파일
@@ -25,9 +26,32 @@
 | `--bg` · `--bg2` · `--bg3` · `--bg4` | 표면 4단계: 작업 공간 · 패널/카드 · 입력 칸/버튼 · 강한 hover/선택. 이 순서로만 쌓는다 |
 | `--line` · `--line-strong` | 테두리 · hover 테두리 |
 | `--fg` · `--mute` · `--dim` | 글자 3단계 (본문 · 보조 · 설명/개수). **모두 패널 바탕에서 4.5:1 이상** (`--dim` 어두움 3.0 → 4.5, 밝음 3.5 → 5.0 으로 올림) |
-| `--accent` · `--accent2` · `--accent-soft` · `--accent-line` | 강조(조작 · 선택만) · 눌린 버튼 · 선택 바탕 · hover 테두리 |
-| `--good` `--warn` `--bad` `--gold` `--info` (+ `-bg`) | 상태. 뜻이 있을 때만 |
+| `--accent` · `--accent2` · `--accent-hover` · `--accent-soft` · `--accent-line` | 강조색(선택 테두리 · 링크 · 아이콘) · 주요 버튼 바탕(흰 글자 4.5:1 이상) · 주요 버튼 hover · 선택 바탕 · hover 테두리 |
+| `--focus-ring` (+ `--focus` 그림자) | 키보드 포커스 고리 |
+| `--good` `--warn` `--bad` `--gold` `--info` (+ `-bg`) | 상태. **뜻이 있을 때만** (장식 금지) |
+| `--cat-1` ~ `--cat-6` | 분류 색 (이벤트 명령 묶음 등) — 상태 색과 겹치지 않음. 예전엔 "스토리" 명령이 빨강(오류색) · "영웅" 명령이 주황(경고색)이라 ⚠ 빈 값 표시와 헷갈렸음 |
+| `--map-sel` · `--map-area` | 맵 캔버스 위 선택 · 영역 표시 (JS 가 `PDM.cssVar` 로 읽음) |
 | `--stage` · `--check-a/b` · `--code-*` · `--graph-*` | 게임 그림 무대 · 투명 체크무늬 · 코드 칸 · 맵 그래프 |
+
+**역할 이름 대응표** (4차 지시서의 역할 이름 → 이미 있던 토큰. 같은 뜻의 토큰을 새로 만들지 않음)
+
+| 역할 | 토큰 | 어두움 | 밝음 |
+|---|---|---|---|
+| app-bg (작업 공간) | `--bg` | `#131518` | `#f1f3f5` |
+| panel-bg | `--bg2` | `#1a1d21` | `#ffffff` |
+| panel-bg-raised · input-bg | `--bg3` | `#23272c` | `#eef0f3` |
+| (강한 hover · 눌림) | `--bg4` | `#2e333a` | `#e0e4e9` |
+| border-subtle · border-strong | `--line` · `--line-strong` | `#2f343b` · `#454c56` | `#d6dbe0` · `#b5bdc6` |
+| text-primary · secondary · muted | `--fg` · `--mute` · `--dim` | 14.6 · 8.0 · 6.0 : 1 (작업 공간 바탕) | 14.9 · 7.4 · 5.1 : 1 |
+| accent | `--accent` | `#3cc2b1` | `#0b7468` |
+| accent-hover | `--accent-hover` | | |
+| accent-selected | `--accent-soft` (+ 강조색 줄/테두리) | | |
+| focus-ring | `--focus-ring` | | |
+| status-success · warning · error | `--good` · `--warn` · `--bad` | | |
+| disabled | `--disabled-opacity` (.4) · 버튼 .45 · 입력 칸 .55 | | |
+| 간격 · 모서리 · 전환 시간 | `--sp-*` · `--r-*` · `--dur-fast` `--dur` | | |
+
+대비는 `tools/tests/run.js` 의 "색 체계" 테스트가 css 를 읽어 계산합니다 (두 테마 모두: 글자 · 상태 색 · 분류 색 4.5:1 이상, 주요 버튼 글자 4.5:1, 강조 테두리 3:1, 바탕이 중성색인지, 코드가 쓰는 `var(--…)` 가 모두 정의돼 있는지).
 
 ### 크기
 
@@ -56,10 +80,15 @@
 | 목록 | `.listed > .li(.compact) > .li-body + .li-tools` | |
 | 배지 | `.badge` + `accent` `good` `warn` `bad` `gold` `info` | |
 | 표 | `table.grid` (머리 고정 · 줄 hover) · `table.tbl` | |
-| 메뉴 · 창 · 알림 | `.ctx` `.ctx-i` · `.modal-bg > .modal > .modal-head/.modal-body/.modal-foot` · `#toast` | 창은 살짝 떠오르며 나타남 |
+| 메뉴 · 창 · 알림 | `.ctx` `.ctx-i` (`.chk` 켜고 끄기 ✓ · `.danger` · `.ctx-h` 묶음 제목) · `.modal-bg > .modal > .modal-head/.modal-body/.modal-foot` · `#toast` | 창은 살짝 떠오르며 나타남 · 버튼 순서는 언제나 [취소] [확인/진행] · 켜고 끄는 메뉴 항목은 `checked` 하나로 (글자 앞 ✓ 를 직접 붙이지 않음) |
+| 고르는 카드 | `.selcard(.compact)(.on)` | 퀘스트 · 업적 · 트레일러 장면 · 조합 타일 목록 (예전: 편집기마다 인라인 style) |
 | 단축키 | `<kbd>` | |
 
-**선택 표시는 한 가지**: 강조색 2px 줄(rail) + `--accent-soft` 바탕 — 리소스 목록(`.tn.sel`) · 이벤트 명령(`.cmd.sel`) · 최근 프로젝트 hover. 탭은 위쪽 줄(`.tab.on`).
+**세 상태를 구분** (4차): 
+- **주요 동작** `.btn.pri` — 꽉 찬 강조색(`--accent2`) + 흰 글자. 한 화면에 하나.
+- **선택 · 켜짐** — `--accent-soft` 바탕 + 강조색 줄/테두리 (색만으로 구분하지 않음): 리소스 목록 `.tn.sel`(왼쪽 줄) · 이벤트 명령 `.cmd.sel` · 도구 `.btn.on` `.tool.on`(아래 2px 줄) · 칩 `.chip.on`(✓) · 고르는 카드 `.selcard.on`(왼쪽 줄) · 메뉴 hover(왼쪽 줄) · 탭 `.tab.on`(위쪽 줄). 예전엔 켜진 도구 · 칩 · 메뉴 hover 가 주요 버튼과 같은 꽉 찬 보라라 "누를 버튼"과 "지금 상태"가 구분되지 않았음.
+- **위험** `.btn.danger` · 메뉴의 "삭제…" — 평소에도 빨간 글자, hover 때 빨간 바탕. 확인 창(`PDM.ui.confirm`)은 지우기 · 덮어쓰기 글이면 ⚠ + 빨간 "진행" 버튼.
+- **알림** `#toast` — 왼쪽 3px 상태 색 줄 + 기호(i ✓ ! ✕). 실패는 5초 · `role=alert`.
 **포커스**: 키보드로 옮길 때만 `:focus-visible` 고리(강조색 2px). 마우스로 누를 때는 안 보임.
 
 ## 4. 유틸리티 (편집기 코드의 짧은 배치)
@@ -91,4 +120,5 @@
 ## 7. 확인
 
 - 웹 모드 + Playwright: 시작 화면 · 프로젝트 설정 · 맵 그래프 · 영웅 · 아이템 · 맵 그리기 · 이벤트 · 대사창을 어두움/밝음 두 방식으로 보고, 리소스 75개 편집 화면을 모두 열어 오류 0.
-- 실제 Electron 창(제목 표시줄 · OS 강조색)은 아직 손으로 확인하지 않음.
+- 4차: 색 대비 · 토큰 정의 자동 검사(`run.js`), 메뉴 묶음 · 확인 창 · 알림 · 선택/주요 구분 · 좁은 창 이벤트 화면(`ui-editor.js`), 전후 화면을 같은 창 크기로 촬영(`ui-shots.js`, `docs/images/ux4/`).
+- 실제 Electron 창(제목 표시줄 · OS 강조색)은 아직 손으로 확인하지 않음. Electron 은 기본값이 "시스템 강조색"이라 Windows · macOS 에서는 OS 강조색이 청록 대신 쓰일 수 있음(보기 → 강조색 → PDMaker 기본).

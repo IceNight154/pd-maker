@@ -580,7 +580,7 @@ PDM.ui = (function () {
       const close = v => { const i = openModals.indexOf(close); if (i >= 0) openModals.splice(i, 1); bg.remove(); res(v); };
       openModals.push(close);
       const foot = h('div', { class: 'modal-foot' }, (buttons || [['확인', true]]).map(([t, v, cls]) => h('button', { class: 'btn ' + (cls || ''), onclick: () => close(typeof v === 'function' ? v() : v) }, t)));
-      const box = h('div', { class: 'modal' }, h('div', { class: 'modal-head' }, title, h('button', { class: 'ib', onclick: () => close(null) }, '✕')), h('div', { class: 'modal-body' }, body), foot);
+      const box = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': typeof title === 'string' ? title : '' }, h('div', { class: 'modal-head' }, title, h('button', { class: 'ib', title: '닫기 (Esc)', 'aria-label': '닫기', onclick: () => close(null) }, '✕')), h('div', { class: 'modal-body' }, body), foot);
       const bg = h('div', { class: 'modal-bg', onmousedown: e => { if (e.target === bg) close(null); } }, box);
       document.body.append(bg);
       const first = box.querySelector('input,textarea,select'); if (first) setTimeout(() => first.focus(), 30);
@@ -592,12 +592,19 @@ PDM.ui = (function () {
     const r = await modal(title, h('div', {}, i, hint ? h('small', { class: 'hint' }, hint) : null), [['취소', null], ['확인', () => i.value, 'pri']]);
     return r;
   }
-  async function confirm(msg) { return !!(await modal('확인', h('p', {}, msg), [['취소', false], ['확인', true, 'pri']])); }
+  /** 확인 창 — 모든 편집기가 같은 모양 · 같은 버튼 순서(취소 · 확인)를 씀.
+   *  o: { title, ok(확인 버튼 글), danger } — danger = 지우기 같은 되돌리기 어려운 일: 빨간 버튼 + ⚠.
+   *  o 를 주지 않으면 글에 "삭제 · 지우 · 버리 · 덮어"가 있을 때 danger 로 봄 (예전: 지우기 확인도 일반 확인과 모양이 같았음) */
+  async function confirm(msg, o = {}) {
+    const danger = o.danger !== undefined ? !!o.danger : /삭제|지우|지울|버리|버릴|덮어/.test(String(msg));
+    const body = h('p', { class: danger ? 'confirm-danger' : '' }, danger ? h('span', { class: 'confirm-ico', 'aria-hidden': 'true' }, '⚠') : null, msg);
+    return !!(await modal(o.title || (danger ? '확인 — 되돌리기 어려운 작업' : '확인'), body, [['취소', false], [o.ok || (danger ? '진행' : '확인'), true, danger ? 'danger solid' : 'pri']]));
+  }
   function menu(x, y, items) {
     $$('.ctx').forEach(m => m.remove());
     const m = h('div', { class: 'ctx', style: { left: x + 'px', top: y + 'px' } },
       items.filter(Boolean).map(it => it === '-' ? h('hr') : it.head ? h('div', { class: 'ctx-h' }, it.head)
-        : h('div', { class: 'ctx-i' + (it.disabled ? ' dis' : '') + (it.checked !== undefined ? ' chk' : ''), onclick: () => { m.remove(); !it.disabled && it.run(); } },
+        : h('div', { class: 'ctx-i' + (it.disabled ? ' dis' : '') + (it.checked !== undefined ? ' chk' : '') + (it.danger || /^삭제/.test(it.label || '') ? ' danger' : ''), role: 'menuitem', onclick: () => { m.remove(); !it.disabled && it.run(); } },
           it.checked !== undefined ? h('span', { class: 'ctx-ck' }, it.checked ? '✓' : '') : null, it.label, it.hint ? h('small', {}, it.hint) : null)));
     document.body.append(m);
     const r = m.getBoundingClientRect();

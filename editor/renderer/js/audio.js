@@ -189,8 +189,9 @@ PDM.audio = (function () {
     const d = buf.getChannelData(0), dur = buf.duration;
     const view = o.view || { a: 0, b: dur };
     const x = t => (t - view.a) / (view.b - view.a) * W;
-    if (o.sel && o.sel.b > o.sel.a) { g.fillStyle = 'rgba(165,139,255,.25)'; g.fillRect(x(o.sel.a), 0, x(o.sel.b) - x(o.sel.a), H); }
-    g.strokeStyle = o.color || '#a58bff'; g.beginPath();
+    const ACC = PDM.cssVar('--accent', '#3cc2b1');
+    if (o.sel && o.sel.b > o.sel.a) { g.fillStyle = PDM.alpha(ACC, .25); g.fillRect(x(o.sel.a), 0, x(o.sel.b) - x(o.sel.a), H); }
+    g.strokeStyle = o.color || ACC; g.beginPath();
     const s0 = Math.floor(view.a * buf.sampleRate), s1 = Math.floor(view.b * buf.sampleRate), step = Math.max(1, (s1 - s0) / W);
     for (let px = 0; px < W; px++) {
       let mn = 1, mx = -1; const a = Math.floor(s0 + px * step), b = Math.min(d.length, Math.floor(a + step) + 1);

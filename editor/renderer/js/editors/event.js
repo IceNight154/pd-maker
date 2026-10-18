@@ -262,8 +262,8 @@
           F.textarea(key, ['note'], { label: '메모', rows: 2 })),
         h('p', { class: 'hint' }, '페이지는 번호가 큰 것부터 조건을 검사해서, 처음 맞는 페이지 하나만 동작합니다 (RPG Maker 와 같음).'),
         pageTabs,
-        h('div', { class: 'flex gap-6 items-start mt-4' }, left,
-          h('div', { class: 'grow min-0' }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
+        h('div', { class: 'ev-cols mt-4' }, left,   // 좁으면 실행 내용이 아래로 (4차: 예전엔 230px 로 눌려 "명령 8개"가 세로로 쪼개짐)
+          h('div', { class: 'ev-cmds' }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
     }
   });
   PDM.events = { newEvent };

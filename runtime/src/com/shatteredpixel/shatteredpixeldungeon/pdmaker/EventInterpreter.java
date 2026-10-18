@@ -109,6 +109,7 @@ public class EventInterpreter {
 		for (EventInterpreter q : queue) q.dead = true;
 		current = null;
 		queue.clear();
+		synchronized (carried) { carried.clear(); }
 		MakerDialogue.faces.clear();
 	}
 	/** 멈춘 명령이 기다리는 창·타이머를 알려 줌 (사라졌는데 이어지지 않으면 막힌 것으로 봄) */
@@ -140,7 +141,7 @@ public class EventInterpreter {
 
 	EventInterpreter(String eventId, String ctxChar) { this.eventId = eventId; this.ctxChar = ctxChar; }
 
-	void start() { current = this; step(); }
+	void start() { current = this; shownOn = Dungeon.level; step(); }
 	void finish() {
 		if (dead) return;
 		current = null;
@@ -148,7 +149,7 @@ public class EventInterpreter {
 		if (next != null) next.start();
 	}
 	/** 멈춘 명령(창 닫힘, 대기 끝) 다음부터 이어서 — 플러그인도 비동기 처리가 끝나면 호출 */
-	public void resume() { if (dead) return; watch = false; waitOn = null; pauseSeq++; step(); }
+	public void resume() { if (dead) return; watch = false; waitOn = null; windowMaker = null; pauseSeq++; step(); }
 
 	/** 기다리던 것이 사라졌는데(창이 화면에서 없어짐 · 창을 만들지 못함) 이어지지 않았는가 */
 	boolean stuck() {
@@ -163,6 +164,7 @@ public class EventInterpreter {
 		return true;
 	}
 	private boolean gone() {
+		if (rebuilding) return false;   // 화면을 다시 만든 직후 — 창 · 타이머를 새 화면에 옮기는 중
 		com.watabou.noosa.Gizmo g = waitOn;
 		if (g == null) return System.currentTimeMillis() - pausedAt > 4000;   // 창이 4초 넘게 안 뜸 (만들다 오류)
 		return g.parent == null || !g.exists;
@@ -222,11 +224,55 @@ public class EventInterpreter {
 				boolean fired;
 				@Override public void update() { super.update(); if (!fired && done.getAsBoolean()) { fired = true; active = false; if (parent != null) parent.remove(this); resume(); } }
 			};
-			Game.scene().add(poll);
+			attach(poll);
 			if (current == self) waitingOn(poll);
 		});
 	}
 	static com.watabou.noosa.ColorBlock fadeBlock;
+	static int fadeColor = 0;
+
+	// ------------------------------------------------------------ 창 크기 · 화면 방향이 바뀔 때 (4차)
+	// 게임은 창 크기가 바뀌면(PC 창 크기 조절 · 휴대폰 화면 돌림 · 분할 화면) 같은 층의 게임 화면을 새로 만들고, 인자 없이 만들 수 있는 창만 되살림.
+	// 예전에는 대사창 · 입력 기다리기 · 타이머 · 일러스트 · 페이드가 모두 사라지고 이벤트가 "실행 중"인 채로 멈췄음(게임에서 확인).
+	// 이제: 이벤트가 화면에 붙인 것(attach)은 새 화면으로 옮기고, 페이드 판 · 일러스트는 새 크기로 다시 만들고, 기다리던 창은 같은 내용으로 다시 띄움.
+	// 층이 바뀐 경우(층 이동 · 불러오기)는 예전 그대로 (창은 showWindow 가 다음 게임 화면을 기다렸다가 띄움).
+	/** 이벤트가 화면에 붙인 타이머 · 대기 · 이동 · 페이드 진행 */
+	static final List<Gizmo> carried = new ArrayList<>();
+	static void attach(Gizmo g) {
+		Game.scene().add(g);
+		synchronized (carried) { carried.removeIf(x -> !x.exists || !x.active); carried.add(g); }
+	}
+	/** 지금 기다리는 창을 다시 만드는 방법 · 그 창을 띄운 층 */
+	volatile java.util.function.Supplier<com.shatteredpixel.shatteredpixeldungeon.ui.Window> windowMaker;
+	volatile Level shownOn;
+	volatile boolean rebuilding;
+	/** PixelScene.create 때 (MakerAssets.onSceneCreate) — 같은 층의 게임 화면이 다시 만들어졌으면 다음 프레임에 연출을 옮김 */
+	public static void sceneCreated(com.watabou.noosa.Scene s) {
+		final EventInterpreter c = current;
+		if (c == null || c.dead || !(s instanceof GameScene) || Dungeon.level == null || c.shownOn != Dungeon.level) return;
+		c.rebuilding = true;
+		Game.runOnRenderThread(() -> c.rebuild(s));
+	}
+	void rebuild(com.watabou.noosa.Scene s) {
+		renderThread = Thread.currentThread();
+		try {
+			if (dead || current != this || Game.scene() != s) return;
+			int moved = 0;
+			synchronized (carried) { for (Gizmo g : new ArrayList<>(carried)) if (g.exists && g.active && g.parent == null) { s.add(g); moved++; } }
+			if (fadeBlock != null && fadeBlock.parent == null) {
+				float a = fadeBlock.alpha();
+				fadeBlock = new com.watabou.noosa.ColorBlock(PixelScene.uiCamera.width, PixelScene.uiCamera.height, 0xFF000000 | fadeColor);
+				fadeBlock.camera = PixelScene.uiCamera; fadeBlock.alpha(a);
+				s.add(fadeBlock);
+			}
+			int ills = MakerStage.rebuild();
+			com.watabou.noosa.Gizmo w = waitOn;
+			boolean reshow = windowMaker != null && w instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && (w.parent == null || !w.exists);
+			MakerRuntime.log("화면 크기가 바뀌어 연출을 새 화면으로 옮겼습니다 (" + eventId + "): 진행 중 " + moved + " · 일러스트 " + ills + (reshow ? " · 창 다시 띄움" : ""));
+			if (reshow) { showWindow(windowMaker); return; }   // rebuilding 은 창을 띄운 뒤 풂
+		} catch (Throwable t) { MakerRuntime.log("화면이 바뀐 뒤 연출 옮기기 오류 (" + eventId + "): " + t); }
+		rebuilding = false;
+	}
 	/** 캐릭터마다 지금 돌고 있는 이동 경로 (새 경로를 주면 앞의 것을 멈춤) */
 	static final java.util.Map<com.shatteredpixel.shatteredpixeldungeon.actors.Char, Gizmo> routes = new java.util.HashMap<>();
 	static int parseColor(String s) { try { return Integer.parseInt(s.replace("#", "").trim(), 16) & 0xFFFFFF; } catch (Exception e) { return 0; } }
@@ -268,8 +314,10 @@ public class EventInterpreter {
 			}
 			com.shatteredpixel.shatteredpixeldungeon.ui.Window w;
 			try { w = make.get(); GameScene.show(w); }
-			catch (Throwable t) { MakerRuntime.log("대사·선택지 창을 띄우지 못했습니다 (" + eventId + "): " + t); self.resume(); return; }
+			catch (Throwable t) { MakerRuntime.log("대사·선택지 창을 띄우지 못했습니다 (" + eventId + "): " + t); self.rebuilding = false; self.resume(); return; }
+			self.windowMaker = make; self.shownOn = Dungeon.level;
 			if (current == self) waitingOn(w);
+			self.rebuilding = false;
 		});
 	}
 
@@ -344,7 +392,7 @@ public class EventInterpreter {
 						float left = sec; boolean fired;
 						@Override public void update() { super.update(); left -= Game.elapsed; if (left <= 0 && !fired) { fired = true; active = false; resume(); if (parent != null) parent.remove(this); } }
 					};
-					Game.scene().add(timer);
+					attach(timer);
 					if (current == self) waitingOn(timer);
 				});
 				return false;
@@ -691,7 +739,7 @@ public class EventInterpreter {
 							} catch (Throwable t) { MakerRuntime.log("이동 경로 오류: " + t); end(); }
 						}
 					};
-					Game.scene().add(walker);
+					attach(walker);
 					routes.put(ch, walker);
 					if (wait && current == self) waitingOn(walker);
 				});
@@ -785,6 +833,7 @@ public class EventInterpreter {
 					if (Game.scene() == null) { if (wait) resume(); return; }
 					if (fadeBlock == null || fadeBlock.parent != Game.scene()) {
 						if (!out) { if (wait) resume(); return; }   // 어둡게 한 적이 없으면 밝게 할 것도 없음
+						fadeColor = color;
 						fadeBlock = new com.watabou.noosa.ColorBlock(PixelScene.uiCamera.width, PixelScene.uiCamera.height, 0xFF000000 | color);
 						fadeBlock.camera = PixelScene.uiCamera; fadeBlock.alpha(0);
 						Game.scene().add(fadeBlock);
@@ -796,11 +845,13 @@ public class EventInterpreter {
 						@Override public void update() {
 							super.update(); if (done) return;
 							t += Game.elapsed; float k = Math.min(1f, t / sec);
-							blk.alpha(out ? from + (1f - from) * k : from * (1f - k));
-							if (k >= 1f) { done = true; active = false; if (!out) { blk.killAndErase(); if (fadeBlock == blk) fadeBlock = null; } if (parent != null) parent.remove(this); if (wait) resume(); }
+							// 창 크기가 바뀌어 화면을 다시 만들면 페이드 판도 새로 만들어짐(rebuild) — 지금 판을 씀
+							com.watabou.noosa.ColorBlock b = fadeBlock != null && fadeBlock.parent != null ? fadeBlock : blk;
+							b.alpha(out ? from + (1f - from) * k : from * (1f - k));
+							if (k >= 1f) { done = true; active = false; if (!out) { b.killAndErase(); if (fadeBlock == b) fadeBlock = null; } if (parent != null) parent.remove(this); if (wait) resume(); }
 						}
 					};
-					Game.scene().add(tw);
+					attach(tw);
 					if (wait && current == self) waitingOn(tw);
 				});
 				return !wait;
