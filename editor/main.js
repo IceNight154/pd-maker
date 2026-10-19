@@ -636,3 +636,18 @@ ipcMain.handle('runtime:status', wrap(repo => {
   const cp = installer.compat(repo);
   return { pkg, hooks, total: installer.PATCHES.length, compat: cp };
 }));
+
+// ---------------- 게임 저장소 분석 (9차 — editor/repo-analyzer.js · 읽기 전용) ----------------
+//  결과는 사용자 설정 폴더(userData/repo-analysis/)에 캐시 → 프로젝트를 닫았다 열어도 그대로, 저장소 파일(목록 · 크기 · 수정 시각)이 바뀌면 다시 분석
+//  분석은 worker 스레드에서 (큰 저장소를 읽는 동안 창이 멈추지 않게). worker 를 못 띄우면 여기서 바로
+function analyzeRepo(opts) {
+  const o = { dir: opts.dir, force: !!opts.force, cacheDir: path.join(app.getPath('userData'), 'repo-analysis'), runtimeSrc: runtimeSrc() };   // runtimeSrc: 런타임이 쓰는 게임 클래스 확인용
+  return new Promise((resolve, reject) => {
+    let w; try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'repo-analyzer.js'), { workerData: { pdmAnalyze: o } }); }
+    catch (_) { try { resolve(require('./repo-analyzer').analyze(o.dir, o)); } catch (e) { reject(e); } return; }
+    w.once('message', m => m && m.error ? reject(new Error(m.error)) : resolve(m.value));
+    w.once('error', reject);
+    w.once('exit', c => { if (c) reject(new Error('저장소 분석기가 멈췄습니다 (종료 코드 ' + c + ')')); });
+  });
+}
+ipcMain.handle('repo:analyze', wrap(opts => analyzeRepo(opts || {})));

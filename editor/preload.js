@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('pdmNative', {
   runtimeUninstall: repo => call('runtime:uninstall', repo),
   runtimeStatus: repo => call('runtime:status', repo),
   repoBundle: from => call('repo:bundle', { from }),
+  // 게임 저장소 분석 (9차 — 읽기 전용 · 결과는 캐시)
+  analyzeRepo: (dir, opts) => call('repo:analyze', Object.assign({ dir }, opts || {})),
   // 테마 (시스템 색)
   themeGet: () => call('theme:get'),
   themeSet: mode => call('theme:set', mode),

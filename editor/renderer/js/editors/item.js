@@ -265,7 +265,7 @@
       const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, cv.width, cv.height);
       const i = PDM.assets.itemIndex(it.sprite, img);
       g.strokeStyle = '#ffde59'; g.lineWidth = 2; g.strokeRect((i % G.stride) * D + 1, Math.floor(i / G.stride) * D + 1, D - 2, D - 2);
-      info.textContent = `번호 ${i}${it.sprite.name ? ' · ' + it.sprite.name : ''} · ${G.mod2 ? 'mod-2 시트 (32px)' : '원작 시트 (16px)'}`;
+      info.textContent = `번호 ${i}${it.sprite.name ? ' · ' + it.sprite.name : ''} · ${G.mod2 ? 'mod-2 시트 (32px)' : G.geo && (G.base !== 16 || G.stride !== 16) ? `게임 시트 (${G.base}px · 한 줄 ${G.stride}칸 — ItemSpriteSheet)` : '원작 시트 (16px)'}`;
       cv.onclick = e => {
         const b = cv.getBoundingClientRect(), k = cv.width / b.width;
         const col = Math.floor((e.clientX - b.left) * k / D), row = Math.floor((e.clientY - b.top) * k / D);

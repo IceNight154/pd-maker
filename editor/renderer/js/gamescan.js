@@ -88,7 +88,12 @@
     const read = async rel => { try { return await pdm.readText(pdm.join(root, rel)); } catch (_) { return ''; } };
 
     // ---- 아이템 그림 번호: 이 저장소의 ItemSpriteSheet 상수 (저장소마다 아이템 시트 배치가 다름)
-    try { const sh = parseItemSheet(await read('sprites/ItemSpriteSheet.java')); if (PDM.SPD_ITEM_SPRITES) PDM.SPD_ITEM_SPRITES.vanilla = sh || BASE.sprites; } catch (_) { /* 묶여 있는 표 그대로 */ }
+    //      칸 크기 · 한 줄 칸 수도 ItemSpriteSheet 의 SIZE · WIDTH 에서 (9차: ARK 계열은 32px × 32칸 — 예전처럼 그림 너비 ÷ 16 으로 추정하면 어긋남)
+    try {
+      const src = await read('sprites/ItemSpriteSheet.java'), g = window.PDMJava && src ? window.PDMJava.itemSheet(src) : null;
+      if (g && g.consts && g.scale === 1) { sum.itemSheet = { cell: g.cell, cols: g.cols, origin1: g.origin1 }; if (PDM.SPD_ITEM_SPRITES) PDM.SPD_ITEM_SPRITES.vanilla = g.consts; }
+      else { const sh = parseItemSheet(src); if (PDM.SPD_ITEM_SPRITES) PDM.SPD_ITEM_SPRITES.vanilla = sh || BASE.sprites; }
+    } catch (_) { /* 묶여 있는 표 그대로 */ }
     // ---- 아이템
     if (itemFiles.size) {
       const known = new Set(), groups = {};
@@ -171,7 +176,10 @@
       if (m) {
         const names = [...m[1].replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '').matchAll(/(?:^|,)\s*([A-Z][A-Z0-9_]*)\s*(?=\(|,|$)/g)].map(x => x[1]);
         const msg = await props(repo, 'actors');
-        sum.heroes = names.map(n => ({ cls: n, name: clean(msg['actors.hero.heroclass.' + n.toLowerCase()]) || pretty(n), desc: clean(msg['actors.hero.heroclass.' + n.toLowerCase() + '_desc']) }));
+        // 영웅 시트: HeroClass.spritesheet() 의 switch(this) 가 고르는 Assets 상수 → 실제 파일 (9차: 직업 이름과 파일 이름이 다른 파생작 — ARK 의 WARRIOR → sprites/blaze.png)
+        let sheets = { map: {}, def: '' };
+        try { if (window.PDMJava) sheets = window.PDMJava.heroSheets(src, window.PDMJava.assets(await read('Assets.java')).map); } catch (_) { /* 예전 규칙 */ }
+        sum.heroes = names.map(n => ({ cls: n, name: clean(msg['actors.hero.heroclass.' + n.toLowerCase()]) || pretty(n), desc: clean(msg['actors.hero.heroclass.' + n.toLowerCase() + '_desc']), sheet: sheets.map[n] || sheets.def || '' }));
         // 영웅 그림 한 칸 크기 (sprites/HeroSprite.java 의 FRAME_WIDTH · FRAME_HEIGHT — 모드마다 다를 수 있음)
         const hsp = await read('sprites/HeroSprite.java'), fw = /FRAME_WIDTH\s*=\s*(\d+)/.exec(hsp), fh = /FRAME_HEIGHT\s*=\s*(\d+)/.exec(hsp);
         if (fw && fh) sum.heroFrame = [+fw[1], +fh[1]];
@@ -185,6 +193,36 @@
         }
       }
     } catch (_) { /* 없음 */ }
+    // ---- 층별 몬스터 목록 클래스 (원작 MobSpawner — 파생작은 이름이 다를 수 있음: ARK 의 MobRotation)
+    sum.mobRotation = 'actors/mobs/MobSpawner.java';
+    if (mobFiles.size && !mobFiles.has('MobSpawner')) {
+      sum.mobRotation = '';
+      for (const f of mobFiles) { if (/\//.test(f)) continue; const s2 = await read('actors/mobs/' + f + '.java'); if (/\bstandardMobRotation\s*\(/.test(s2)) { sum.mobRotation = 'actors/mobs/' + f + '.java'; break; } }
+    }
+    // ---- 저장소 분석기 (editor/repo-analyzer.js — Electron · 테스트 환경에서만): 상속 · 스프라이트 · 능력치 · 원본 위치로 새 몬스터를 보강
+    sum.analysis = null;
+    if (pdm.analyzeRepo) {
+      try {
+        const rep = await pdm.analyzeRepo(repo);
+        if (rep && rep.objects) {
+          PDM.REPO_ANALYSIS = rep;
+          sum.analysis = { fingerprint: rep.fingerprint, generatedAt: rep.generatedAt, cached: !!rep.cached, summary: rep.summary, features: (rep.features || []).map(f => f.id) };
+          if (rep.objects.mobRotation) sum.mobRotation = rep.objects.mobRotation.rel;
+          if (rep.itemSheet && rep.itemSheet.consts && (rep.itemSheet.scale || 1) === 1 && !sum.itemSheet) sum.itemSheet = { cell: rep.itemSheet.cell, cols: rep.itemSheet.cols, origin1: rep.itemSheet.origin1 };
+          const known = new Set((PDM.SPD_CHARS || []).map(e => String(e.cls).split('$')[0].replace(/\./g, '/')));
+          const msgA = await props(repo, 'actors'), seen = new Set();
+          // 그림을 못 읽은 몬스터도 빼지 않음 (임시 그림 + 이유) — 예전 목록에 있던 것을 잃지 않게 (예: ARK TheEndspeaker 는 spriteClass 를 코드로 고름)
+          const fresh = (rep.objects.mobs || []).filter(m => m.convertible && !String(m.cls).includes('$') && !known.has(String(m.cls).replace(/\./g, '/')));
+          sum.newMobs = fresh.filter(m => !seen.has(m.cls) && seen.add(m.cls)).map(m => {
+            const e = { cls: m.cls, kind: m.cls.startsWith('npcs.') ? 'npc' : 'mob', name: m.name || clean(msgA['actors.mobs.' + m.cls.toLowerCase() + '.name']) || m.simple, desc: m.desc || '',
+              stats: {}, source: { file: m.file, line: m.line }, extracted: ['name', 'desc'] };
+            if (m.stats.hp != null) { e.stats.hp = m.stats.hp; e.extracted.push('stats.hp'); } if (m.stats.evasion != null) { e.stats.evasion = m.stats.evasion; e.extracted.push('stats.evasion'); } if (m.stats.exp != null) { e.exp = m.stats.exp; e.extracted.push('exp'); }
+            if (m.spriteOk) { e.sprite = { sheet: 'game:' + m.sprite.sheet, frame: m.sprite.frame.slice(), scale: 0, anims: JSON.parse(JSON.stringify(m.sprite.anims)) }; e.extracted.push('sprite'); e.spriteFrom = m.sprite.file; }
+            else e.spriteProblem = (m.reasons || []).join(' · ');
+            return e; }).sort((a, b) => a.name.localeCompare(b.name));
+        }
+      } catch (e) { console.error(e); PDM.log && PDM.log('저장소 분석기가 실패했습니다 (리소스 목록은 예전 방식으로 읽음): ' + (e && e.message), 'err'); }
+    }
     /** 프로젝트 캐릭터의 game 클래스가 이 저장소에 없는지 */
     sum.missingMob = cls => !!cls && mobFiles.size > 0 && !mobFiles.has(String(cls).split('$')[0].replace(/\./g, '/'));
     sum.msgRoot = (await msgRoot(repo)).join(' + ');
@@ -200,22 +238,30 @@
     const res = { charsRemoved: 0, charsAdded: 0, heroesRemoved: 0, heroesAdded: 0 };
     // 영웅 시트 높이 (갑옷 단계 줄 수를 알려고) — 미리 읽어 둠
     const sheetH = {};
-    if (sc.heroFrame) for (const x of sc.heroes || []) { try { const im = await PDM.assets.load('game:sprites/' + x.cls.toLowerCase() + '.png'); if (!im) continue;
+    const sheetOf = x => 'game:' + (x.sheet || 'sprites/' + x.cls.toLowerCase() + '.png'), convOf = cls => 'game:sprites/' + String(cls).toLowerCase() + '.png';
+    if (sc.heroFrame) for (const x of sc.heroes || []) { try { const im = await PDM.assets.load(sheetOf(x)); if (!im) continue;
         // 그림이 실제로 그려진 줄만 씀 (갑옷 단계 그림이 한 줄뿐인 시트: 아래 줄이 비어 있음)
         const [fw, fh] = sc.heroFrame, n = Math.max(1, Math.floor(im.height / fh)), cv = document.createElement('canvas'); cv.width = fw; cv.height = n * fh;
         const g = cv.getContext('2d'); g.drawImage(im, 0, 0, fw, n * fh, 0, 0, fw, n * fh); const d = g.getImageData(0, 0, fw, n * fh).data, used = [];
         for (let r = 0; r < n; r++) { let c = 0; for (let k = r * fh * fw; k < (r + 1) * fh * fw; k++) if (d[k * 4 + 3] > 0) c++; if (c > 20) used.push(r); }
         sheetH[x.cls] = used.length ? used : [0]; } catch (_) { /* 없음 */ } }
-    const fixSprite = (sp, cls) => { if (!sp || !sc.heroFrame || sp.sheet !== 'game:sprites/' + cls.toLowerCase() + '.png') return false;
+    const fixSprite = (sp, cls) => { const x = (sc.heroes || []).find(q => q.cls === cls) || { cls };
+      if (!sp || (sp.sheet !== convOf(cls) && sp.sheet !== sheetOf(x))) return false;
+      let changed = false;
+      if (sp.sheet !== sheetOf(x)) { sp.sheet = sheetOf(x); changed = true; }   // 원작 규칙(sprites/<직업>.png)으로 넣어 둔 것 → 게임이 실제로 쓰는 시트
+      if (!sc.heroFrame) return changed;
       const [fw, fh] = sc.heroFrame, used = sheetH[cls] || [0, 1, 2, 3, 4, 5, 6], tr = [0, 1, 2, 3, 4, 5, 6].map(i => used[Math.min(i, used.length - 1)]);
-      if ((sp.frame || [])[0] === fw && (sp.frame || [])[1] === fh && JSON.stringify(sp.tierRows || []) === JSON.stringify(tr) && sp.rowsChecked) return false;
+      if ((sp.frame || [])[0] === fw && (sp.frame || [])[1] === fh && JSON.stringify(sp.tierRows || []) === JSON.stringify(tr) && sp.rowsChecked) return changed;
       sp.frame = [fw, fh]; sp.tierRows = tr; sp.rowsChecked = true; return true; };
     const titled = n => String(n).toLowerCase().replace(/(^|_)([a-z])/g, (m, a, b) => (a ? ' ' : '') + b.toUpperCase());
     store.transaction('게임 저장소에 맞추기', () => {
       if (!fixOnly) store.all('char').forEach(c => { if (c.game && sc.missingMob(c.game)) { store.remove('char:' + c.id, '저장소에 없는 캐릭터'); res.charsRemoved++; } });
       const have = new Set(store.all('char').map(c => c.game).filter(Boolean));
-      (fixOnly ? [] : sc.newMobs || []).forEach(e => { if (have.has(e.cls)) return; const c = PDM.make.vanillaChar(Object.assign({}, e, { sprite: PDM.make.character('x', e.kind).sprite })); if (store.has('char:' + c.id)) return;
-        c.note = '게임 저장소에서 찾은 캐릭터 (actors.mobs.' + e.cls + ') — 그림·능력치·AI 는 게임 코드의 값을 씁니다 (캐릭터 화면 위 "게임 코드의 실제 값" 참고)'; store.add('char:' + c.id, c, '게임 캐릭터 추가'); res.charsAdded++; });
+      (fixOnly ? [] : sc.newMobs || []).forEach(e => { if (have.has(e.cls)) return; const c = PDM.make.vanillaChar(Object.assign({}, e, { sprite: e.sprite || PDM.make.character('x', e.kind).sprite })); if (store.has('char:' + c.id)) return;
+        c.note = '게임 저장소에서 찾은 캐릭터 (actors.mobs.' + e.cls + ') — 그림·능력치·AI 는 게임 코드의 값을 씁니다 (캐릭터 화면 위 "게임 코드의 실제 값" 참고)' + (e.sprite ? '' : ' · 그림을 소스에서 읽지 못해 임시 그림' + (e.spriteProblem ? ' (' + e.spriteProblem + ')' : ''));
+        // 9차: 어디서 읽었는지 · 무엇이 원본에서 뽑은 값인지 (나머지는 PDMaker 기본값) — 다시 저장해도 그대로 남음
+        if (e.source) c.origin = { repo: pdm.basename(sc.repo), file: e.source.file, line: e.source.line, extracted: (e.extracted || []).slice(), sprite: e.spriteFrom || '' };
+        store.add('char:' + c.id, c, '게임 캐릭터 추가'); res.charsAdded++; });
       if (sc.heroes && sc.heroes.length) {
         const ok = new Set(sc.heroes.map(x => x.cls));
         if (!fixOnly) store.all('hero').forEach(hr => { if (hr.baseClass && !ok.has(hr.baseClass)) { store.remove('hero:' + hr.id, '저장소에 없는 영웅'); res.heroesRemoved++; } });
@@ -224,7 +270,8 @@
           const hr = PDM.make.hero(id); Object.assign(hr, { name: x.name, desc: String(x.desc || ''), baseClass: x.cls, note: '게임 저장소의 직업 — 비워 둔 항목(그림·특성·전직·직업 능력)은 게임 코드의 값을 씁니다 (각 섹션 위 상자에 실제 값 표시)' });
           if (hr.spellbook) hr.spellbook.enabled = false;
           if (x.hidden) hr.enabled = false;
-          if (tpl) hr.sprite = Object.assign(PDM.clone(tpl.sprite), { sheet: 'game:sprites/' + id + '.png' });
+          if (tpl) hr.sprite = Object.assign(PDM.clone(tpl.sprite), { sheet: sheetOf(x) });
+          hr.origin = { repo: pdm.basename(sc.repo), file: 'actors/hero/HeroClass.java', extracted: ['name', 'desc'].concat(x.sheet ? ['sprite.sheet'] : []) };
           fixSprite(hr.sprite, x.cls);
           store.add('hero:' + id, hr, '게임 영웅 추가'); res.heroesAdded++; });
         // 이미 있는 영웅: 이름이 클래스 이름 그대로(번역을 못 찾았던 것)면 저장소의 이름·설명으로, 그림 칸 크기도 저장소에 맞춤
@@ -246,7 +293,9 @@
     const gone = store.all('char').filter(c => c.game && sc.missingMob(c.game)).length + (sc.heroes ? store.all('hero').filter(hr => hr.baseClass && !sc.heroes.some(x => x.cls === hr.baseClass)).length : 0);
     const titled = n => String(n).toLowerCase().replace(/(^|_)([a-z])/g, (m, a, b) => (a ? ' ' : '') + b.toUpperCase());
     const fix = (sc.heroes || []).filter(x => { const hr = store.all('hero').find(q => q.baseClass === x.cls); if (!hr) return false;
-      return ((hr.name === x.cls || hr.name === titled(x.cls)) && x.name && x.name !== hr.name) || (sc.heroFrame && hr.sprite && hr.sprite.sheet === 'game:sprites/' + x.cls.toLowerCase() + '.png' && ((hr.sprite.frame || [])[0] !== sc.heroFrame[0] || (hr.sprite.frame || [])[1] !== sc.heroFrame[1] || !hr.sprite.rowsChecked)); }).length;
+      const conv = 'game:sprites/' + x.cls.toLowerCase() + '.png', real = 'game:' + (x.sheet || 'sprites/' + x.cls.toLowerCase() + '.png');
+      if (hr.sprite && hr.sprite.sheet === conv && real !== conv) return true;   // 시트 경로가 게임 실제 시트와 다름
+      return ((hr.name === x.cls || hr.name === titled(x.cls)) && x.name && x.name !== hr.name) || (sc.heroFrame && hr.sprite && (hr.sprite.sheet === conv || hr.sprite.sheet === real) && ((hr.sprite.frame || [])[0] !== sc.heroFrame[0] || (hr.sprite.frame || [])[1] !== sc.heroFrame[1] || !hr.sprite.rowsChecked)); }).length;
     return { heroes, mobs, gone, fix };
   };
 })();

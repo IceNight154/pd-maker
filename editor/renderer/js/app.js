@@ -380,6 +380,7 @@
   /** 설정 (프로젝트 메뉴 · 도구 모음 ⚙ ▾) */
   const SETTINGS_ITEMS = () => [
     { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
+    { label: '게임 저장소 분석 (구조 · 지원 범위 · 문제 목록)', run: () => PDM.tabs.open('repoanalysis'), disabled: !store.isOpen },
     { label: '확장 기능… (이벤트 · 스토리 같은 추가 기능 켜고 끄기)', run: showExtensions, disabled: !store.isOpen },
     { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
     '-',
