@@ -19,11 +19,14 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-dialogue.js` | 대사 글꼴 · 연출 탭 · 미리보기 · 테스트 플레이 실행 환경 UI |
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-camera-theme.js` | 스크린/카메라 명령 편집 · 이벤트 미리보기 · 게임 UI 테마 편집 |
 | `NODE_PATH=$(npm root -g) node tools/tests/ui-title.js` | 타이틀 편집기 (목록 · 캔버스 · 속성 · 끌기 · 상태/창 미리보기 · 검사 연결 · 루프 누수 · 손상된 값) |
+| `node tools/tests/repo-compat.js [--game <폴더>]` | 9차: 게임 저장소 호환 (합성 저장소 + `game/` 의 기준 · ARK_PD-main · New-Blue-Archive — 없는 저장소는 "실행하지 못함"으로 실패) |
+| `NODE_PATH=$(npm root -g) node tools/tests/ui-repoanalysis.js [--reports <폴더>]` | 9차: 「게임 저장소 분석」 화면 UI |
 | [docs/EDITOR-UX-CUTSCENES.md](docs/EDITOR-UX-CUTSCENES.md) | 3차: 편집기 UI/UX 개선 · 이벤트 연출(대사 · 일러스트 · 페이드 · 소리) 구현 · 게임 안 검증 기록 |
 | [docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md](docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md) | 4차: 메뉴 · 도구 모음 묶음 정리 · 색 체계(차콜 + 청록) · PC · 휴대폰 비율 · 화면 돌림 연출 검사와 고친 버그 |
 | [docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md](docs/EDITOR-GAME-THEME-CAMERA-CUTSCENES.md) | 6차: 게임 UI 테마 · 연출 중 배속 표시(끝나면 1×) · 이벤트 스크린/카메라 연출(이동 · 팔로우 · 쉐이크 · 리셋) |
 | [docs/EDITOR-TITLE-SCREEN-CUSTOMIZATION.md](docs/EDITOR-TITLE-SCREEN-CUSTOMIZATION.md) | 7차: 타이틀 화면 — 게임과 같은 규칙 · 그림 · 글꼴로 그리는 미리보기, 글 · 그림 · 정보 요소, 버튼 상태 · 효과, 팝업 창, 게임 ↔ 편집기 자리 비교 |
 | [docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md](docs/EDITOR-MOBILE-TESTPLAY-DIALOGUE-AND-UI-STABILITY.md) | 5차: 프로젝트별 테스트 실행 환경(모바일) · 맵 편집기 묶음 · 타일 레이어 보존 · 대사 글꼴/연출 · 배속/스킵 · UI 밀림 근본 수정 |
+| [docs/PROJECT-COMPATIBILITY-ARK-BA-9.md](docs/PROJECT-COMPATIBILITY-ARK-BA-9.md) | 9차: 여러 파생 저장소 호환 — 저장소 분석기 · 구조 차이(어댑터) · 지원 범위 8단계 · 「게임 저장소 분석」 화면 · ARK_PD / New Blue Archive 결과 |
 
 ---
 
@@ -31,6 +34,7 @@ Shattered Pixel Dungeon(SPD) 기반 게임을 **코드 없이** 만드는 도구
 
 PDMaker 폴더 하나에 필요한 것이 모두 들어 있습니다. 기준 게임 저장소는 `game/shattered-pixel-dungeon-master` (SPD 4.0.0)입니다.
 다른 게임 저장소도 쓸 수 있습니다: Shattered Pixel Dungeon 2.5 ~ 4.0 과 그 패키지(`com.shatteredpixel.shatteredpixeldungeon`)를 그대로 쓰는 모드 (확인: 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2). 원작 Pixel Dungeon · 패키지를 바꾼 파생작(RKPD2 등) · 체력이 long 인 파생작(Experienced PD)은 지원하지 않으며, 프로젝트 설정 › 게임 런타임에 이유가 표시됩니다.
+**설정(⚙ ▾) › 게임 저장소 분석**에서 저장소마다 무엇을 읽었고 어디까지 편집 · 실행할 수 있는지(소스 · 그림 · 소리 · 게임 객체 · 런타임이 쓰는 클래스)를 볼 수 있습니다. 예: ARK_PD 는 분석 · 편집은 되지만 런타임이 쓰는 게임 클래스 14개가 없어 테스트 플레이는 안 됩니다 ([9차 보고](docs/PROJECT-COMPATIBILITY-ARK-BA-9.md)).
 
 1. **Node.js LTS** 설치 (한 번만) — `make-release.bat` 로 만든 배포 zip 에는 Electron 이 들어 있어 필요 없습니다.
 2. `start-editor.bat` 더블클릭 → 처음에는 `npm install` 로 Electron 을 받습니다 (1~2분).

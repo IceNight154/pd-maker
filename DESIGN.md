@@ -87,6 +87,8 @@
 | `keys.js` | 단축키 `PDM.keys` — 동작 표(id · 기본 키 · scope global/draw) + 사용자 키(`localStorage pdm.keys`), `e.code` 기준 키 이름, 편집 › 단축키 설정 창 |
 | `listops.js` | `{ list: [{id,name}] }` 꼴 리소스의 추가 · 복제 · 복사/붙여넣기 · 삭제 · id 바꾸기 · 쓰는 곳(이벤트 명령 `cmdType`+`cmdKey` · 맵 오브젝트 `objType` · 참조 칸 `fields`) · 순서 `PDM.listOps` — 도구 줄은 resOps 와 같은 모양 |
 | `gamescan.js` · `gamehero.js` · `gameinfo.js` | 게임 저장소 소스를 읽어 목록 맞추기 · 원래 값 보여 주기 (§2.5) |
+| `javasrc.js` (`window.PDMJava`) | 공용 Java 구조 분석 (주석 · 문자열을 걷은 골격 → 괄호 짝 · 형 · 깊이 · enum · Assets · ItemSpriteSheet · 스프라이트 · gradle) — 편집기 · `editor/repo-analyzer.js` · 테스트가 같이 씀 (§2.5) |
+| `editors/repoanalysis.js` | 「게임 저장소 분석」 화면 (§2.5) |
 | `spd-items.js` · `spd-chars.js` · `spd-rooms.js` · `spd-room-previews.js` · `spd-level-previews.js` | 게임 데이터 (`tools/data` · `tools/playtest` 로 뽑음) |
 | `validate.js` | 검사(F7) |
 | `theme.js` | 테마 (가장 먼저 실행) |
@@ -136,6 +138,8 @@
 - `gamescan.js PDM.gameScan(repo, force)` (`resolveRepo` 에서 호출, `fs:walk`): 저장소의 `items` · `levels/rooms` · `actors/mobs` 를 훑어 내장 목록에서 파일이 없는 것은 빼고, 저장소에만 있는 것은 소스에서 읽어 덧붙임(목록에 ＋). 캐릭터는 지우지 않고 클래스가 없으면 ⚠, 새 몬스터는 캐릭터 › "게임 저장소에서 새로 찾음". 요약 `PDM.GAME_SCAN`. 새 프로젝트에서 저장소를 고르면 `PDM.gameSyncVanilla()` 가 원작 영웅 · 캐릭터를 그 저장소에 맞춤 (프로젝트 설정 "영웅 · 캐릭터를 저장소에 맞추기"로도).
 - `gamehero.js`: 바탕 직업이 있는 영웅의 시작 인벤토리 · 전직 · 직업 능력 · 특성 섹션 위에 소스에서 읽은 원래 값을 읽기 전용 상자로 (`HeroClass.initHero` · `HeroSubClass` · `armorAbilities()` · `Talent.initClassTalents` · 코드에서 쓰이는 곳), 지금 게임이 그 값을 쓰는지 / 프로젝트가 대신하는지 배지.
 - `gameinfo.js` (`PDM.gameSrc`): 캐릭터 "게임 코드의 실제 값"(체력 · 피해 · 명중 · 회피 · 방어 · 경험치 · 속성 · 전리품, 부모 값 이어받음), 드랍 테이블의 몬스터별 게임 전리품 · 상자류 설명, 스폰이 비었을 때 그 깊이의 `MobSpawner` 목록, 구성 블럭이 비었을 때 지역 Level 의 방 수, 영웅 선택 글 · 해금 글, 아이템 · 캐릭터의 실제 게임 소리.
+
+- **저장소 분석기** (9차, `editor/repo-analyzer.js` — 읽기 전용, Electron 은 `repo:analyze` IPC → worker 스레드, 캐시 `userData/repo-analysis/`): 루트 찾기(모듈 폴더 → 상위, 여러 저장소면 후보) → 안전한 훑기(바깥 · 순환 링크 · 권한 오류 기록) → 모듈 · 빌드 → 게임 모듈(Dungeon.java) → 모든 Java 구조 분석 → 리소스 디코딩(PNG 끝까지 · 나머지 머리 · 확장자와 실제 형식) → 에셋 참조 → 상속 그래프로 게임 객체(몬스터 스프라이트 · 능력치는 부모까지, 출처 표시) → 구조 차이 `features[]`(아이템 시트 격자 · 영웅 시트 switch · 층별 몬스터 클래스 · 글자 폴더 겹침 …) → 지원 범위 `support[]`(항목 × 8단계: 발견 · 읽기 · 구조 · 의미 · 변환 · 표시 · 편집 · 런타임) → 런타임 호환(설치기 compat + 런타임이 부르는 게임 클래스가 있는지). `gamescan` 이 이 결과로 새 몬스터를 만들고 `origin { repo, file, line, extracted[] }` 을 남김. 보고: docs/PROJECT-COMPATIBILITY-ARK-BA-9.md
 
 ### 2.6 새 프로젝트
 - 위치(상위 폴더)를 고르면 그 안에 **프로젝트 이름 폴더**를 만듦 (윈도우에서 못 쓰는 글자는 뺌, 끌 수 있음, 만들 경로 미리 보기, 비어 있지 않은 폴더면 물어봄). 창에서 게임 이름 · 패키지 이름(§18.3), 이어서 게임 저장소 경로.
@@ -1028,6 +1032,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 - **샘플** (`tools/sample`): `make_sample.py` · `make_heart.js` · `make_sounds.js` · `make_portraits.py` — mod-2 기준 샘플 프로젝트(아리아 · 미레유 …)를 만드는 스크립트. 시작 화면의 "샘플 열기"는 없앰.
 - **편집기 셸 · 이벤트 UI 테스트** (`tools/tests/ui-editor.js`): 패널 접기 · 기억 · 좁은 창 · 입력 중 단축키 · 상태 줄 · 저장 상태 · 이벤트 명령 속성 창 편집과 실행 취소 · 번호 · ⚠ · 명령 찾기 · 미리보기 · 탭 전환 뒤 창 이벤트 수. **화면 캡처** (`tools/tests/ui-shots.js <폴더> [접두어]`): 시작 · 맵 · 영역 선택 · 이벤트 · 대사창을 넓은 창 · 좁은 창으로 (개선 전후 비교). **게임 안 연출 확인**: 헤드리스 플레이 `eval:event:[…]` + `eval:cutinfo`(이벤트 실행 중 · 페이드 · 일러스트 번호마다 불투명도 · 크기 · 자리 · 떠 있는 창 · 영웅 자리).
 - **맵 편집기 UI 테스트** (`tools/tests/ui-map.js` — 웹 모드 + Playwright · Chromium, `NODE_PATH=$(npm root -g)`): 실제 마우스 · 키보드로 영역 고르기 · 복사 · 붙여넣기 · 잘라내기 · 실행 취소, 여러 오브젝트 이동 · 일괄 수정 · 삭제 · 방향키, 검사 결과에서 칸으로 이동, 다시 그릴 때 창 이벤트가 쌓이지 않는지, 80×80 맵 그리기 시간.
+- **저장소 호환 테스트** (`tools/tests/repo-compat.js`, 9차): 합성 저장소(손상 파일 · 링크 · 캐시 · worker) + `game/` 의 실제 저장소 세 개 — 원본 ↔ 변환 결과 비교 · 중복 없음 · 원본 그대로 · 기준 저장소 회귀. 없는 저장소는 "실행하지 못함"(실패). 화면은 `ui-repoanalysis.js`
 - **회귀 테스트** (`tools/tests/run.js` — Node 만 있으면 됨): 편집기 스크립트를 Node `vm` 에 불러(`editor-env.js`, 파일 기능은 임시 폴더) 확인 — 편집기 ↔ 런타임 ↔ 게임 소스 표 일치(밑그림 대응표 · 보존 타일 번호 29종 · 구멍 · 기본 레이어 · 함정), 맵 변환, 저장/불러오기 · 실행 취소, 손상 파일 · 쓰기 실패 · 백업, 검사. `node tools/tests/run.js [이름 일부]`.
 - **화면 환경별 연출 검사** (`tools/playtest/platform-matrix.sh` · `scenarios.js`, 4차): 데스크톱 판 게임을 PC · 휴대폰 가로/세로 비율 창 · 안전 영역 흉내(`eval:insets`) · 실행 중 창 돌림(`eval:winsize`)으로 띄워 같은 연출을 돌리고, `eval:layout` 이 대사창 · 글 · 이름표 · 선택지 · 일러스트의 화면/안전 영역 밖 여부를 판정. 실제 휴대폰 검증은 아님 — `docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md`.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.
