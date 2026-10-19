@@ -503,6 +503,15 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .lp-edge { position: absolute; left: -8px; top: 0; bottom: 18px; width: 8px; cursor: col-resize; }
 .lp-edge:hover { background: var(--accent-soft); border-radius: var(--r-xs); }
 .px-canvas { image-rendering: pixelated; border: 1px solid var(--line); cursor: crosshair; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
+/* 8차: 픽셀 편집기 창 크기 — 창 규칙(98vw × 96vh 까지)과 그림 칸 크기를 처음부터 정함. 그림 칸은 화면 크기로만 정하고(그림 · 배율과 상관없음) 캔버스는 그 안에서 스크롤
+   (예전: 그림 칸 = 캔버스 크기(70vw · 70vh 까지) · 창 900px 까지 → 모서리를 누르면 JS 가 창을 98vw 로 바꿔 갑자기 커지고, 확대/축소가 창 크기를 바꿈) */
+.modal:has(.px-wrap) { width: auto; max-width: 98vw; max-height: 96vh; }
+.px-pane { overflow: auto; width: clamp(160px, calc(98vw - 420px), 720px); height: clamp(120px, calc(96vh - 210px), 640px); }
+.px-preview .px-pane { width: clamp(160px, calc(97vw - 440px - min(30vw, 420px)), 600px); }
+@media (max-width: 720px) {   /* 좁은 화면: 도구 칸을 그림 아래로 — 그림 칸은 창 너비 */
+  .px-wrap { flex-wrap: wrap; }
+  .px-pane { width: calc(98vw - 76px); height: clamp(120px, 50vh, 480px); }
+}
 .px-panebox { position: relative; flex: 0 0 auto; padding: 0 12px 12px 0; }   /* 줄어들지 않음 — 크게 늘려도 옆의 도구 칸을 덮지 않고 밀어냄 */
 .px-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: var(--r-xs);
   background: linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 55%, transparent 55% 65%, var(--accent) 65% 75%, transparent 75% 85%, var(--accent) 85%); opacity: .75; }
