@@ -824,3 +824,20 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .tp-issues { margin-bottom: 8px; font-size: var(--fs-sm); }
 .tp-states details, .tp-fx .li { margin: 2px 0; }
 .tp-list { margin: 4px 0; }
+/* 8차: 레이어 타일 목록 (맵 그리기 → 그릴 것, 레이어 편집 중) */
+.pal-t.bad { border-color: var(--bad); border-style: dashed; }
+.pal-target.layer { display: flex; align-items: center; gap: var(--sp-2, 6px); flex-wrap: wrap; }
+.pal-target .lt-to-terrain { margin-left: auto; }
+.lt-cat { width: 100%; margin: 2px 0 4px; }
+.lt-empty { border: 1px dashed var(--line-strong); border-radius: var(--r-sm); padding: 8px; color: var(--dim); font-size: var(--fs-sm); }
+.lt-empty p { margin: 0 0 6px; }
+.lt-bad { color: var(--bad); font-size: var(--fs-xs); margin: 4px 0; }
+.lt-sel { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px; margin: 6px 0; background: var(--accent-soft); }
+.lt-sel-head { font-size: var(--fs-sm); margin-bottom: 4px; overflow-wrap: anywhere; }
+.lt-sel-fields { display: grid; grid-template-columns: 1fr 1fr 64px; gap: 4px; }
+.lt-sel-fields label { display: flex; flex-direction: column; min-width: 0; }
+.lt-sel-fields input { width: 100%; min-width: 0; }
+.lt-import { max-width: min(760px, 86vw); }
+.lt-pick-wrap { max-height: 56vh; overflow: auto; margin: 6px 0; }
+.lt-pick { image-rendering: pixelated; cursor: crosshair; display: block; touch-action: none; }
+.lt-pick:focus-visible { outline: 2px solid var(--accent); }

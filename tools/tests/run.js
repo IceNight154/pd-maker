@@ -929,6 +929,54 @@ test('타이틀 데이터 호환: 예전 title.json 은 그대로 · 모르는 �
   assert.ok(M.check(bad).some(x => x.level === 'error'));
 });
 
+// ------------------------------------------------------------ 8차: 레이어 타일 목록 (PDM.layerTiles)
+test('레이어 타일 목록: 예전 프로젝트는 전부 보임 · 처음 고칠 때 모든 레이어를 지금 목록으로 · 새 타일은 그 레이어에만 · 같은 칸은 다시 씀', async () => {
+  const { ctx } = await newProject(), P = ctx.PDM, LT = P.layerTiles;
+  const w = { userTiles: [{ id: 'a', name: 'A', image: 'x.png', x: 0, y: 0, size: 16 }] };
+  eq(LT.list(w, 'base').tiles.map(t => t.id), ['a']); assert.ok(LT.list(w, 'base').all);
+  const ids = LT.addRegion(w, 'grass', 'x.png', 16, 0, 0, 1, 1, { name: '풀', category: '식생' });
+  eq(ids.length, 4); eq(ids[0], 'a', '같은 칸 (0,0) 은 이미 있는 타일');
+  eq(w.userTiles.length, 4, '새 타일 3개');
+  eq(w.tileLayers.find(l => l.id === 'grass').tiles, ids);
+  eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a'], '다른 레이어 = 고치기 전 목록 (새 타일 없음)');
+  eq(w.userTiles.slice(1).map(t => [t.x, t.y, t.category, t.terrain]), [[1, 0, '식생', -2], [0, 1, '식생', -2], [1, 1, '식생', -2]]);
+  eq(LT.addRegion(w, 'grass', 'x.png', 16, 1, 1, 1, 1), [ids[3]], '다시 가져와도 새로 만들지 않음');
+  eq(w.tileLayers.find(l => l.id === 'grass').tiles.length, 4);
+});
+test('레이어 타일 목록: 복제 · 순서 · 목록에서 빼기 · 삭제(모든 목록에서) · 쓰는 곳 · 분류 · 손상된 목록', async () => {
+  const { ctx } = await newProject(), LT = ctx.PDM.layerTiles;
+  const w = { userTiles: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B', category: '벽' }] };
+  const c = LT.duplicate(w, 'base', 'a');
+  eq(w.userTiles.map(t => t.id), ['a', c.id, 'b']); eq(c.name, 'A 사본');
+  eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a', c.id, 'b']);
+  assert.ok(LT.move(w, 'base', 'b', -1)); eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a', 'b', c.id]);
+  assert.ok(!LT.move(w, 'base', 'a', -1), '맨 앞에서 앞으로');
+  LT.detach(w, 'base', 'a'); eq(w.tileLayers.find(l => l.id === 'base').tiles, ['b', c.id]); assert.ok(w.userTiles.some(t => t.id === 'a'));
+  LT.remove(w, 'b'); assert.ok(!w.userTiles.some(t => t.id === 'b')); assert.ok(w.tileLayers.every(l => !l.tiles.includes('b')));
+  eq(LT.categories([{ category: '벽' }, { category: ' 바닥 ' }, {}, { category: '벽' }]), ['바닥', '벽']);
+  const maps = [['node:a', { layers: { tiles: { base: ['a', '', 'a'], grass: ['a'] } } }], ['room:r', { layers: { utile: ['a'] } }], ['node:b', { layers: null }]];
+  eq(LT.usage(maps, 'a'), { total: 4, places: [['node:a', 3], ['room:r', 1]] });
+  const bad = { userTiles: [null, 3, { id: 'z' }], tileLayers: [null, { id: 'base', tiles: ['z', 'gone', 'z', 5] }] };
+  const L = LT.list(bad, 'base'); eq(L.tiles.map(t => t.id), ['z']); eq(L.missing, ['gone']);
+});
+test('레이어 타일 검사: 그림 없음 · 칸이 그림 밖 · 불투명도 범위 · 효과 타일(그림 없음)은 문제 아님', async () => {
+  const { ctx } = await newProject(), LT = ctx.PDM.layerTiles;
+  eq(LT.check({ image: 'a.png', x: 3, y: 0, size: 16 }, { width: 64, height: 16 }), []);
+  assert.ok(/밖/.test(LT.check({ image: 'a.png', x: 4, y: 0, size: 16 }, { width: 64, height: 16 })[0]));
+  assert.ok(/밖/.test(LT.check({ image: 'a.png', x: -1, y: 0 }, { width: 64, height: 16 })[0]));
+  assert.ok(/찾을 수 없/.test(LT.check({ image: 'a.png' }, null)[0]));
+  assert.ok(/불투명도/.test(LT.check({ image: 'a.png', alpha: 2 }, { width: 16, height: 16 })[0]));
+  eq(LT.check({ image: '', gameFx: 'torch' }, null), []);
+  eq(LT.check({ image: 'a.png' }, undefined), [], '아직 불러오는 중이면 판단하지 않음');
+});
+test('사용자 타일 불투명도: 런타임 MakerUserTiles.render 가 alpha(숫자)를 읽고 묶음을 나눔 · 편집기 그리기도 같은 값', () => {
+  const src = read(path.join(PDMK, 'MakerUserTiles.java'));
+  assert.ok(/av != null && av\.isNumber\(\)\) a = av\.asFloat\(\)/.test(src), '런타임 alpha 읽기');
+  assert.ok(/Math\.max\(0f, Math\.min\(1f, a\)\)/.test(src), '0~1 로 자름');
+  assert.ok(/\+ "\|" \+ rd\[2\] \+/.test(src), '불투명도가 다르면 다른 타일맵 묶음');
+  assert.ok(/t\.alpha < 1\) g\.globalAlpha = ga \* Math\.max\(0, t\.alpha\)/.test(read(path.join(ROOT, 'editor/renderer/js/editors/map.js'))), '편집기 맵 그리기');
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];
