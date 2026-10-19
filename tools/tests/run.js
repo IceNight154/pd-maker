@@ -1080,6 +1080,66 @@ test('AI 프로필 런타임 연결: MakerCharAI 가 combat(검사 오류 없을
   assert.ok(/MakerCombat\.onHit\(c\)/.test(ai) && /MakerCombat\.onDeath\(m\)/.test(ai), '맞음 · 쓰러짐 연결');
 });
 
+// ------------------------------------------------------------ 8차: 아이템 공격 모션 타임라인 (PDM.atkMotion ↔ 런타임 MakerAtkMotion)
+function atkCases(ctx) {
+  const P = ctx.PDM, cases = [], ts = []; for (let i = 0; i <= 40; i++) ts.push(i / 40); ts.push(-0.1, 1.2, 0.333333, 0.999999);
+  for (const [k, m] of Object.entries(P.SWING_MOTIONS)) cases.push({ fn: 'sample', fx: { keys: m.keys, hits: m.hits, dur: m.dur }, ts, legacy: k });
+  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let n = 0; n < 30; n++) {
+    const tracks = {}; for (const p of P.atkMotion.PROPS) { if (rnd() < 0.3) continue; const k = []; const c = 1 + Math.floor(rnd() * 5); for (let i = 0; i < c; i++) k.push([Math.round(rnd() * 100) / 100, Math.round((rnd() * 200 - 100) * 10) / 10, P.atkMotion.EASES[Math.floor(rnd() * 8) % 7]]); tracks[p] = k; }
+    const fx = { v: 2, tracks, dur: 0.1 + rnd(), speed: 0.5 + rnd() * 2, hits: [rnd(), rnd()].map(x => Math.round(x * 100) / 100), sync: rnd() > .5 ? 'hit' : 'game',
+      hitWindows: rnd() > .5 ? [[0.3, 0.5], [0.7, 0.65]] : undefined,
+      events: [{ id: 'a', type: 'image', t: rnd(), dur: rnd(), ease: P.atkMotion.EASES[n % 7], alpha: 0.8, size: 2, grow: 1.5, ref: 'x.png' }, { id: 'b', type: 'flash', t: 0.5, dur: 0, role: 'hit' }, { id: 'c', type: 'shake', t: 0.2, dur: 0.3, power: 4 }, { id: 'd', type: 'effect', t: 0.9, role: 'hit' }] };
+    cases.push({ fn: 'sample', fx, ts }, { fn: 'event', fx, ts: ts.map(t => t * 1.5) }, { fn: 'windows', fx }, { fn: 'judge', fx, anim: n % 3 ? 0.2667 : undefined, frames: 4 + (n % 3) }, { fn: 'validate', fx, anim: 0.2667 });
+  }
+  const broken = [null, 5, {}, { keys: 'x' }, { keys: [[0, 1, 2, 3, 4]] }, { tracks: { angle: 'x', dist: [[2, 1], ['a', 3], [0.5, 'b'], [0.5]] } }, { tracks: {} }, { keys: [[0, 0, 0, 1, 1], [1, 90, 4, 1, 0]], dur: -1, speed: 0, hits: [2, 'x', 0.5], hitWindows: [[0.1], 'x'] },
+    { keys: [[0, 0, 0, 1, 1], [1, 90, 4, 1, 0]], hits: [0.9], sync: 'game', dur: 0.3, events: [{ type: 'trail' }, { type: 'nope', t: 3, dur: 99, role: 'hit' }] }, { keys: [[0, 0, 0, 1, 1], [1, 9, 4, 1, 0]], sync: 'hit', dur: 0.2 }];
+  broken.forEach(fx => cases.push({ fn: 'validate', fx, anim: 0.2667 }, { fn: 'sample', fx, ts: [0, 0.5, 1] }, { fn: 'windows', fx }, { fn: 'judge', fx, frames: 4 }, { fn: 'event', fx, ts: [0, 0.1, 5] }));
+  return cases;
+}
+test('공격 모션 규칙: 편집기 PDM.atkMotion = 런타임 MakerAtkMotion (javac 실행 — 트랙 · 이징 7종 · 1판 keys · 이펙트 상태 · 판정 구간 · 판정 시각 · 검사 · 손상된 값)', async () => {
+  const { execFileSync } = require('child_process');
+  const ctx = env.load(), A = ctx.PDM.atkMotion, cases = atkCases(ctx);
+  const ES = s => [{ before: 0, active: 1, after: 2, fire: 3 }[s.phase], s.u, s.p, s.alpha, s.size];
+  const js = cases.map(c => {
+    if (c.fn === 'sample') { const T = A.tracksOf(c.fx); return c.ts.map(t => { const o = A.sample(c.fx, t, T); return A.PROPS.map(p => o[p]); }); }
+    if (c.fn === 'event') { const D = A.durOf(c.fx), out = []; A.eventsOf(c.fx).forEach(e => c.ts.forEach(t => out.push(ES(A.eventState(e, D, t))))); return out; }
+    if (c.fn === 'windows') return { w: A.windowsOf(c.fx), hits: A.hitsOf(c.fx), dur: A.durOf(c.fx) };
+    if (c.fn === 'judge') return { judge: A.judgeSec(c.fx, c.anim), delay: A.syncDelay(c.fx, c.frames) };
+    return A.validate(c.fx, c.anim).map(i => [i.level, i.code, i.path]);
+  });
+  const out = tmp();
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(PDMK, 'MakerAtkMotion.java'), path.join(__dirname, 'TitleModelCheck.java'), path.join(__dirname, 'AtkMotionCheck.java')], { stdio: 'pipe' });
+  const java = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'AtkMotionCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
+  const close = (a, b) => { if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-9; if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => close(x, b[i])); if (a && b && typeof a === 'object') return Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => close(a[k], b[k])); return a === b; };
+  let bad = 0; const first = [];
+  cases.forEach((c, i) => { if (!close(J(js[i]), java[i])) { bad++; if (first.length < 3) first.push(`#${i} ${c.fn}: 편집기 ${JSON.stringify(js[i]).slice(0, 240)}\n      런타임 ${JSON.stringify(java[i]).slice(0, 240)}`); } });
+  assert.strictEqual(bad, 0, `${bad}/${cases.length} 다름\n    ` + first.join('\n    '));
+  // 1판 그대로: 예전 PDM.swingSample (모션 프리셋) 과 같은 값
+  let n = 0; cases.filter(c => c.legacy).forEach(c => c.ts.forEach(t => { const a = ctx.PDM.swingSample(c.fx.keys, t), b = A.sample(c.fx, t); [b.angle, b.dist, b.scale, b.alpha].forEach((v, j) => assert.ok(Math.abs(v - a[j]) < 1e-9, `${c.legacy} t=${t}`)); n++; }));
+  const codes = new Set(); js.forEach((r, i) => { if (cases[i].fn === 'validate') r.forEach(x => codes.add(x[1])); });
+  for (const k of ['noKeys', 'negative', 'visualNoJudge', 'multiHitVisual', 'desync', 'syncNoHit', 'noRef', 'track', 'keyRange']) assert.ok(codes.has(k), '검사 코드 ' + k);
+  console.log(`    ${cases.length}개 같음 · 1판 모션 ${n}점이 예전 계산과 같음 · 검사 코드 ${[...codes].join(' ')}`);
+});
+test('공격 모션 규칙: 이징 · 판정 시각 · 게임 동작 한 칸 시간 · 이펙트 진행 · 프레임 환산', async () => {
+  const A = env.load().PDM.atkMotion;
+  eq([A.ease('linear', .25), A.ease('in', .5), A.ease('out', .5), A.ease('step', .99), A.ease('step', 1)], [.25, .25, .75, 0, 1]);
+  assert.ok(A.ease('back', .8) > 1, 'back 은 살짝 넘침');
+  const fx = { tracks: { angle: [[0, 0, 'linear'], [1, 100]] }, dur: 0.4, speed: 2, hits: [0.5], sync: 'hit' };
+  eq(A.sample(fx, .5).angle, 50); eq(A.durOf(fx), 0.2); eq(A.judgeSec(fx), 0.1); eq(A.syncDelay(fx, 4), 0.025);
+  eq(A.judgeSec(Object.assign({}, fx, { sync: 'game' })), 4 / 15, '원작 = 영웅 공격 동작이 끝날 때');
+  eq(A.frameOf(0.1), 6); eq(A.frameOf(4 / 15), 16);
+  const s = A.eventState(A.normEvent({ t: .5, dur: .2, ease: 'linear', alpha: 1, size: 2, grow: 1 }), 0.2, 0.2);
+  eq([s.phase, +s.u.toFixed(6), +s.alpha.toFixed(6), +s.size.toFixed(6)], ['active', .5, .5, 3]);
+  eq(A.validate({ keys: [[0, 0, 0, 1, 1], [1, 9, 4, 1, 0]], hits: [0.5], sync: 'hit', events: [{ type: 'flash', t: 0.9, role: 'hit' }] }).map(i => i.code), ['visualNoJudge']);
+});
+test('공격 모션 런타임 연결: MakerSwing 이 MakerAtkMotion 으로 자리 · 이펙트 · 판정 맞추기 · 정리', () => {
+  const src = read(path.join(PDMK, 'MakerSwing.java'));
+  assert.ok(/MakerAtkMotion\.sample\(/.test(src) && /MakerAtkMotion\.eventsOf\(/.test(src) && /MakerAtkMotion\.eventState\(/.test(src), '같은 규칙으로 그림 자리 · 이펙트');
+  assert.ok(/MakerAtkMotion\.syncDelay\(/.test(src), '판정을 첫 타격에 맞춤');
+  assert.ok(/public void destroy\(\)/.test(src) || /killAndErase\(\)/.test(src), '끝나면 정리');
+});
+
 // ------------------------------------------------------------ 실행
 (async () => {
   const only = process.argv[2];

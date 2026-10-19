@@ -1,5 +1,11 @@
 /** 테스트 스크립트용 명령 (eval:<name>) */
 public class Hooks {
+	/** 8차 motiontime: 피해를 받은 시각(공격 동작 시작부터 초)을 찍는 쥐 — 저장 · 불러오기에 되살릴 수 있게 public static (익명 클래스는 불러오기에서 만들 수 없음) */
+	public static class TimingRat extends com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Rat {
+		public TimingRat() { super(); }
+		@Override public void damage(int dmg, Object src) { System.out.println(String.format("[TEST] motiondmg dt=%.3f dmg=%d", (System.nanoTime() - com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.lastAttackNanos) / 1e9, dmg)); super.damage(dmg, src); }
+		@Override public int defenseSkill(com.shatteredpixel.shatteredpixeldungeon.actors.Char enemy) { return 0; }
+	}
 	/** 대상이 있는 시전이면 가장 가까운 적 옆으로 순간이동하고 그 적의 칸을 돌려줌 */
 	static int nearEnemy(com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h, String target) {
 		if (target.equals("self")) return h.pos;
@@ -649,6 +655,42 @@ public class Hooks {
 							System.out.println(String.format("[TEST] swingcheck dir=%s hero=%s t=%.1f expected=(%.1f,%.1f) actual=(%.1f,%.1f) err=%.2f flip=%s", dr, p.length > 2 ? p[2] : "r", t, tip.x, tip.y, wx, wy, Math.hypot(wx - tip.x, wy - tip.y), sw.flipHorizontal));
 						}
 						sw.killAndErase(); }
+					break; }
+				case "motiontime": { // motiontime,<방향 r|l|u|d> — 8차: 그 쪽 옆 칸에 피해를 받으면 시각을 찍는 쥐(마비) → 사람이 누른 것처럼 공격 → [TEST] motiondmg dt = 공격 동작 시작 → 판정(피해)까지 초
+					final String P = "com.shatteredpixel.shatteredpixeldungeon.";
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					String dir = p.length > 1 ? p[1] : "r"; int d = dir.equals("l") ? -1 : dir.equals("u") ? -l.width() : dir.equals("d") ? l.width() : 1;
+					int tgt = hero.pos + d;
+					com.shatteredpixel.shatteredpixeldungeon.actors.Char ex = com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(tgt);
+					if (ex == null) {
+						com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob rat = new TimingRat();
+						rat.HP = rat.HT = 5000; rat.pos = tgt; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(rat);
+						com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Buff.affect(rat, com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Paralysis.class, 500f);
+					}
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe();   // 새로 놓은 쥐가 영웅 시야에 들어가게 (안 하면 게임이 공격 명령을 버림)
+					final long before = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.lastAttackNanos; final int ftgt = tgt; final String fdir = dir;
+					// 사람이 누르는 것과 같은 입력 (GameScene.handleCell 과 같음). 영웅이 아직 앞 차례를 처리 중이면 게임이 명령을 버리므로, 공격 동작이 시작될 때까지 0.3초마다 다시 누름 (시도 수를 남김)
+					new Thread(() -> { int tries = 0;
+						for (; tries < 6; tries++) {
+							final boolean[] h = new boolean[1];
+							java.util.concurrent.CountDownLatch cl = new java.util.concurrent.CountDownLatch(1);
+							com.badlogic.gdx.Gdx.app.postRunnable(() -> { try { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; if (hh.ready) { h[0] = hh.handle(ftgt); if (h[0]) hh.next(); } } finally { cl.countDown(); } });
+							try { cl.await(2, java.util.concurrent.TimeUnit.SECONDS); Thread.sleep(300); } catch (InterruptedException ignored) { }
+							if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.lastAttackNanos != before) break;
+						}
+						System.out.println("[TEST] motiontime dir=" + fdir + " tries=" + (tries + 1) + " attacked=" + (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.lastAttackNanos != before));
+					}).start();
+					break; }
+				case "motionstat": { // 8차: 공격 모션 — 낸 모션 · 이펙트 수 · 살아 있는 모션/이미지 · 판정 맞추기 · 영웅 공격 동작 한 칸 시간
+					com.watabou.noosa.MovieClip.Animation a = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.attackAnim(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite);
+					System.out.println(String.format("[TEST] motionstat spawned=%d fx=%d live=%d sync=%.4f heroAttackDelay=%.4f frames=%d", com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned, com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.fxFired, com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.LIVE.size(), com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.lastSyncDelay, a == null ? -1f : a.delay, a == null || a.frames == null ? -1 : a.frames.length));
+					break; }
+				case "equipitem": { // equipitem,<프로젝트 아이템 id> — 들려 줌 (무기)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]);
+					it.identify(); it.collect(); ((com.shatteredpixel.shatteredpixeldungeon.items.EquipableItem) it).doEquip(hero);
+					System.out.println("[TEST] equipitem " + p[1] + " weapon=" + hero.belongings.weapon);
 					break; }
 				case "swingcount": System.out.println("[TEST] swingcount " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.spawned + " blocking=" + com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.interfaceBlockingHero() + " wnds=" + PlayTest.windows() + " curAction=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.curAction + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready + " para=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.paralysed); break;
 				case "itemsprite": { // itemsprite,<아이템 id> — 그 아이템의 ItemSprite 가 어떤 그림(텍스처) · 크기로 그려지는지 (세밀한 아이템 그림)
