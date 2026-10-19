@@ -518,3 +518,43 @@ combat { version: 1, enabled, detect(감지 거리 칸), debug, behaviors: [...]
 - 레이어 타일의 칸 단위 회전 · 뒤집기: 레이어 렌더러를 Image 묶음으로 바꾸는 큰 작업입니다.
 - AI 시뮬레이터에서 여러 대상 · 지형(벽 · 시야)을 다루기: 지금은 거리 · 보임 · 투사체를 값으로 넣습니다.
 - 몬스터 공격의 타임라인 모션.
+
+---
+
+## 최종 회귀 (마지막 코드 커밋 `03a1d5e` 기준)
+
+### 편집기 회귀 테스트 (`run.js`)
+
+59 통과 · 0 실패.
+
+### UI 테스트 (웹 모드 + Playwright · Chromium)
+
+| 묶음 | 결과 | 비고 |
+|---|---|---|
+| ui-editor | 19 통과 | |
+| ui-map | 14 통과 | |
+| ui-layers | 10 통과 | |
+| ui-layertiles | 14 통과 | 8차 새 테스트 |
+| ui-stability | 18 통과 | |
+| ui-dialogue | 8 통과 | |
+| ui-camera-theme | 10 통과 | |
+| ui-title | 13 통과 | |
+| ui-sprite-window | 11 통과 | 8차 새 테스트 |
+| ui-combat | 10 통과 | 8차 새 테스트 |
+| ui-motion | 10 통과 | 8차 새 테스트 |
+
+실패는 하나도 없습니다.
+
+### 게임 검사
+
+8차 런타임으로 다시 빌드했고, 모두 데스크톱 판 화면 시뮬레이션입니다. 실제 기기에서는 돌리지 않았습니다.
+
+| 검사 | 결과 |
+|---|---|
+| cutscene-check | 모두 통과 |
+| testenv-check | 모두 통과 |
+| title-check (pc · phone-land · phone-port) | 71 통과 |
+| combat-check (8차 새 검사) | 15 통과 |
+| motion-check (8차 새 검사) | 12 통과 |
+
+platform-matrix 9환경은 이번 회차에 다시 돌리지 않았습니다. 8차는 화면 배치 · 테스트 환경 코드를 바꾸지 않았습니다.
