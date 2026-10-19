@@ -9,16 +9,22 @@
  *     autogen: { enabled, where: wallFace | wall | floor | floorNearWall | grass | water | terrain, terrains: [지형 번호], chance (%), max (0 = 제한 없음),
  *                spacing (칸), themes: [테마 — 비우면 모두], handmade (직접 그린 맵에도) } }
  *   놓기  ① 자동 생성: 층을 만든 직후(LevelHooks.afterCreate) 조건에 맞는 칸을 층 씨앗으로 섞어 확률 · 간격 · 최대 개수대로 (같은 층은 늘 같은 자리)
+ *         배치 방식 tilecombos.json autogenVersion — 1(값 없음 · 예전 파일): 목록 순서대로 처리 · 씨앗에 목록 순번 포함 → 목록 순서를 바꾸면 배치가 바뀜 (예전 결과 그대로 보존)
+ *                                                  2(새 파일 기본): 우선순위(autogen.priority 큰 것 먼저) → id 순으로 처리 · 씨앗은 id 만 → 목록 순서와 상관없음
  *         ② 맵에 직접: 오브젝트 { type: "combo", ref: 조합 id } (직접 그린 맵 · 방 템플릿 · 혼합 층)
  *   그림  스프라이트마다 MakerUserTiles 에 "combo:<id>#<번호>" 로 넣어 레이어 순서대로 그림 (세이브에는 그린 결과가 남음)
  *   참조  맵 · 자동 생성은 조합을 id 로 참조 — 조합을 고치면 다음에 만드는 층부터 반영, 이미 만든 층(세이브)은 그대로.
  *         지운 조합 · 끈 자동 생성은 새 층에 놓이지 않을 뿐 맵 데이터는 그대로 (편집기 검사가 없는 id 를 알려 줌)
  *   확장 기능 "tilecombos"(project.json extensions)가 꺼져 있으면 놓지도 자동 생성하지도 않음 (MakerRuntime.tileCombos)
- *   이 타일맵(보이지 않음)은 층에 놓인 조합 목록을 세이브에 저장 — 광원(MakerLights)이 여기서 점광원을 만듦
+ *   이 타일맵(보이지 않음)은 층에 놓인 조합 목록을 세이브에 저장 — 광원(MakerLights)이 여기서 점광원을 만듦.
+ *   광원 설정은 놓을 때 그대로 복사해 둠(pdm_combo_lights) → 조합을 고치거나 지워도 이미 만든 층의 빛은 그대로 (그림 · 오프셋도 MakerUserTiles 에 구워져 있음).
+ *   복사본이 없는 예전 세이브는 지금 조합 정의에서 찾음
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
+import com.badlogic.gdx.utils.JsonReader;
 import com.badlogic.gdx.utils.JsonValue;
+import com.badlogic.gdx.utils.JsonWriter;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.levels.Level;
 import com.shatteredpixel.shatteredpixeldungeon.levels.Terrain;
@@ -35,6 +41,8 @@ public class MakerCombos extends CustomTilemap {
 
 	public String[] ids = new String[0];
 	public int[] cells = new int[0];
+	/** 놓을 때의 광원 설정 JSON (ids 와 같은 순서, "" = 광원 없음 · null 배열 = 예전 세이브) */
+	public String[] lights = new String[0];
 
 	// ------------------------------------------------------------ 데이터
 
@@ -103,7 +111,10 @@ public class MakerCombos extends CustomTilemap {
 			JsonValue ob = c.get("objects");
 			if (ob != null) for (JsonValue o : ob) LevelHooks.placeObject(l, o, cell);   // 함정 · 발판 · 맵 오브젝트 — 오브젝트 시스템이 만들고 동작
 			MakerCombos m = marks(l);
+			JsonValue lt = c.get("light");
+			if (m.lights == null || m.lights.length != m.ids.length) m.lights = new String[m.ids.length];   // 예전 세이브에 이어 놓을 때 (복사본 없음 = null)
 			m.ids = append(m.ids, id); m.cells = append(m.cells, cell);
+			m.lights = append(m.lights, lt != null && lt.getBoolean("on", false) ? lt.toJson(JsonWriter.OutputType.json) : "");
 			return true;
 		} catch (Throwable t) { MakerRuntime.log("조합 타일 놓기 오류 " + id + ": " + t); return false; }
 	}
@@ -122,19 +133,28 @@ public class MakerCombos extends CustomTilemap {
 		if (list == null || l == null) return;
 		boolean handmade = l instanceof MakerLevel;
 		int total = 0, idx = 0;
+		JsonValue tc = MakerRuntime.tilecombos;
+		boolean stable = tc != null && tc.getInt("autogenVersion", 1) >= 2;
+		List<JsonValue> order = new ArrayList<>();
+		for (JsonValue c : list) order.add(c);
+		if (stable) order.sort((a, b) -> {   // 우선순위 큰 것 → id 순 (목록 순서와 상관없이 같은 차례)
+			JsonValue ga = a.get("autogen"), gb = b.get("autogen");
+			int pa = ga == null ? 0 : ga.getInt("priority", 0), pb = gb == null ? 0 : gb.getInt("priority", 0);
+			return pa != pb ? Integer.compare(pb, pa) : a.getString("id", "").compareTo(b.getString("id", ""));
+		});
 		java.util.HashSet<Integer> used = new java.util.HashSet<>();
 		MakerCombos existing = null;
 		for (CustomTilemap t : l.customTiles) if (t instanceof MakerCombos) existing = (MakerCombos) t;
 		if (existing != null) for (int c : existing.cells) used.add(c);
-		for (JsonValue c : list) {
-			idx++;
+		for (JsonValue c : order) {
+			idx++;   // 예전 방식(1)의 씨앗에 쓰는 목록 순번 — order 는 1 이면 목록 그대로
 			JsonValue a = c.get("autogen");
 			if (a == null || !a.getBoolean("enabled", false)) continue;
 			if (handmade && !a.getBoolean("handmade", false)) continue;
 			if (!themeOk(a.get("themes"), theme)) continue;
 			List<Integer> cand = new ArrayList<>();
 			for (int i = 0; i < l.length(); i++) if (!used.contains(i) && fits(l, i, a)) cand.add(i);
-			java.util.Random rnd = new java.util.Random(Dungeon.seedCurDepth() * 31337L + c.getString("id", "").hashCode() * 7L + idx);
+			java.util.Random rnd = new java.util.Random(Dungeon.seedCurDepth() * 31337L + c.getString("id", "").hashCode() * 7L + (stable ? 0 : idx));
 			java.util.Collections.shuffle(cand, rnd);
 			float chance = Math.max(0f, Math.min(100f, a.getFloat("chance", 10f))) / 100f, spacing = Math.max(0f, a.getFloat("spacing", 2f));
 			int max = a.getInt("max", 0), n = 0, w = l.width();
@@ -206,11 +226,22 @@ public class MakerCombos extends CustomTilemap {
 		for (CustomTilemap t : l.customTiles) if (t instanceof MakerCombos) {
 			MakerCombos m = (MakerCombos) t;
 			for (int i = 0; i < m.ids.length && i < m.cells.length; i++) {
-				JsonValue c = combo(m.ids[i]), lt = c == null ? null : c.get("light");
+				JsonValue lt = m.lightAt(i);
 				if (lt != null && lt.getBoolean("on", false)) out.add(new Object[]{ lt, m.cells[i] });
 			}
 		}
 		return out;
+	}
+
+	/** i 번째로 놓인 조합의 광원: 놓을 때 복사해 둔 설정 → 없으면(예전 세이브) 지금 조합 정의 */
+	JsonValue lightAt(int i) {
+		String s = lights != null && i < lights.length ? lights[i] : null;
+		if (s != null) {
+			if (s.isEmpty()) return null;
+			try { return new JsonReader().parse(s); } catch (Throwable t) { MakerRuntime.warnOnce("조합 타일 광원 읽기 실패: " + ids[i]); return null; }
+		}
+		JsonValue c = combo(ids[i]);
+		return c == null ? null : c.get("light");
 	}
 
 	// ------------------------------------------------------------ 보이지 않는 타일맵
@@ -225,10 +256,17 @@ public class MakerCombos extends CustomTilemap {
 	@Override public Image image(int tx, int ty) { return null; }
 	@Override public String name(int tx, int ty) { return null; }
 	@Override public String desc(int tx, int ty) { return null; }
-	@Override public void storeInBundle(Bundle b) { super.storeInBundle(b); b.put("pdm_combo_ids", ids); b.put("pdm_combo_cells", cells); }
+	@Override public void storeInBundle(Bundle b) {
+		super.storeInBundle(b); b.put("pdm_combo_ids", ids); b.put("pdm_combo_cells", cells);
+		if (lights != null && lights.length == ids.length) {   // 복사본이 없는 칸(예전 세이브에 이어 놓은 경우)은 저장하지 않음 → 다시 읽으면 지금 정의
+			boolean all = true; for (String s : lights) if (s == null) { all = false; break; }
+			if (all) b.put("pdm_combo_lights", lights);
+		}
+	}
 	@Override public void restoreFromBundle(Bundle b) {
 		super.restoreFromBundle(b);
 		ids = b.contains("pdm_combo_ids") ? b.getStringArray("pdm_combo_ids") : new String[0];
 		cells = b.contains("pdm_combo_cells") ? b.getIntArray("pdm_combo_cells") : new int[0];
+		lights = b.contains("pdm_combo_lights") ? b.getStringArray("pdm_combo_lights") : null;   // 예전 세이브: 없음 → 지금 정의에서 찾음
 	}
 }

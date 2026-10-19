@@ -477,7 +477,7 @@ ${o.css || ''}`;
         info.textContent = `길이 ${m.b.total.toFixed(2)}초 · ${Math.round(m.b.total * num(fx.fps, 20))}프레임 · ${fx.w}×${fx.h}px`;
         lastNow = performance.now(); raf = requestAnimationFrame(tick);
       }, 0);
-      const bar = h('div', { style: { height: '4px', background: 'var(--line)', borderRadius: '2px', marginTop: '6px', display: 'none' } }, h('div', { style: { height: '100%', width: '0', background: 'var(--accent, #7a5cff)', borderRadius: '2px' } }));
+      const bar = h('div', { style: { height: '4px', background: 'var(--line)', borderRadius: '2px', marginTop: '6px', display: 'none' } }, h('div', { style: { height: '100%', width: '0', background: 'var(--accent)', borderRadius: '2px' } }));
       const result = h('div', { class: 'hint mt-3' }, raw.sheet ? `게임용 시트: ${raw.sheet.png} (${raw.sheet.frames}프레임 · ${raw.sheet.w}×${raw.sheet.h}px) · APNG: ${raw.apng || ''}` : '아직 게임용으로 만들지 않았습니다 — "APNG 내보내기"를 눌러야 게임에서 쓸 수 있습니다. 설정을 바꾼 뒤에도 다시 눌러 주세요.');
       const out = h('div', { class: 'mt-3' });
       let cancelled = false;

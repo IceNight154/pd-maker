@@ -90,6 +90,15 @@ public class MakerAudio {
 			MakerRuntime.log("배경음 재생 실패 " + ref + ": " + e + (r.file.toLowerCase().endsWith(".wav") ? " — 게임은 16비트(또는 8비트) PCM WAV 만 읽고, 24비트 · float · 여러 채널은 자동으로 바꿔 쓰는데 그것도 실패함 (편집기 소리 화면의 \"16비트로 바꾸기\" 또는 ogg 로 저장해 보세요)" : ""));
 		}
 	}
+	/** 배경음 끄기 — sec 초 동안 작아지다가 멈춤 (0 = 바로). 게임 Music.fadeOut 이 없는 판이면 바로 끔 */
+	public static void stopBgm(float sec) {
+		if (sec <= 0) { playBgm("none"); return; }
+		try {
+			java.lang.reflect.Method m = Music.class.getMethod("fadeOut", float.class, com.watabou.utils.Callback.class);
+			m.invoke(Music.INSTANCE, sec, (com.watabou.utils.Callback) () -> { Music.INSTANCE.end(); current = ""; });
+			MakerRuntime.log("배경음: " + sec + "초 동안 줄이며 끔");
+		} catch (Throwable t) { playBgm("none"); }
+	}
 	private static String tag = "";
 	private static Object ourPlayer;
 	/** 로그용: 음량 · 음악 켜짐 · 일시정지 · 실제 재생 여부 */

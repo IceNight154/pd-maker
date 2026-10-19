@@ -47,8 +47,15 @@ PDM.defaults = {
         items: order.map(id => ({ id, label: '', visible: true, icon: '' })) },
       version: { visible: true, text: '' }, exit: { visible: true } };
   },
-  /** 대사창 (dialogue.json) — 게임 MakerDialogue.DEFAULTS 와 같음 */
-  dialogue() {
+  /** 게임 UI 테마 (theme.json — 6차) = 런타임 기본 (MakerTheme.DEF) */
+  theme() { return JSON.parse(JSON.stringify(PDM.gameTheme.DEFAULT)); },
+  /** 대사창 (dialogue.json) — 게임 MakerDialogue.DEFAULTS 와 같음. themed = 새 프로젝트: 색 · 모양 칸을 비워 게임 UI 테마를 따름 (6차) */
+  dialogue(o = {}) {
+    const d = this._dialogue();
+    if (o.themed) Object.keys(PDM.gameTheme.DIALOGUE_LINK).forEach(p => { const [g, k] = p.split('.'); d[g][k] = ''; });
+    return d;
+  },
+  _dialogue() {
     return { format: 'pdmaker-dialogue', version: PDM.FORMAT_VERSION, mode: 'box',
       box: { style: 'round', color: '#ffffff', alpha: 0.94, border: '#b9b4c8', radius: 5, textColor: '#3a3448', fontSize: 8, height: 0.27, margin: 4, padding: 8, image: '', slice: 6, highlight: '#d0602a', align: 'left', hideHud: true },
       name: { show: true, pos: 'auto', color: '#3c3a48', textColor: '#ffffff', fontSize: 7, image: '', slice: 4 },
@@ -57,7 +64,8 @@ PDM.defaults = {
       indicator: { show: true, color: '#8a82a8', image: '', anim: 'bob' },
       choice: { pos: 'middle', width: 0.42, fontSize: 0, textColor: '', textOnColor: '', image: '', imageOn: '', slice: 4 },
       sounds: { open: '', type: '', next: '', move: '', select: '' },
-      text: { autoScale: true, scaleMax: 2, scale: 1, lineSpacing: 0, shadow: false, shadowColor: '#000000', shadowX: 0.5, shadowY: 0.5, outline: false, outlineColor: '#000000', outlineWidth: 0.5, bold: false },
+      text: { autoScale: true, scaleMax: 2, scale: 1, lineSpacing: 0, tracking: 0, shadow: false, shadowColor: '#000000', shadowX: 0.5, shadowY: 0.5, outline: false, outlineColor: '#000000', outlineWidth: 0.5, bold: false },
+      fx: { effect: 'none', dur: 0.25, strength: 1, scope: 'all', emScale: 1 },   // 5차: 글자 연출 (런타임 MakerDialogue.DEFAULTS fx)
       layout: { enabled: false } };
   },
   /** 게임 아이템 바꾸기 (아이템 트리의 ▫ 게임 아이템 → 그림) — { items: { 'spd:<경로>': { sprite } } } */
@@ -79,7 +87,8 @@ PDM.defaults = {
   texts() { return { format: 'pdmaker-texts', version: PDM.FORMAT_VERSION, texts: {} }; },
   effects() { return { format: 'pdmaker-effects', version: PDM.FORMAT_VERSION, list: [] }; },
   /** 조합 타일 (maps/tilecombos.json — 런타임 MakerCombos · MakerTileUnderlay). legacy = 분리된 타일셋 밑그림 대응표 (비우면 기본 PDM.TILE_LEGACY_DEFAULT) */
-  tilecombos() { return { format: 'pdmaker-tilecombos', version: PDM.FORMAT_VERSION, legacy: [], list: [] }; },
+  //  autogenVersion 2 = 자동 생성 배치가 목록 순서와 상관없음 (새로 만드는 파일만 — 값이 없는 예전 파일은 1 = 예전 배치 그대로, MakerCombos.autogen)
+  tilecombos() { return { format: 'pdmaker-tilecombos', version: PDM.FORMAT_VERSION, autogenVersion: 2, legacy: [], list: [] }; },
   textfx() { return { format: 'pdmaker-textfx', version: PDM.FORMAT_VERSION, list: [] }; },
   gameitems() { return { format: 'pdmaker-gameitems', version: PDM.FORMAT_VERSION, items: {} }; },
   sounds() {

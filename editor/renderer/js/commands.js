@@ -25,6 +25,7 @@
         }
         set(o.number ? +s.value : s.value);
         if (p.k === 'speaker' || p.k === 'char') ctx.onCharChange && ctx.onCharChange(s.value);
+        if (p.redraw && ctx.redraw) ctx.redraw();   // 이 칸에 따라 보이는 칸이 바뀜 (p.when)
       });
       return s;
     };
@@ -33,6 +34,20 @@
       case 'textarea': { const t = h('textarea', { rows: 4 }); t.value = cur ?? ''; t.addEventListener('input', () => set(t.value)); return t; }
       case 'number': { const i = h('input', { type: 'number', value: cur ?? 0 }); i.addEventListener('input', () => set(parseFloat(i.value) || 0)); return i; }
       case 'bool': { const i = h('input', { type: 'checkbox', checked: !!cur }); i.addEventListener('change', () => set(i.checked)); return h('label', { class: 'check' }, i, '예'); }
+      case 'optnum': {   // 빈 칸 = 다음 단계 값 (대사 스타일 — 0 도 값이므로 비우기와 구분), 범위 밖은 범위로
+        const i = h('input', { type: 'number', value: cur ?? '', placeholder: '(기본)', min: p.min, max: p.max, step: p.step || 'any' });
+        i.addEventListener('input', () => { const v = parseFloat(i.value); set(i.value === '' || !Number.isFinite(v) ? undefined : v); });
+        i.addEventListener('change', () => { const v = parseFloat(i.value); if (i.value === '' || !Number.isFinite(v)) return; const c = Math.min(p.max ?? v, Math.max(p.min ?? v, v)); if (c !== v) { i.value = c; set(c); } });
+        return i;
+      }
+      case 'optcolor': {   // 색 (비우면 대사창 설정)
+        const ok = v => /^#[0-9a-f]{6}$/i.test(v || '');
+        const c = h('input', { type: 'color', value: ok(cur) ? cur : '#d0602a' }), t = h('input', { type: 'text', value: cur ?? '', placeholder: '(기본) #rrggbb', style: { width: '9em' } });
+        c.addEventListener('input', () => { t.value = c.value; set(c.value); });
+        t.addEventListener('input', () => { if (ok(t.value)) { c.value = t.value; set(t.value); } else if (!t.value) set(undefined); });
+        const x = h('button', { class: 'btn xs', title: '비우기 (대사창 설정)', onclick: e => { e.preventDefault(); t.value = ''; set(undefined); t.dispatchEvent(new Event('change', { bubbles: true })); } }, '기본');
+        return h('div', { class: 'flex gap-2 items-center' }, c, t, x);
+      }
       case 'select': return sel(Object.entries(p.options || {}), { empty: '(기본)' });
       case 'cond': {
         const i = h('input', { type: 'text', class: 'mono', value: cur ?? '', placeholder: '예: favor>=200 && switch.met' });
@@ -59,7 +74,7 @@
         const chk = (k, label, dis) => { const i = h('input', { type: 'checkbox', checked: !!obj[k], disabled: !!dis }); i.onchange = () => { obj[k] = i.checked; redraw(); }; return h('label', { class: 'check', style: dis ? { opacity: .5 } : {} }, i, label); };
         const redraw = () => {
           lb.innerHTML = '';
-          [...list, null].forEach((o, i) => lb.append(h('div', { style: { padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap', background: i === selI ? 'var(--accent)' : (i % 2 ? 'var(--bg2)' : ''), color: i === selI ? '#fff' : '' },
+          [...list, null].forEach((o, i) => lb.append(h('div', { style: { padding: '3px 8px', cursor: 'pointer', whiteSpace: 'nowrap', background: i === selI ? 'var(--accent-soft)' : (i % 2 ? 'var(--bg2)' : ''), boxShadow: i === selI ? 'inset 2px 0 0 var(--accent)' : '' },
             onclick: () => { selI = i; redraw(); }, ondblclick: () => { if (o) { list.splice(i, 1); selI = Math.min(i, list.length); redraw(); } } }, '◇ ' + (o ? PDM.routeOpText(o) : ''))));
           detail.innerHTML = '';
           const o = list[selI];
@@ -111,6 +126,56 @@
       default: { const i = h('input', { type: 'text', value: cur ?? '' }); i.addEventListener('input', () => set(i.value)); return i; }
     }
   }
+  // ---------- 탭으로 나눈 칸 (대사 · 대사 스타일: 내용 · 글꼴 · 출력 · 연출 · 미리보기) ----------
+  const lastTab = {};   // 명령 종류별 마지막으로 연 탭 (창 · 속성 창을 다시 열어도)
+  /** def.params 를 body 에 그림. def.tabs 가 있으면 탭 줄 + 탭마다 칸. onField(el) = 칸마다 (속성 창이 input/change 를 받음) · ctx.previewOf() = 미리보기에 쓸 이벤트 스타일 */
+  function renderParams(def, obj, ctx, body, onField) {
+    const fieldOf = p => { const el = PDM.ui.field(p.label, paramInput(obj, p, ctx)); el.dataset.k = p.k; if (onField) onField(el); return el; };
+    if (!def.tabs) { def.params.filter(p => !p.when || p.when(obj)).forEach(p => body.append(fieldOf(p))); return; }   // when = 그 명령 설정에서만 쓰는 칸 (6차)
+    let cur = lastTab[obj.cmd] || def.tabs[0][0], stopPv = null;
+    const bar = h('div', { class: 'seg tabs-cmd mb-3', role: 'tablist' }), pane = h('div', { class: 'cmd-tab' });
+    const show = id => {
+      cur = lastTab[obj.cmd] = id;
+      if (stopPv) { stopPv(); stopPv = null; }
+      bar.querySelectorAll('button').forEach(b => { const on = b.dataset.tab === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+      pane.innerHTML = '';
+      if (id === 'preview') { stopPv = preview(def, obj, ctx, pane); return; }
+      const ps = def.params.filter(p => (p.tab || 'main') === id);
+      ps.forEach(p => pane.append(fieldOf(p)));
+      if (id !== 'main') pane.append(h('p', { class: 'hint mt-2' }, '빈 칸 = 다음 단계 값: 이 대사 → 이벤트의 "대사 스타일" 명령 → 대사창 설정(대사창 편집기) → 기본값'));
+    };
+    def.tabs.forEach(([id, label]) => bar.append(h('button', { type: 'button', class: 'chip', role: 'tab', 'data-tab': id, onclick: e => { e.preventDefault(); show(id); } }, label)));
+    body.append(bar, pane);
+    show(def.tabs.some(t => t[0] === cur) ? cur : def.tabs[0][0]);
+    // 칸을 다시 그려 미리보기가 화면에서 빠지면 그 재생은 스스로 멈춤 (PDM.Dialogue.render 의 타이머 · 프레임이 isConnected 를 봄)
+  }
+  /** 미리보기 탭: 게임 대사창과 같은 계산(PDM.Dialogue.render)으로 이 대사 · 스타일을 재생 — 되풀이 단추. 반환 = 멈추기 */
+  function preview(def, obj, ctx, pane) {
+    if (!PDM.Dialogue) { pane.append(h('p', { class: 'hint' }, '대사창 미리보기를 쓸 수 없습니다.')); return () => {}; }
+    const stage = h('div', { class: 'dlg-stage cmd-pv' }), info = h('p', { class: 'hint mt-2' });
+    // 화면 비율 = 이 프로젝트의 테스트 실행 환경 (휴대폰이면 그 기기의 논리 화면 — 세로면 세로 상자). PC = 16:9
+    const te = PDM.testEnv ? PDM.testEnv.resolve((PDM.store.get('project') || {}).testplay) : null;
+    const ar = te && te.kind === 'phone' ? te.logical : [16, 9];
+    stage.style.aspectRatio = `${ar[0]} / ${ar[1]}`;
+    if (ar[0] < ar[1]) { stage.style.width = Math.round(100 * Math.min(1, 0.62)) + '%'; stage.style.margin = '0 auto'; }
+    const envNote = te ? ` · 화면: ${te.name}${te.kind === 'phone' ? ` ${te.logical[0]}×${te.logical[1]}` : ' 16:9'}` : '';
+    let r = null, gen = 0;
+    const play = async () => {
+      const my = ++gen; if (r) { r.stop(); r.el.remove(); r = null; }
+      const style = obj.cmd === 'textStyle' ? (obj.reset ? null : obj) : (ctx && ctx.styleBefore ? ctx.styleBefore() : null);
+      const l = obj.cmd === 'textStyle' ? PDM.Dialogue.line('', '', '', '글자 **강조** 미리보기 — 가나다라 English 123', {}) : PDM.Dialogue.line(obj.speaker, obj.face, obj.illust, obj.text || '', {});
+      if (obj.cmd === 'textStyle') l.name = '미리보기'; else { if (obj.name) l.name = obj.name; if (obj.side) l.side = obj.side; }
+      PDM.Dialogue.styleLine(l, obj.cmd === 'textStyle' ? {} : obj, style);
+      const res = await PDM.Dialogue.render(stage, l, {});
+      if (my !== gen || !stage.isConnected) { res.stop(); res.el.remove(); return; }
+      r = res;
+      info.textContent = PDM.Dialogue.describeLine(l) + (style && obj.cmd !== 'textStyle' ? ' · 이 이벤트의 앞선 "대사 스타일"을 함께 씀' : '') + envNote;
+    };
+    pane.append(stage, h('div', { class: 'flex gap-2 mt-2' }, h('button', { type: 'button', class: 'btn sm', onclick: e => { e.preventDefault(); play(); } }, '다시 재생'), h('span', { class: 'hint' }, '누르면 글자를 다 보임 (게임과 같음)')), info);
+    stage.addEventListener('click', () => { if (r && r.typing()) r.finish(); });
+    requestAnimationFrame(play);
+    return () => { gen++; if (r) { r.stop(); r.el.remove(); r = null; } };
+  }
   async function createStoryVar(listKey, label) {
     const id = await PDM.ui.prompt(`새 ${label} id (영문)`, ''); if (!id) return null;
     const clean = PDM.slugId(id);
@@ -126,7 +191,7 @@
     if (!ok) return null;
     delete o.wait; return o;
   };
-  PDM.editCommandModal = async function (cmd, isNew) {
+  PDM.editCommandModal = async function (cmd, isNew, mopts = {}) {
     const def = PDM.COMMANDS[cmd.cmd];
     if (!def) { toast('알 수 없는 명령: ' + cmd.cmd, 'bad'); return null; }
     const obj = PDM.clone(cmd);
@@ -134,11 +199,15 @@
     const draw = () => {
       body.innerHTML = '';
       if (!def.params.length) body.append(h('p', { class: 'hint' }, '설정할 값이 없습니다.'));
-      def.params.forEach(p => body.append(PDM.ui.field(p.label, paramInput(obj, p, { onCharChange: () => { if (def.params.some(x => x.t === 'face')) draw(); }, redraw: () => draw() }))));
+      renderParams(def, obj, { onCharChange: () => { if (def.params.some(x => x.t === 'face')) draw(); }, redraw: () => draw(), styleBefore: () => (mopts.styleBefore ? mopts.styleBefore() : null) }, body);
     };
     draw();
     const ok = await PDM.ui.modal((isNew ? '새 명령: ' : '명령 편집: ') + def.name, body, [['취소', false], ['확인', true, 'pri']]);
     if (!ok) return null;
+    return normBlocks(def, obj);
+  };
+  /** 블록 명령의 하위 목록 모양 맞추기 (선택지 수 = 갈래 수 · 조건 분기 then/else · 반복 body) */
+  function normBlocks(def, obj) {
     if (def.block === 'branches') {
       obj.branches = obj.branches || [];
       while (obj.branches.length < (obj.options || []).length) obj.branches.push([]);
@@ -147,35 +216,53 @@
     if (def.block === 'ifelse') { obj.then = obj.then || []; obj.else = obj.else || []; }
     if (def.block === 'body') obj.body = obj.body || [];
     return obj;
-  };
+  }
+  /** 명령 한 줄의 빠진 값 (목록의 ⚠ 표시 · 속성 창) — 실행은 되지만 아무 일도 하지 않거나 게임에서 건너뜀. 자세한 참조 검사는 검사(F7) */
+  const REQUIRED = { text: ['text'], illust: ['image'], illustMove: [], sound: ['file'], call: ['event'], transfer: ['node'], choice: ['options'], textfx: ['fx'], effect: ['fx'], trailer: ['id'], giveItem: ['item'], switch: ['id'], var: ['id'] };
+  function problems(c) {
+    const def = PDM.COMMANDS[c.cmd];
+    if (!def) return [`알 수 없는 명령 "${c.cmd}" (플러그인이 꺼져 있나요?)`];
+    return (REQUIRED[c.cmd] || []).filter(k => !(c.cmd === 'sound' && c.kind === 'bgmStop')).filter(k => { const v = c[k]; return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length); })
+      .map(k => `"${((def.params || []).find(p => p.k === k) || {}).label || k}" 이(가) 비어 있습니다`);
+  }
+  PDM.commandProblems = problems;
 
   /** 명령 고르기 메뉴 (분류별) */
   function pickCommand(x, y) {
     return new Promise(res => {
       const groups = {};
       Object.entries(PDM.COMMANDS).forEach(([id, d]) => { (groups[d.g] = groups[d.g] || []).push([id, d]); });
-      const box = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: '10px' } },
-        Object.entries(groups).map(([g, list]) => h('div', {}, h('div', { class: 'fl mb-2' }, g),
-          list.map(([id, d]) => h('button', { class: 'btn sm', style: { display: 'block', width: '100%', textAlign: 'left', marginBottom: '3px' },
+      const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(160px, 1fr))', gap: '10px' } },
+        Object.entries(groups).map(([g, list]) => h('div', { class: 'cmd-grp' }, h('div', { class: 'fl mb-2' }, g),
+          list.map(([id, d]) => h('button', { class: 'btn sm cmd-pick', 'data-name': (d.name + ' ' + id + ' ' + g).toLowerCase(), style: { display: 'block', width: '100%', textAlign: 'left', marginBottom: '3px' },
             onclick: () => { PDM.$('.modal-bg').remove(); res(id); } }, d.name + (d.plugin ? ' 🧩' : ''))))));
-      PDM.ui.modal('명령 넣기', box, [['취소', null]]).then(v => { if (v === null) res(null); });
+      // 이름으로 찾기 — 글자를 치면 맞는 명령만, Enter = 첫 번째
+      const q = h('input', { type: 'search', placeholder: '명령 찾기 (예: 대사 · 일러스트 · 소리 · 대기)', class: 'w-full mb-4' });
+      q.addEventListener('input', () => { const t = q.value.trim().toLowerCase(); grid.querySelectorAll('.cmd-pick').forEach(b => { b.hidden = !!t && !b.dataset.name.includes(t); }); grid.querySelectorAll('.cmd-grp').forEach(gr => { gr.hidden = ![...gr.querySelectorAll('.cmd-pick')].some(b => !b.hidden); }); });
+      q.addEventListener('keydown', e => { if (e.key === 'Enter') { const b = [...grid.querySelectorAll('.cmd-pick')].find(x => !x.hidden); if (b) { e.preventDefault(); b.click(); } } });
+      PDM.ui.modal('명령 넣기', h('div', {}, q, grid), [['취소', null]]).then(v => { if (v === null) res(null); });
+      setTimeout(() => q.focus(), 30);
     });
   }
 
   // ---------- 목록 그리기 ----------
+  // 목록마다 고른 명령 (탭을 다시 그려도 — 실행 취소 · 다른 편집 뒤 — 같은 명령을 고른 채로)
+  const SEL = new Map();
   PDM.commandList = function (key, path, opts = {}) {
     const wrap = h('div', { class: 'cmdlist', tabindex: 0 });
-    let sel = null;   // 선택한 명령의 경로 (store 경로)
+    const selKey = key + '|' + JSON.stringify(path);
+    let sel = SEL.get(selKey) || null;   // 선택한 명령의 경로 (store 경로)
+    const setSel = p => { sel = p; if (p) SEL.set(selKey, p); else SEL.delete(selKey); };
     const arrAt = p => PDM.deepGet(PDM.store.get(key), p);
 
     function rows() {
-      const out = [];
+      const out = []; let n = 0;
       const walk = (p, d) => {
         const arr = arrAt(p) || [];
         arr.forEach((c, i) => {
           const def = PDM.COMMANDS[c.cmd] || { g: '확장', name: c.cmd, sum: () => c.cmd };
           let s; try { s = def.sum ? def.sum(c) : def.name; } catch (_) { s = def.name; }
-          out.push({ kind: 'cmd', path: [...p, i], arr: p, i, d, g: def.g, text: s, cmd: c });
+          out.push({ kind: 'cmd', path: [...p, i], arr: p, i, d, g: def.g, text: s, cmd: c, n: ++n });   // n = 실행 순서대로 매긴 번호 (목록 · 속성 창 제목)
           if (def.block === 'ifelse') {
             walk([...p, i, 'then'], d + 1);
             out.push({ kind: 'branch', d, text: '그 외' });
@@ -197,20 +284,21 @@
 
     async function insertAt(arrPath, i) {
       const id = await pickCommand(); if (!id) return;
-      const base = { cmd: id };
+      const base = Object.assign({ cmd: id }, PDM.clone(PDM.COMMANDS[id].defaults || {}));   // 새 명령의 기본값 (런타임 기본값과 같게 — 예: 기다림 켬)
       if (opts.defaultSpeaker && (id === 'text')) base.speaker = opts.defaultSpeaker;
-      const c = await PDM.editCommandModal(base, true); if (!c) return;
+      const c = await PDM.editCommandModal(base, true, { styleBefore: () => styleBefore({ arr: arrPath, i }) }); if (!c) return;
+      setSel([...arrPath, i]);
       PDM.store.edit(key, '명령 추가: ' + PDM.COMMANDS[id].name, r => {
         let a = PDM.deepGet(r, arrPath); if (!a) { PDM.deepSet(r, arrPath, []); a = PDM.deepGet(r, arrPath); }
         a.splice(i, 0, c);
       });
-      sel = [...arrPath, i];
     }
     async function editAt(row) {
-      const c = await PDM.editCommandModal(row.cmd, false); if (!c) return;
+      const c = await PDM.editCommandModal(row.cmd, false, { styleBefore: () => styleBefore(row) }); if (!c) return;
       PDM.store.edit(key, '명령 편집', r => { PDM.deepGet(r, row.arr)[row.i] = c; });
     }
-    function removeAt(row) { PDM.store.edit(key, '명령 삭제', r => { PDM.deepGet(r, row.arr).splice(row.i, 1); }); sel = null; }
+    function removeAt(row) { setSel(null); PDM.store.edit(key, '명령 삭제', r => { PDM.deepGet(r, row.arr).splice(row.i, 1); }); }
+    function duplicateAt(row) { setSel([...row.arr, row.i + 1]); PDM.store.edit(key, '명령 복제', r => { const a = PDM.deepGet(r, row.arr); a.splice(row.i + 1, 0, PDM.clone(a[row.i])); }); }
     // 명령 복사는 공용 클립보드(PDM.clip, kind 'cmds')에도 — 다른 이벤트 · 캐릭터 행동에도 붙여 넣을 수 있음
     const copyCmd = cmd => { clipboard = [PDM.clone(cmd)]; PDM.clip.set('cmds', clipboard, '명령 ' + ((PDM.COMMANDS[cmd.cmd] || {}).name || cmd.cmd)); };
     const curClip = () => { const c = PDM.clip.peek(); return c && c.kind === 'cmds' ? PDM.clone(c.payload) : clipboard; };
@@ -220,29 +308,87 @@
       PDM.store.edit(key, '명령 붙여넣기', r => { let a = PDM.deepGet(r, arrPath); if (!a) { PDM.deepSet(r, arrPath, []); a = PDM.deepGet(r, arrPath); } a.splice(i, 0, ...PDM.clone(clipboard)); });
     }
     function move(row, dir) {
-      PDM.store.edit(key, '명령 이동', r => { const a = PDM.deepGet(r, row.arr); const j = row.i + dir; if (j < 0 || j >= a.length) return; [a[row.i], a[j]] = [a[j], a[row.i]]; });
-      sel = [...row.arr, row.i + dir];
+      const j = row.i + dir, n = (arrAt(row.arr) || []).length; if (j < 0 || j >= n) return;
+      setSel([...row.arr, j]);
+      PDM.store.edit(key, '명령 이동', r => { const a = PDM.deepGet(r, row.arr); [a[row.i], a[j]] = [a[j], a[row.i]]; });
+    }
+    const selRow = () => sel && rows().find(r => r.path && JSON.stringify(r.path) === JSON.stringify(sel));
+    /** 이 자리(arr, i) 앞에서 마지막으로 실행되는 "대사 스타일" (목록 순서 — 런타임처럼 이벤트 안에서 이어짐). 되돌리기면 null */
+    function styleBefore(at) {
+      const list = rows(), key0 = JSON.stringify([...at.arr, at.i]);
+      let end = list.findIndex(r => r.path && JSON.stringify(r.path) === key0); if (end < 0) end = list.length;
+      for (let j = end - 1; j >= 0; j--) { const c = list[j].kind === 'cmd' && list[j].cmd; if (c && c.cmd === 'textStyle') return c.reset ? null : c; }
+      return null;
+    }
+
+    /** 고른 명령의 속성을 오른쪽 속성 창에서 바로 고침 (같은 칸들 — 대화 상자와 같은 paramInput).
+     *  고친 값은 잠깐(0.4초) 모았다가 store.edit 한 번 = 실행 취소 한 번. 목록 글만 다시 쓰고 속성 창은 그대로 두어 입력 중 초점을 잃지 않음 */
+    let pending = null;
+    function showProps() {
+      if (opts.inspector === false || !PDM.inspector) return;
+      const row = selRow();
+      if (!row) { PDM.inspector.show(opts.title || '이벤트 명령', h('div', { class: 'empty' }, '명령을 누르면 여기서 바로 고칠 수 있습니다. ◇ 줄 더블클릭 · "+ 명령 추가" = 새 명령, 더블클릭 = 큰 창으로 편집.')); return; }
+      const def = PDM.COMMANDS[row.cmd.cmd];
+      if (!def) { PDM.inspector.show('알 수 없는 명령', h('div', { class: 'c-bad' }, problems(row.cmd)[0])); return; }
+      const at = { arr: row.arr, i: row.i }, body = h('div', {});
+      const obj = new Proxy(PDM.clone(row.cmd), { set(t, k, v) { t[k] = v; schedule(); return true; } });   // 칸이 값을 넣으면(찾기… 창 · 맵에서 고르기 포함) 저장 예약
+      const commit = () => {
+        pending = null;
+        const cur = (arrAt(at.arr) || [])[at.i]; if (!cur || cur.cmd !== obj.cmd) return;   // 그사이 지워졌거나 바뀜
+        const next = normBlocks(def, Object.assign(PDM.clone(obj), { then: cur.then, else: cur.else, body: cur.body, branches: cur.branches }));
+        ['then', 'else', 'body', 'branches'].forEach(k => { if (next[k] === undefined) delete next[k]; });
+        normBlocks(def, next);
+        if (JSON.stringify(next) === JSON.stringify(cur)) return;
+        PDM.store.edit(key, '명령 편집: ' + def.name, r => { PDM.deepGet(r, at.arr)[at.i] = next; }, { silent: !def.block });   // 블록(선택지 갈래 수)이 바뀔 수 있으면 목록을 다시 그림
+        draw(); probe();
+      };
+      function schedule() { clearTimeout(pending); pending = setTimeout(commit, 400); }
+      const probe = () => { const pr = problems(obj), box = body.querySelector('.cmd-probs'); if (box) box.textContent = pr.length ? '⚠ ' + pr.join(' · ') : ''; };
+      const fields = () => {
+        body.innerHTML = '';
+        body.append(h('div', { class: 'cmd-probs c-warn mb-3' }));
+        if (!def.params.length) body.append(h('p', { class: 'c-mute' }, '설정할 값이 없습니다.'));
+        renderParams(def, obj, { onCharChange: () => { if (def.params.some(x => x.t === 'face')) fields(); }, redraw: () => fields(), styleBefore: () => styleBefore(at) }, body, el => {
+          el.addEventListener('input', schedule); el.addEventListener('change', schedule);   // 목록 · 경로처럼 안쪽 배열을 바로 고치는 칸
+        });
+        body.append(h('div', { class: 'flex gap-2 wrap mt-4' },
+          h('button', { class: 'btn sm', onclick: () => { commit(); editAt(selRow()); } }, '큰 창으로 편집…'),
+          h('button', { class: 'btn sm', onclick: () => { commit(); duplicateAt(selRow()); } }, '복제'),
+          h('button', { class: 'btn sm danger', onclick: () => { clearTimeout(pending); removeAt(selRow()); } }, '삭제')));
+        probe();
+      };
+      fields();
+      PDM.inspector.show(`${row.n}. ${def.name}`, body);
     }
 
     function draw() {
       wrap.innerHTML = '';
       const list = rows();
+      // 도구 줄: 명령 추가(고른 명령 다음 · 없으면 끝) · 복제 · 위/아래 · 삭제
+      const cur = selRow(), top = arrAt(path) || [];
+      const tb = (label, tip, fn, dis, cls) => h('button', { class: 'btn xs' + (cls ? ' ' + cls : ''), title: tip, disabled: dis, onclick: e => { e.stopPropagation(); fn(); } }, label);
+      wrap.append(h('div', { class: 'cmd-bar' },
+        tb('+ 명령 추가', '고른 명령 다음에 (없으면 맨 끝에) 새 명령 — ◇ 줄 더블클릭과 같음', () => cur ? insertAt(cur.arr, cur.i + 1) : insertAt(path, top.length), false, 'add'),
+        tb('복제', '고른 명령 복제', () => duplicateAt(cur), !cur), tb('▲', '위로', () => move(cur, -1), !cur || cur.i === 0), tb('▼', '아래로', () => move(cur, 1), !cur || cur.i >= (arrAt(cur.arr) || []).length - 1),
+        tb('삭제', 'Delete', () => removeAt(cur), !cur, 'danger'), h('span', { class: 'grow' }), h('span', { class: 'c-dim fs-xs' }, `명령 ${list.filter(r => r.kind === 'cmd').length}개`)));
       list.forEach(r => {
         const same = sel && r.path && JSON.stringify(sel) === JSON.stringify(r.path);
         if (r.kind === 'cmd') {
-          wrap.append(h('div', { class: `cmd g-${r.g}` + (same ? ' sel' : ''), style: { '--d': r.d },
-            onclick: () => { sel = r.path; draw(); },
+          const pr = problems(r.cmd);
+          wrap.append(h('div', { class: `cmd g-${r.g}` + (same ? ' sel' : '') + (pr.length ? ' bad' : ''), style: { '--d': r.d }, title: pr.length ? '⚠ ' + pr.join(' · ') : '',
+            onclick: () => { setSel(r.path); draw(); showProps(); },
             ondblclick: () => editAt(r),
-            oncontextmenu: e => { e.preventDefault(); sel = r.path; draw(); PDM.ui.menu(e.clientX, e.clientY, [
+            oncontextmenu: e => { e.preventDefault(); setSel(r.path); draw(); showProps(); PDM.ui.menu(e.clientX, e.clientY, [
               { label: '편집…', run: () => editAt(r) },
               { label: '위에 새 명령…', run: () => insertAt(r.arr, r.i) },
               '-',
               { label: '복사', hint: PDM.keys.label('copy'), run: () => copyCmd(r.cmd) },
               { label: '위에 붙여넣기', hint: PDM.keys.label('paste'), run: () => paste(r.arr, r.i), disabled: !curClip() },
+              { label: '복제', run: () => duplicateAt(r) },
               { label: '위로', run: () => move(r, -1) }, { label: '아래로', run: () => move(r, 1) },
               '-',
               { label: '삭제', hint: 'Del', run: () => removeAt(r) }]); } },
-            h('span', { class: 'cg' }, '◆'), h('span', { class: 'cs' }, r.text)));
+            h('span', { class: 'cn' }, r.n), h('span', { class: 'cg' }, pr.length ? '⚠' : '◆'), h('span', { class: 'cs' }, r.text)));
         } else if (r.kind === 'branch') {
           wrap.append(h('div', { class: 'cmd branch', style: { '--d': r.d } }, h('span', { class: 'cg' }, ':'), h('span', { class: 'cs' }, r.text)));
         } else {
@@ -257,11 +403,19 @@
       if (!sel) return;
       const row = rows().find(r => r.path && JSON.stringify(r.path) === JSON.stringify(sel)); if (!row) return;
       if (e.key === 'Delete') { e.preventDefault(); removeAt(row); }
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {   // 위 · 아래 명령 고르기 (Alt = 옮기기)
+        e.preventDefault();
+        if (e.altKey) { move(row, e.key === 'ArrowUp' ? -1 : 1); return; }
+        const cmds = rows().filter(r => r.kind === 'cmd'), k = cmds.findIndex(r => JSON.stringify(r.path) === JSON.stringify(sel)), nx = cmds[k + (e.key === 'ArrowUp' ? -1 : 1)];
+        if (nx) { setSel(nx.path); draw(); showProps(); }
+      }
       else if (e.key === 'Enter') { e.preventDefault(); editAt(row); }
       else if (PDM.keys.is(e, 'copy')) { e.preventDefault(); e.stopPropagation(); copyCmd(row.cmd); }
       else if (PDM.keys.is(e, 'paste')) { e.preventDefault(); e.stopPropagation(); paste(row.arr, row.i + 1); }
     });
     draw();
+    if (sel && selRow()) setTimeout(() => { if (wrap.isConnected) showProps(); }, 0);   // 다시 그린 뒤에도 고른 명령의 속성 창
+    else if (sel) setSel(null);
     wrap.redraw = draw;
     return wrap;
   };

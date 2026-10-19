@@ -299,7 +299,7 @@ public class HeroSelect {
 		static final int W = 120, M = 2;
 		InfoWnd(JsonValue h) {
 			com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock title = PixelScene.renderTextBlock(name(h), 9);
-			title.hardlight(TITLE_COLOR);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44));
 			add(title);
 			title.setPos((W - title.width()) / 2f, M);
 			List<String> texts = new ArrayList<>(); List<Image> icons = new ArrayList<>();
@@ -356,7 +356,7 @@ public class HeroSelect {
 			float leftPortion = Math.max(100, Camera.main.width / 3f);
 			if (heroName != null) {
 				heroName.text(name);
-				heroName.hardlight(Window.TITLE_COLOR);
+				heroName.hardlight(MakerTheme.or("accent", 0xFFFF44));
 				heroName.setPos((leftPortion - heroName.width() - 20) / 2f, heroName.top());
 				PixelScene.align(heroName);
 			}

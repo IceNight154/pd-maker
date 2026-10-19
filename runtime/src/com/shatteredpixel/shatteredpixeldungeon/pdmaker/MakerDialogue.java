@@ -57,7 +57,8 @@ public class MakerDialogue {
 			+ "layout:{enabled:false},"
 			+ "sounds:{open:\"\",type:\"\",next:\"\",move:\"\",select:\"\"},"
 			+ "choice:{pos:middle,width:0.42,fontSize:0,textColor:\"\",textOnColor:\"\",image:\"\",imageOn:\"\",slice:4},"
-			+ "text:{autoScale:true,scaleMax:2,scale:1,lineSpacing:0,shadow:false,shadowColor:\"#000000\",shadowX:0.5,shadowY:0.5,outline:false,outlineColor:\"#000000\",outlineWidth:0.5,bold:false}}";
+			+ "text:{autoScale:true,scaleMax:2,scale:1,lineSpacing:0,tracking:0,shadow:false,shadowColor:\"#000000\",shadowX:0.5,shadowY:0.5,outline:false,outlineColor:\"#000000\",outlineWidth:0.5,bold:false},"
+			+ "fx:{effect:none,dur:0.25,strength:1,scope:all,emScale:1}}";   // 5차: 글자 간격(tracking) · 글자 연출(fx) — 없으면 예전과 같은 모습
 	private static JsonValue defaults;
 
 	static JsonValue cfg(String group) {
@@ -66,11 +67,25 @@ public class MakerDialogue {
 		JsonValue g = d == null ? null : d.get(group);
 		return g != null ? g : defaults.get(group);
 	}
+	/** 빈 칸("")이면 프로젝트 게임 UI 테마를 따르는 칸 (6차 — 우선순위: 대사창 설정 → 테마 → 원작). 예전 프로젝트는 값이 들어 있어 그대로.
+	 *  모양(box.style) 빈 칸 = "skin": 대사창 · 이름표 · 선택지를 게임 UI 스프라이트(chrome.png 9조각 — MakerTheme.patch)로. 글자 색은 테마 글자 색 */
+	static final java.util.Map<String, String> THEMED = new java.util.HashMap<>();
+	static {
+		THEMED.put("box.textColor", "text"); THEMED.put("box.highlight", "accent"); THEMED.put("name.textColor", "text"); THEMED.put("indicator.color", "accent");
+		THEMED.put("box.style", "@skin");
+	}
 	static String s(String group, String key) {
 		JsonValue g = cfg(group);
-		if (g != null && g.has(key)) return g.getString(key, "");
-		return defaults.get(group).getString(key, "");
+		String v = g != null && g.has(key) ? g.getString(key, "") : defaults.get(group).getString(key, "");
+		if (v.isEmpty()) {
+			String t = THEMED.get(group + "." + key);
+			if (t != null) return t.equals("@skin") ? "skin" : MakerTheme.hex(t);
+			v = defaults.get(group).getString(key, "");   // 테마와 상관없는 칸(둥근 상자의 색 등)을 비웠으면 기본값
+		}
+		return v;
 	}
+	/** 대사창 · 이름표 · 선택지를 게임 UI 스프라이트로 그리는가 (모양 = 테마) */
+	static boolean skinned() { return "skin".equals(s("box", "style")); }
 	static float f(String group, String key) {
 		JsonValue g = cfg(group);
 		try { if (g != null && g.has(key)) return g.getFloat(key); } catch (Exception ignored) { }
@@ -111,6 +126,14 @@ public class MakerDialogue {
 		public boolean flip;
 		public String[] choices;       // 대사 뒤에 이어서 고르는 선택지 (null = 없음)
 		public String voice = "";      // 캐릭터 목소리 (글자가 나올 때 소리, 캐릭터 편집기)
+		public float speed = -1;       // 이 줄만 글자 속도 (글자/초, 0 = 바로 다 보임, < 0 = 대사창 설정)
+		public float auto = 0;         // 다 보인 뒤 이 초가 지나면 저절로 넘김 (0 = 입력을 기다림, 선택지가 있으면 쓰지 않음)
+		// 5차 — 이 줄만 덮어쓰기 (NaN · null = 이벤트의 "대사 스타일" → 대사창 설정 순서로)
+		public float tracking = Float.NaN, lineGap = Float.NaN, fxDur = Float.NaN, fxStrength = Float.NaN;
+		public String effect, fxScope;
+		public float sizePct = Float.NaN, padding = Float.NaN;   // 글자 크기(대사창 글자 크기의 %) · 안쪽 여백(px)
+		public String align, emColor;                            // 정렬(left · center) · 강조 색(#rrggbb)
+		public Boolean bold;                                     // 굵게 (null = 설정 그대로)
 	}
 
 	/** 화자(캐릭터 id 또는 $hero) · 표정 · 직접 고른 그림으로 Line 을 채움 */
@@ -214,14 +237,17 @@ public class MakerDialogue {
 		return tx;
 	}
 
+	static int boxRadius() { return (int) f("box", "radius"); }
 	static NinePatch boxPatch() {
 		String st = s("box", "style");
+		if (st.equals("skin")) return MakerTheme.patch("box");   // 게임 UI 스프라이트 (프로젝트 chrome.png — 테마가 고른 조각)
 		if (st.equals("game")) return Chrome.get(Chrome.Type.WINDOW);
 		if (st.equals("image") && !s("box", "image").isEmpty()) {
 			Object tx = MakerRuntime.texture(s("box", "image"));
 			if (tx != null) return new NinePatch(tx, (int) Math.max(0, f("box", "slice")));
 		}
-		return new NinePatch(rounded(col("box", "color"), f("box", "alpha"), col("box", "border"), (int) f("box", "radius")), (int) f("box", "radius") + 1);
+		int rad = boxRadius();
+		return new NinePatch(rounded(col("box", "color"), f("box", "alpha"), col("box", "border"), rad), rad + 1);
 	}
 	/** 그림 9조각 (없거나 못 읽으면 null) */
 	static NinePatch imagePatch(String ref, float slice) {
@@ -231,12 +257,14 @@ public class MakerDialogue {
 	}
 	static NinePatch namePatch() {
 		NinePatch p = imagePatch(s("name", "image"), f("name", "slice"));
-		return p != null ? p : platePatch(col("name", "color"), col("name", "color"));
+		if (p != null) return p;
+		return skinned() ? MakerTheme.patch("name") : platePatch(col("name", "color"), col("name", "color"));
 	}
 	static NinePatch choicePatch(boolean on) {
 		NinePatch p = imagePatch(s("choice", on ? "imageOn" : "image"), f("choice", "slice"));
 		if (p == null && on) p = imagePatch(s("choice", "image"), f("choice", "slice"));   // 고른 것 그림이 없으면 같은 그림 (색으로 구분)
 		if (p != null) return p;
+		if (skinned()) return MakerTheme.patch(on ? "choiceOn" : "choice");
 		return on ? platePatch(col("name", "color"), col("indicator", "color")) : boxPatch();
 	}
 	/** 직접 그린 레이아웃 (dialogue.json layout.enabled) 의 영역 — 없으면 null. 좌표는 화면의 비율 0~1 */
@@ -252,7 +280,7 @@ public class MakerDialogue {
 		return v.isEmpty() ? col(fbGroup, fbKey) : MakerTitle.color(v, col(fbGroup, fbKey));
 	}
 	static NinePatch platePatch(int fill, int border) {
-		int r = Math.max(2, Math.min(4, (int) f("box", "radius")));
+		int r = Math.max(2, Math.min(4, boxRadius()));
 		return new NinePatch(rounded(fill, 1f, border, r), r + 1);
 	}
 
@@ -288,6 +316,11 @@ public class MakerDialogue {
 	static class TypeText extends RenderedTextBlock {
 		int total = 0;
 		float lineExtra = 0;   // 줄 간격 더하기 (text.lineSpacing)
+		float tracking = 0;    // 글자 사이 더하기 (text.tracking, 5차) — 글자 단위로 나눈 대사에만
+		float emScale = 1;     // 강조(**…**) 글자 크기 (fx.emScale)
+		Boolean center;        // 가운데 정렬 (null = 대사창 설정 box.align)
+		boolean[] em = new boolean[0];   // 글자마다 강조 구간인지 (글자 번호 = wordsOf 순서)
+		float[] baseX = new float[0], baseY = new float[0], baseS = new float[0];   // 줄 배치가 정한 자리 · 크기 (글자 연출이 여기서부터 움직임)
 		TypeText(int size) { super(size); }
 		void set(String text, int maxW, int color, boolean perChar) { set(text, maxW, color, col("box", "highlight"), perChar); }
 		void set(String text, int maxW, int color, int hiColor, boolean perChar) {
@@ -295,18 +328,28 @@ public class MakerDialogue {
 			maxWidth(maxW);
 			hardlight(color);
 			setHightlighting(true, hiColor);
-			if ("center".equals(s("box", "align"))) align(CENTER_ALIGN);
+			if (center != null ? center : "center".equals(s("box", "align"))) align(CENTER_ALIGN);
 			if (!perChar) { text(text); total = 0; for (RenderedText w : wordsOf()) total++; return; }
+			// 글자 = 사람이 보는 한 글자(grapheme — 결합 문자 · 이모지 조합을 쪼개지 않음, 5차). "**" · "_" 는 강조 표시 (원작 RenderedTextBlock 규칙)
 			List<String> tk = new ArrayList<>();
-			int i = 0;
-			while (i < text.length()) {
-				if (text.startsWith("**", i)) { tk.add("**"); i += 2; continue; }
-				int cp = text.codePointAt(i);
-				tk.add(new String(Character.toChars(cp)));
-				i += Character.charCount(cp);
+			List<Boolean> emList = new ArrayList<>();
+			boolean on = false;
+			String[] parts = text.split("\\*\\*", -1);
+			for (int pi = 0; pi < parts.length; pi++) {
+				if (pi > 0) { tk.add("**"); on = !on; }
+				String part = parts[pi];
+				java.text.BreakIterator bi = java.text.BreakIterator.getCharacterInstance();
+				bi.setText(part);
+				for (int a = bi.first(), b = bi.next(); b != java.text.BreakIterator.DONE; a = b, b = bi.next()) {
+					String g = part.substring(a, b); tk.add(g);
+					if (g.equals("_")) { on = !on; continue; }   // 원작 강조 표시 "_" 도 (그리는 글자가 아님 — 강조 번호가 밀리지 않게)
+					if (!g.equals(" ") && !g.equals("\n")) emList.add(on);
+				}
 			}
 			tokens(tk.toArray(new String[0]));
 			total = wordsOf().size();
+			em = new boolean[total]; for (int k = 0; k < total && k < emList.size(); k++) em[k] = emList.get(k);
+			if (emScale != 1f) { int k = 0; for (RenderedText w : wordsOf()) { if (k < em.length && em[k]) w.scale.set(w.scale.x * emScale, w.scale.y * emScale); k++; } layout(); }
 		}
 		/** 화면에 그려지는 글자들 (빈칸·줄바꿈 제외) */
 		List<RenderedText> wordsOf() {
@@ -323,9 +366,94 @@ public class MakerDialogue {
 			float r = ((color >> 16) & 0xFF) / 255f, g = ((color >> 8) & 0xFF) / 255f, b = (color & 0xFF) / 255f;
 			for (RenderedText w : words) { if (w == null) continue; w.rm = w.gm = w.bm = 0; w.ra = r; w.ga = g; w.ba = b; }
 		}
-		/** 게임 줄 배치 뒤에 줄마다 lineExtra 씩 아래로 */
+		int align = LEFT_ALIGN;
+		@Override public synchronized void align(int a) { align = a; super.align(a); }
+		/** 원작의 빈칸 · 줄바꿈 표시 (RenderedTextBlock 의 private 상수 — 줄 배치를 직접 하려고 읽음) */
+		static final RenderedText SPACE_, NEWLINE_;
+		static {
+			RenderedText sp = null, nl = null;
+			try {
+				java.lang.reflect.Field f = RenderedTextBlock.class.getDeclaredField("SPACE"); f.setAccessible(true); sp = (RenderedText) f.get(null);
+				f = RenderedTextBlock.class.getDeclaredField("NEWLINE"); f.setAccessible(true); nl = (RenderedText) f.get(null);
+			} catch (Throwable t) { MakerRuntime.log("대사 줄 배치: 원작 글 상자 구조가 달라 원작 배치를 씁니다 (" + t + ")"); }
+			SPACE_ = sp; NEWLINE_ = nl;
+		}
+		static boolean cjk(RenderedText w) {
+			String t = w.text(); if (t == null || t.isEmpty()) return false;
+			Character.UnicodeScript sc = Character.UnicodeScript.of(t.codePointAt(0));
+			return sc == Character.UnicodeScript.HAN || sc == Character.UnicodeScript.HIRAGANA || sc == Character.UnicodeScript.KATAKANA
+					|| (t.codePointAt(0) >= 0x3000 && t.codePointAt(0) <= 0x303F) || (t.codePointAt(0) >= 0xFF00 && t.codePointAt(0) <= 0xFFEF);
+		}
+		/** 줄 배치 — 원작(RenderedTextBlock.layout)과 같은 규칙이되 두 가지를 고침 (4차 · 게임에서 발견):
+		 *   ① 글자마다 나누어 그리는 대사(글자가 하나씩 나오는 효과)는 빈칸까지를 한 낱말로 묶는데, 빈칸 없이 이어진 글(일본어 · 중국어 · 긴 주소)이
+		 *      대사창 폭보다 길면 앞 글자들이 한 줄에 하나씩 세로로 쌓였음 → 한 줄보다 긴 낱말은 글자 단위로 자름
+		 *   ② 한자 · 가나 · 전각 문장 부호는 어디서든 줄을 바꿀 수 있게 (원작은 게임 언어가 중국어 · 일본어일 때만 그렇게 함)
+		 *   그 밖(빈칸이 있는 한국어 · 영어)은 원작과 같은 자리에 놓임 + 줄 간격(lineExtra) */
 		@Override protected synchronized void layout() {
-			super.layout();
+			if (SPACE_ == null || NEWLINE_ == null || words == null) { super.layout(); applyLineExtra(); return; }
+			float x = this.x, y = this.y, lh = 0; nLines = 1;
+			List<List<RenderedText>> lines = new ArrayList<>(); List<RenderedText> cur = new ArrayList<>(); lines.add(cur);
+			int maxW = maxWidth();
+			width = 0;
+			for (int i = 0; i < words.size(); i++) {
+				RenderedText w = words.get(i);
+				if (w == SPACE_) { x += 1.667f; continue; }
+				if (w == NEWLINE_) { y += lh + 2f; x = this.x; nLines++; cur = new ArrayList<>(); lines.add(cur); continue; }
+				if (w.height() > lh) lh = w.height();
+				float full = w.width();
+				if (!cjk(w)) for (int j = i + 1; j < words.size() && words.get(j) != SPACE_ && words.get(j) != NEWLINE_ && !cjk(words.get(j)); j++) full += words.get(j).width() - 0.667f + tracking;
+				if (full > maxW) full = w.width();   // ① 한 줄보다 긴 낱말: 이 글자만 보고 넘침을 판단
+				if ((x - this.x) + full - 0.001f > maxW && !cur.isEmpty()) { y += lh + 2f; x = this.x; nLines++; cur = new ArrayList<>(); lines.add(cur); }
+				w.x = x; w.y = y; PixelScene.align(w);
+				x += w.width(); cur.add(w);
+				if (x - this.x > width) width = x - this.x;
+				x -= 0.667f;
+				x += tracking;   // 글자 간격 (5차)
+			}
+			height = (y - this.y) + lh;
+			if (align == CENTER_ALIGN || align == RIGHT_ALIGN) for (List<RenderedText> line : lines) {
+				if (line.isEmpty()) continue;
+				RenderedText last = line.get(line.size() - 1);
+				float lw = last.width() + last.x - this.x;
+				for (RenderedText t : line) { t.x += align == CENTER_ALIGN ? (width - lw) / 2f : width - lw; PixelScene.align(t); }
+			}
+			applyLineExtra();
+			saveBase();
+		}
+		/** 줄 배치 결과(자리 · 크기)를 기억 — 글자 연출은 매 프레임 이 값에서 옮김 */
+		void saveBase() {
+			List<RenderedText> g = wordsOf(); int n = g.size();
+			if (baseX.length != n) { baseX = new float[n]; baseY = new float[n]; baseS = new float[n]; }
+			for (int k = 0; k < n; k++) { RenderedText w = g.get(k); baseX[k] = w.x; baseY[k] = w.y; baseS[k] = w.scale.y; }
+		}
+		/** 글자 연출 (5차): 글자마다 나타난 때(t0) 부터 지난 시간으로 — fade 흐리게 · rise 아래에서 올라옴 · drop 위에서 내려옴 · pop 크게 나타나 제자리 · shake 떨림 · wave 물결.
+		 *  emOnly = 강조(**…**) 글자에만. 시간은 Game.elapsed 를 더한 Wnd 시계 (배속 · 스킵과 같은 시계) */
+		void fx(String effect, float[] t0, float now, float dur, float strength, boolean emOnly) {
+			List<RenderedText> g = wordsOf();
+			for (int k = 0; k < g.size() && k < baseX.length; k++) {
+				RenderedText w = g.get(k);
+				if (!w.visible) continue;
+				float dx = 0, dy = 0, sc = 1, a = 1;
+				boolean act = !emOnly || (k < em.length && em[k]);
+				if (act) {
+					float p = Math.max(0, Math.min(1, (now - (k < t0.length ? t0[k] : 0)) / Math.max(0.01f, dur))), e = p * p * (3 - 2 * p);
+					switch (effect) {
+						case "fade": a = e; break;
+						case "rise": dy = 3f * strength * (1 - e); a = e; break;
+						case "drop": dy = -3f * strength * (1 - e); a = e; break;
+						case "pop": sc = 1 + 0.8f * strength * (1 - e); a = Math.min(1, e * 2); break;
+						case "shake": dx = 0.7f * strength * (float) Math.sin(now * 40 + k * 2.3f); dy = 0.7f * strength * (float) Math.cos(now * 33 + k * 1.7f); break;
+						case "wave": dy = 1.2f * strength * (float) Math.sin(now * 6 + k * 0.6f); break;
+					}
+				}
+				float bs = baseS[k], bw = w.width() / (w.scale.y / bs), bh = w.height() / (w.scale.y / bs);
+				w.scale.set(bs * sc);
+				w.x = baseX[k] + dx - (sc - 1) * bw / 2f; w.y = baseY[k] + dy - (sc - 1) * bh / 2f;
+				w.alpha(a);
+			}
+		}
+		/** 줄마다 lineExtra 씩 아래로 */
+		void applyLineExtra() {
 			if (lineExtra == 0 || words == null) return;
 			java.util.TreeSet<Integer> ys = new java.util.TreeSet<>();
 			for (RenderedText w : words) if (w.parent == this) ys.add(Math.round(w.y * 100));
@@ -373,7 +501,7 @@ public class MakerDialogue {
 				com.watabou.noosa.Gizmo g = member(sc, i);
 				if (g == null || g == this || !g.visible) continue;
 				if (g.camera != PixelScene.uiCamera) continue;
-				if (g instanceof Window || g instanceof MakerStage || g instanceof MakerFilter.Host) continue;   // 화면 필터(날씨 등)는 대사 중에도 그대로
+				if (g instanceof Window || g instanceof MakerStage || g instanceof MakerFilter.Host || g instanceof MakerTestEnv.Overlay || g instanceof MakerCutscene.Bar) continue;   // 화면 필터(날씨 등) · 테스트 플레이 단추는 대사 중에도 그대로
 				g.visible = false;
 				hidden.add(g);
 			}
@@ -401,6 +529,46 @@ public class MakerDialogue {
 
 	// ------------------------------------------------------------ 창
 
+	/** "입력 기다리기" 명령: 화면을 누르거나 확인 · 취소 키를 누를 때까지 (보이는 것 없음 — 그 사이 게임 조작도 막힘). 끝나면 onDone 한 번 */
+	public static class WaitWnd extends Window {
+		Runnable onDone;
+		public WaitWnd(Runnable onDone) {
+			super(0, 0, new NinePatch(TextureCache.createSolid(0x00000000), 0));
+			this.onDone = onDone;
+			shadow.visible = false;
+			int W = PixelScene.uiCamera.width, H = PixelScene.uiCamera.height;
+			resize(W, H); pinToScreen(this);
+			add(new PointerArea(0, 0, W, H) { @Override protected void onClick(PointerEvent event) { hide(); } });
+		}
+		@Override public boolean onSignal(KeyEvent event) {
+			if (!event.pressed) return true;
+			int k = event.code;
+			if (k == Input.Keys.ENTER || k == Input.Keys.SPACE || k == Input.Keys.Z || k == Input.Keys.NUMPAD_ENTER || k == Input.Keys.ESCAPE || k == Input.Keys.BACK) hide();
+			return true;
+		}
+		@Override public void onBackPressed() { hide(); }
+		@Override public void offset(int xOffset, int yOffset) { }   // 화면 전체 창 — 가방 창 옆으로 밀리지 않게 (Wnd 와 같음)
+		@Override public void hide() {
+			Runnable r = onDone; onDone = null;
+			if (r != null) r.run();   // 이벤트를 먼저 이어 줌 — 창이 사라진 틈에 "멈춘 이벤트"로 오해받지 않게 (Wnd 와 같음)
+			super.hide();
+		}
+	}
+
+	/** 안전 영역 (ui 좌표: x, y, w, h) — 노치 · 상태 줄 · 내비게이션 바를 뺀 곳. 데스크톱은 화면 전체 (원작 GameScene 과 같은 getSafeInsets(INSET_ALL)) */
+	static float[] safeArea(float W, float H) {
+		com.watabou.utils.RectF in;
+		try { in = Game.platform.getSafeInsets(com.watabou.utils.PlatformSupport.INSET_ALL).scale(1f / PixelScene.uiCamera.zoom); }
+		catch (Throwable t) { in = new com.watabou.utils.RectF(); }
+		float[] te = MakerTestEnv.insets(); float z = PixelScene.uiCamera.zoom;   // 테스트 플레이 안전 영역 미리보기 (5차) — 기기 값과 큰 쪽
+		in.left = Math.max(in.left, te[0] / z); in.top = Math.max(in.top, te[1] / z); in.right = Math.max(in.right, te[2] / z); in.bottom = Math.max(in.bottom, te[3] / z);
+		return new float[]{in.left, in.top, Math.max(1, W - in.left - in.right), Math.max(1, H - in.top - in.bottom)};
+	}
+
+	/** 화면 전체 창의 카메라를 화면 (0,0) 에 — 원작 Window 는 내비게이션 바만큼 줄인 곳의 가운데에 두어, 안전 영역이 위아래 · 좌우로 다르면 창 전체가 반만큼 밀렸음.
+	 *  이렇게 하면 창 안 좌표 = 화면 좌표(uiCamera)라서 안전 영역(safeArea)을 그대로 쓸 수 있음 */
+	static void pinToScreen(Window w) { w.camera.x = 0; w.camera.y = 0; }
+
 	public static class Wnd extends Window {
 		public final Line line;
 		Runnable onDone; final OnChoice onChoice;
@@ -409,13 +577,20 @@ public class MakerDialogue {
 		TypeText text;
 		final List<TypeText> deco = new ArrayList<>();   // 그림자 · 외곽선 · 굵게 사본
 		Image arrow;
+		NinePatch plate; RenderedTextBlock nameText; Image illImg;   // 이름표 · 일러스트 (배치 검사 debugLayout 용)
 		TypeText newText(int fs, float lineExtra) {
 			TypeText t = new TypeText(fs * PixelScene.defaultZoom);
 			t.zoom(1 / (float) PixelScene.defaultZoom);
 			t.lineExtra = lineExtra;
 			return t;
 		}
-		void revealAll(int n) { if (text != null) text.reveal(n); for (TypeText c : deco) c.reveal(n); }
+		// 글자 연출 (5차): 효과 · 시간 · 세기 · 강조만 — 줄 → 이벤트 "대사 스타일" → 대사창 설정 순서 (EventInterpreter 가 줄에 채움)
+		String effect = "none"; float fxDur = 0.25f, fxStrength = 1f, fxT = 0; boolean fxEm; float[] t0 = new float[0]; int shownN = 0;
+		void revealAll(int n) {
+			if (text != null) text.reveal(n); for (TypeText c : deco) c.reveal(n);
+			if (text != null) { int m = Math.min(n, text.total); if (t0.length != text.total) t0 = new float[text.total]; for (int k = shownN; k < m; k++) t0[k] = fxT; shownN = Math.max(shownN, m); }
+		}
+		void applyFx() { if ("none".equals(effect) || text == null) return; text.fx(effect, t0, fxT, fxDur, fxStrength, fxEm); for (TypeText c : deco) c.fx(effect, t0, fxT, fxDur, fxStrength, fxEm); }
 		float shown = 0, speed, arrowT = 0, arrowY;
 		boolean typing;
 		int soundEvery = 3, lastSound = 0;
@@ -429,7 +604,7 @@ public class MakerDialogue {
 			this.line = l; this.onDone = onDone; this.onChoice = onChoice;
 			shadow.visible = false;
 			W = PixelScene.uiCamera.width; H = PixelScene.uiCamera.height;
-			resize(W, H);
+			resize(W, H); pinToScreen(this);
 
 			snd("open");
 			HudHider.hold();
@@ -438,13 +613,16 @@ public class MakerDialogue {
 			});
 
 			boolean hasText = !l.text.isEmpty();
-			float margin = f("box", "margin"), pad = f("box", "padding");
+			float margin = f("box", "margin"), pad = !Float.isNaN(l.padding) ? Math.max(0, Math.min(40, l.padding)) : f("box", "padding");
 			final float tk = textScale(W, H);   // 화면 크기에 맞춘 글자 배율
-			int fs = Math.max(5, Math.round(f("box", "fontSize") * tk));
-			float bh = Math.max(fs * 3 + pad * 2, H * f("box", "height"));
-			float bx = margin, bw = W - margin * 2, by = H - margin - bh;
+			int fs = Math.max(5, Math.round(f("box", "fontSize") * (Float.isNaN(l.sizePct) ? 1f : Math.max(0.5f, Math.min(3f, l.sizePct / 100f))) * tk));
+			// 대사창 · 글 · 이름표 · ▼ · 선택지는 안전 영역(노치 · 상태 줄 · 내비게이션 바를 뺀 곳) 안에 — 데스크톱 · 안전 영역이 없는 기기는 화면 전체라 예전과 같음.
+			// 일러스트 · 배경은 화면 전체 (4차: 예전엔 대사창이 내비게이션 바 · 노치 아래로 들어갔음)
+			final float[] sa = safeArea(W, H); final float SX = sa[0], SY = sa[1], SW = sa[2], SH = sa[3];
+			float bh = Math.max(fs * 3 + pad * 2, SH * f("box", "height"));
+			float bx = SX + margin, bw = SW - margin * 2, by = SY + SH - margin - bh;
 			JsonValue Lb = lay("box");
-			if (Lb != null) { bx = Lb.getFloat("x") * W; by = Lb.getFloat("y") * H; bw = Math.max(20, Lb.getFloat("w", 0.9f) * W); bh = Math.max(12, Lb.getFloat("h", 0.27f) * H); }
+			if (Lb != null) { bx = SX + Lb.getFloat("x") * SW; by = SY + Lb.getFloat("y") * SH; bw = Math.max(20, Lb.getFloat("w", 0.9f) * SW); bh = Math.max(12, Lb.getFloat("h", 0.27f) * SH); }
 
 			// 일러스트
 			Image ill = null;
@@ -455,6 +633,7 @@ public class MakerDialogue {
 				float th = H * (Li != null ? Li.getFloat("h", 0.9f) : f("illust", "height")) * (l.scale <= 0 ? 1 : l.scale);
 				ill = illustImage(l.illust, th);
 				if (ill != null) {
+					if (Li == null) th = Math.min(th, W * ill.height / ill.width);   // 화면보다 넓어지지 않게 (세로 화면 · 가로로 긴 그림 — 편집기 미리보기와 같음)
 					float sc = th / ill.height;
 					ill.scale.set(sc);
 					ill.flipHorizontal = l.flip;
@@ -464,6 +643,7 @@ public class MakerDialogue {
 					ill.y = (Li != null ? Li.getFloat("y", 1f) * H : H) - th + l.offY * H / 100f;
 				}
 			}
+			illImg = ill;
 			boolean front = !"back".equals(s("illust", "layer"));
 			if (ill != null && !front) add(ill);
 
@@ -483,9 +663,14 @@ public class MakerDialogue {
 			}
 
 			JsonValue Lt = lay("text");
-			if (Lt != null) { tx = Lt.getFloat("x") * W; tr = (Lt.getFloat("x") + Lt.getFloat("w", 0.5f)) * W; textY = Lt.getFloat("y") * H; }
+			if (Lt != null) { tx = SX + Lt.getFloat("x") * SW; tr = SX + (Lt.getFloat("x") + Lt.getFloat("w", 0.5f)) * SW; textY = SY + Lt.getFloat("y") * SH; }
 			if (hasText) {
-				speed = f("typing", "speed");
+				speed = l.speed >= 0 ? l.speed : f("typing", "speed");
+				effect = l.effect != null && !l.effect.isEmpty() ? l.effect : s("fx", "effect");
+				fxDur = !Float.isNaN(l.fxDur) ? l.fxDur : f("fx", "dur"); fxStrength = !Float.isNaN(l.fxStrength) ? l.fxStrength : f("fx", "strength");
+				fxEm = "em".equals(l.fxScope != null && !l.fxScope.isEmpty() ? l.fxScope : s("fx", "scope"));
+				final float tracking = !Float.isNaN(l.tracking) ? l.tracking : f("text", "tracking"), emScale = Math.max(0.5f, Math.min(2f, f("fx", "emScale")));
+				final boolean perChar = speed > 0 || tracking != 0 || !"none".equals(effect) || emScale != 1f;   // 글자 단위로 나눌 때: 글자가 하나씩 · 글자 간격 · 연출 · 강조 크기
 				sound = l.voice;                                        // 캐릭터 목소리 → 글자 소리 → 대사창 소리 → 게임 효과음
 				if (sound == null || sound.isEmpty()) sound = s("typing", "sound");
 				if (sound.isEmpty()) sound = sndRef("type");
@@ -494,18 +679,20 @@ public class MakerDialogue {
 				List<float[]> offs = new ArrayList<>(); List<Integer> ocs = new ArrayList<>();   // 옮길 거리 {dx, dy} · 색 (null = 본문 색)
 				if (b("text", "shadow")) { offs.add(new float[]{sx, sy}); ocs.add(col("text", "shadowColor")); }
 				if (b("text", "outline")) { int oc = col("text", "outlineColor"); for (float[] d : new float[][]{{-ow, 0}, {ow, 0}, {0, -ow}, {0, ow}, {-ow, -ow}, {ow, -ow}, {-ow, ow}, {ow, ow}}) { offs.add(d); ocs.add(oc); } }
-				if (b("text", "bold")) { offs.add(new float[]{bd, 0}); ocs.add(null); }
-				int maxW = (int) (tr - tx - (b("text", "bold") ? bd : 0));
-				float lineExtra = f("text", "lineSpacing");
-				text = newText(fs, lineExtra);
-				text.set(l.text, maxW, col("box", "textColor"), speed > 0);
-				boolean centerText = "center".equals(s("box", "align"));
+				final boolean bold = l.bold != null ? l.bold : b("text", "bold");
+				final boolean centerText = "center".equals(l.align != null && !l.align.isEmpty() ? l.align : s("box", "align"));
+				final int hi = l.emColor != null && !l.emColor.isEmpty() ? MakerTitle.color(l.emColor, col("box", "highlight")) : col("box", "highlight");
+				if (bold) { offs.add(new float[]{bd, 0}); ocs.add(null); }
+				int maxW = (int) (tr - tx - (bold ? bd : 0));
+				float lineExtra = !Float.isNaN(l.lineGap) ? l.lineGap : f("text", "lineSpacing");
+				text = newText(fs, lineExtra); text.tracking = tracking; text.emScale = emScale; text.center = centerText;
+				text.set(l.text, maxW, col("box", "textColor"), hi, perChar);
 				float textX = centerText ? tx + Math.max(0, (tr - tx) - text.width()) / 2f : tx;
 				for (int oi = 0; oi < offs.size(); oi++) {
 					float[] o = offs.get(oi); Integer occ = ocs.get(oi);
-					TypeText c = newText(fs, lineExtra);
+					TypeText c = newText(fs, lineExtra); c.tracking = tracking; c.emScale = emScale; c.center = centerText;
 					int oc = occ == null ? col("box", "textColor") : occ;
-					c.set(l.text, maxW, oc, occ == null ? col("box", "highlight") : oc, speed > 0);
+					c.set(l.text, maxW, oc, occ == null ? hi : oc, perChar);
 					if (occ != null) c.silhouette(occ);
 					c.setPos(textX + o[0], textY + o[1]);
 					PixelScene.align(c);
@@ -516,7 +703,8 @@ public class MakerDialogue {
 				PixelScene.align(text);
 				add(text);
 				typing = speed > 0;
-				if (typing) revealAll(0);
+				revealAll(typing ? 0 : Integer.MAX_VALUE);   // 바로 다 보이는 대사도 나타난 시각을 기록 (연출이 한꺼번에)
+				applyFx();
 
 				// 이름표
 				if (b("name", "show") && !l.name.isEmpty()) {
@@ -530,9 +718,10 @@ public class MakerDialogue {
 					float px = np.equals("left") ? bx + pad : np.equals("text") ? tx : bx + bw - pad - pw;
 					float py = by - ph + 2;
 					JsonValue Ln = lay("name");
-					if (Ln != null) { px = Ln.getFloat("x") * W; py = Ln.getFloat("y") * H; }
+					if (Ln != null) { px = SX + Ln.getFloat("x") * SW; py = SY + Ln.getFloat("y") * SH; }
 					plate.x = px; plate.y = py; plate.size(pw, ph);
 					add(plate);
+					this.plate = plate; this.nameText = nt;
 					nt.setPos(px + 5, py + (ph - nt.height()) / 2f);
 					PixelScene.align(nt);
 					add(nt);
@@ -545,7 +734,7 @@ public class MakerDialogue {
 					arrow.x = bx + (bw - arrow.width()) / 2f;
 					arrowY = by + bh - arrow.height() - 3;
 					JsonValue La = lay("indicator");
-					if (La != null) { arrow.x = La.getFloat("x") * W; arrowY = La.getFloat("y") * H; }
+					if (La != null) { arrow.x = SX + La.getFloat("x") * SW; arrowY = SY + La.getFloat("y") * SH; }
 					arrow.y = arrowY;
 					arrow.visible = !typing;
 					add(arrow);
@@ -559,18 +748,18 @@ public class MakerDialogue {
 				String cp = s("choice", "pos");
 				List<RenderedTextBlock> labels = new ArrayList<>();
 				for (String c : l.choices) { RenderedTextBlock t = PixelScene.renderTextBlock(c, cfs); labels.add(t); cw = Math.max(cw, t.width()); }
-				float minW = W * (f("choice", "width") > 0 ? f("choice", "width") : 0.22f);
+				float minW = SW * (f("choice", "width") > 0 ? f("choice", "width") : 0.22f);
 				float contentW = cw + pad * 2 + 6;
-				cw = Math.min(W - margin * 2, Math.max(contentW, minW));
+				cw = Math.min(SW - margin * 2, Math.max(contentW, minW));
 				float ch = cfs + 8, gap = 2;
 				float total = l.choices.length * ch + (l.choices.length - 1) * gap;
-				float bottom = hasText ? by - (b("name", "show") && !l.name.isEmpty() ? 14 : 4) : H - margin;
+				float bottom = hasText ? by - (b("name", "show") && !l.name.isEmpty() ? 14 : 4) : SY + SH - margin;
 				float cy = bottom - total;
-				if (cp.equals("middle")) cy = Math.max(margin, Math.min(bottom - total, (bottom - total) / 2f));   // 대사창 위 공간의 가운데
+				if (cp.equals("middle")) cy = Math.max(SY + margin, Math.min(bottom - total, SY + (bottom - SY - total) / 2f));   // 대사창 위 공간의 가운데
 				float rightEdge = ill != null && side.equals("right") ? Math.max(bx + cw, ill.x - 4) : bx + bw;   // 오른쪽 일러스트를 가리지 않게
-				float cx = cp.equals("left") ? bx : (cp.equals("center") || cp.equals("middle")) ? (W - cw) / 2f : rightEdge - cw;
+				float cx = cp.equals("left") ? bx : (cp.equals("center") || cp.equals("middle")) ? SX + (SW - cw) / 2f : rightEdge - cw;
 				JsonValue Lc = lay("choices");
-				if (Lc != null) { cx = Lc.getFloat("x") * W; cy = Lc.getFloat("y") * H; cw = Math.min(W - cx, Math.max(contentW, Lc.getFloat("w", 0.4f) * W)); }
+				if (Lc != null) { cx = SX + Lc.getFloat("x") * SW; cy = SY + Lc.getFloat("y") * SH; cw = Math.min(SX + SW - cx, Math.max(contentW, Lc.getFloat("w", 0.4f) * SW)); }
 				for (int i = 0; i < l.choices.length; i++) {
 					Choice c = new Choice(i, labels.get(i), pad, cp.equals("middle") || cp.equals("center"));
 					c.setRect(cx, cy + i * (ch + gap), cw, ch);
@@ -580,6 +769,22 @@ public class MakerDialogue {
 				}
 				if (!hasText) openChoices();
 			}
+			// 화면 크기가 바뀌어(돌리기 · 창 크기) 같은 줄을 다시 띄운 경우: 나온 글자 · 연출 시계를 이어받음 (처음부터 다시 타자하지 않게)
+			Carry k = carry; carry = null;
+			if (k != null && k.line == l && text != null) {
+				fxT = k.fxT; autoT = k.autoT;
+				if (!k.typing) { finishTyping(); for (int i = 0; i < t0.length; i++) t0[i] = fxT - 100f; }
+				else { shown = k.shown; revealAll((int) shown); for (int i = 0; i < Math.min(t0.length, k.t0.length); i++) t0[i] = k.t0[i]; }
+				applyFx();
+			}
+		}
+		/** 다시 띄울 창에 넘길 진행 상태 (EventInterpreter.rebuild 가 옛 창에서 담음 — 같은 Line 객체일 때만 씀) */
+		static final class Carry { Line line; float shown, fxT, autoT; boolean typing; float[] t0; }
+		static Carry carry;
+		public void carryOver() {
+			if (done) return;
+			Carry k = new Carry(); k.line = line; k.shown = shown; k.fxT = fxT; k.autoT = autoT; k.typing = typing; k.t0 = t0.clone();
+			carry = k;
 		}
 
 		void openChoices() {
@@ -614,6 +819,25 @@ public class MakerDialogue {
 			if (!choices.isEmpty()) { if (!choiceOpen) openChoices(); return; }
 			hide();
 		}
+		/** 상태 (자동 테스트 "typing"): 글자 진행 · 연출 · 글자 간격 · 줄 수 · 글 크기 */
+		public String debugTyping() {
+			return String.format(java.util.Locale.ROOT, "line='%s' shown=%d/%d real=%.2f perRealSec=%.1f typing=%s speed=%.0f effect=%s dur=%.2f fxT=%.2f tracking=%.1f lineExtra=%.1f text=%.0fx%.0f choices=%d open=%s done=%s",
+					line.text.length() > 20 ? line.text.substring(0, 20) : line.text, Math.min(shownN, text == null ? 0 : text.total), text == null ? 0 : text.total, realT, typedRealT > 0 ? Math.min(shownN, text == null ? 0 : text.total) / typedRealT : 0f, typing, speed, effect, fxDur, fxT,
+					text == null ? 0 : text.tracking, text == null ? 0 : text.lineExtra, text == null ? 0 : text.width(), text == null ? 0 : text.height(), choices.size(), choiceOpen, done);
+		}
+		/** 대사 완성 (테스트 플레이): 글자 · 연출을 바로 끝까지 — 창은 그대로 (입력을 기다림) */
+		public void complete() {
+			if (typing) finishTyping();
+			for (int k = 0; k < t0.length; k++) t0[k] = Math.min(t0[k], fxT - 100f);
+			if (!choices.isEmpty() && !choiceOpen) openChoices();
+		}
+		/** 다음 대사 (테스트 플레이): 완성한 뒤 닫음 — 선택지가 있으면 선택지를 열기만 (사람이 고름) */
+		public void next() {
+			if (done) return;
+			complete();
+			if (!choices.isEmpty()) return;
+			hide();
+		}
 		void finishTyping() {
 			typing = false;
 			if (text != null) revealAll(Integer.MAX_VALUE);
@@ -621,8 +845,18 @@ public class MakerDialogue {
 			else if (arrow != null) arrow.visible = true;
 		}
 
+		float autoT = 0, skipT = 0, realT = 0, typedRealT = 0;   // realT · typedRealT = 실제로 지난 시간 (배속과 무관 — 자동 테스트가 배속을 잼)
 		@Override public void update() {
 			super.update();
+			fxT += Game.elapsed;
+			realT += Game.elapsed / Math.max(0.0001f, Game.timeScale);
+			if (typing) typedRealT = realT;
+			// 테스트 플레이 스킵 (MakerTestEnv): 글자를 다 보이고 잠깐 뒤 넘김 — 선택지는 열기만 (고르지 않음)
+			if (MakerCutscene.skipping() && !done) {
+				complete();
+				if (choices.isEmpty()) { skipT += Game.elapsed / Math.max(0.0001f, Game.timeScale); if (skipT >= 0.05f) { hide(); return; } }
+			}
+			if (!typing && !done && line.auto > 0 && choices.isEmpty()) { autoT += Game.elapsed; if (autoT >= line.auto) advance(); }   // 저절로 넘기기 (시간은 실제 지난 시간)
 			if (typing && text != null) {
 				shown += speed * Game.elapsed;
 				int n = (int) shown;
@@ -630,6 +864,7 @@ public class MakerDialogue {
 				if (sound != null && !sound.isEmpty() && n >= lastSound + soundEvery) { lastSound = n; MakerAudio.playSe(sound); }
 				if (n >= text.total) finishTyping();
 			}
+			applyFx();
 			if (arrow != null && arrow.visible) {
 				arrowT += Game.elapsed;
 				String an = s("indicator", "anim");
@@ -663,6 +898,39 @@ public class MakerDialogue {
 			if (r != null) r.run();
 			super.hide();
 			HudHider.letGo();
+		}
+
+		// ---- 배치 검사 (자동 테스트 tools/playtest "layout") — 화면 크기 · 비율 · 안전 영역마다 잘리는 것이 없는지 ----
+		static String r(float x, float y, float w, float h) { return String.format(java.util.Locale.ROOT, "[%.0f,%.0f %.0fx%.0f]", x, y, w, h); }
+		public String debugLayout() {
+			StringBuilder b = new StringBuilder();
+			if (box != null) b.append("box=").append(r(box.x, box.y, box.width(), box.height()));
+			if (text != null) b.append(" text=").append(r(text.left(), text.top(), text.width(), text.height()));
+			if (plate != null) b.append(" name=").append(r(plate.x, plate.y, plate.width(), plate.height()));
+			if (illImg != null) b.append(" ill=").append(r(illImg.x, illImg.y, illImg.width(), illImg.height()));
+			if (arrow != null) b.append(" arrow=").append(r(arrow.x, arrowY, arrow.width(), arrow.height()));
+			for (Choice c : choices) b.append(" choice").append(c.index).append('=').append(r(c.left(), c.top(), c.width(), c.height()));
+			return b.toString();
+		}
+		/** 화면 밖 · 안전 영역(노치 · 내비게이션 바) 침범 · 글이 대사창을 넘침 · 이름표/선택지가 화면 밖 — 없으면 빈 목록. 일러스트는 화면 밖으로 조금 나가도 됨(배경 그림) — 절반 넘게 나가면 문제 */
+		public java.util.List<String> layoutProblems() {
+			java.util.List<String> out = new java.util.ArrayList<>();
+			float[] sa = safeArea(W, H);
+			float e = 0.5f;
+			java.util.function.BiConsumer<String, float[]> in = (n, q) -> {
+				if (q[0] < -e || q[1] < -e || q[0] + q[2] > W + e || q[1] + q[3] > H + e) out.add(n + " 화면 밖 " + r(q[0], q[1], q[2], q[3]) + " 화면 " + W + "x" + H);
+				else if (q[0] < sa[0] - e || q[1] < sa[1] - e || q[0] + q[2] > sa[0] + sa[2] + e || q[1] + q[3] > sa[1] + sa[3] + e) out.add(n + " 안전 영역 침범 " + r(q[0], q[1], q[2], q[3]) + " 안전 " + r(sa[0], sa[1], sa[2], sa[3]));
+			};
+			if (box != null) in.accept("대사창", new float[]{box.x, box.y, box.width(), box.height()});
+			if (text != null && box != null) {
+				in.accept("대사 글", new float[]{text.left(), text.top(), text.width(), text.height()});
+				if (lay("text") == null && text.top() + text.height() > box.y + box.height() + e) out.add("대사 글이 대사창 아래로 넘침 (글 " + Math.round(text.height()) + " / 창 " + Math.round(box.height()) + ")");
+				if (text.width() < 40) out.add("대사 글 폭이 너무 좁음 " + Math.round(text.width()));
+			}
+			if (plate != null) in.accept("이름표", new float[]{plate.x, plate.y, plate.width(), plate.height()});
+			for (Choice c : choices) in.accept("선택지 " + (c.index + 1), new float[]{c.left(), c.top(), c.width(), c.height()});
+			if (illImg != null) { float vis = Math.max(0, Math.min(W, illImg.x + illImg.width()) - Math.max(0, illImg.x)); if (vis < illImg.width() * 0.5f) out.add("일러스트가 절반 넘게 화면 밖 " + r(illImg.x, illImg.y, illImg.width(), illImg.height())); }
+			return out;
 		}
 
 		/** 화면 전체를 쓰는 창이라 가방 창 옆으로 밀리지 않게 (GameScene.show 가 창 위치를 옮기려 함) */

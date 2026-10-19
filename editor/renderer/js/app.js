@@ -17,16 +17,37 @@
   function showBottom(which) {
     $$('.btab').forEach(b => b.classList.toggle('on', b.dataset.b === which));
     $('#logBody').hidden = which !== 'log'; $('#checkBody').hidden = which !== 'check';
+    PDM.panels.show('bottom');   // 접어 둔 출력 창도 검사 · 빌드 결과는 펼쳐서 보여 줌
   }
+
+  // ---------------- 패널 접기 · 크기 기억 (이 PC 의 화면 설정 — 프로젝트와 상관없음, localStorage "pdm.layout") ----------------
+  //   tree = 리소스 · insp = 속성(인스펙터) · bottom = 출력/검사. 상태 줄 오른쪽 버튼 · 패널 제목의 « » ⌄ · Ctrl+B / Ctrl+Shift+B / Ctrl+J
+  PDM.panels = (function () {
+    const KEY = 'pdm.layout', NAMES = { tree: '리소스', insp: '속성', bottom: '출력' }, VARS = { treeW: '--treeW', inspW: '--inspW', bottomH: '--bottomH' };
+    let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (_) { st = {}; }
+    st.hide = st.hide || {};
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (_) { /* 저장 불가 환경 */ } };
+    const apply = () => {
+      const app = $('#app'); if (!app) return;
+      Object.keys(NAMES).forEach(n => app.classList.toggle('no-' + n, !!st.hide[n]));
+      Object.entries(VARS).forEach(([k, v]) => { if (st[k]) document.documentElement.style.setProperty(v, st[k] + 'px'); });
+      const bar = $('#stPanels'); if (bar) { bar.innerHTML = ''; Object.entries(NAMES).forEach(([n, label]) => bar.append(h('button', { class: st.hide[n] ? 'off' : '', title: `${label} 패널 ${st.hide[n] ? '보이기' : '숨기기'} (${PDM.keys.label({ tree: 'toggleTree', insp: 'toggleInspector', bottom: 'toggleBottom' }[n]) || '단축키 없음'})`, onclick: () => toggle(n) }, label))); }
+    };
+    function toggle(n, on) { st.hide[n] = on === undefined ? !st.hide[n] : !on; save(); apply(); dispatchEvent(new Event('resize')); }
+    return { apply, toggle, show: n => { if (st.hide[n]) toggle(n, true); }, isOpen: n => !st.hide[n], size(k, px) { st[k] = Math.round(px); save(); }, NAMES };
+  })();
+
+  // ---------------- 상태 줄 — 편집기가 지금 상태(도구 · 레이어 · 확대 · 선택)를 한 줄로 (탭을 바꾸면 비움) ----------------
+  PDM.status = { ctx(text, title) { const el = $('#stCtx'); if (!el) return; el.textContent = text || ''; el.title = title || text || ''; } };
 
   // ---------------- 인스펙터 ----------------
   PDM.inspector = {
     show(title, el) {   // 같은 것을 다시 보여 줄 때(편집 뒤 다시 그림)는 스크롤 위치를 그대로
-      const t = title || '인스펙터', b = $('#inspBody'), same = $('#inspTitle').textContent === t, keep = same ? b.scrollTop : 0;
+      const t = title || '속성', b = $('#inspBody'), same = $('#inspTitle').textContent === t, keep = same ? b.scrollTop : 0;
       $('#inspTitle').textContent = t; b.innerHTML = ''; if (el) b.append(el);
       if (same) { b.scrollTop = keep; requestAnimationFrame(() => { if (b.scrollTop !== keep) b.scrollTop = keep; }); }
     },
-    clear() { this.show('인스펙터', h('div', { class: 'empty' }, '선택한 것이 없습니다')); }
+    clear() { this.show('속성', h('div', { class: 'empty' }, '선택한 것이 없습니다')); }
   };
 
   // ---------------- 탭 ----------------
@@ -63,7 +84,8 @@
     if (/^(node|room|char|hero|item|event|prop):/.test(t.key) && store.isOpen && !store.has(t.key)) { setTimeout(() => PDM.tabs.close(t.key), 0); return; }   // 지워진 리소스의 탭은 닫음 (그리다 오류 나지 않게)
     t.dispose && t.dispose(); t.dispose = null;
     // ctx 는 탭마다 하나 (ctx.state / ctx.st 에 둔 화면 상태가 다시 그려도 유지됨)
-    const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { t.dispose = fn; }, key: t.key };
+    // onDispose 는 여러 번 불러도 모두 실행 (예전엔 마지막 것만 남아 맵 편집기가 다시 그릴 때마다 창 이벤트 3개가 쌓였음)
+    const ctx = t.ctx = t.ctx || { refresh: () => render(t), onDispose: fn => { const prev = t.dispose; t.dispose = prev ? () => { prev(); fn(); } : fn; }, key: t.key };
     let el;
     try {
       el = t.editor.render(t.key, ctx);
@@ -74,7 +96,7 @@
     // 다시 그릴 때 화면이 밀리지 않게: 그림·미리보기(비동기로 크기가 정해짐)가 아직 작아서 페이지가 잠깐 짧아지면
     // 스크롤 위치가 잘려 위로 밀렸음 → 잠깐 예전 높이를 최소 높이로 잡아 두었다가 풂
     // 안쪽 스크롤 칸(아이템 시트 고르기 등)의 위치도 그대로 — 다시 그리면 맨 위로 돌아가 밀려 보였음
-    const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view';
+    const INNER = '.sheet-view, .map-scroll, .keep-scroll, .code-view, .palette';
     const inner = active === t ? [...t.el.querySelectorAll(INNER)].map(e => [e.scrollTop, e.scrollLeft]) : [];
     const oldH = active === t ? t.el.offsetHeight : 0;
     // 기준점: 방금 누른(포커스된) 칸 — 다시 그린 뒤 같은 자리의 칸이 화면의 같은 높이에 오게 맞춤 (위쪽 칸 높이가 바뀌어도 밀리지 않게)
@@ -112,13 +134,17 @@
     const fix = () => { if (moved) return; const n = find(); if (!n) return; const d = n.getBoundingClientRect().top - a.top; if (Math.abs(d) > 1) body.scrollTop += d; };
     fix(); [30, 120, 400].forEach(ms => setTimeout(fix, ms));   // 그림 · 미리보기가 늦게 커져도 다시 맞춤 (그사이 휠로 움직였으면 그만)
   }
+  /** 탭 안쪽 스크롤 칸들의 위치 (5차): 탭을 바꾸면 그 탭의 화면(t.el)을 문서에서 뗐다가 다시 붙이는데, 브라우저는 뗀 요소의 스크롤을 0 으로 되돌림.
+   *  예전엔 바깥(#tabbody) 위치만 기억해서 맵 편집기 팔레트 · 시트 고르기 같은 안쪽 칸이 탭을 오갈 때마다 맨 위로 튀었음 → 떼기 전에 모두 기억했다가 붙인 뒤 되돌림 */
+  const innerScrolls = root => { const out = []; root.querySelectorAll('*').forEach(e => { if (e.scrollTop || e.scrollLeft) out.push([e, e.scrollTop, e.scrollLeft]); }); return out; };
   function activate(t) {
-    if (active && active !== t) active.scroll = $('#tabbody').scrollTop;
+    if (active && active !== t) { active.scroll = $('#tabbody').scrollTop; active.inner = innerScrolls(active.el); }
     active = t;
     const body = $('#tabbody'); body.innerHTML = ''; body.append(t.el); body.scrollTop = t.scroll || 0;
+    if (t.inner) { t.inner.forEach(([e, top, left]) => { if (t.el.contains(e)) { e.scrollTop = top; e.scrollLeft = left; } }); t.inner = null; }
     if (!t.el.childElementCount) render(t);
     drawTabbar(); markTree();
-    PDM.inspector.clear();
+    PDM.inspector.clear(); PDM.status.ctx('');
     t.editor.onActivate && t.editor.onActivate(t.key);
   }
   function drawTabbar() {
@@ -324,7 +350,88 @@
 
   // ---------------- 메뉴 / 툴바 (GameMaker 식: 위 = 메뉴, 아래 = 아이콘 도구 모음) ----------------
   const T = () => window.PDM_THEME;
-  const chk = on => (on ? '✓ ' : '\u2003 ');
+  // ---- 메뉴 항목 묶음 (4차: 메뉴 막대 · 도구 모음 ▾ 가 같은 목록을 씀 — 예전엔 같은 일을 하는 항목이 곳마다 이름 · 비활성 조건이 달랐음) ----
+  const isRunning = () => !!drawToolbar.running;
+  const webTip = () => (pdm.isElectron ? '' : ' — 웹 모드에서는 쓸 수 없습니다');
+  /** 테마 · 강조색 (보기 메뉴 · 도구 모음의 테마 버튼) — 켜진 것은 checked(✓) 로 */
+  const THEME_ITEMS = () => [
+    { head: '테마' },
+    { label: '시스템 따르기', checked: T().mode === 'system', run: () => T().setMode('system') },
+    { label: '밝게', checked: T().mode === 'light', run: () => T().setMode('light') },
+    { label: '어둡게', checked: T().mode === 'dark', run: () => T().setMode('dark') },
+    { head: '강조색' },
+    { label: '시스템 강조색' + (T().systemAccent ? '' : ' (이 환경에서는 없음)'), checked: T().accent === 'system', run: () => T().setAccent('system') },
+    { label: 'PDMaker 기본 (청록)', checked: T().accent === 'default', run: () => T().setAccent('default') },
+    { label: '직접 고르기…', checked: !['system', 'default'].includes(T().accent), run: pickAccent }];
+  /** 내보내기 · 가져오기 (파일 메뉴 · 도구 모음 "내보내기 ▾") */
+  const EXPORT_ITEMS = () => [
+    { label: '게임 파일 내보내기… (JAR · exe · 설치 파일 · APK)', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !store.isOpen || !pdm.isElectron },
+    { label: '프로젝트 내보내기 (.pdmproj — 백업 · 다른 PC)…', hint: PDM.keys.label('exportProject'), run: exportProject, disabled: !store.isOpen || !pdm.isElectron },
+    { label: '프로젝트 가져오기 (.pdmproj / .zip)…', run: importProject, disabled: !pdm.isElectron }];
+  /** 실행 (실행 메뉴 · 도구 모음 "▶ 테스트 플레이 · 빌드 ▾ · ■") — 실행 중에는 새 실행을 막고 중지만 */
+  const RUN_ITEMS = (withMain = true) => [
+    ...(withMain ? [{ label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen || isRunning() }] : []),
+    { label: '▶ desktop:debug 로 실행 (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen || isRunning() },
+    { label: '▶ PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen || isRunning() },
+    '-',
+    { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen || isRunning() },
+    { label: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때', run: cleanBuild, disabled: !store.isOpen || !pdm.isElectron || isRunning() },
+    ...(withMain ? ['-', { label: '■ 중지', hint: PDM.keys.label('stopGame'), run: stopGame, disabled: !isRunning() }] : [])];
+  /** 설정 (프로젝트 메뉴 · 도구 모음 ⚙ ▾) */
+  const SETTINGS_ITEMS = () => [
+    { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
+    { label: '확장 기능… (이벤트 · 스토리 같은 추가 기능 켜고 끄기)', run: showExtensions, disabled: !store.isOpen },
+    { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
+    '-',
+    { label: '단축키 설정…', hint: PDM.keys.label('keySettings'), run: () => PDM.keys.dialog() }];
+  // ---- 실행 환경 (5차) — 프로젝트마다 (project.json testplay). 바꿔도 맵 · 이벤트 데이터는 그대로 ----
+  const envCfg = () => PDM.testEnv.normalize((store.get('project') || {}).testplay).cfg;
+  function setEnv(patch, label) {
+    if (!store.isOpen) return;
+    store.edit('project', label || '실행 환경', p => { p.testplay = Object.assign(PDM.testEnv.normalize(p.testplay).cfg, patch); }, { silent: true });
+    drawToolbar(); toast('실행 환경: ' + PDM.testEnv.describe(PDM.testEnv.resolve(envCfg())), 'ok');
+  }
+  const ENV_ITEMS = () => { const c = envCfg(); return [
+    { head: '실행 환경 (이 프로젝트)' },
+    ...Object.entries(PDM.testEnv.ENV_NAMES).map(([k, n]) => ({ label: n, checked: c.env === k, hint: k === 'custom' ? '' : PDM.testEnv.PRESETS[k].kind === 'pc' ? `${PDM.testEnv.PRESETS[k].w}×${PDM.testEnv.PRESETS[k].h}` : `${PDM.testEnv.PRESETS[k].w}×${PDM.testEnv.PRESETS[k].h} ${PDM.testEnv.PRESETS[k].dpi}dpi`, disabled: !store.isOpen, run: () => k === 'custom' ? envDialog({ env: 'custom' }) : setEnv({ env: k }) })),
+    { head: '시작 배속' },
+    ...PDM.testEnv.SPEEDS.map(v => ({ label: v + '배속', checked: c.speed === v, disabled: !store.isOpen, run: () => setEnv({ speed: v }, '시작 배속') })),
+    '-', { label: '실행 환경 설정… (해상도 · 배율 · 회전 · 안전 영역 · 터치 · 디버그)', disabled: !store.isOpen, run: () => envDialog() }]; };
+  /** 실행 환경 창 — 고칠 때마다 아래에 계산 결과(기기 픽셀 → 논리 화면 → PC 창)를 바로 보여 줌 */
+  async function envDialog(init) {
+    if (!store.isOpen) return;
+    const c = Object.assign(envCfg(), init || {});
+    const out = h('div', { class: 'env-calc mono' });
+    const sel = (k, opts) => { const e = h('select', { onchange: () => { c[k] = e.value; draw(); } }, opts.map(([v, t]) => h('option', { value: v }, t))); e.value = String(c[k]); return e; };
+    const numIn = (get, set, o) => h('input', Object.assign({ type: 'number', value: get(), oninput: e => { set(e.target.value); draw(); } }, o));
+    const chk = (k, t, hint) => h('label', { class: 'check', title: hint || '' }, h('input', { type: 'checkbox', checked: !!c[k], onchange: e => { c[k] = e.target.checked; draw(); } }), h('span', {}, t));
+    const custom = h('div', { class: 'row' }, PDM.ui.field('기기 가로 (px)', numIn(() => c.custom.w, v => { c.custom.w = v; }, { min: 240, max: 8192 })), PDM.ui.field('기기 세로 (px)', numIn(() => c.custom.h, v => { c.custom.h = v; }, { min: 240, max: 8192 })), PDM.ui.field('밀도 (dpi)', numIn(() => c.custom.dpi, v => { c.custom.dpi = v; }, { min: 80, max: 800 })));
+    const insets = h('div', { class: 'row' }, ...['l', 't', 'r', 'b'].map(k => PDM.ui.field({ l: '왼쪽', t: '위', r: '오른쪽', b: '아래' }[k] + ' (기기 px)', numIn(() => c.insets[k], v => { c.insets[k] = v; }, { min: 0, max: 1000 }))));
+    function draw() {
+      const { cfg, fixes } = PDM.testEnv.normalize(Object.assign({}, c, { uiScale: Number(c.uiScale), speed: Number(c.speed) })), r = PDM.testEnv.resolve(cfg);   // 고르기 칸은 글자 — 숫자로 (예전: "0" ≠ 0 이라 늘 "고침" 경고)
+      custom.hidden = c.env !== 'custom'; insets.hidden = c.safeArea !== 'custom';
+      out.textContent = [PDM.testEnv.describe(r), r.insets.some(Boolean) ? `안전 영역 (PC 창 px): 왼 ${r.insets[0]} · 위 ${r.insets[1]} · 오른 ${r.insets[2]} · 아래 ${r.insets[3]}` : '안전 영역: 없음',
+        `회전 ${r.rotate ? '허용 (게임에서 F9)' : '안 함'} · 터치 표시 ${r.touch ? '켬' : '끔'} · 디버그 정보 ${r.debug ? '켬' : '끔'} · 시작 배속 ${r.speed}배`,
+        fixes.length ? '⚠ 허용 범위 밖 값은 저장할 때 고침: ' + fixes.join(', ') : ''].filter(Boolean).join('\n');
+    }
+    const body = h('div', { class: 'env-dlg' },
+      h('div', { class: 'row' }, PDM.ui.field('실행 환경', sel('env', Object.entries(PDM.testEnv.ENV_NAMES))),
+        PDM.ui.field('UI 배율', sel('uiScale', [['0', '자동 (그 기기에서 게임이 고르는 값)'], ...[2, 3, 4, 5, 6, 7, 8].map(v => [String(v), '×' + v])]), '기기 기준 배율 — 클수록 UI 가 크고 논리 화면이 작아짐'),
+        PDM.ui.field('시작 배속', sel('speed', PDM.testEnv.SPEEDS.map(v => [String(v), v + '배속']))),
+        PDM.ui.field('안전 영역 미리보기', sel('safeArea', [['none', '없음'], ['notch', '노치 · 제스처 바 흉내'], ['custom', '직접 (기기 px)']]))),
+      custom, insets,
+      h('div', { class: 'btnbar' }, chk('rotate', '실행 중 화면 돌리기 허용 (F9)'), chk('touch', '터치 표시 (누른 자리에 원)', '마우스 클릭을 손가락 터치처럼 표시 — 실제 터치 입력 검증은 아님'), chk('debug', '디버그 정보 표시 (환경 · 화면 · 배속 · FPS)')),
+      out,
+      h('p', { class: 'hint' }, 'PC 에서 기기 화면을 흉내 내는 "화면 시뮬레이션"입니다 — 에뮬레이터 · 실제 기기 검증을 대신하지 않습니다 (터치 · 앱 생명주기 · 하드웨어 가속 · 실제 노치는 다름). 웹 모드에서는 저장만 됩니다.'));
+    c.uiScale = String(c.uiScale); c.speed = String(c.speed);
+    draw();
+    const ok = await PDM.ui.modal('실행 환경 설정', body, [['취소', false], ['저장', true, 'pri']]);
+    if (!ok) return;
+    const { cfg } = PDM.testEnv.normalize(Object.assign({}, c, { uiScale: Number(c.uiScale), speed: Number(c.speed) }));
+    setEnv(cfg, '실행 환경 설정');
+  }
+  PDM.testEnvUI = { dialog: envDialog, set: setEnv, items: ENV_ITEMS };
+  const CHECK_LABEL = '검사 — 끊어진 참조 · 빠진 그림 · 소리 찾기';
   const MENUS = {
     '파일': () => [
       { label: '새 프로젝트…', hint: PDM.keys.label('newProject'), run: newProject },
@@ -332,56 +439,39 @@
       '-',
       { label: '저장', hint: PDM.keys.label('save'), run: saveAll, disabled: !store.isOpen },
       { label: '다른 이름으로 저장…', hint: PDM.keys.label('saveAs'), run: saveAs, disabled: !store.isOpen || !pdm.isElectron },
-      '-',
-      { label: '프로젝트 내보내기 (.pdmproj)…', hint: PDM.keys.label('exportProject'), run: exportProject, disabled: !store.isOpen || !pdm.isElectron },
-      { label: '프로젝트 가져오기…', run: importProject, disabled: !pdm.isElectron },
-      { label: '게임 파일 내보내기…', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !store.isOpen || !pdm.isElectron },
+      '-', ...EXPORT_ITEMS(),
       '-',
       { label: '프로젝트 폴더 열기', run: () => pdm.openExternal(store.root), disabled: !store.isOpen || !pdm.isElectron },
       { label: '닫기', run: closeProject, disabled: !store.isOpen }
     ],
     '편집': () => [
       { label: '실행 취소' + (store.undoLabel() ? ` (${store.undoLabel()})` : ''), hint: PDM.keys.label('undo'), run: undo, disabled: !store.undoLabel() },
-      { label: '다시 실행' + (store.redoLabel() ? ` (${store.redoLabel()})` : ''), hint: PDM.keys.label('redo'), run: redo, disabled: !store.redoLabel() },
-      '-',
-      { label: '단축키 설정…', hint: PDM.keys.label('keySettings'), run: () => PDM.keys.dialog() }
+      { label: '다시 실행' + (store.redoLabel() ? ` (${store.redoLabel()})` : ''), hint: PDM.keys.label('redo'), run: redo, disabled: !store.redoLabel() }
     ],
     '보기': () => [
-      { label: chk(T().mode === 'system') + '테마: 시스템 따르기', run: () => T().setMode('system') },
-      { label: chk(T().mode === 'light') + '테마: 밝게', run: () => T().setMode('light') },
-      { label: chk(T().mode === 'dark') + '테마: 어둡게', run: () => T().setMode('dark') },
-      '-',
-      { label: chk(T().accent === 'system') + '강조색: 시스템 강조색' + (T().systemAccent ? '' : ' (이 환경에서는 없음)'), run: () => T().setAccent('system') },
-      { label: chk(T().accent === 'default') + '강조색: PDMaker 보라', run: () => T().setAccent('default') },
-      { label: chk(!['system', 'default'].includes(T().accent)) + '강조색: 직접 고르기…', run: pickAccent },
-      '-',
-      { label: chk(PDM.tips.mode === 'hover') + '설명문: 마우스를 올리면 상자로 보기', run: () => PDM.tips.setMode('hover') },
-      { label: chk(PDM.tips.mode === 'inline') + '설명문: 화면에 항상 펼쳐 보기', run: () => PDM.tips.setMode('inline') },
-      { label: chk(PDM.tips.mode === 'off') + '설명문: 숨기기 (버튼 도움말만)', run: () => PDM.tips.setMode('off') },
-      '-',
-      { label: '출력 창', run: () => showBottom('log') }, { label: '검사 결과', run: () => showBottom('check') }
+      ...Object.entries(PDM.panels.NAMES).map(([n, t]) => ({ label: `${t} 패널`, checked: PDM.panels.isOpen(n), hint: PDM.keys.label({ tree: 'toggleTree', insp: 'toggleInspector', bottom: 'toggleBottom' }[n]), run: () => PDM.panels.toggle(n) })),
+      { label: '출력 창', run: () => showBottom('log') }, { label: '검사 결과', run: () => showBottom('check') },
+      ...THEME_ITEMS(),
+      { head: '설명문' },
+      { label: '마우스를 올리면 상자로 보기', checked: PDM.tips.mode === 'hover', run: () => PDM.tips.setMode('hover') },
+      { label: '화면에 항상 펼쳐 보기', checked: PDM.tips.mode === 'inline', run: () => PDM.tips.setMode('inline') },
+      { label: '숨기기 (버튼 도움말만)', checked: PDM.tips.mode === 'off', run: () => PDM.tips.setMode('off') }
     ],
     '프로젝트': () => [
-      { label: '프로젝트 설정', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
-      { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
-      { label: '확장 기능…', run: showExtensions, disabled: !store.isOpen },
-      { label: '검사 (끊어진 참조 찾기)', hint: PDM.keys.label('check'), run: runCheck, disabled: !store.isOpen },
+      ...SETTINGS_ITEMS().slice(0, 3),
       '-',
-      { label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen },
-      { label: '▶ 테스트 플레이 — desktop:debug (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen },
-      { label: '▶ 테스트 플레이 — PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen },
-      { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen },
-      { label: '빌드 정리 (gradlew clean)', run: cleanBuild, disabled: !store.isOpen || !pdm.isElectron },
-      { label: '■ 중지', hint: PDM.keys.label('stopGame'), run: stopGame },
-      '-',
-      { label: '게임 파일 내보내기…', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !store.isOpen || !pdm.isElectron }
+      { label: CHECK_LABEL, hint: PDM.keys.label('check'), run: runCheck, disabled: !store.isOpen }
     ],
+    // 4차: 테스트 플레이 · 빌드를 "프로젝트"에서 따로 (도구 모음의 ▶ 묶음과 같은 목록)
+    '실행': () => [...RUN_ITEMS(), '-', ...ENV_ITEMS()],
     '도구': () => [
       { label: '용어 관리', run: () => PDM.tabs.open('terms'), disabled: !store.isOpen },
       { label: '마음 시스템', run: () => PDM.tabs.open('heart'), disabled: !store.isOpen },
       { label: '그림 관리', run: () => PDM.tabs.open('sprites'), disabled: !store.isOpen },
       { label: '고급: Java 코드 생성기 (이전 메이커)', run: () => PDM.tabs.open('legacy'), disabled: !store.isOpen },
-      ...PDM.registry.menus.filter(m => m.menu === '도구').map(m => ({ label: m.label, run: m.run }))
+      ...PDM.registry.menus.filter(m => m.menu === '도구').map(m => ({ label: m.label, run: m.run })),
+      '-',
+      { label: '단축키 설정…', hint: PDM.keys.label('keySettings'), run: () => PDM.keys.dialog() }
     ],
     '플러그인': () => [
       { label: '플러그인 관리', run: () => PDM.tabs.open('plugins'), disabled: !store.isOpen },
@@ -394,6 +484,7 @@
       { label: 'GitHub 페이지 열기', run: () => pdm.openExternal('https://github.com/IceNight154/pd-maker') }
     ]
   };
+  PDM.menus = { MENUS, RUN_ITEMS, EXPORT_ITEMS, SETTINGS_ITEMS, THEME_ITEMS };   // 테스트 · 플러그인용
   function drawMenubar() {
     const mb = $('#menubar'); mb.innerHTML = '';
     Object.keys(MENUS).forEach(name => {
@@ -417,46 +508,34 @@
   const drawToolbarSoon = PDM.debounce(() => drawToolbar(), 60);
   function drawToolbar() {
     const tb = $('#toolbar'); tb.innerHTML = '';
-    const open = store.isOpen, el = pdm.isElectron, running = !!drawToolbar.running;
-    const webTip = el ? '' : ' — 웹 모드에서는 쓸 수 없습니다';
-    const grp = (...kids) => h('div', { class: 'tb-grp' }, ...kids);
+    const open = store.isOpen, el = pdm.isElectron, running = isRunning();
+    const grp = (label, ...kids) => h('div', { class: 'tb-grp', role: 'group', 'aria-label': label }, ...kids);
+    // 묶음: 파일 | 내보내기 | 편집 ··· 검사 | 실행 | 보기 · 설정  (4차: "확장 기능" 단독 버튼은 ⚙ 설정 ▾ · 프로젝트 메뉴로 — 같은 일을 하는 버튼이 세 곳이었음)
     tb.append(
-      grp(tbBtn('new', '새로', newProject, { iconOnly: true, tip: '새 프로젝트', key: PDM.keys.label('newProject') }),
+      grp('파일', tbBtn('new', '새로', newProject, { iconOnly: true, tip: '새 프로젝트', key: PDM.keys.label('newProject') }),
         tbBtn('open', '열기', openProject, { iconOnly: true, tip: '프로젝트 열기', key: PDM.keys.label('openProject') }),
         tbBtn('save', '저장', saveAll, { disabled: !open, tip: '프로젝트 저장', key: PDM.keys.label('save'), cls: store.isDirty() ? 'dirty' : '' }),
-        tbBtn('saveAs', '다른 이름으로', saveAs, { iconOnly: true, disabled: !open || !el, tip: '다른 이름으로 저장 (다른 폴더에 복사해서 계속 작업)' + webTip, key: PDM.keys.label('saveAs') })),
-      // 내보내기 · 가져오기는 한 묶음으로 (예전: 버튼 3개)
-      grp(tbDrop('exportGame', '내보내기', () => [
-        { label: '게임 파일 내보내기… (JAR · exe · 설치 파일 · APK)', hint: PDM.keys.label('exportGame'), run: exportGame, disabled: !open || !el },
-        '-',
-        { label: '프로젝트 내보내기 (.pdmproj — 백업 · 다른 PC)…', hint: PDM.keys.label('exportProject'), run: exportProject, disabled: !open || !el },
-        { label: '프로젝트 가져오기 (.pdmproj / .zip)…', run: importProject, disabled: !el }], { tip: '게임 파일 · 프로젝트 내보내기 / 가져오기' + webTip })),
-      grp(tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: PDM.keys.label('undo') }),
+        tbBtn('saveAs', '다른 이름으로', saveAs, { iconOnly: true, disabled: !open || !el, tip: '다른 이름으로 저장 (다른 폴더에 복사해서 계속 작업)' + webTip(), key: PDM.keys.label('saveAs') })),
+      grp('내보내기', tbDrop('exportGame', '내보내기', EXPORT_ITEMS, { tip: '게임 파일 · 프로젝트 내보내기 / 가져오기' + webTip() })),
+      grp('편집', tbBtn('undo', '실행 취소', undo, { iconOnly: true, disabled: !open || !store.undoLabel(), tip: '실행 취소' + (store.undoLabel() ? ': ' + store.undoLabel() : ''), key: PDM.keys.label('undo') }),
         tbBtn('redo', '다시 실행', redo, { iconOnly: true, disabled: !open || !store.redoLabel(), tip: '다시 실행' + (store.redoLabel() ? ': ' + store.redoLabel() : ''), key: PDM.keys.label('redo') })),
-      grp(tbBtn('ext', '확장 기능', showExtensions, { disabled: !open, tip: '확장 기능 — 이벤트·시스템 같은 추가 기능을 켜고 끄기 (켠 것만 리소스 목록에 보임)' })),
       h('span', { class: 'grow' }),
-      grp(tbBtn('check', '검사', runCheck, { disabled: !open, tip: '검사 — 끊어진 참조·빠진 그림 찾기', key: PDM.keys.label('check') })),
-      // 테스트 플레이 + 빌드 묶음 (빌드 방식 고르기 · 컴파일 확인 · 빌드 정리 — 예전: 정리 버튼이 따로)
-      grp(tbBtn('play', '테스트 플레이', playtest, { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장·검사 후 게임 실행', key: PDM.keys.label('playtest') }),
-        tbDrop('clean', '빌드', () => [
-          { label: '▶ desktop:debug 로 실행 (INDEV 버전)', run: () => playtest('debug'), disabled: !open || running },
-          { label: '▶ PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !open || running },
-          '-',
-          { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !open || running },
-          { label: '빌드 정리 (gradlew clean) — 이상한 컴파일 오류가 날 때', run: cleanBuild, disabled: !open || !el || running }], { iconOnly: true, tip: '빌드 방식 · 컴파일 확인 · 빌드 정리' + webTip }),
-        tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running && el, tip: '실행·빌드 중지', key: PDM.keys.label('stopGame') })),
-      grp(tbBtn('theme', '테마', e => { const r = e.currentTarget.getBoundingClientRect(); PDM.ui.menu(r.right - 220, r.bottom + 2, MENUS['보기']().slice(0, 7)); }, { iconOnly: true, tip: `테마: ${({ system: '시스템 따르기', light: '밝게', dark: '어둡게' })[T().mode]}` }),
-        // 설정 묶음: 프로젝트 설정 · build.gradle · 단축키 (예전: build.gradle 버튼이 따로)
-        tbDrop('settings', '설정', () => [
-          { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !open },
-          { label: 'build.gradle — 게임 저장소의 빌드 설정 보고 고치기', run: editBuildGradle, disabled: !open },
-          { label: '확장 기능…', run: showExtensions, disabled: !open },
-          '-',
-          { label: '단축키 설정…', run: () => PDM.keys.dialog() }], { iconOnly: true, right: true, tip: '설정 — 프로젝트 · build.gradle · 단축키' })));
+      grp('검사', tbBtn('check', '검사', runCheck, { disabled: !open, tip: CHECK_LABEL, key: PDM.keys.label('check') })),
+      grp('실행', tbBtn('play', '테스트 플레이', () => playtest(), { cls: 'play', disabled: !open || running, tip: '테스트 플레이 — 저장 · 검사 후 게임 실행', key: PDM.keys.label('playtest') }),
+        open ? (() => { const r = PDM.testEnv.resolve((store.get('project') || {}).testplay); const b = tbDrop(r.kind === 'pc' ? 'monitor' : 'phone', r.name + (r.speed > 1 ? ` · ${r.speed}×` : ''), ENV_ITEMS, { tip: '실행 환경 — ' + PDM.testEnv.describe(r) }); b.classList.add('env-btn'); b.dataset.env = r.env; return b; })() : null,
+        tbDrop('clean', '빌드', () => RUN_ITEMS(false), { iconOnly: true, tip: '실행 방식 · 컴파일 확인 · 빌드 정리' + webTip() }),
+        tbBtn('stop', '중지', stopGame, { cls: 'stop', iconOnly: true, disabled: !running,   // 실행 중일 때만 (예전: 웹 모드에서는 늘 빨간 버튼이 켜져 있었음)
+          tip: '실행 · 빌드 중지', key: PDM.keys.label('stopGame') })),
+      grp('보기 · 설정', tbBtn('theme', '테마', e => { const r = e.currentTarget.getBoundingClientRect(); PDM.ui.menu(r.right - 220, r.bottom + 2, THEME_ITEMS()); }, { iconOnly: true, tip: `테마: ${({ system: '시스템 따르기', light: '밝게', dark: '어둡게' })[T().mode]}` }),
+        tbDrop('settings', '설정', SETTINGS_ITEMS, { iconOnly: true, right: true, tip: '설정 — 프로젝트 · 확장 기능 · build.gradle · 단축키' })));
   }
+  let saveState = '';   // '' · 'saving' · 'fail:<이유>' — 저장 중 · 실패를 상태 줄에 (다음 편집 · 저장까지 남음)
   function updateStatus() {
-    const d = store.isDirty();
-    const el = $('#stDirty'); el.textContent = store.isOpen ? (d ? '● 저장 안 된 변경 있음' : '저장됨') : ''; el.classList.toggle('on', d);
+    const d = store.isDirty(), n = store.isOpen ? store.dirtyKeys().length : 0;
+    const el = $('#stDirty');
+    el.textContent = !store.isOpen ? '' : saveState === 'saving' ? '⟳ 저장 중…' : saveState.startsWith('fail') ? '✕ 저장 실패 — 눌러서 다시 저장 (Ctrl+S)' : d ? `● 저장 안 됨${n ? ` (${n}개)` : ''}` : '✓ 저장됨';
+    el.title = saveState.startsWith('fail') ? saveState.slice(5) : d ? '저장하지 않은 리소스: ' + store.dirtyKeys().slice(0, 12).join(', ') + (n > 12 ? ' …' : '') : '';
+    el.className = saveState === 'saving' ? 'saving' : saveState.startsWith('fail') ? 'fail' : d ? 'on' : '';
     $('#projName').textContent = store.isOpen ? `— ${(store.get('project') || {}).name || ''}` : '';
     document.title = `${d ? '● ' : ''}PDMaker${store.isOpen ? ' — ' + ((store.get('project') || {}).name || '') : ''}`;
   }
@@ -770,8 +849,10 @@
   async function closeProject() { if (!(await guardDirty())) return; PDM.tabs.closeAll(); location.reload(); }
   async function saveAll() {
     if (!store.isOpen) return;
-    try { const s = await store.save(); PDM.log(`저장했습니다 (${s.length}개 파일)`, 'ok'); toast('저장했습니다'); }
-    catch (e) { PDM.log('저장 실패: ' + e.message, 'err'); toast('저장 실패', 'bad'); }
+    saveState = 'saving'; updateStatus();
+    try { const s = await store.save(); saveState = ''; PDM.log(`저장했습니다 (${s.length}개 파일)`, 'ok'); toast('저장했습니다'); }
+    catch (e) { saveState = 'fail:' + e.message; PDM.log('저장 실패: ' + e.message + ' — 저장하지 못한 변경은 그대로 남아 있습니다. 디스크 공간 · 쓰기 권한 · 파일이 다른 프로그램에서 열려 있는지 확인한 뒤 다시 저장하세요.', 'err'); toast('저장 실패 — 상태 줄을 눌러 다시 저장', 'bad'); showBottom('log'); }
+    updateStatus();
   }
   /** 폴더를 옮기면 상대 경로(게임 저장소 등)가 틀어지므로 새 위치 기준으로 다시 계산 */
   function rebasePaths(oldRoot, newRoot) {
@@ -890,7 +971,7 @@
   }
   function setRunning(on) { drawToolbar.running = on; drawToolbar(); }
   async function pickAccent() {
-    const cur = T().accent && T().accent.startsWith('#') ? T().accent : '#a58bff';
+    const cur = T().accent && T().accent.startsWith('#') ? T().accent : (PDM.cssVar('--accent', '#3cc2b1').startsWith('#') ? PDM.cssVar('--accent') : '#3cc2b1');
     const i = h('input', { type: 'color', value: cur, style: { width: '80px', height: '40px' } });
     const v = await PDM.ui.modal('강조색 고르기', h('div', {}, i, h('p', { class: 'hint' }, '밝은/어두운 테마에서 잘 보이도록 밝기는 자동으로 조금 맞춥니다.')), [['취소', null], ['적용', () => i.value, 'pri']]);
     if (v) T().setAccent(v);
@@ -899,21 +980,41 @@
   function redo() { const l = store.redo(); if (l) toast('다시 실행: ' + l); }
 
   // ---------------- 검사 / 테스트 플레이 ----------------
+  /** 검사 결과 한 줄 — 누르면 그 리소스 탭 (맵 칸이 있으면 맵 편집기에서 그 칸을 고름) */
+  function checkLine(r) {
+    const open = () => { if (!r.open) return; if (r.cell && PDM.mapUtil && /^(node|room):/.test(r.open)) PDM.mapUtil.focus(r.open, r.cell); PDM.tabs.open(r.open); const ed = PDM.editorFor(r.open); if (r.focus && ed && ed.focus) ed.focus(r.focus); };   // focus = 편집기 안에서 고를 대상 (7차: 타이틀 요소)
+    return h('div', { class: 'chk-l log-l ' + (r.level === 'error' ? 'err' : r.level === 'info' ? 'info' : 'warn'), title: [r.kind, r.path && '데이터: ' + r.path, r.fix && '조치: ' + r.fix].filter(Boolean).join('\n'), onclick: open },
+      `${r.level === 'error' ? '✕' : r.level === 'info' ? 'ℹ' : '!'} ${r.kind ? '[' + r.kind + '] ' : ''}${r.where} — ${r.msg}${r.cell ? ` (칸 ${r.cell.x}, ${r.cell.y})` : ''}`,
+      r.fix ? h('div', { class: 'dim', style: { paddingLeft: '18px' } }, '→ ' + r.fix) : null);
+  }
+  /** 검사 (F7): 데이터 참조는 바로(테스트 플레이 전 오류 확인에도 씀), 그림 · 소리 파일은 이어서 비동기로 붙임 */
   function runCheck() {
     const res = PDM.validate();
     const body = $('#checkBody'); body.innerHTML = '';
-    if (!res.length) body.append(h('div', { class: 'log-l ok' }, '문제를 찾지 못했습니다 ✓'));
-    res.forEach(r => body.append(h('div', { class: 'chk-l log-l ' + (r.level === 'error' ? 'err' : r.level === 'info' ? 'info' : 'warn'), onclick: () => r.open && PDM.tabs.open(r.open) }, `${r.level === 'error' ? '✕' : r.level === 'info' ? 'ℹ' : '!'} ${r.where} — ${r.msg}`)));
+    res.forEach(r => body.append(checkLine(r)));
+    const wait = h('div', { class: 'log-l dim' }, '그림 · 소리 파일 확인 중…'); body.append(wait);
     showBottom('check');
+    const run = ++checkRun;
+    (PDM.validateAssets ? PDM.validateAssets() : Promise.resolve({ issues: [] })).then(a => {
+      if (run !== checkRun) return;   // 그사이 다시 검사함
+      wait.remove();
+      a.issues.forEach(r => body.append(checkLine(r)));
+      if (!res.length && !a.issues.length) body.append(h('div', { class: 'log-l ok' }, '문제를 찾지 못했습니다 ✓'));
+      body.append(h('div', { class: 'log-l dim' }, `에셋 경로 ${a.refs}개 중 ${a.refs - a.skippedGame}개 확인 (쓰는 곳 ${a.uses}곳 · ${a.ms}ms)${a.skippedGame ? ` · 게임 저장소가 없어 게임 그림 · 소리 ${a.skippedGame}개는 확인하지 못함 (프로젝트 설정)` : ''}`));
+    }).catch(e => { wait.textContent = '파일 확인 실패: ' + e.message; });
     return res;
   }
+  let checkRun = 0;
   async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
     // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'debug' 기본 = gradle desktop:debug, INDEV 버전 | 'playtest' = PDMaker 테스트 실행)
     if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'debug';
     if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
-    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode }); setRunning(true); }
+    // 실행 환경 (5차): 프로젝트 testplay → 계산한 값을 게임에 (-Dpdmaker.testenv) — 런타임 MakerTestEnv 가 창 크기 · 배율 · 안전 영역 · 배속을 적용
+    const testenv = task === 'play' ? PDM.testEnv.resolve((store.get('project') || {}).testplay) : null;
+    if (testenv) PDM.log('> 실행 환경: ' + PDM.testEnv.describe(testenv), 'dim');
+    try { showBottom('log'); await pdm.runGame({ repo, project: store.root, task, mode, testenv }); setRunning(true); }
     catch (e) { PDM.log(e.message, 'err'); toast(e.message, 'bad'); }
   }
   async function playtest(mode) {
@@ -1018,15 +1119,17 @@
       e.preventDefault();
       const right = sp.dataset.right, target = sp.dataset.target, root = document.documentElement;
       const startX = e.clientX, start = $('#' + target).getBoundingClientRect().width;
-      const move = ev => { const w = PDM.clamp(start + (right ? startX - ev.clientX : ev.clientX - startX), 160, 700); root.style.setProperty(target === 'tree' ? '--treeW' : '--inspW', w + 'px'); };
-      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      let w = start;
+      const move = ev => { w = PDM.clamp(start + (right ? startX - ev.clientX : ev.clientX - startX), 160, 700); root.style.setProperty(target === 'tree' ? '--treeW' : '--inspW', w + 'px'); };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); PDM.panels.size(target === 'tree' ? 'treeW' : 'inspW', w); };
       addEventListener('mousemove', move); addEventListener('mouseup', up);
     }));
     $('.split-h').addEventListener('mousedown', e => {
       e.preventDefault();
       const startY = e.clientY, start = $('#bottom').getBoundingClientRect().height;
-      const move = ev => document.documentElement.style.setProperty('--bottomH', PDM.clamp(start + startY - ev.clientY, 60, 600) + 'px');
-      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); };
+      let hh = start;
+      const move = ev => { hh = PDM.clamp(start + startY - ev.clientY, 60, 600); document.documentElement.style.setProperty('--bottomH', hh + 'px'); };
+      const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); PDM.panels.size('bottomH', hh); };
       addEventListener('mousemove', move); addEventListener('mouseup', up);
     });
   }
@@ -1034,13 +1137,15 @@
   function drawLogo(cv) {
     const g = (cv || $('#logo')).getContext('2d');
     const px = ['..aaaa..', '.aabbaa.', 'aabccbaa', '.abccba.', '..bddb..', '..d..d..', '.dd..dd.', '........'];
-    const col = { a: '#6a45d6', b: '#a58bff', c: '#e6b95c', d: '#5fd6b4' };
+    const col = { a: '#1f8f82', b: '#4fd1c0', c: '#e2b85e', d: '#a4acb6' };   // 4차: 강조색(청록)에 맞춤
     px.forEach((r, y) => [...r].forEach((c, x) => { if (col[c]) { g.fillStyle = col[c]; g.fillRect(x * 3, y * 3, 3, 3); } }));
   }
 
   // ---------------- 시작 ----------------
   function init() {
-    drawLogo(); splitters(); drawAll(); PDM.inspector.clear();
+    drawLogo(); splitters(); PDM.panels.apply(); drawAll(); PDM.inspector.clear();
+    $$('.pnl-x').forEach(b => b.addEventListener('click', () => PDM.panels.toggle(b.dataset.panel)));
+    $('#stDirty').addEventListener('click', () => { if ($('#stDirty').classList.contains('fail')) saveAll(); });
     $('#stMode').textContent = pdm.isElectron ? 'Electron' : '웹 모드(개발용)';
     $$('.btab').forEach(b => b.addEventListener('click', () => showBottom(b.dataset.b)));
     $('#logClear').addEventListener('click', () => { $('#logBody').innerHTML = ''; $('#checkBody').innerHTML = ''; });
@@ -1054,6 +1159,7 @@
     K.define('exportProject', exportProject); K.define('exportGame', exportGame); K.define('undo', undo); K.define('redo', redo);
     K.define('keySettings', () => K.dialog()); K.define('playtest', () => playtest()); K.define('stopGame', stopGame); K.define('check', runCheck);
     K.define('projectSettings', () => store.isOpen && PDM.tabs.open('project')); K.define('showLog', () => showBottom('log'));
+    K.define('toggleTree', () => PDM.panels.toggle('tree')); K.define('toggleInspector', () => PDM.panels.toggle('insp')); K.define('toggleBottom', () => PDM.panels.toggle('bottom'));
     K.define('closeTab', () => { if (!PDM.ui.closeTop() && active) PDM.tabs.close(active.key); });   // 떠 있는 창 · 메뉴가 먼저, 없으면 지금 탭 (프로그램은 닫지 않음)
     K.define('nextTab', () => PDM.tabs.cycle(1)); K.define('prevTab', () => PDM.tabs.cycle(-1));
     // 복사 · 붙여넣기: 지금 탭 편집기의 ctx.copy/paste(고른 노드 · 오브젝트 · 명령) → 리소스 통째로 → 목록 항목(이펙트 등)
@@ -1065,6 +1171,10 @@
       const m = resKey(active.key); if (m && store.has(active.key)) { PDM.resOps.copy(m[1], m[2]); return; }
       const lo = PDM.listOpsAll[active.key]; if (lo && lo.current) { lo.copy(); return; }
       return false;
+    });
+    K.define('cut', () => {   // 지금 탭 편집기의 ctx.cut (맵 편집기의 영역 · 오브젝트) — 없으면 입력 칸 · 브라우저 기본 동작
+      if (!active || !active.ctx || !active.ctx.cut) return false;
+      return active.ctx.cut();
     });
     K.define('paste', async () => {
       const c = await PDM.clip.get(); if (!c) { toast('복사한 것이 없습니다'); return; }

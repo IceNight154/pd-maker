@@ -42,7 +42,7 @@ public class MakerTraps {
 			level.setTrap(t, cell);
 			Level.set(cell, inactive ? Terrain.INACTIVE_TRAP : t.visible ? Terrain.TRAP : Terrain.SECRET_TRAP, level);
 			return true;
-		} catch (Throwable e) { MakerRuntime.log("함정 놓기 오류: " + e); return false; }
+		} catch (Throwable e) { StackTraceElement[] st = e.getStackTrace(); MakerRuntime.log("함정 놓기 오류: " + e + (st.length > 0 ? " @ " + st[0] + (st.length > 1 ? " ← " + st[1] : "") : "")); return false; }
 	}
 
 	/** 지형에 직접 칠한 함정(예전 형식) — 그 칸에 함정 오브젝트가 없으면 기본 함정으로 */

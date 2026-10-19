@@ -67,7 +67,7 @@
         const ritems = (rw.items || []).map((e, ei) => h('div', { class: 'hstack gap-2 mb-2' },
           itemInput(e.item, v => ed('보상 아이템', x => { x.rewards.items[ei].item = v; }, false)), h('span', { class: 'hint' }, '×'), num(e.count ?? 1, v => ed('보상 개수', x => { x.rewards.items[ei].count = v; }, false), 1, 56),
           h('button', { class: 'btn xs', onclick: () => ed('보상 아이템 삭제', x => { x.rewards.items.splice(ei, 1); }) }, '×')));
-        return h('div', { id: 'quest-' + q.id, style: { border: '1px solid var(--acc, #a58bff)', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px' } }, head,
+        return h('div', { id: 'quest-' + q.id, class: 'selcard' }, head,
           h('div', { class: 'mt-4' },
             row(F.text(K, [...P, 'name'], { label: '이름', rerender: true }), F.ref(K, [...P, 'giver'], 'char', { label: '주는 캐릭터 (말을 걸면 수주 창)', empty: '(없음 — 이벤트 명령으로만)', rerender: true }),
               F.ref(K, [...P, 'turnIn'], 'char', { label: '보고할 캐릭터', empty: '(주는 캐릭터와 같음)' })),

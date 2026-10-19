@@ -9,7 +9,7 @@
   const K = 'dialogue';
   const UI_H = 270;                      // 게임 화면 높이(게임 픽셀). 1080p 에서 4배 확대 기준
 
-  const STYLES = { round: '둥근 상자 (색 지정)', game: '게임 창 (원작 창 테두리)', image: '내 그림 (9조각)' };
+  const STYLES = { '': '게임 UI 스킨 (테마 — chrome.png 조각)', round: '둥근 상자 (색 지정)', game: '게임 창 (원작 창 테두리)', image: '내 그림 (9조각)' };
   const NAME_POS = { auto: '일러스트 반대편 (자동)', right: '오른쪽 위', left: '왼쪽 위', text: '글 시작 위치' };
   const SIDES = { left: '왼쪽', right: '오른쪽' };
   const LAYERS = { front: '대사 상자 앞 (겹쳐 보임)', back: '대사 상자 뒤' };
@@ -29,8 +29,8 @@
   function cfg(over) {
     const d = PDM.defaults.dialogue(), c = over || store.get(K) || {};
     const out = { mode: c.mode || d.mode };
-    ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'text', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
-    return out;
+    ['box', 'name', 'illust', 'typing', 'indicator', 'choice', 'sounds', 'text', 'fx', 'layout'].forEach(g => { out[g] = Object.assign({}, d[g], c[g] || {}); });
+    return PDM.gameTheme ? PDM.gameTheme.resolveDialogue(out, d) : out;   // 빈 칸 = 게임 UI 테마 (6차 — 런타임 MakerDialogue.s 와 같음)
   }
 
   /** 화자(캐릭터 id · $hero) · 표정 · 직접 고른 그림 → 한 줄 (게임 MakerDialogue.line 과 같음) */
@@ -81,16 +81,81 @@
     return sh.join(',');
   }
 
-  /** 글 → 글자별 span (_강조_ 는 노란색 — 게임과 같음) */
-  function chars(text, color, hiColor) {
-    const out = []; let hi = false;
+  /** 사람이 보는 한 글자 단위 (결합 문자 · 이모지 조합을 쪼개지 않음 — 런타임 BreakIterator.getCharacterInstance 와 같음) */
+  const SEG = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ko', { granularity: 'grapheme' }) : null;
+  const graphemes = t => SEG ? [...SEG.segment(t)].map(x => x.segment) : Array.from(t);
+  /** 한중일 글자 (런타임 TypeText.cjk — 글자마다 줄을 바꿀 수 있음. 그 밖의 글자는 빈칸까지 한 낱말) */
+  const CJK = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef\u3000-\u303f]/;
+  /** 글 → 글자별 span (**강조** · _강조_ 는 강조 색 — 게임과 같음). o: { emFs(강조 글자 크기 px) } → 노드들 (span.dataset.em = 강조) */
+  function chars(text, color, hiColor, o = {}) {
+    const out = []; let hi = false, word = null;
     const parts = String(text).split(/(\*\*|_)/);
     for (const part of parts) {
       if (part === '_' || part === '**') { hi = !hi; continue; }
-      for (const ch of part) out.push(ch === '\n' ? h('br') : h('span', { style: { color: hi ? (hiColor || '#ffff44') : color } }, ch));
+      for (const ch of graphemes(part)) {
+        if (ch === '\n') { word = null; out.push(h('br')); continue; }
+        if (ch === ' ') { word = null; out.push(document.createTextNode(' ')); continue; }
+        const sp = h('span', { class: 'dlg-ch', style: { color: hi ? (hiColor || '#ffff44') : color, fontSize: hi && o.emFs ? o.emFs : '' } }, ch);
+        if (hi) sp.dataset.em = '1';
+        if (CJK.test(ch)) { word = null; out.push(sp); continue; }
+        if (!word) { word = h('span', { class: 'dlg-word' }); out.push(word); }   // 영문 · 숫자 낱말은 줄을 바꾸지 않음
+        word.append(sp);
+      }
     }
     return out;
   }
+  /** 런타임 TypeText.fx 와 같은 식 — 글자 하나의 { dx, dy (게임 px), sc, a }. t = 나타난 뒤 지난 초, now = 창 시계(초), k = 글자 번호 */
+  function fxAt(effect, t, now, k, dur, strength) {
+    const p = Math.max(0, Math.min(1, t / Math.max(0.01, dur))), e = p * p * (3 - 2 * p);
+    let dx = 0, dy = 0, sc = 1, a = 1;
+    switch (effect) {
+      case 'fade': a = e; break;
+      case 'rise': dy = 3 * strength * (1 - e); a = e; break;
+      case 'drop': dy = -3 * strength * (1 - e); a = e; break;
+      case 'pop': sc = 1 + 0.8 * strength * (1 - e); a = Math.min(1, e * 2); break;
+      case 'shake': dx = 0.7 * strength * Math.sin(now * 40 + k * 2.3); dy = 0.7 * strength * Math.cos(now * 33 + k * 1.7); break;
+      case 'wave': dy = 1.2 * strength * Math.sin(now * 6 + k * 0.6); break;
+    }
+    return { dx, dy, sc, a };
+  }
+  /** 대사 스타일 (5차) — 런타임 EventInterpreter.styleLine 과 같은 순서 · 단위: 명령 칸 → 이벤트 "대사 스타일"(textStyle) → (없으면 대사창 설정)
+   *  fxDur 0.1초 · fxStrength % · size % · bold on/off */
+  const SPEEDS = { instant: 0, slow: 20, normal: 40, fast: 80, veryfast: 160 };
+  const textSpeed = v => v === '' ? -1 : v in SPEEDS ? SPEEDS[v] : Number.isFinite(parseFloat(v)) ? Math.max(0, parseFloat(v)) : -1;
+  function styleLine(l, c, style) {
+    const pick = k => { let v = c && c[k] != null ? String(c[k]) : ''; if (v === '' && style && style[k] != null) v = String(style[k]); return v; };
+    const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; };
+    l.speed = textSpeed(pick('speed'));
+    let v;
+    if ((v = pick('tracking')) !== '') l.tracking = num(v);
+    if ((v = pick('lineGap')) !== '') l.lineGap = num(v);
+    if ((v = pick('effect')) !== '') l.effect = v;
+    if ((v = pick('fxDur')) !== '') l.fxDur = num(v) / 10;
+    if ((v = pick('fxStrength')) !== '') l.fxStrength = num(v) / 100;
+    if ((v = pick('fxScope')) !== '') l.fxScope = v;
+    if ((v = pick('size')) !== '') l.sizePct = num(v);
+    if ((v = pick('padding')) !== '') l.padding = num(v);
+    if ((v = pick('align')) !== '') l.align = v;
+    if ((v = pick('emColor')) !== '') l.emColor = v;
+    if ((v = pick('bold')) !== '') l.bold = v === 'on' || v === 'true';
+    return l;
+  }
+  /** 이 줄에 실제로 쓰일 값 (미리보기 아래 설명 · 테스트) — render 와 같은 규칙 */
+  function lineStyle(l, over) {
+    const c = cfg(over), B = c.box, T = c.text || {}, F = c.fx || {};
+    const fin = (v, d) => Number.isFinite(v) ? v : d, numd = (v, d) => Number.isFinite(+v) && v !== '' && v != null ? +v : d;
+    return {
+      speed: l.speed >= 0 ? l.speed : (+c.typing.speed || 0),
+      sizeK: Number.isFinite(l.sizePct) ? Math.max(0.5, Math.min(3, l.sizePct / 100)) : 1,
+      pad: Number.isFinite(l.padding) ? Math.max(0, Math.min(40, l.padding)) : (+B.padding || 0),
+      bold: l.bold != null ? !!l.bold : !!T.bold, center: (l.align || B.align) === 'center', hi: /^#[0-9a-f]{6}$/i.test(l.emColor || '') ? l.emColor : B.highlight,
+      tracking: fin(l.tracking, +T.tracking || 0), lineGap: fin(l.lineGap, +T.lineSpacing || 0),
+      effect: l.effect || F.effect || 'none', dur: fin(l.fxDur, numd(F.dur, 0.25)), strength: fin(l.fxStrength, numd(F.strength, 1)),
+      emOnly: (l.fxScope || F.scope) === 'em', emScale: Math.max(0.5, Math.min(2, numd(F.emScale, 1)))
+    };
+  }
+  const EFFECT_NAMES = { none: '연출 없음', fade: '흐리게', rise: '올라옴', drop: '내려옴', pop: '튀어나옴', shake: '떨림', wave: '물결' };
+  const describeLine = (l, over) => { const s = lineStyle(l, over); return `글자 ${s.speed > 0 ? s.speed + '자/초' : '바로'} · 크기 ${Math.round(s.sizeK * 100)}% · 자간 ${s.tracking} · 행간 ${s.lineGap} · 여백 ${s.pad}${s.bold ? ' · 굵게' : ''}${s.center ? ' · 가운데' : ''} · ${EFFECT_NAMES[s.effect] || s.effect}${s.effect !== 'none' ? ` ${s.dur}초 ${Math.round(s.strength * 100)}%${s.emOnly ? ' (강조만)' : ''}` : ''}`; };
 
   /**
    * 대사창 그리기. stage: position:relative 인 상자 (가로·세로 아무 크기 — 높이 기준으로 맞춤)
@@ -107,7 +172,8 @@
     const px = v => (v * k) + 'px';
     const hasText = !!(l.text && l.text.length);
     const T = c.text || {}, tk = textScale(T, W, H);   // 화면 크기에 맞춘 글자 배율 (미리보기 = 1080p 화면)
-    const margin = +B.margin || 0, pad = +B.padding || 0, fs = Math.max(5, Math.round((+B.fontSize || 8) * tk));
+    const S = lineStyle(l, over);   // 이 줄의 스타일 (대사 → 이벤트 스타일 → 대사창 설정)
+    const margin = +B.margin || 0, pad = S.pad, fs = Math.max(5, Math.round((+B.fontSize || 8) * S.sizeK * tk));
     let bh = Math.max(fs * 3 + pad * 2, H * (+B.height || 0.27));
     let bx = margin, bw = W - margin * 2, by = H - margin - bh;
     // 직접 그린 레이아웃 (layout.enabled — 좌표는 화면의 비율 0~1)
@@ -123,7 +189,8 @@
       const img = await PDM.assets.load(l.illust);
       if (img) {
         const Li = LR('illust');
-        const th = H * (Li ? Li.h : (+I.height || 0.92)) * (l.scale > 0 ? l.scale : 1);
+        let th = H * (Li ? Li.h : (+I.height || 0.92)) * (l.scale > 0 ? l.scale : 1);
+        if (!Li) th = Math.min(th, W * img.height / img.width);   // 화면보다 넓어지지 않게 (런타임과 같음 — 세로 화면)
         iw = th * img.width / img.height;
         const baseX = Li ? Li.x * W : bx;                 // 왼쪽 기준 (오른쪽에 서면 좌우 대칭)
         ix = side === 'right' ? W - baseX - iw - l.offX * H / 100 : baseX + l.offX * H / 100;
@@ -140,7 +207,8 @@
     let box = null;
     const boxCss = (x, y, w, hh, fill, alpha, border, rad) => ({ left: px(x), top: px(y), width: px(w), height: px(hh), background: hexA(fill, alpha), border: `${Math.max(1, k)}px solid ${border}`, borderRadius: px(rad) });
     const boxStyle = (x, y, w, hh) => {
-      if (B.style === 'game') return { left: px(x), top: px(y), width: px(w), height: px(hh), background: '#3a3a3a', border: `${Math.max(2, k * 2)}px solid #8c7f65`, boxShadow: `inset 0 0 0 ${Math.max(1, k)}px #1c1c1c`, borderRadius: px(2) };
+      if ((B.style === 'skin' || B.style === 'game') && sk.box) return Object.assign({ left: px(x), top: px(y), width: px(w), height: px(hh) }, PDM.gameTheme.css(sk.box, k));   // 실제 chrome.png 조각 (게임과 같은 9칸 늘림)
+      if (B.style === 'game' || B.style === 'skin') return { left: px(x), top: px(y), width: px(w), height: px(hh), background: '#3a3a3a', border: `${Math.max(2, k * 2)}px solid #8c7f65`, boxShadow: `inset 0 0 0 ${Math.max(1, k)}px #1c1c1c`, borderRadius: px(2) };
       if (B.style === 'image' && B.image) {
         const s = +B.slice || 6, abs = PDM.assets.resolvePath && PDM.assets.resolvePath(B.image);
         return { left: px(x), top: px(y), width: px(w), height: px(hh), borderStyle: 'solid', borderWidth: px(s), borderImage: `url("${el._imgUrl || ''}") ${s} fill / ${px(s)} stretch`, imageRendering: 'pixelated', _abs: abs };
@@ -148,6 +216,10 @@
       return boxCss(x, y, w, hh, B.color, +B.alpha, B.border, +B.radius || 0);
     };
     if (B.style === 'image' && B.image) { const bi = await PDM.assets.load(B.image); el._imgUrl = bi ? bi.src : ''; }
+    // 게임 UI 스킨 (6차): 모양 = 테마면 대사창 · 이름표 · 선택지를 프로젝트 chrome.png 의 조각으로 (런타임 MakerTheme.patch 와 같은 조각)
+    const skinned = B.style === 'skin', SK = c._skin || PDM.gameTheme.DEFAULT.skin, sk = {};
+    if (skinned) for (const u of ['box', 'name', 'choice', 'choiceOn']) sk[u] = await PDM.gameTheme.piece(SK[u]);
+    else if (B.style === 'game') sk.box = await PDM.gameTheme.piece('WINDOW');
     // 그림(스프라이트) — 이름표 · 선택지 · ▼
     const Ch = c.choice, IN = c.indicator;
     const urlOf = async r => { if (!r) return ''; const im = await PDM.assets.load(r); return im ? im.src : ''; };
@@ -167,14 +239,16 @@
     if (hasText) {
       if (LR('text')) { const r = LR('text'); tx = r.x * W; tr = (r.x + r.w) * W; ty = r.y * H; }
       geo.text = { x: tx / W, y: ty / H, w: (tr - tx) / W, h: Math.max(fs + 4, (LR('text') ? LR('text').h * H : by + bh - pad - ty)) / H };
-      textEl = h('div', { class: 'dlg-text', style: { left: px(tx), top: px(ty), width: px(tr - tx), fontSize: px(fs), lineHeight: px(fs + 3 + (+T.lineSpacing || 0)), textShadow: textDeco(T, k), fontWeight: T.bold ? '700' : '' } }, chars(l.text, B.textColor, B.highlight));
-      if (B.align === 'center') textEl.style.textAlign = 'center';
-      spans = [...textEl.querySelectorAll('span')];
+      textEl = h('div', { class: 'dlg-text', style: { left: px(tx), top: px(ty), width: px(tr - tx), fontSize: px(fs), lineHeight: px(fs + 3 + S.lineGap), letterSpacing: S.tracking ? px(S.tracking) : '', textShadow: textDeco(T, k), fontWeight: S.bold ? '700' : '' } },
+        chars(l.text, B.textColor, S.hi, { emFs: S.emScale !== 1 ? px(fs * S.emScale) : '' }));
+      if (S.center) textEl.style.textAlign = 'center';
+      spans = [...textEl.querySelectorAll('.dlg-ch')];
       el.append(textEl);
       if (N.show && l.name) {
         const nfs = Math.max(5, Math.round((+N.fontSize || 7) * tk));
         const plate = h('div', { class: 'dlg-name', style: Object.assign({ fontSize: px(nfs), color: N.textColor, background: N.color, borderRadius: px(Math.max(2, Math.min(4, +B.radius || 0))), padding: `${px(2.5)} ${px(5)}`, textShadow: outline(k) },
-          nameUrl ? Object.assign(sliceCss(nameUrl, +N.slice || 4), { padding: `${px(Math.max(0, 2.5 - (+N.slice || 4)))} ${px(Math.max(0, 5 - (+N.slice || 4)))}` }) : {}) }, l.name);
+          nameUrl ? Object.assign(sliceCss(nameUrl, +N.slice || 4), { padding: `${px(Math.max(0, 2.5 - (+N.slice || 4)))} ${px(Math.max(0, 5 - (+N.slice || 4)))}` })
+            : skinned && sk.name ? Object.assign(PDM.gameTheme.css(sk.name, k), { padding: `0 ${px(Math.max(0, 5 - sk.name.m[0]))}` }) : {}) }, l.name);
         let np = N.pos || 'auto'; if (np === 'auto') np = ill && side === 'right' ? 'left' : 'right';
         el.append(plate);
         const pw = plate.offsetWidth / k || 40, ph = nfs + 5 + 2;   // 대략
@@ -200,7 +274,7 @@
     let sel = 0;
     const select = i => {
       if (!choiceEls.length) return; sel = (i + choiceEls.length) % choiceEls.length;
-      choiceEls.forEach((e, j) => { e.classList.toggle('on', j === sel); if (e.dataset.imgOn) e.style.borderImageSource = `url("${j === sel ? e.dataset.imgOn : e.dataset.img}")`; });
+      choiceEls.forEach((e, j) => { e.classList.toggle('on', j === sel); if (e._skin) Object.assign(e.style, e._skin[j === sel ? 1 : 0]); else if (e.dataset.imgOn) e.style.borderImageSource = `url("${j === sel ? e.dataset.imgOn : e.dataset.img}")`; });
     };
     if (opts.choices && opts.choices.length) {
       const cfs = +Ch.fontSize > 0 ? Math.max(5, Math.round(+Ch.fontSize * tk)) : fs;
@@ -219,7 +293,8 @@
       opts.choices.forEach((s, i) => {
         const e = mkBox(cx, cy0 + i * (ch + gap), cw, ch, 'dlg-choice');
         if (chUrl) Object.assign(e.style, sliceCss(chUrl, +Ch.slice || 4));
-        e.style.setProperty('--on-bg', chOnUrl ? 'none' : N.color); e.style.setProperty('--on-fg', fgOn); e.style.setProperty('--on-line', IN.color);
+        else if (skinned && sk.choice) { e._skin = [PDM.gameTheme.css(sk.choice, k), PDM.gameTheme.css(sk.choiceOn || sk.choice, k)]; Object.assign(e.style, e._skin[0]); }
+        e.style.setProperty('--on-bg', chOnUrl || e._skin ? 'none' : N.color); e.style.setProperty('--on-fg', fgOn); e.style.setProperty('--on-line', IN.color);
         if (chOnUrl) { e.dataset.img = chUrl; e.dataset.imgOn = chOnUrl; e.dataset.sl = +Ch.slice || 4; }
         if (centered) e.style.justifyContent = 'center';
         e.append(h('span', { style: { paddingLeft: centered ? 0 : px(pad), fontSize: px(cfs), color: fg, textShadow: outline(k) } }, s));
@@ -231,30 +306,46 @@
       if (!hasText) select(0);
     }
 
-    // 한 글자씩
-    let timer = null, n = 0, isTyping = false;
+    // 한 글자씩 · 글자 연출 — 시계 하나(requestAnimationFrame): 글자마다 나타난 때(t0)부터 런타임 TypeText.fx 와 같은 식. 미리보기가 화면에서 빠지면 스스로 멈춤
+    let raf = 0, n = 0, isTyping = false, stopped = false;
+    const t0 = new Array(spans.length).fill(Infinity), start = performance.now(), sec = () => (performance.now() - start) / 1000;
+    const reveal = upto => { const now = sec(); while (n < upto && n < spans.length) { spans[n].style.visibility = ''; t0[n] = now; n++; } };
     const showChoices = () => { if (!choiceEls.length) return; choiceEls.forEach(e => { e.hidden = false; }); select(0); if (arrow) arrow.hidden = true; };
-    const finish = () => { if (timer) clearInterval(timer); timer = null; isTyping = false; spans.forEach(s => { s.style.visibility = ''; }); if (arrow) arrow.hidden = !!choiceEls.length; showChoices(); };
-    const speed = +c.typing.speed || 0;
+    const finish = () => { isTyping = false; reveal(spans.length); if (arrow) arrow.hidden = !!choiceEls.length; showChoices(); };
+    const speed = S.speed;   // 이 줄만 글자 속도 (런타임 Line.speed 와 같음)
+    const fxOn = S.effect !== 'none';
+    const loop = () => {
+      raf = 0;
+      if (stopped || !el.isConnected) return;
+      const now = sec();
+      if (isTyping) { reveal(Math.floor(now * speed)); if (n >= spans.length) finish(); }
+      if (fxOn) spans.forEach((sp, i) => {
+        if (i >= n || (S.emOnly && !sp.dataset.em)) return;
+        const f = fxAt(S.effect, now - t0[i], now, i, S.dur, S.strength);
+        sp.style.transform = f.dx || f.dy || f.sc !== 1 ? `translate(${(f.dx * k).toFixed(2)}px, ${(f.dy * k).toFixed(2)}px) scale(${f.sc.toFixed(3)})` : '';
+        sp.style.opacity = f.a < 1 ? f.a.toFixed(3) : '';
+      });
+      const busy = isTyping || (fxOn && (S.effect === 'shake' || S.effect === 'wave' || t0.some(t => now - t < S.dur)));
+      if (busy) raf = requestAnimationFrame(loop);
+    };
+    const kick = () => { if (!raf && !stopped) raf = requestAnimationFrame(loop); };
     if (hasText && speed > 0 && !opts.static) {
       isTyping = true; spans.forEach(s => { s.style.visibility = 'hidden'; }); if (arrow) arrow.hidden = true;
-      const t0 = performance.now();
-      timer = setInterval(() => {
-        const want = Math.floor((performance.now() - t0) / 1000 * speed);
-        while (n < want && n < spans.length) spans[n++].style.visibility = '';
-        if (n >= spans.length) finish();
-      }, 16);
     } else if (hasText) finish();
+    kick();
+    const finishAndKick = () => { finish(); kick(); };
     geo.box = { x: bx / W, y: by / H, w: bw / W, h: bh / H };
-    return { el, geo, finish, typing: () => isTyping, select, get sel() { return sel; }, hasChoices: choiceEls.length > 0, stop: () => { if (timer) clearInterval(timer); } };
+    return { el, geo, finish: finishAndKick, typing: () => isTyping, select, get sel() { return sel; }, hasChoices: choiceEls.length > 0, stop: () => { stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; }, debug: () => ({ shown: n, total: spans.length, style: S }) };
   }
 
   /** 클릭해서 넘기며 재생: 글자가 나오는 중이면 다 보이기 → (선택지면 고름) → 닫기. 결과: 고른 번호 또는 undefined */
   function play(stage, l, choices, over) {
     return new Promise(async resolve => {
-      let r = null;
-      const done = v => { stage.removeEventListener('click', onClick); if (r) { r.stop(); r.el.remove(); } resolve(v); };
+      let r = null, autoT = null, ended = false;
+      const done = v => { if (ended) return; ended = true; clearInterval(autoT); stage.removeEventListener('click', onClick); if (r) { r.stop(); r.el.remove(); } resolve(v); };
       r = await render(stage, l, { choices, onChoice: i => done(i) }, over);
+      // 저절로 넘기기 (런타임 Wnd.update 와 같음: 글자가 다 나온 뒤 l.auto 초, 선택지가 있으면 쓰지 않음)
+      if (l.auto > 0 && !choices) { let since = null; autoT = setInterval(() => { if (r.typing()) return; since = since || performance.now(); if (performance.now() - since >= l.auto * 1000) done(undefined); }, 30); }
       function onClick() {
         if (r.typing()) { r.finish(); return; }
         if (r.hasChoices) return;
@@ -264,7 +355,19 @@
     });
   }
 
-  PDM.Dialogue = { cfg, line, render, play, classic: () => cfg().mode === 'window' };
+  /** 이벤트 일러스트 자리 — 런타임 MakerStage.show/place 와 같은 계산 (게임 화면 단위 W×H, 그림 원래 크기 iw×ih).
+   *  pos: left · center · right · full / o: { scale(1 = 100%), ox, oy, flip } → { x, y, w, h, flip } (보이는 사각형 — 왼쪽 위 · 크기) */
+  function stageLayout(pos, W, H, iw, ih, o = {}) {
+    const full = pos === 'full', th = full ? H : Math.min(H * 0.9, W * ih / iw);   // 화면보다 넓어지지 않게 (세로 화면 · 가로로 긴 그림)
+    let baseSc, baseX, baseY;
+    if (full) { baseSc = Math.max(W / iw, H / ih); baseX = (W - iw * baseSc) / 2; baseY = (H - ih * baseSc) / 2; }
+    else { baseSc = th / ih; const w0 = iw * baseSc; baseX = pos === 'left' ? W * 0.04 : pos === 'right' ? W * 0.96 - w0 : (W - w0) / 2; baseY = th < H * 0.9 - 0.5 ? (H - th) / 2 : H - th; }   // 폭 때문에 줄면 세로 가운데 (런타임과 같음)
+    const scale = o.scale > 0 ? o.scale : 1, sc = baseSc * scale, w0 = iw * baseSc, h0 = ih * baseSc, w = iw * sc, h = ih * sc;
+    return { x: baseX + (+o.ox || 0) + (w0 - w) / 2, y: baseY + (+o.oy || 0) + (h0 - h), w, h, flip: !!o.flip, baseX, baseSc };
+  }
+  /** 런타임 MakerStage.ease 와 같은 곡선 (움직이기) */
+  const ease = k => k * k * (3 - 2 * k);
+  PDM.Dialogue = { cfg, line, render, play, stageLayout, ease, UI_H, styleLine, lineStyle, describeLine, fxAt, graphemes, textSpeed, SPEEDS, classic: () => cfg().mode === 'window' };
 
   // ---------------- 편집기 ----------------
   function previewBox(ctx, st) {
@@ -336,7 +439,9 @@
       const chk = h('input', { type: 'checkbox', checked: st.choices, onchange: () => { st.choices = chk.checked; pv.draw(false); } });
       const preset = (id) => h('button', { class: 'btn sm', onclick: async e => { e.preventDefault(); const [label, make] = PRESETS[id]; if (await PDM.ui.confirm(`대사창을 "${label}" 모양으로 바꿀까요? (되돌리기로 복구할 수 있습니다)`)) store.edit(K, '대사창 모양: ' + label, o => { const p = make(); Object.keys(o).forEach(k2 => delete o[k2]); Object.assign(o, p); }); } }, PRESETS[id][0]);
       const classic = c.mode === 'window';
-      const col = (g, k2, label) => F.color(K, [g, k2], { label, rerender: true, def: (c[g] || {})[k2] });
+      const raw = store.get(K) || {};
+      const col = (g, k2, label) => { const tok = PDM.gameTheme.DIALOGUE_LINK[g + '.' + k2];   // 테마를 따를 수 있는 칸: "테마" 단추 (빈 칸 = 테마)
+        return F.color(K, [g, k2], { label, rerender: true, def: ((raw[g] || {})[k2]) ?? (c[g] || {})[k2], inherit: tok ? { label: '테마', value: PDM.gameTheme.color(tok), hint: `게임 UI 테마의 「${(PDM.gameTheme.TOKENS.find(t => t[0] === tok) || [])[1]}」` } : null }); };
       return h('div', { class: 'page' },
         h('h1', {}, '💬 대사창'),
         h('p', { class: 'lead' }, '이벤트의 "대사 표시"·선택지가 게임에서 어떻게 보일지 정합니다. 화면 아래에 넓은 대사 상자가 뜨고, 말하는 캐릭터의 일러스트(캐릭터 편집기 → 초상화/일러스트)가 옆에 섭니다. 주인공이 말할 때는 영웅과 연결된 캐릭터의 일러스트를 씁니다.'),
@@ -360,6 +465,8 @@
               F.num(K, ['box', 'padding'], { label: '안쪽 여백', step: 1, min: 0, def: 8, rerender: true })),
             c.box.style === 'round' ? row(col('box', 'color', '배경색'), F.num(K, ['box', 'alpha'], { label: '불투명도', step: 0.02, min: 0, max: 1, def: 0.94, rerender: true }),
               col('box', 'border', '테두리색'), F.num(K, ['box', 'radius'], { label: '모서리 둥글기', int: true, min: 0, max: 12, def: 5, rerender: true })) : null,
+            c.box.style === 'skin' ? h('div', { class: 'hstack wrap' }, h('span', { class: 'hint' }, `게임 UI 스프라이트로 그립니다 — 대사창 ${c._skin.box} · 이름표 ${c._skin.name} · 선택지 ${c._skin.choice}/${c._skin.choiceOn} (프로젝트 chrome.png 의 조각). 이름표 · 선택지에 그림을 직접 넣으면 그 그림이 먼저입니다.`),
+              h('button', { class: 'btn sm', onclick: e => { e.preventDefault(); PDM.tabs.open('theme'); } }, '🎨 게임 UI 테마 열기')) : null,
             c.box.style === 'image' ? row(F.image(K, ['box', 'image'], { label: '상자 그림 (9조각으로 늘림)', sub: 'ui', rerender: true }), F.num(K, ['box', 'slice'], { label: '가장자리 두께 (px)', int: true, min: 0, def: 6, rerender: true })) : null,
             F.bool(K, ['box', 'hideHud'], { label: '대사창·선택지가 떠 있는 동안 다른 UI 숨기기 (상태창·도구 막대·기록·버튼)', def: true, hint: '대화가 끝나면 다시 보입니다. 일러스트와 대사창만 남습니다.' })),
           section('글자 모양',
@@ -371,7 +478,7 @@
               c.text.autoScale !== false ? F.num(K, ['text', 'scaleMax'], { label: '최대 배율', step: 0.1, min: 1, max: 4, def: 2, rerender: true }) : null,
               F.num(K, ['text', 'scale'], { label: '글자 크기 배율 (전체)', step: 0.05, min: 0.5, max: 3, def: 1, rerender: true, hint: '대사 · 이름표 · 선택지 글자에 모두 곱함' })),
             h('p', { class: 'hint' }, `지금 설정의 배율 — PC 창 1280×720: ×${scaleAt(c.text, 1280, 720).toFixed(2)} · 1920×1080: ×${scaleAt(c.text, 1920, 1080).toFixed(2)} · 2560×1440: ×${scaleAt(c.text, 2560, 1440).toFixed(2)} (대사 글자 ${Math.round((+c.box.fontSize || 8) * scaleAt(c.text, 1920, 1080))} — 1080p). 미리보기는 1080p 화면 비율.`),
-            row(F.num(K, ['text', 'lineSpacing'], { label: '줄 간격 더하기 (px)', step: 0.5, min: -2, max: 12, def: 0, rerender: true }), F.bool(K, ['text', 'bold'], { label: '굵게', rerender: true })),
+            row(F.num(K, ['text', 'lineSpacing'], { label: '줄 간격 더하기 (px)', step: 0.5, min: -2, max: 12, def: 0, rerender: true }), F.num(K, ['text', 'tracking'], { label: '글자 간격 더하기 (px)', step: 0.5, min: -1, max: 6, def: 0, rerender: true }), F.bool(K, ['text', 'bold'], { label: '굵게', rerender: true })),
             row(F.bool(K, ['text', 'outline'], { label: '외곽선', rerender: true }),
               c.text.outline ? col('text', 'outlineColor', '외곽선 색') : null,
               c.text.outline ? F.num(K, ['text', 'outlineWidth'], { label: '외곽선 두께 (px)', step: 0.25, min: 0.25, max: 3, def: 0.5, rerender: true }) : null),
@@ -404,6 +511,13 @@
               F.image(K, ['choice', 'imageOn'], { label: '고른 선택지 그림 (비우면 이름표 색)', sub: 'ui', rerender: true }),
               F.num(K, ['choice', 'slice'], { label: '가장자리 두께 (px)', int: true, min: 0, def: 4, rerender: true })),
             h('p', { class: 'hint' }, '대사 바로 뒤에 "선택지" 명령이 있으면 대사창을 띄운 채로 선택지가 나옵니다. 캐릭터에게 말을 걸 때 나오는 메뉴(대화·부탁·마음 보기)도 이 선택지로 나옵니다. 게임에서: 누르기·Enter·Space 로 넘김, ↑↓ 와 숫자 키로 고르기.')),
+          section('글자 연출 (5차)',
+            row(F.select(K, ['fx', 'effect'], { none: '없음', fade: '흐리게 → 또렷이', rise: '아래에서 올라옴', drop: '위에서 내려옴', pop: '크게 → 제자리', shake: '떨림 (계속)', wave: '물결 (계속)' }, { label: '글자가 나타날 때', rerender: true }),
+              F.num(K, ['fx', 'dur'], { label: '시간 (초)', step: 0.05, min: 0.05, max: 3, def: 0.25, rerender: true }),
+              F.num(K, ['fx', 'strength'], { label: '세기 (1 = 보통)', step: 0.1, min: 0.1, max: 3, def: 1, rerender: true })),
+            row(F.select(K, ['fx', 'scope'], { all: '모든 글자', em: '강조(**…**) 글자만' }, { label: '연출할 글자', rerender: true }),
+              F.num(K, ['fx', 'emScale'], { label: '강조 글자 크기 배율', step: 0.1, min: 0.5, max: 2, def: 1, rerender: true })),
+            h('p', { class: 'hint' }, '프로젝트 전체의 기본값입니다. 이벤트에서 "대사 스타일" 명령 · 대사 명령의 글꼴 · 출력 · 연출 탭으로 바꿀 수 있습니다 (우선순위: 대사 > 대사 스타일 > 여기 > 기본값). 시간은 게임 배속(테스트 플레이 2 · 4 · 16배)을 따릅니다.')),
           section('글자 나오기 · ▼ · 소리',
             row(F.num(K, ['typing', 'speed'], { label: '글자 속도 (글자/초, 0 = 한 번에)', int: true, min: 0, max: 400, def: 40, rerender: true }),
               F.sound(K, ['typing', 'sound'], { kind: 'se', label: '글자 소리 (예전 칸 — 아래 "글자 나올 때"와 같음)' })),

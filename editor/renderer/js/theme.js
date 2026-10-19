@@ -1,7 +1,7 @@
 // ================================================================
 //  테마 — 시스템 색에 맞춤 (index.html 의 <head> 에서 가장 먼저 실행: 깜빡임 없이 색을 정함)
 //   · 모드: system(OS 의 밝게/어둡게를 따름, 바뀌면 바로 반영) · light · dark
-//   · 강조색: system(Windows·macOS 강조색) · default(PDMaker 보라) · '#rrggbb'(직접)
+//   · 강조색: system(Windows·macOS 강조색) · default(PDMaker 기본 청록) · '#rrggbb'(직접)
 //   설정은 이 PC 에 저장 (localStorage + Electron 은 userData/pdmaker-settings.json — 창 제목 표시줄·대화상자도 같은 테마)
 // ================================================================
 (function () {

@@ -19,6 +19,7 @@
     { id: 'undo', group: '편집', label: '실행 취소', def: ['Ctrl+Z'], scope: 'global' },
     { id: 'redo', group: '편집', label: '다시 실행', def: ['Ctrl+Y', 'Ctrl+Shift+Z'], scope: 'global' },
     { id: 'copy', group: '편집', label: '복사 (고른 리소스 · 노드 · 오브젝트 · 명령 · 항목)', def: ['Ctrl+C'], scope: 'global' },
+    { id: 'cut', group: '편집', label: '잘라내기 (맵 편집기의 고른 영역 · 오브젝트)', def: ['Ctrl+X'], scope: 'global' },
     { id: 'paste', group: '편집', label: '붙여넣기', def: ['Ctrl+V'], scope: 'global' },
     { id: 'keySettings', group: '편집', label: '단축키 설정 열기', def: [], scope: 'global', inInput: true },
     // 보기 · 탭
@@ -27,10 +28,13 @@
     { id: 'prevTab', group: '보기', label: '이전 탭', def: ['Ctrl+Shift+Tab'], scope: 'global', inInput: true },
     { id: 'treeSearch', group: '보기', label: '리소스 검색 칸으로', def: ['Ctrl+Shift+F'], scope: 'global', inInput: true },
     { id: 'showLog', group: '보기', label: '출력 창', def: [], scope: 'global', inInput: true },
+    { id: 'toggleTree', group: '보기', label: '리소스 패널 보이기/숨기기', def: ['Ctrl+B'], scope: 'global' },
+    { id: 'toggleInspector', group: '보기', label: '속성 패널 보이기/숨기기', def: ['Ctrl+Shift+B'], scope: 'global' },
+    { id: 'toggleBottom', group: '보기', label: '출력 패널 보이기/숨기기', def: ['Ctrl+J'], scope: 'global' },
     // 프로젝트
-    { id: 'playtest', group: '프로젝트', label: '▶ 테스트 플레이', def: ['F5'], scope: 'global', inInput: true },
-    { id: 'stopGame', group: '프로젝트', label: '■ 중지', def: ['Shift+F5'], scope: 'global', inInput: true },
-    { id: 'check', group: '프로젝트', label: '검사 (끊어진 참조 찾기)', def: ['F7'], scope: 'global', inInput: true },
+    { id: 'playtest', group: '실행', label: '▶ 테스트 플레이', def: ['F5'], scope: 'global', inInput: true },
+    { id: 'stopGame', group: '실행', label: '■ 중지', def: ['Shift+F5'], scope: 'global', inInput: true },
+    { id: 'check', group: '프로젝트', label: '검사 — 끊어진 참조 · 빠진 그림 · 소리 찾기', def: ['F7'], scope: 'global', inInput: true },
     { id: 'projectSettings', group: '프로젝트', label: '프로젝트 설정 열기', def: [], scope: 'global', inInput: true },
     // 그리기 (맵 편집기 · 스프라이트 편집기 공용)
     { id: 'draw.pen', group: '그리기 (맵 · 스프라이트 편집)', label: '펜 / 브러쉬', def: ['B'], scope: 'draw' },
@@ -47,6 +51,7 @@
   // 바꿀 수 없는 키 (참고용으로 창에 보여 줌)
   const FIXED = [
     ['맵 · 스프라이트 편집', 'Space+끌기 = 화면 이동 · Z+끌기 = 확대/축소 · Ctrl+휠 = 확대 · Enter = 화면에 맞춤 · Delete = 고른 것 삭제 · Ctrl+C/X/V/A (스프라이트)'],
+    ['맵 편집기 ⇱ 선택', '빈 곳에서 끌기 = 영역 (Alt+끌기 = 오브젝트 위에서도) · Shift/Ctrl+클릭 = 여러 오브젝트 · Ctrl+A = 맵 전체 · Ctrl+C/X/V (붙일 자리를 누름, 오른쪽 클릭 · Esc = 끝) · Delete = 비우기/삭제 · 방향키 = 한 칸 (Shift = 5칸) · Esc = 선택 해제'],
     ['맵 그래프', 'Delete · Ctrl+D 복제 · Ctrl+C/V · Ctrl+A · G 그룹 · F 전체 보기 · 방향키 이동 · Esc'],
     ['어디서나', 'Esc = 창 닫기 · 입력 칸 안의 Ctrl+Z/Y 는 그 칸의 되돌리기']
   ];

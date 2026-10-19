@@ -18,7 +18,7 @@
     "appId": "com.witchlingpixel.pdmaker",
     "productName": "PDMaker",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "runtime-installer.js", "zip.js", "renderer/**/*", "builtin-plugins/**/*"],
+    "files": ["main.js", "preload.js", "playtest-init.js", "runtime-installer.js", "zip.js", "renderer/**/*", "builtin-plugins/**/*"],
     "extraResources": [{ "from": "../runtime", "to": "runtime" }, { "from": "../DESIGN.md", "to": "DESIGN.md" }],
     "win": { "target": "portable" }
   }

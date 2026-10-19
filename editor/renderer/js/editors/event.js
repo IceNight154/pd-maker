@@ -26,7 +26,25 @@
     const box = h('div', { class: 'scene-box', hidden: true });
     const choices = h('div', { class: 'scene-choices' });
     const logEl = h('div', { class: 'sim-log', style: { width: '640px' } });
-    stage.append(box, choices);
+    // 카메라 연출 미리보기 (6차): 맨 뒤 "월드" 격자를 PDM.camera 식(런타임 MakerCamera 와 같음)으로 옮기고 흔듦 — 맵이 없으니 위치는 처음 자리 기준 상대값
+    const world = h('div', { class: 'scene-world' });
+    stage.append(world, box, choices);
+    const cam = { x: 0, y: 0, ox: 0, oy: 0 };
+    const camDraw = () => { const k = stage.clientHeight / PDM.Dialogue.UI_H; world.style.backgroundSize = `${16 * k}px ${16 * k}px`; world.style.backgroundPosition = `${(-(cam.x + cam.ox) * k).toFixed(1)}px ${(-(cam.y + cam.oy) * k).toFixed(1)}px`; };
+    /** sec 초 동안 프레임마다 f(k, t) — 창을 닫으면 멈춤 (따로 남는 타이머 없음) */
+    const animate = (sec, f) => new Promise(res => { const t0 = performance.now(); const tick = () => { if (closed || !stage.isConnected) return res(); const t = (performance.now() - t0) / 1000, k = sec > 0 ? Math.min(1, t / sec) : 1; f(k, t); camDraw(); if (k < 1) requestAnimationFrame(tick); else res(); }; requestAnimationFrame(tick); });
+    const camPreview = c => {
+      const C = PDM.camera, P = C.params(c);
+      if (c.cmd === 'camMove') {
+        const to = c.target === 'world' ? { x: +c.x || 0, y: +c.y || 0 } : (c.target || 'tile') === 'tile' ? C.tileToWorld(+c.x || 0, +c.y || 0) : null;
+        if (!to) { log(PDM.COMMANDS.camMove.sum(c) + ' — 미리보기에는 맵 · 캐릭터 자리가 없어 시간만'); return P.wait ? wait(P.sec * 1000) : null; }
+        const fx = cam.x, fy = cam.y, p = animate(P.sec, k => { const e = C.ease(P.ease, k); cam.x = fx + (to.x - fx) * e; cam.y = fy + (to.y - fy) * e; });
+        return P.wait ? p : null;
+      }
+      if (c.cmd === 'camShake') { const p = animate(P.sec, (k, t) => { const o = C.shakeOffset(P.power, P.sec, P.freq, P.decay, P.axis, t); cam.ox = o.x; cam.oy = o.y; }).then(() => { cam.ox = cam.oy = 0; camDraw(); }); return P.wait ? p : null; }
+      if (c.cmd === 'camReset') { cam.ox = cam.oy = 0; const fx = cam.x, fy = cam.y, p = animate(P.sec, k => { const e = C.ease('smooth', k); cam.x = fx * (1 - e); cam.y = fy * (1 - e); }); return P.wait ? p : null; }
+      return null;   // camFollow: 미리보기에는 따라갈 대상이 없음
+    };
     const illusts = {};
     const state = { switches: {}, vars: {}, self: {} };
     let closed = false;
@@ -39,17 +57,46 @@
     const log = t => logEl.prepend(h('div', {}, t));
     const wait = ms => new Promise(r => setTimeout(r, ms));
     const click = () => new Promise(r => { const f = () => { stage.removeEventListener('click', f); r(); }; stage.addEventListener('click', f); });
-    async function setIllust(slot, ref, pos, fade) {
-      if (illusts[slot]) { illusts[slot].style.opacity = 0; const old = illusts[slot]; setTimeout(() => old.remove(), 300); delete illusts[slot]; }
-      if (!ref) return;
-      const abs = PDM.assets.resolvePath(ref); if (!abs) return;
-      let url; try { url = await pdm.readDataURL(abs); } catch (_) { log('이미지 없음: ' + ref); return; }
-      const img = h('img', { src: url, style: { opacity: 0 } });
-      const P = { left: { left: '4%' }, right: { right: '4%' }, center: { left: '50%', transform: 'translateX(-50%)' }, full: { left: 0, top: 0, width: '100%', height: '100%', maxHeight: 'none', objectFit: 'cover' } }[pos || 'center'];
-      Object.assign(img.style, P, { transition: `opacity ${(fade || 3) / 10}s` });
-      stage.insertBefore(img, box); illusts[slot] = img;
-      requestAnimationFrame(() => { img.style.opacity = 1; });
+    // 일러스트: 런타임 MakerStage 와 같은 자리 계산(PDM.Dialogue.stageLayout — 게임 화면 높이 270 단위를 미리보기 크기로) · 번호가 큰 그림이 앞
+    const UH = PDM.Dialogue.UI_H, unit = () => stage.clientHeight / UH, UW = () => stage.clientWidth / unit();
+    function placeIllust(s) {
+      const L = PDM.Dialogue.stageLayout(s.pos, UW(), UH, s.iw, s.ih, s), k = unit();
+      L.x += s.shift || 0;   // 움직이기 중 자리(왼쪽 · 가운데 · 오른쪽)를 바꾸는 만큼
+      Object.assign(s.img.style, { left: L.x * k + 'px', top: L.y * k + 'px', width: L.w * k + 'px', height: L.h * k + 'px', bottom: 'auto', maxHeight: 'none', transform: L.flip ? 'scaleX(-1)' : '' });
+      s.L = L;
     }
+    async function setIllust(slot, ref, pos, fade, o = {}) {
+      if (illusts[slot]) { const old = illusts[slot]; old.img.style.transition = `opacity ${(fade ?? 3) / 10}s`; old.img.style.opacity = 0; setTimeout(() => old.img.remove(), (fade ?? 3) * 100 + 50); delete illusts[slot]; }
+      if (!ref) return true;
+      const abs = PDM.assets.resolvePath(ref);
+      let url = null; try { url = abs && await pdm.readDataURL(abs); } catch (_) { url = null; }
+      if (!url) { log('⚠ 그림 없음: ' + ref + ' — 게임에서도 보이지 않습니다 (검사 F7)'); return false; }
+      const img = h('img', { src: url, style: { opacity: 0, position: 'absolute', zIndex: slot } });
+      await new Promise(r => { img.onload = r; img.onerror = r; });
+      const sl = { img, pos: pos || 'center', iw: img.naturalWidth || 1, ih: img.naturalHeight || 1, scale: (o.scale || 100) / 100, alpha: (o.alpha ?? 100) / 100, ox: +o.ox || 0, oy: +o.oy || 0, flip: !!o.flip };
+      stage.insertBefore(img, box); illusts[slot] = sl; placeIllust(sl);
+      img.style.transition = `opacity ${(fade ?? 3) / 10}s`;
+      requestAnimationFrame(() => { img.style.opacity = sl.alpha; });
+      return true;
+    }
+    /** 일러스트 움직이기 — 런타임과 같은 곡선 · 시간 (지금 값 → 목표) */
+    function moveIllust(slot, c) {
+      const s = illusts[slot]; if (!s) { log(`⚠ 일러스트 움직이기: ${slot}번에 그림이 없음`); return Promise.resolve(); }
+      const from = { scale: s.scale, ox: s.ox, oy: s.oy, alpha: s.alpha };
+      const to = { scale: c.scale > 0 ? c.scale / 100 : s.scale, ox: +c.ox || 0, oy: +c.oy || 0, alpha: c.alpha != null && c.alpha !== '' ? c.alpha / 100 : s.alpha };
+      const newPos = c.pos && c.pos !== 'full' && s.pos !== 'full' ? c.pos : s.pos;
+      const bx = p => PDM.Dialogue.stageLayout(p, UW(), UH, s.iw, s.ih, {}).baseX, dBx = bx(newPos) - bx(s.pos);   // 자리를 바꾸면 기준 x 가 움직이는 만큼
+      const dur = Math.max(0.01, (c.time ?? 5) / 10) * 1000, t0 = performance.now();
+      s.img.style.transition = 'none';
+      return new Promise(res => { const tick = () => { if (closed) return res(); const k = PDM.Dialogue.ease(Math.min(1, (performance.now() - t0) / dur));
+        s.scale = from.scale + (to.scale - from.scale) * k; s.ox = from.ox + (to.ox - from.ox) * k; s.oy = from.oy + (to.oy - from.oy) * k; s.alpha = from.alpha + (to.alpha - from.alpha) * k; s.shift = dBx * k;
+        placeIllust(s); s.img.style.opacity = s.alpha;
+        if (k < 1) requestAnimationFrame(tick); else { s.pos = newPos; s.shift = 0; placeIllust(s); res(); } }; requestAnimationFrame(tick); });
+    }
+    // 화면 어둡게 / 밝게 (런타임: 화면 위 색 상자 · 대사창 아래)
+    const fadeEl = h('div', { style: { position: 'absolute', inset: 0, opacity: 0, pointerEvents: 'none', zIndex: 50, background: '#000' } });
+    stage.append(fadeEl);
+    let style = null;   // "대사 스타일" 명령 (이 이벤트 안에서 이어짐 — 런타임 EventInterpreter.style)
     function portraitOf(charId, face) {
       const c = store.get('char:' + charId); if (!c || !c.portrait) return null;
       const ex = (c.portrait.expressions || []).find(e => e.key === face);
@@ -67,6 +114,7 @@
           case 'text': if (newStyle) {
             const l = PDM.Dialogue.line(c.speaker, c.face, c.illust, c.text || '', faces);
             if (c.name) l.name = c.name; if (c.side) l.side = c.side;
+            PDM.Dialogue.styleLine(l, c, style); if (+c.auto > 0) l.auto = c.auto / 10;   // 글자 속도 · 글꼴 · 연출: 대사 → 대사 스타일 → 대사창 설정
             const nx = list[li + 1];
             const withChoice = nx && nx.cmd === 'choice' && (nx.options || []).length;
             box.hidden = true;
@@ -103,9 +151,21 @@
           case 'switch': state.switches[c.id] = !!c.value; log(`스위치 ${c.id} = ${!!c.value}`); break;
           case 'var': { const v = state.vars[c.id] || 0, x = +c.value || 0; state.vars[c.id] = ({ set: x, add: v + x, sub: v - x, mul: v * x })[c.op || 'set']; log(`변수 ${c.id} = ${state.vars[c.id]}`); break; }
           case 'self': state.self[c.key || 'A'] = !!c.value; break;
-          case 'illust': await setIllust(c.slot || 1, c.image, c.pos, c.fade); break;
+          case 'illust': { const ok = await setIllust(c.slot || 1, c.image, c.pos, c.fade, c); if (ok && c.wait) await wait((c.fade ?? 3) * 100); break; }
+          case 'illustMove': { const p = moveIllust(c.slot || 1, c); if (c.wait !== false) await p; break; }
+          case 'textStyle': style = c.reset ? null : c; log(PDM.COMMANDS.textStyle.sum(c)); break;
+          case 'camMove': case 'camFollow': case 'camShake': case 'camReset': { log(PDM.COMMANDS[c.cmd].sum(c)); const p = camPreview(c); if (p) await p; break; }
+          case 'waitInput': log('입력 기다리는 중 — 화면을 누르세요'); await click(); break;
+          case 'fade': { const t = Math.max(1, c.time ?? 5) * 100; fadeEl.style.background = c.color || '#000'; fadeEl.style.transition = `opacity ${t}ms linear`; fadeEl.style.opacity = c.op === 'in' ? 0 : 1; if (c.wait !== false) await wait(t); break; }
+          case 'sound': {
+            if (c.kind === 'bgmStop') { log(`배경음 끄기${c.fade ? ` (${c.fade / 10}초)` : ''}`); if (PDM.audio && PDM.audio.stop) PDM.audio.stop(); break; }
+            if (!c.file) { log('⚠ 소리를 고르지 않음'); break; }
+            log(`${c.kind === 'bgm' ? '배경음' : '효과음'}: ${PDM.audio ? PDM.audio.label(c.file) : c.file}`);
+            try { if (PDM.audio && PDM.audio.play) await Promise.race([PDM.audio.play(c.file), wait(50)]); } catch (e) { log('⚠ 소리를 재생하지 못함: ' + c.file); }
+            break;
+          }
           case 'face': faces[c.char] = c.face || ''; log(`표정: ${PDM.refName('character', c.char)} → ${c.face || '기본'}`); break;
-          case 'illustHide': if (!c.slot) Object.keys(illusts).forEach(k => setIllust(k, null)); else await setIllust(c.slot, null); break;
+          case 'illustHide': if (!c.slot) Object.keys(illusts).forEach(k => setIllust(k, null, null, c.fade)); else await setIllust(c.slot, null, null, c.fade); break;
           case 'shake': stage.animate([{ transform: 'translate(0,0)' }, { transform: `translate(${c.power || 3}px,0)` }, { transform: `translate(-${c.power || 3}px,0)` }, { transform: 'translate(0,0)' }], { duration: 120, iterations: Math.max(1, (c.time || 5) / 1.2) }); await wait((c.time || 5) * 100); break;
           case 'flash': stage.animate([{ boxShadow: `inset 0 0 0 400px ${c.color || '#ffffff'}` }, { boxShadow: 'inset 0 0 0 400px transparent' }], { duration: (c.time || 3) * 100 }); await wait((c.time || 3) * 100); break;
           case 'call': { const e2 = store.get('event:' + c.event); if (e2) { if ((await run(e2.pages[0].commands)) === 'stop') return 'stop'; } break; }
@@ -222,8 +282,8 @@
           F.textarea(key, ['note'], { label: '메모', rows: 2 })),
         h('p', { class: 'hint' }, '페이지는 번호가 큰 것부터 조건을 검사해서, 처음 맞는 페이지 하나만 동작합니다 (RPG Maker 와 같음).'),
         pageTabs,
-        h('div', { class: 'flex gap-6 items-start mt-4' }, left,
-          h('div', { class: 'grow min-0' }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
+        h('div', { class: 'ev-cols mt-4' }, left,   // 좁으면 실행 내용이 아래로 (4차: 예전엔 230px 로 눌려 "명령 8개"가 세로로 쪼개짐)
+          h('div', { class: 'ev-cmds' }, panel(`실행 내용 — 페이지 ${pi + 1}`, PDM.commandList(key, [...P, 'commands'])))));
     }
   });
   PDM.events = { newEvent };

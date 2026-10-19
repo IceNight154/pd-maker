@@ -75,6 +75,17 @@ public class Hooks {
 					System.out.println("[TEST] touch " + x + "," + y);
 					break;
 				}
+				case "drag": { // drag,<x1>,<y1>,<x2>,<y2> — 진짜 마우스로 누른 채 끌기 (원작은 끄는 동안 포인터 신호에 null 을 보냄)
+					int x1 = Integer.parseInt(p[1]), y1 = Integer.parseInt(p[2]), x2 = Integer.parseInt(p[3]), y2 = Integer.parseInt(p[4]);
+					com.badlogic.gdx.InputProcessor ip = com.badlogic.gdx.Gdx.input.getInputProcessor();
+					ip.touchDown(x1, y1, 0, 0);
+					new Thread(() -> {   // 끌기는 누름이 한 프레임 처리된 뒤에야 받음(addIfExisting) — 프레임에 걸쳐 나눠 보냄
+						try { for (int k = 1; k <= 8; k++) { Thread.sleep(50); ip.touchDragged(x1 + (x2 - x1) * k / 8, y1 + (y2 - y1) * k / 8, 0); } Thread.sleep(50); ip.touchUp(x2, y2, 0, 0); }
+						catch (InterruptedException ignored) { }
+					}).start();
+					System.out.println("[TEST] drag " + x1 + "," + y1 + " → " + x2 + "," + y2);
+					break;
+				}
 				case "wnds": { // 떠 있는 창 정보 (보이는지 · 카메라 위치)
 					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
 					walk(com.watabou.noosa.Game.scene(), all);
@@ -193,6 +204,46 @@ public class Hooks {
 					com.watabou.noosa.Game.scene().addToFront(new com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd(dl, null, null));   // 게임 화면 밖(타이틀)에서도
 					break;
 				}
+				case "rotate": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.rotate(); System.out.println("[TEST] rotate"); break;   // F9 와 같음 (가로 ↔ 세로)
+				case "cam": System.out.println("[TEST] cam " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.debugState() + " hero=" + (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero == null || com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite == null ? "-" : String.format(java.util.Locale.ROOT, "%.1f,%.1f", com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.center().x, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite.center().y)) + " heroCell=" + (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero == null ? -1 : com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); break;   // 카메라 상태 (6차)
+				case "bartouch": { // bartouch,<단추 글: 1x 2x 4x 16x 스킵> — 배속 표시줄 단추를 진짜 마우스처럼 누름
+					float[] q = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCutscene.barButton(p[1]);
+					if (q == null) { System.out.println("[TEST] bartouch " + p[1] + " none"); break; }
+					com.badlogic.gdx.InputProcessor ip = com.badlogic.gdx.Gdx.input.getInputProcessor();
+					ip.touchDown((int) q[0], (int) q[1], 0, 0); ip.touchUp((int) q[0], (int) q[1], 0, 0);
+					System.out.println("[TEST] bartouch " + p[1] + " " + (int) q[0] + "," + (int) q[1]); break; }
+				case "mark": System.out.println("[TEST] mark " + p[1]); break;   // 기록 구간 표시 (검사 스크립트)
+				case "cutscene": System.out.println("[TEST] cutscene " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCutscene.debugState()); break;   // 연출 상태 · 배속 · 표시줄 (6차)
+				case "theme": System.out.println("[TEST] theme " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTheme.debugState()); break;   // 게임 UI 테마 (6차)
+				case "evcancel": com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.reset(); System.out.println("[TEST] evcancel"); break;   // 실행 중 이벤트 취소 (불러오기 · 멈춤 정리와 같은 길)
+				case "testenv": System.out.println("[TEST] testenv " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.debugState()); break;   // 실행 환경 · 배속 상태 (5차)
+				case "speed": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.setSpeed(Integer.parseInt(p[1])); System.out.println("[TEST] speed " + p[1]); break;
+				case "skip": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.toggleSkip(); System.out.println("[TEST] skip " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.skipping()); break;
+				case "complete": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.completeLine(); break;
+				case "next": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTestEnv.nextLine(); break;
+				case "typing": {   // 떠 있는 대사창의 글자 진행 · 연출 (5차)
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd)
+						System.out.println("[TEST] typing " + ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w).debugTyping());
+					break; }
+				case "layercells": { // 레이어별 칸 → 사용자 타일 id (게임이 실제로 만든 타일맵에서) + 칸 지형 — 편집기 저장 배열과 비교 (tools/playtest/compare-layers.js)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					StringBuilder sb = new StringBuilder("[TEST] layercells w=" + lv.width() + " h=" + lv.height() + " {");
+					java.util.Map<String, java.util.TreeMap<Integer, String>> by = new java.util.TreeMap<>();
+					java.util.List<com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap> all = new java.util.ArrayList<>(lv.customTiles); all.addAll(lv.customWalls);
+					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : all) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles u = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerUserTiles) t;
+						java.util.TreeMap<Integer, String> m = by.computeIfAbsent(u.layer + (lv.customWalls.contains(t) ? "@above" : "@below"), k -> new java.util.TreeMap<>());
+						for (int k = 0; k < u.cells.length; k++) m.put(u.cells[k], u.ids[k]);
+					}
+					boolean first = true;
+					for (java.util.Map.Entry<String, java.util.TreeMap<Integer, String>> e : by.entrySet()) {
+						sb.append(first ? "" : ",").append('"').append(e.getKey()).append("\":{"); first = false; boolean f2 = true;
+						for (java.util.Map.Entry<Integer, String> c : e.getValue().entrySet()) { sb.append(f2 ? "" : ",").append('"').append(c.getKey()).append("\":\"").append(c.getValue()).append('"'); f2 = false; }
+						sb.append('}');
+					}
+					sb.append("} map=");
+					for (int k = 0; k < lv.length(); k++) sb.append(k == 0 ? "" : ",").append(lv.map[k]);
+					System.out.println(sb); break; }
 				case "layerinfo": { // 타일 레이어 타일맵 순서 · 함정 목록 · 칸 판정 (layerinfo,<칸>,<칸>…)
 					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
 					StringBuilder sb = new StringBuilder("[TEST] layers below=");
@@ -202,7 +253,7 @@ public class Hooks {
 					System.out.println(sb);
 					for (com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap t : lv.customTiles) if (t instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) {
 						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos m = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos) t; StringBuilder cb = new StringBuilder("[TEST] combos n=" + m.cells.length);
-						for (int k = 0; k < Math.min(6, m.cells.length); k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
+						for (int k = 0; k < m.cells.length; k++) { int c = m.cells[k]; cb.append(" ").append(m.ids[k]).append("@").append(c % lv.width()).append(",").append(c / lv.width()).append("(지형").append(lv.map[c]).append(",아래").append(c + lv.width() < lv.length() ? lv.map[c + lv.width()] : -1).append(")"); }
 						java.util.Map<String,Integer> tally = new java.util.TreeMap<>(); for (String id : m.ids) tally.merge(id, 1, Integer::sum); cb.append(" by=").append(tally);
 						System.out.println(cb + " lights=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombos.lights(lv).size());
 					}
@@ -607,8 +658,43 @@ public class Hooks {
 					System.out.println(sb.append(" npcs=").append(n)); break; }
 				case "killmob": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs.toArray(new com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob[0])) if (m.alignment == com.shatteredpixel.shatteredpixeldungeon.actors.Char.Alignment.ENEMY) { m.die(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break; } break; }
 				case "pickgold": new com.shatteredpixel.shatteredpixeldungeon.items.food.Food().doPickUp(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero); break;
-				case "winsize": { // winsize,<가로>,<세로> — 창 크기 바꾸기 (세로 화면 = 모바일 흉내)
-					com.badlogic.gdx.Gdx.graphics.setWindowedMode(Integer.parseInt(p[1]), Integer.parseInt(p[2])); break; }
+				case "winsize": { // winsize,<가로>,<세로> — 창 크기 바꾸기 (세로 화면 = 휴대폰 비율 흉내 · 실행 중에 바꾸면 화면 돌림 · 창 크기 조절과 같은 경로: Game.resize → 화면 다시 만들기)
+					// 데스크톱 판의 최소 창 크기(720×400)를 풀어야 세로 비율이 됨
+					try { ((com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics) com.badlogic.gdx.Gdx.graphics).getWindow().setSizeLimits(1, 1, -1, -1); } catch (Throwable t) { System.out.println("[TEST] size limits: " + t); }
+					com.badlogic.gdx.Gdx.graphics.setWindowedMode(Integer.parseInt(p[1]), Integer.parseInt(p[2]));
+					System.out.println("[TEST] window " + p[1] + "x" + p[2]); break; }
+				case "uisize": { // uisize,<0|1|2> — 게임 설정 "인터페이스 크기" (0 = 휴대폰 기본 · 세로 화면이면 세로 배치, 1·2 = 데스크톱 기본 큰 UI → 늘 가로 배치) 바꾸고 화면 다시 만들기
+					com.shatteredpixel.shatteredpixeldungeon.SPDSettings.interfaceSize(Integer.parseInt(p[1]));
+					com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon.seamlessResetScene();
+					System.out.println("[TEST] interfaceSize " + p[1]); break; }
+				case "insets": { // insets,<왼>,<위>,<오른>,<아래> (화면 px) — 노치 · 상태 줄 · 내비게이션 바 흉내 (데스크톱은 원래 0). 원작 Window · GameScene 이 쓰는 getSafeInsets 를 바꾸고 화면을 다시 만듦
+					final float il = Float.parseFloat(p[1]), it = Float.parseFloat(p[2]), ir = Float.parseFloat(p[3]), ib = Float.parseFloat(p[4]);
+					com.watabou.noosa.Game.platform = new com.shatteredpixel.shatteredpixeldungeon.desktop.DesktopPlatformSupport() {
+						@Override public com.watabou.utils.RectF getSafeInsets(int level) { return new com.watabou.utils.RectF(il, it, ir, ib); } };
+					com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon.seamlessResetScene();
+					System.out.println("[TEST] insets " + il + "," + it + "," + ir + "," + ib); break; }
+				case "layout": { // 연출 화면 배치 검사: 대사창 · 글 · 이름표 · ▼ · 선택지 · 일러스트가 화면(그리고 안전 영역) 밖으로 나가는지 — 결과 한 줄 + 문제 목록
+					StringBuilder sb = new StringBuilder();
+					com.watabou.noosa.Camera uc = com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene.uiCamera;
+					sb.append("screen=").append(com.watabou.noosa.Game.width).append('x').append(com.watabou.noosa.Game.height).append(" ui=").append(uc.width).append('x').append(uc.height).append(" z").append(uc.zoom);
+					sb.append(" landscape=").append(com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene.landscape());
+					int probs = 0;
+					for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) {
+						com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd d = (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w;
+						sb.append(" dlg{").append(d.debugLayout()).append('}');
+						for (String pr : d.layoutProblems()) { System.out.println("[TEST] LAYOUT-PROBLEM " + pr); probs++; }
+					}
+					String st = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerStage.debugLayout();
+					sb.append(" stage{").append(st).append('}');
+					for (String pr : com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerStage.layoutProblems()) { System.out.println("[TEST] LAYOUT-PROBLEM " + pr); probs++; }
+					System.out.println("[TEST] layout " + sb + " problems=" + probs);
+					break; }
+				case "wshot": { // wshot,<이름> — 게임 창만 찍기 (xvfb 화면보다 창이 작을 때 · 창 자리를 GLFW 에서 읽어 잘라냄)
+					com.badlogic.gdx.backends.lwjgl3.Lwjgl3Window win = ((com.badlogic.gdx.backends.lwjgl3.Lwjgl3Graphics) com.badlogic.gdx.Gdx.graphics).getWindow();
+					final String geo = com.badlogic.gdx.Gdx.graphics.getWidth() + "x" + com.badlogic.gdx.Gdx.graphics.getHeight() + "+" + win.getPositionX() + "+" + win.getPositionY();
+					final String name = p[1];
+					new Thread(() -> { try { Thread.sleep(250); new ProcessBuilder("import", "-display", System.getenv("DISPLAY"), "-window", "root", "-crop", geo, "+repage", PlayTest.outDir + "/" + name + ".png").inheritIO().start().waitFor(); System.out.println("[TEST] wshot " + name + " " + geo); } catch (Exception e) { e.printStackTrace(); } }).start();
+					break; }
 				case "godepth": { // godepth,<깊이> — 원작 던전의 그 깊이로
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.mode = com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.Mode.RETURN;
 					com.shatteredpixel.shatteredpixeldungeon.scenes.InterlevelScene.returnDepth = Integer.parseInt(p[1]);
@@ -648,6 +734,12 @@ public class Hooks {
 						if (m instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC && ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerNPC) m).charId.equals(p[1])) cell = m.pos;
 					System.out.println("[TEST] click " + cell + " hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + " busy=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.busy() + " ready=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.ready);
 					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(cell);
+					break;
+				}
+				case "cutinfo": { // 연출 상태: 이벤트 실행 중 · 화면 어둡게 · 일러스트 번호마다 · 떠 있는 창 · 영웅 자리
+					StringBuilder ws = new StringBuilder(); for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) ws.append(w.getClass().getName().replaceAll("^.*\\.", "")).append(w.visible ? "" : "(hidden)").append(' ');
+					String line = ""; for (com.shatteredpixel.shatteredpixeldungeon.ui.Window w : PlayTest.windows()) if (w instanceof com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) line = " line='" + ((com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerDialogue.Wnd) w).line.text + "'";
+					System.out.println("[TEST] cut " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.EventInterpreter.debugState() + " windows=[" + ws.toString().trim() + "]" + line + " hero=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos);
 					break;
 				}
 				case "adv": case "pick": { // 대사창: 다음(글자 다 보이기 → 선택지 → 닫기) · pick,<n> 선택지 고르기
@@ -738,6 +830,17 @@ public class Hooks {
 				case "action": System.out.println("[TEST] action " + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action); break;
 				case "title": System.out.println("[TEST] title buttons " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.describe()); break;
 				case "tap": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.tap(); break;
+				case "titlegeo": System.out.println("[TEST] titlegeo " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.geo()); break;   // 7차: 타이틀 배치 · 상태 JSON
+				case "titlewin": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.openWin(p[1]); System.out.println("[TEST] titlewin " + p[1]); break;
+				case "titlehover": if (p[1].startsWith("@")) { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.hoverOn(p[1].substring(1)); System.out.println("[TEST] titlehover " + p[1]); break; }
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.hover(p.length > 2 ? new float[]{ Float.parseFloat(p[1]), Float.parseFloat(p[2]) } : null); System.out.println("[TEST] titlehover " + (p.length > 2 ? p[1] + "," + p[2] : "off")); break;
+				case "titleclick": com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTitle.click(p[1]); System.out.println("[TEST] titleclick " + p[1]); break;
+				case "key": { // key,<libGDX 키 이름: ENTER · ESCAPE · DOWN · TAB …> — 진짜 키처럼 (누름 → 뗌, 입력 처리기로)
+					int kc = com.badlogic.gdx.Input.Keys.valueOf(p[1].equals("ESCAPE") ? "Escape" : p[1].substring(0, 1) + p[1].substring(1).toLowerCase().replace("_", " "));
+					if (kc < 0) kc = (int) com.badlogic.gdx.Input.Keys.class.getField(p[1]).getInt(null);
+					com.watabou.input.KeyEvent.addKeyEvent(new com.watabou.input.KeyEvent(kc, true));
+					com.watabou.input.KeyEvent.addKeyEvent(new com.watabou.input.KeyEvent(kc, false));
+					System.out.println("[TEST] key " + p[1] + " " + kc); break; }
 				case "talk": for (int i = 0; i < 12; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");
 					com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.onFloorLeave(com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth);
 					for (int i = 0; i < 5; i++) com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeartSystem.applyAction(p[1], "TALK");

@@ -52,7 +52,7 @@
         bar(PDM.T('rel.stress'), rec.stress, R.stressTiers[R.stressTiers.length - 1], '#7c6f9a', `${rec.stress} (${PDM.Heart.stressTier(sys, rec)}단계)`),
         orec ? bar(st.other.name + ' ' + PDM.T('rel.anger'), orec.anger, R.angerMax, 'var(--gold)', `${orec.anger}${orec.sulk ? ' ' + PDM.T('rel.sulk') : ''} · ${PDM.T('rel.jealousy')} ${orec.jealousy}`) : null,
         h('div', { class: 'cols2 mt-4' },
-          h('div', {}, h('div', { class: 'fl' }, PDM.T('sys.gauge') + ' (이번 층)'), ...(sys.gauges || []).map(g => bar(PDM.T(g.key), rec.gauges[g.key] || 0, Math.max(500, ...Object.values(rec.gauges)), '#a58bff'))),
+          h('div', {}, h('div', { class: 'fl' }, PDM.T('sys.gauge') + ' (이번 층)'), ...(sys.gauges || []).map(g => bar(PDM.T(g.key), rec.gauges[g.key] || 0, Math.max(500, ...Object.values(rec.gauges)), 'var(--accent)'))),
           h('div', {}, h('div', { class: 'fl' }, PDM.T('sys.crystal')),
             h('div', { class: 'kv' }, ...(sys.crystals || []).flatMap(g => rec.crystals[g] ? [h('b', {}, PDM.T(g)), h('span', {}, rec.crystals[g])] : [])),
             h('div', { class: 'fl mt-3' }, PDM.T('sys.ability')),

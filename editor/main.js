@@ -17,7 +17,7 @@ let gameProc = null;
 function settingsFile() { return path.join(app.getPath('userData'), 'pdmaker-settings.json'); }
 function readSettings() { try { return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')); } catch (_) { return {}; } }
 function writeSettings(o) { try { fs.mkdirSync(path.dirname(settingsFile()), { recursive: true }); fs.writeFileSync(settingsFile(), JSON.stringify(o, null, 2)); } catch (_) { /* 무시 */ } }
-const bgFor = dark => dark ? '#17151d' : '#f3f2f7';
+const bgFor = dark => dark ? '#131518' : '#f1f3f5';   // 창이 뜨는 순간의 바탕 = css --bg (테마 토큰과 같게)
 /** OS 강조색 (Windows·macOS) → '#rrggbb', 없으면 null */
 function accentColor() {
   try { const c = systemPreferences.getAccentColor && systemPreferences.getAccentColor(); return c ? '#' + String(c).slice(0, 6) : null; } catch (_) { return null; }
@@ -242,34 +242,9 @@ function download(url, to, hops = 0) {
     }).on('error', rej);
   });
 }
-function writeInitScript(userData, projectDir) {
+function writeInitScript(userData, projectDir, testenv) {
   const f = path.join(userData, 'pdmaker-playtest.gradle');
-  const proj = projectDir.replace(/\\/g, '/');
-  fs.writeFileSync(f, [
-    '// PDMaker 가 만든 파일. build.gradle 을 고치지 않고 테스트 실행 작업을 추가합니다.',
-    'gradle.projectsEvaluated {',
-    "    def d = rootProject.findProject(':desktop')",
-    "    if (d == null) throw new GradleException('desktop project not found')",
-    "    d.tasks.register('pdmakerPlaytest', JavaExec) {",
-    "        group = 'pdmaker'",
-    '        classpath = d.sourceSets.main.runtimeClasspath',
-    "        mainClass.set('com.shatteredpixel.shatteredpixeldungeon.desktop.DesktopLauncher')",
-    '        ignoreExitValue = true',
-    "        systemProperty 'Specification-Title', 'PDMaker Playtest'",
-    "        systemProperty 'Implementation-Title', d.appPackageName",
-    "        systemProperty 'Specification-Version', d.appVersionName + '-PLAYTEST'",
-    "        systemProperty 'Implementation-Version', d.appVersionCode",
-    `        systemProperty 'pdmaker.project', '${proj}'`,
-    "        jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8', '-Dsun.stdout.encoding=UTF-8'",
-    "        if (System.getProperty('os.name').toLowerCase().contains('mac')) jvmArgs '-XstartOnFirstThread'",
-    '    }',
-    '    // desktop:debug (게임 원래 실행 작업 — INDEV 버전) 으로 테스트할 때도 이 프로젝트를 넘겨줌',
-    "    def dbg = d.tasks.findByName('debug')",
-    '    if (dbg != null) {',
-    `        dbg.systemProperty 'pdmaker.project', '${proj}'`,
-    "        dbg.jvmArgs '-Dfile.encoding=UTF-8', '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8', '-Dsun.stdout.encoding=UTF-8'",
-    '    }',
-    '}', ''].join('\n'), 'utf8');
+  fs.writeFileSync(f, require('./playtest-init').build(projectDir, testenv), 'utf8');   // 내용: playtest-init.js (테스트: tools/tests/run.js)
   return f;
 }
 function log(line) { if (win) win.webContents.send('game:log', line); }
@@ -302,7 +277,7 @@ function repairRepo(repo) {
   }
   if (left.length) throw new Error('게임 저장소에 빌드 파일이 없습니다: ' + left.join(', ') + ' — 원래 게임 저장소에서 복사해 넣으세요 (' + repo + ')');
 }
-ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
+ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode, testenv }) => {
   if (gameProc) throw new Error('이미 실행 중입니다. 먼저 중지하세요.');
   if (!isRepoDir(repo) && bundledRepo()) repo = bundledRepo();
   const gradlew = path.join(repo, IS_WIN ? 'gradlew.bat' : 'gradlew');
@@ -321,7 +296,8 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode }) => {
   if (project) { try { installer.generate(repo, project, l => log('  ' + l)); } catch (e) { log('! 코드 생성 실패: ' + e.message); } }
   // 게임 이름 · 패키지 이름 → build.gradle (세이브 폴더가 원작과 섞이지 않게)
   if (project) { try { installer.applyGameId(repo, project, l => log('  ' + l)); } catch (e) { log('! build.gradle 게임 이름 적용 실패: ' + e.message); } }
-  const init = writeInitScript(app.getPath('userData'), project);
+  const init = writeInitScript(app.getPath('userData'), project, task === 'play' ? testenv : null);
+  if (task === 'play' && testenv) log(`> 실행 환경: ${testenv.name} · 창 ${testenv.window.join('×')}${testenv.zoom ? ' · 배율 ×' + testenv.winZoom : ''}${testenv.insets.some(Boolean) ? ' · 안전 영역 ' + testenv.insets.join(',') : ''}`);
   const args = task === 'compile'
     ? ['core:compileJava', '--console=plain']
     : ['-I', init, mode === 'debug' ? 'desktop:debug' : 'desktop:pdmakerPlaytest', '--no-daemon', '--console=plain'];   // debug = 게임 원래 실행 작업 (버전 표시 -INDEV)
@@ -358,7 +334,7 @@ ipcMain.handle('game:stop', wrap(() => { stopGame(); return true; }));
 // ---------------- 프로젝트 저장·내보내기·가져오기 (GameMaker 의 Save As · Export/Import Project) ----------------
 const zip = require('./zip');
 /** 프로젝트에 넣지 않는 것: 임시 파일·백업 */
-const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp)$/.test(rel) || /^signing$/.test(rel) || (!isDir && /\.tmp$/.test(rel));   // signing = 안드로이드 서명 키 (게임 파일에 넣지 않음)
+const skipProj = (rel, isDir) => /(^|\/)(\.git|node_modules|\.pdmaker-tmp|\.pdmaker-backup)$/.test(rel) || /^signing$/.test(rel) || (!isDir && /\.tmp$/.test(rel));   // signing = 안드로이드 서명 키 (게임 파일에 넣지 않음) · .pdmaker-backup = 편집기가 저장 전에 남긴 원본 백업 (store.js)
 ipcMain.handle('project:copyTo', wrap(({ from, to }) => {
   if (!fs.existsSync(path.join(from, 'project.json'))) throw new Error('프로젝트 폴더가 아닙니다: ' + from);
   if (fs.existsSync(to) && fs.readdirSync(to).length) throw new Error('빈 폴더를 골라 주세요: ' + to);

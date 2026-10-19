@@ -75,6 +75,8 @@ public class MakerTileUnderlay extends DungeonTilemap {
 
 	/** GameScene.create 연결 줄: 지형 타일맵(tiles)을 넣기 직전에 밑그림 층들을 넣음 */
 	public static void addTo(Group terrainGroup, DungeonTerrainTilemap tiles) {
+		// 지난 화면의 밑그림 텍스처 해제 (TextureCache 밖에서 만든 것이라 직접 지워야 함 — 이전 GameScene 은 이미 destroy 됨)
+		for (MakerTileUnderlay u : live) try { if (u.texture != null) u.texture.delete(); } catch (Throwable ignored) { }
 		live.clear();
 		try {
 			if (!MakerRuntime.isActive() || !MakerRuntime.tileCombos() || Dungeon.level == null || tiles == null) return;   // 확장 기능 "tilecombos" 꺼짐 = 밑그림 없음

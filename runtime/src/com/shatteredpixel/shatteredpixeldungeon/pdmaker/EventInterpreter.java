@@ -103,12 +103,15 @@ public class EventInterpreter {
 		}
 		return current != null;
 	}
+	/** 실행 중인 이벤트 id (없으면 "") — 연출 상태 표시(MakerCutscene) */
+	public static String currentId() { EventInterpreter c = current; return c == null ? "" : c.eventId; }
 	/** 새 게임 · 불러오기 때 (StoryState.reset): 이전 게임의 실행 중·대기 중 이벤트를 모두 버림 */
 	public static synchronized void reset() {
-		if (current != null) current.dead = true;
+		if (current != null) { current.dead = true; MakerCamera.eventEnded(current); }   // 취소 · 멈춤 정리: 그 이벤트의 카메라 연출도 정리 (6차)
 		for (EventInterpreter q : queue) q.dead = true;
 		current = null;
 		queue.clear();
+		synchronized (carried) { carried.clear(); }
 		MakerDialogue.faces.clear();
 	}
 	/** 멈춘 명령이 기다리는 창·타이머를 알려 줌 (사라졌는데 이어지지 않으면 막힌 것으로 봄) */
@@ -117,6 +120,12 @@ public class EventInterpreter {
 		if (c != null) { c.waitOn = g; c.pauseSeq++; }
 	}
 	static Thread renderThread;
+	/** 상태 한 줄 (자동 테스트 tools/playtest Hooks "cutinfo" · 로그용): 실행 중 · 대기열 · 화면 어둡게 · 일러스트 */
+	public static String debugState() {
+		EventInterpreter c = current;
+		return "busy=" + (c != null) + (c != null ? "(" + c.eventId + ")" : "") + " queue=" + queue.size()
+				+ " fade=" + (fadeBlock == null || fadeBlock.parent == null ? "none" : String.format(java.util.Locale.ROOT, "%.2f", fadeBlock.alpha())) + " stage=" + MakerStage.debugState();
+	}
 
 	// ------------------------------------------------------------ 실행기
 
@@ -134,15 +143,16 @@ public class EventInterpreter {
 
 	EventInterpreter(String eventId, String ctxChar) { this.eventId = eventId; this.ctxChar = ctxChar; }
 
-	void start() { current = this; step(); }
+	void start() { current = this; shownOn = Dungeon.level; step(); }
 	void finish() {
 		if (dead) return;
 		current = null;
+		MakerCamera.eventEnded(this);   // 6차: 이 이벤트가 연 카메라 연출 정리 (흔들림 멈춤 · 영웅에게 돌아감)
 		EventInterpreter next = queue.poll();
 		if (next != null) next.start();
 	}
 	/** 멈춘 명령(창 닫힘, 대기 끝) 다음부터 이어서 — 플러그인도 비동기 처리가 끝나면 호출 */
-	public void resume() { if (dead) return; watch = false; waitOn = null; pauseSeq++; step(); }
+	public void resume() { if (dead) return; watch = false; waitOn = null; windowMaker = null; pauseSeq++; step(); }
 
 	/** 기다리던 것이 사라졌는데(창이 화면에서 없어짐 · 창을 만들지 못함) 이어지지 않았는가 */
 	boolean stuck() {
@@ -157,6 +167,7 @@ public class EventInterpreter {
 		return true;
 	}
 	private boolean gone() {
+		if (rebuilding) return false;   // 화면을 다시 만든 직후 — 창 · 타이머를 새 화면에 옮기는 중
 		com.watabou.noosa.Gizmo g = waitOn;
 		if (g == null) return System.currentTimeMillis() - pausedAt > 4000;   // 창이 4초 넘게 안 뜸 (만들다 오류)
 		return g.parent == null || !g.exists;
@@ -196,8 +207,100 @@ public class EventInterpreter {
 	}
 
 	/** 창·타이머로 멈추는 명령 (멈춤 감시 대상) */
-	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade"));
+	static final java.util.Set<String> UI_WAITS = new java.util.HashSet<>(java.util.Arrays.asList("text", "topic", "choice", "action", "wait", "move", "fade", "illust", "illustMove", "waitInput", "camMove", "camShake", "camReset"));
+	/** 이 이벤트의 "대사 스타일" 명령 값 (없으면 null) — 이벤트가 끝나면 사라짐 (다른 이벤트에 넘어가지 않음) */
+	JsonValue style;
+	/** 대사 한 줄에 스타일: 명령 칸 → 이벤트 스타일 → (없으면 Line 기본값 = 대사창 설정) */
+	void styleLine(MakerDialogue.Line l, JsonValue c) {
+		String sp = pick(c, "speed"); l.speed = textSpeed(sp);   // 이 줄만 글자 속도 (비우면 대사창 설정)
+		String v;
+		if (!(v = pick(c, "tracking")).isEmpty()) l.tracking = num(v, Float.NaN);
+		if (!(v = pick(c, "lineGap")).isEmpty()) l.lineGap = num(v, Float.NaN);
+		if (!(v = pick(c, "effect")).isEmpty()) l.effect = v;
+		if (!(v = pick(c, "fxDur")).isEmpty()) l.fxDur = num(v, Float.NaN) / 10f;      // 0.1초
+		if (!(v = pick(c, "fxStrength")).isEmpty()) l.fxStrength = num(v, Float.NaN) / 100f;   // %
+		if (!(v = pick(c, "fxScope")).isEmpty()) l.fxScope = v;
+		if (!(v = pick(c, "size")).isEmpty()) l.sizePct = num(v, Float.NaN);          // 글자 크기 %
+		if (!(v = pick(c, "padding")).isEmpty()) l.padding = num(v, Float.NaN);
+		if (!(v = pick(c, "align")).isEmpty()) l.align = v;
+		if (!(v = pick(c, "emColor")).isEmpty()) l.emColor = v;
+		if (!(v = pick(c, "bold")).isEmpty()) l.bold = v.equals("on") || v.equals("true");   // "" = 설정 그대로 · on · off
+	}
+	String pick(JsonValue c, String k) {
+		String v = c.has(k) ? c.getString(k, "") : "";
+		if ((v == null || v.isEmpty()) && style != null && style.has(k)) v = style.getString(k, "");
+		return v == null ? "" : v;
+	}
+	static float num(String v, float d) { try { return Float.parseFloat(v); } catch (Exception e) { return d; } }
+	/** 대사 글자 속도 (글자/초): "" = 대사창 설정(-1) · instant = 바로 · slow 20 · normal 40 · fast 80 · veryfast 160 · 숫자 */
+	static float textSpeed(String v) {
+		switch (v) { case "": return -1; case "instant": return 0; case "slow": return 20; case "normal": return 40; case "fast": return 80; case "veryfast": return 160; }
+		try { return Math.max(0, Float.parseFloat(v)); } catch (Exception e) { return -1; }
+	}
+	/** 화면 스레드에서 start 를 한 번 하고, done 이 참이 될 때까지 (프레임마다 확인) 기다렸다가 이어서 — 연출이 끝날 때까지 대기.
+	 *  start 가 false(그림이 없음 등)면 기다리지 않고 바로 이어서. 화면이 바뀌어 사라지면 멈춤 감시가 정리 */
+	void waitUntil(java.util.function.BooleanSupplier start, java.util.function.BooleanSupplier done) {
+		final EventInterpreter self = this;
+		Game.runOnRenderThread(() -> {
+			renderThread = Thread.currentThread();
+			if (self.dead) return;
+			boolean ok;
+			try { ok = Game.scene() != null && start.getAsBoolean(); } catch (Throwable t) { MakerRuntime.log("연출 명령 오류 (" + eventId + "): " + t); ok = false; }
+			if (!ok) { resume(); return; }
+			Gizmo poll = new Gizmo() {
+				boolean fired;
+				@Override public void update() { super.update(); if (!fired && done.getAsBoolean()) { fired = true; active = false; if (parent != null) parent.remove(this); resume(); } }
+			};
+			attach(poll);
+			if (current == self) waitingOn(poll);
+		});
+	}
 	static com.watabou.noosa.ColorBlock fadeBlock;
+	static int fadeColor = 0;
+
+	// ------------------------------------------------------------ 창 크기 · 화면 방향이 바뀔 때 (4차)
+	// 게임은 창 크기가 바뀌면(PC 창 크기 조절 · 휴대폰 화면 돌림 · 분할 화면) 같은 층의 게임 화면을 새로 만들고, 인자 없이 만들 수 있는 창만 되살림.
+	// 예전에는 대사창 · 입력 기다리기 · 타이머 · 일러스트 · 페이드가 모두 사라지고 이벤트가 "실행 중"인 채로 멈췄음(게임에서 확인).
+	// 이제: 이벤트가 화면에 붙인 것(attach)은 새 화면으로 옮기고, 페이드 판 · 일러스트는 새 크기로 다시 만들고, 기다리던 창은 같은 내용으로 다시 띄움.
+	// 층이 바뀐 경우(층 이동 · 불러오기)는 예전 그대로 (창은 showWindow 가 다음 게임 화면을 기다렸다가 띄움).
+	/** 이벤트가 화면에 붙인 타이머 · 대기 · 이동 · 페이드 진행 */
+	static final List<Gizmo> carried = new ArrayList<>();
+	static void attach(Gizmo g) {
+		Game.scene().add(g);
+		synchronized (carried) { carried.removeIf(x -> !x.exists || !x.active); carried.add(g); }
+	}
+	/** 지금 기다리는 창을 다시 만드는 방법 · 그 창을 띄운 층 */
+	volatile java.util.function.Supplier<com.shatteredpixel.shatteredpixeldungeon.ui.Window> windowMaker;
+	volatile Level shownOn;
+	volatile boolean rebuilding;
+	/** PixelScene.create 때 (MakerAssets.onSceneCreate) — 같은 층의 게임 화면이 다시 만들어졌으면 다음 프레임에 연출을 옮김 */
+	public static void sceneCreated(com.watabou.noosa.Scene s) {
+		final EventInterpreter c = current;
+		if (c == null || c.dead || !(s instanceof GameScene) || Dungeon.level == null || c.shownOn != Dungeon.level) return;
+		c.rebuilding = true;
+		Game.runOnRenderThread(() -> c.rebuild(s));
+	}
+	void rebuild(com.watabou.noosa.Scene s) {
+		renderThread = Thread.currentThread();
+		try {
+			if (dead || current != this || Game.scene() != s) return;
+			int moved = 0;
+			synchronized (carried) { for (Gizmo g : new ArrayList<>(carried)) if (g.exists && g.active && g.parent == null) { s.add(g); moved++; } }
+			if (fadeBlock != null && fadeBlock.parent == null) {
+				float a = fadeBlock.alpha();
+				fadeBlock = new com.watabou.noosa.ColorBlock(PixelScene.uiCamera.width, PixelScene.uiCamera.height, 0xFF000000 | fadeColor);
+				fadeBlock.camera = PixelScene.uiCamera; fadeBlock.alpha(a);
+				s.add(fadeBlock);
+			}
+			int ills = MakerStage.rebuild();
+			com.watabou.noosa.Gizmo w = waitOn;
+			boolean reshow = windowMaker != null && w instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && (w.parent == null || !w.exists);
+			MakerRuntime.log("화면 크기가 바뀌어 연출을 새 화면으로 옮겼습니다 (" + eventId + "): 진행 중 " + moved + " · 일러스트 " + ills + (reshow ? " · 창 다시 띄움" : ""));
+			if (reshow && w instanceof MakerDialogue.Wnd) ((MakerDialogue.Wnd) w).carryOver();   // 같은 줄이면 나온 글자 · 연출을 이어받음
+			if (reshow) { showWindow(windowMaker); return; }   // rebuilding 은 창을 띄운 뒤 풂
+		} catch (Throwable t) { MakerRuntime.log("화면이 바뀐 뒤 연출 옮기기 오류 (" + eventId + "): " + t); }
+		rebuilding = false;
+	}
 	/** 캐릭터마다 지금 돌고 있는 이동 경로 (새 경로를 주면 앞의 것을 멈춤) */
 	static final java.util.Map<com.shatteredpixel.shatteredpixeldungeon.actors.Char, Gizmo> routes = new java.util.HashMap<>();
 	static int parseColor(String s) { try { return Integer.parseInt(s.replace("#", "").trim(), 16) & 0xFFFFFF; } catch (Exception e) { return 0; } }
@@ -239,8 +342,10 @@ public class EventInterpreter {
 			}
 			com.shatteredpixel.shatteredpixeldungeon.ui.Window w;
 			try { w = make.get(); GameScene.show(w); }
-			catch (Throwable t) { MakerRuntime.log("대사·선택지 창을 띄우지 못했습니다 (" + eventId + "): " + t); self.resume(); return; }
+			catch (Throwable t) { MakerRuntime.log("대사·선택지 창을 띄우지 못했습니다 (" + eventId + "): " + t); self.rebuilding = false; self.resume(); return; }
+			self.windowMaker = make; self.shownOn = Dungeon.level;
 			if (current == self) waitingOn(w);
+			self.rebuilding = false;
 		});
 	}
 
@@ -253,8 +358,15 @@ public class EventInterpreter {
 				MakerDialogue.Line l = MakerDialogue.line(c.getString("speaker", ""), c.getString("face", ""), c.getString("illust", ""), StoryState.expand(c.getString("text", "")));
 				if (!c.getString("name", "").isEmpty()) l.name = c.getString("name", "");
 				if (!c.getString("side", "").isEmpty()) l.side = c.getString("side", "");
+				styleLine(l, c);   // 글자 속도 · 간격 · 줄 간격 · 연출: 이 줄 → 이 이벤트의 "대사 스타일" → 대사창 설정 (5차)
+				l.auto = Math.max(0, c.getInt("auto", 0)) / 10f;  // 다 보인 뒤 저절로 넘기기 (0.1초, 0 = 입력 기다림)
 				showLine(l);
 				return false;
+			}
+			case "textStyle": {   // 대사 스타일 (5차): 이 이벤트의 남은 대사에 — 빈 칸은 대사창 설정 그대로. reset = 대사창 설정으로 되돌림
+				if (c.getBoolean("reset", false)) style = null;
+				else style = c;   // 명령 자체를 기억 (이벤트 데이터 — 실행하는 동안 그대로)
+				return true;
 			}
 			case "topic": {
 				String ch = charArg(c, "char");
@@ -313,7 +425,7 @@ public class EventInterpreter {
 						float left = sec; boolean fired;
 						@Override public void update() { super.update(); left -= Game.elapsed; if (left <= 0 && !fired) { fired = true; active = false; resume(); if (parent != null) parent.remove(this); } }
 					};
-					Game.scene().add(timer);
+					attach(timer);
 					if (current == self) waitingOn(timer);
 				});
 				return false;
@@ -456,17 +568,43 @@ public class EventInterpreter {
 				return true;
 			}
 			case "sound": {
+				String kind = c.getString("kind", "se");
+				if ("bgmStop".equals(kind)) { final float sec = Math.max(0, c.getInt("fade", 0)) / 10f; Game.runOnRenderThread(() -> MakerAudio.stopBgm(sec)); return true; }   // 배경음 끄기 (페이드 아웃)
 				String file = c.getString("file", "");
-				if (file.isEmpty()) return true;
-				if ("bgm".equals(c.getString("kind", "se"))) MakerAudio.playBgm(file);
+				if (file.isEmpty()) { MakerRuntime.log("효과음/음악: 소리를 고르지 않아 건너뜀 (" + eventId + ")"); return true; }
+				if ("bgm".equals(kind)) MakerAudio.playBgm(file);
 				else MakerAudio.playSe(file);
 				return true;
 			}
-			case "illust": {
+			case "illust": {   // 일러스트 표시: 번호 · 그림 · 위치 · 페이드 + 크기 % · 불투명도 % · 옮기기 px · 뒤집기 · 끝날 때까지 대기
 				final int slot = c.getInt("slot", 1); final String img = c.getString("image", ""), pos = c.getString("pos", "center");
-				final float fade = c.getInt("fade", 3) / 10f;
-				Game.runOnRenderThread(() -> MakerStage.show(slot, img, pos, fade));
-				return true;
+				final float fade = c.getInt("fade", 3) / 10f, scale = c.getFloat("scale", 100) / 100f, alpha = c.getFloat("alpha", 100) / 100f;
+				final float ox = c.getFloat("ox", 0), oy = c.getFloat("oy", 0); final boolean flip = c.getBoolean("flip", false), wait = c.getBoolean("wait", false);
+				if (!wait) { Game.runOnRenderThread(() -> MakerStage.show(slot, img, pos, fade, scale, alpha, ox, oy, flip)); return true; }
+				waitUntil(() -> MakerStage.show(slot, img, pos, fade, scale, alpha, ox, oy, flip), () -> MakerStage.idle(slot));
+				return false;
+			}
+			case "illustMove": {   // 일러스트 움직이기: 그 번호의 그림을 time 동안 목표 자리 · 크기 · 불투명도로 (비운 값은 그대로)
+				final int slot = c.getInt("slot", 1); final String pos = c.getString("pos", "");
+				final float sec = Math.max(0, c.getInt("time", 5)) / 10f;
+				final float scale = c.getFloat("scale", 0) > 0 ? c.getFloat("scale", 0) / 100f : -1f;                      // 0 · 없음 = 크기 그대로
+				final float alpha = c.has("alpha") && c.get("alpha").isNumber() ? c.getFloat("alpha") / 100f : -1f;         // 없음 = 불투명도 그대로 (0 = 안 보이게)
+				final float ox = c.getFloat("ox", 0), oy = c.getFloat("oy", 0); final boolean wait = c.getBoolean("wait", true);
+				if (!wait) { Game.runOnRenderThread(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec)); return true; }
+				waitUntil(() -> MakerStage.move(slot, pos, ox, oy, scale, alpha, sec), () -> MakerStage.idle(slot));
+				return false;
+			}
+			case "camMove": case "camFollow": case "camShake": case "camReset": {   // 스크린 · 카메라 연출 (6차 — MakerCamera)
+				final JsonValue cc = c; final EventInterpreter self = this;
+				final java.util.function.BooleanSupplier[] done = new java.util.function.BooleanSupplier[1];
+				boolean wait = c.getBoolean("wait", true) && !cmd.equals("camFollow");
+				if (!wait) { Game.runOnRenderThread(() -> { if (!self.dead) MakerCamera.exec(self, cc); }); return true; }
+				waitUntil(() -> { done[0] = MakerCamera.exec(self, cc); return done[0] != null; }, () -> done[0] == null || done[0].getAsBoolean());
+				return false;
+			}
+			case "waitInput": {   // 입력 기다리기: 화면을 누르거나 확인 키 (보이는 창 없음)
+				showWindow(() -> new MakerDialogue.WaitWnd(this::resume));
+				return false;
 			}
 			case "illustHide": {
 				final int slot = c.getInt("slot", 0); final float fade = c.getInt("fade", 3) / 10f;
@@ -642,7 +780,7 @@ public class EventInterpreter {
 							} catch (Throwable t) { MakerRuntime.log("이동 경로 오류: " + t); end(); }
 						}
 					};
-					Game.scene().add(walker);
+					attach(walker);
 					routes.put(ch, walker);
 					if (wait && current == self) waitingOn(walker);
 				});
@@ -736,6 +874,7 @@ public class EventInterpreter {
 					if (Game.scene() == null) { if (wait) resume(); return; }
 					if (fadeBlock == null || fadeBlock.parent != Game.scene()) {
 						if (!out) { if (wait) resume(); return; }   // 어둡게 한 적이 없으면 밝게 할 것도 없음
+						fadeColor = color;
 						fadeBlock = new com.watabou.noosa.ColorBlock(PixelScene.uiCamera.width, PixelScene.uiCamera.height, 0xFF000000 | color);
 						fadeBlock.camera = PixelScene.uiCamera; fadeBlock.alpha(0);
 						Game.scene().add(fadeBlock);
@@ -747,11 +886,13 @@ public class EventInterpreter {
 						@Override public void update() {
 							super.update(); if (done) return;
 							t += Game.elapsed; float k = Math.min(1f, t / sec);
-							blk.alpha(out ? from + (1f - from) * k : from * (1f - k));
-							if (k >= 1f) { done = true; active = false; if (!out) { blk.killAndErase(); if (fadeBlock == blk) fadeBlock = null; } if (parent != null) parent.remove(this); if (wait) resume(); }
+							// 창 크기가 바뀌어 화면을 다시 만들면 페이드 판도 새로 만들어짐(rebuild) — 지금 판을 씀
+							com.watabou.noosa.ColorBlock b = fadeBlock != null && fadeBlock.parent != null ? fadeBlock : blk;
+							b.alpha(out ? from + (1f - from) * k : from * (1f - k));
+							if (k >= 1f) { done = true; active = false; if (!out) { b.killAndErase(); if (fadeBlock == b) fadeBlock = null; } if (parent != null) parent.remove(this); if (wait) resume(); }
 						}
 					};
-					Game.scene().add(tw);
+					attach(tw);
 					if (wait && current == self) waitingOn(tw);
 				});
 				return !wait;

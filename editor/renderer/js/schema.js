@@ -233,13 +233,45 @@ PDM.ROUTE_OPS = [
 ];
 PDM.ROUTE_OP = {}; PDM.ROUTE_OPS.forEach(([, l]) => l.forEach(([id, name, ps]) => { PDM.ROUTE_OP[id] = { name: name.replace('…', ''), params: ps || [] }; }));
 PDM.routeOpText = o => { const d = PDM.ROUTE_OP[o.op]; if (!d) return o.op || '?'; const v = d.params.map(([k]) => o[k]).filter(x => x !== undefined && x !== ''); return d.name + (v.length ? ' ' + v.join(', ') : ''); };
+// 대사 스타일 칸 (5차) — 대사 명령 · "대사 스타일" 명령이 함께 씀. 빈 칸 = 다음 단계 값 (대사 → 이벤트 "대사 스타일" → 대사창 설정 → 기본값)
+//   런타임 EventInterpreter.styleLine 이 같은 키를 읽음 (단위: fxDur 0.1초 · fxStrength % · size %)
+const PDM_TEXT_TABS = [['main', '내용'], ['font', '글꼴'], ['out', '출력'], ['fx', '연출'], ['preview', '미리보기']];
+const PDM_TEXT_STYLE = [
+  { k: 'size', t: 'optnum', tab: 'font', label: '글자 크기 % (대사창 글자 크기 기준 · 50~300)', min: 50, max: 300, step: 10 },
+  { k: 'bold', t: 'select', tab: 'font', label: '굵게', options: { on: '굵게', off: '보통' } },
+  { k: 'align', t: 'select', tab: 'font', label: '정렬', options: { left: '왼쪽', center: '가운데' } },
+  { k: 'tracking', t: 'optnum', tab: 'font', label: '글자 간격 더하기 (화면 px · -1~6)', min: -1, max: 6, step: 0.5 },
+  { k: 'lineGap', t: 'optnum', tab: 'font', label: '줄 간격 더하기 (화면 px · -2~12)', min: -2, max: 12, step: 0.5 },
+  { k: 'padding', t: 'optnum', tab: 'font', label: '안쪽 여백 (화면 px · 0~40)', min: 0, max: 40, step: 1 },
+  { k: 'emColor', t: 'optcolor', tab: 'font', label: '강조(**…**) 색' },
+  { k: 'speed', t: 'select', tab: 'out', label: '글자 속도 (기본 = 대사창 설정)', options: { instant: '바로 다 보임', slow: '느리게 (20자/초)', normal: '보통 (40자/초)', fast: '빠르게 (80자/초)', veryfast: '아주 빠르게 (160자/초)' } },
+  { k: 'auto', t: 'number', tab: 'out', label: '저절로 넘기기 (0.1초 — 0 = 입력을 기다림)' },
+  { k: 'effect', t: 'select', tab: 'fx', label: '글자 연출 (글자가 나타날 때)', options: { none: '없음 (그냥 나타남)', fade: '흐리게 → 또렷이', rise: '아래에서 올라옴', drop: '위에서 내려옴', pop: '크게 → 제자리', shake: '떨림 (계속)', wave: '물결 (계속)' } },
+  { k: 'fxDur', t: 'optnum', tab: 'fx', label: '연출 시간 (0.1초 · 1~30)', min: 1, max: 30, step: 1 },
+  { k: 'fxStrength', t: 'optnum', tab: 'fx', label: '연출 세기 % (10~300)', min: 10, max: 300, step: 10 },
+  { k: 'fxScope', t: 'select', tab: 'fx', label: '연출할 글자', options: { all: '모든 글자', em: '강조(**…**) 글자만' } }];
+/** 바꾼 스타일 한 줄 요약 (명령 목록) */
+PDM.textStyleSum = c => {
+  const o = [];
+  if (c.size) o.push(c.size + '%'); if (c.bold) o.push(c.bold === 'on' ? '굵게' : '보통 굵기'); if (c.align) o.push(c.align === 'center' ? '가운데' : '왼쪽');
+  if (c.tracking != null && c.tracking !== '') o.push('자간 ' + c.tracking); if (c.lineGap != null && c.lineGap !== '') o.push('행간 ' + c.lineGap);
+  if (c.padding != null && c.padding !== '') o.push('여백 ' + c.padding); if (c.emColor) o.push('강조색 ' + c.emColor);
+  if (c.cmd === 'textStyle' && c.speed) o.push('속도 ' + c.speed);
+  if (c.effect && c.effect !== 'none') o.push('연출 ' + c.effect + (c.fxScope === 'em' ? '(강조만)' : ''));
+  return o.join(' · ');
+};
 PDM.COMMANDS = {
-  text:      { g: '메시지', name: '대사 표시', params: [
+  text:      { g: '메시지', name: '대사 표시', tabs: PDM_TEXT_TABS, preview: 'line', params: [
                  { k: 'speaker', t: 'charHero', label: '화자' }, { k: 'face', t: 'face', label: '표정' },
                  { k: 'illust', t: 'image', label: '일러스트(선택 — 비우면 캐릭터 초상화)' },
                  { k: 'side', t: 'select', label: '일러스트 위치 (기본 = 대사창 설정)', options: { left: '왼쪽', right: '오른쪽', none: '이번엔 숨김' } },
-                 { k: 'name', t: 'text', label: '이름 바꾸기(선택 — 예: ???)' }, { k: 'text', t: 'textarea', label: '대사' }],
-               sum: c => `${c.speaker ? '[' + PDM.refName('character', c.speaker) + (c.face ? ':' + c.face : '') + '] ' : ''}${(c.text || '').replace(/\n/g, ' ')}` },
+                 { k: 'name', t: 'text', label: '이름 바꾸기(선택 — 예: ???)' }, { k: 'text', t: 'textarea', label: '대사 (줄바꿈 = 다음 줄 · **강조** · 창 하나에 들어가지 않으면 대사 명령을 나누세요)' },
+                 ...PDM_TEXT_STYLE],
+               sum: c => `${c.speaker ? '[' + PDM.refName('character', c.speaker) + (c.face ? ':' + c.face : '') + '] ' : c.name ? '[' + c.name + '] ' : ''}${(c.text || '').replace(/\n/g, ' ⏎ ')}${c.auto ? `  ⏱${c.auto / 10}초` : ''}${PDM.textStyleSum(c) ? '  ✎ ' + PDM.textStyleSum(c) : ''}` },
+  textStyle: { g: '메시지', name: '대사 스타일 (이 이벤트의 다음 대사들)', tabs: PDM_TEXT_TABS, preview: 'style', params: [
+                 { k: 'reset', t: 'bool', label: '대사창 설정으로 되돌리기 (켜면 아래 값은 쓰지 않음)' },
+                 ...PDM_TEXT_STYLE.filter(p => p.k !== 'auto')],   // 저절로 넘기기는 대사마다
+               sum: c => c.reset ? '대사 스타일: 대사창 설정으로 되돌림' : '대사 스타일: ' + (PDM.textStyleSum(c) || '(바꾼 것 없음)') },
   choice:    { g: '메시지', name: '선택지', block: 'branches', params: [{ k: 'options', t: 'options', label: '선택지' }],
                sum: c => '선택: ' + (c.options || []).join(' / ') },
   topic:     { g: '메시지', name: '대사 토픽 말하기', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'topic', t: 'topic', label: '토픽' }],
@@ -275,8 +307,54 @@ PDM.COMMANDS = {
   memory:    { g: '마음', name: '기억 기록', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'key', t: 'text', label: '기억 키' }],
                sum: c => `${PDM.refName('character', c.char)} 기억: ${c.key || ''}` },
   illust:    { g: '연출', name: '일러스트 표시', params: [{ k: 'slot', t: 'number', label: '번호(1~8)' }, { k: 'image', t: 'image', label: '이미지' },
-                 { k: 'pos', t: 'select', label: '위치', options: { left: '왼쪽', center: '가운데', right: '오른쪽', full: '전체 화면' } }, { k: 'fade', t: 'number', label: '페이드(0.1초)' }],
-               sum: c => `일러스트 #${c.slot || 1}: ${c.image || '(없음)'} (${c.pos || 'center'})` },
+                 { k: 'pos', t: 'select', label: '위치', options: { left: '왼쪽', center: '가운데', right: '오른쪽', full: '전체 화면' } }, { k: 'fade', t: 'number', label: '페이드(0.1초)' },
+                 { k: 'scale', t: 'number', label: '크기 % (기본 100 — 화면 높이의 90%)' }, { k: 'alpha', t: 'number', label: '불투명도 % (기본 100)' },
+                 { k: 'ox', t: 'number', label: '→ 옮기기 (화면 px)' }, { k: 'oy', t: 'number', label: '↓ 옮기기 (화면 px)' }, { k: 'flip', t: 'bool', label: '좌우 뒤집기' },
+                 { k: 'wait', t: 'bool', label: '나타날 때까지 대기' }],
+               sum: c => `일러스트 #${c.slot || 1}: ${c.image || '(없음)'} (${c.pos || 'center'}${c.scale && c.scale != 100 ? ' · ' + c.scale + '%' : ''}${c.alpha != null && c.alpha != 100 ? ' · 불투명 ' + c.alpha + '%' : ''}${c.flip ? ' · 뒤집기' : ''})${c.wait ? ' · 대기' : ''}` },
+  illustMove:{ g: '연출', name: '일러스트 움직이기', params: [{ k: 'slot', t: 'number', label: '번호(1~8)' },
+                 { k: 'pos', t: 'select', label: '자리 (기본 = 지금 자리)', options: { left: '왼쪽', center: '가운데', right: '오른쪽' } },
+                 { k: 'ox', t: 'number', label: '→ 옮기기 (화면 px — 목표)' }, { k: 'oy', t: 'number', label: '↓ 옮기기 (화면 px — 목표)' },
+                 { k: 'scale', t: 'number', label: '크기 % (0 = 그대로)' }, { k: 'alpha', t: 'number', label: '불투명도 % (비우면 그대로 · 0 = 안 보임)' },
+                 { k: 'time', t: 'number', label: '시간 (0.1초)' }, { k: 'wait', t: 'bool', label: '끝날 때까지 대기 (기본 켬)' }],
+               sum: c => `일러스트 #${c.slot || 1} 움직이기${c.pos ? ' → ' + ({ left: '왼쪽', center: '가운데', right: '오른쪽' })[c.pos] : ''}${c.ox || c.oy ? ` (${c.ox || 0}, ${c.oy || 0})` : ''}${c.scale ? ` ${c.scale}%` : ''}${c.alpha != null ? ` 불투명 ${c.alpha}%` : ''} · ${(c.time ?? 5) / 10}초${c.wait === false ? ' (기다리지 않음)' : ''}` },
+  // ---- 카메라 / 스크린 (6차 — 런타임 MakerCamera). 좌표: 타일 = 칸 번호(0부터) · 월드 = 게임 픽셀(칸 하나 16, 칸 가운데 = 칸×16+8). 시간 = 0.1초
+  camMove:   { g: '카메라 / 스크린', name: '스크린 이동', defaults: { target: 'tile', x: 0, y: 0, time: 10, ease: 'smooth', wait: true }, params: [
+                 { k: 'target', t: 'select', label: '이동할 곳', redraw: true, options: { tile: '타일 좌표 (칸)', world: '월드 좌표 (게임 픽셀)', char: '캐릭터 · 영웅', event: '이벤트 오브젝트 (이 맵)' } },
+                 { k: 'x', t: 'cell', yk: 'y', label: '칸 (x, y — 0부터, 칸의 가운데로)', pickTitle: '카메라가 볼 칸 고르기', when: c => (c.target || 'tile') === 'tile' },
+                 { k: 'x', t: 'number', label: '월드 x (게임 픽셀 — 칸×16+8 = 칸 가운데)', when: c => c.target === 'world' },
+                 { k: 'y', t: 'number', label: '월드 y (게임 픽셀)', when: c => c.target === 'world' },
+                 { k: 'ref', t: 'charHero', label: '캐릭터 (그 캐릭터가 지금 있는 자리로)', when: c => c.target === 'char' },
+                 { k: 'ref', t: 'event', label: '이벤트 (이 맵에 놓인 이벤트 오브젝트의 자리로)', when: c => c.target === 'event' },
+                 { k: 'time', t: 'number', label: '이동 시간 (0.1초 — 0 = 바로)' },
+                 { k: 'ease', t: 'select', label: '보간', options: { smooth: '부드럽게 (천천히 시작 · 천천히 끝)', linear: '일정한 속도', in: '점점 빠르게', out: '점점 느리게' } },
+                 { k: 'wait', t: 'bool', label: '도착할 때까지 기다림 (끄면 바로 다음 명령)' }],
+               sum: c => `스크린 이동 → ${({ tile: `칸 (${c.x ?? 0}, ${c.y ?? 0})`, world: `월드 (${c.x ?? 0}, ${c.y ?? 0})px`, char: PDM.refName('character', c.ref || '$hero'), event: '이벤트 ' + PDM.refName('event', c.ref) })[c.target || 'tile']} · ${(c.time ?? 0) / 10}초${c.wait === false ? ' (기다리지 않음)' : ''}` },
+  camFollow: { g: '카메라 / 스크린', name: '스크린 팔로우', defaults: { kind: 'char', ref: '$hero', start: 'pan', smooth: true, speed: 5, ax: 0, ay: 0 }, params: [
+                 { k: 'kind', t: 'select', label: '따라갈 대상', redraw: true, options: { char: '캐릭터 · 영웅', event: '이벤트 오브젝트 (이 맵)' } },
+                 { k: 'ref', t: 'charHero', label: '캐릭터 (비우면 영웅)', when: c => (c.kind || 'char') === 'char' },
+                 { k: 'event', t: 'event', label: '이벤트', when: c => c.kind === 'event' },
+                 { k: 'start', t: 'select', label: '시작', options: { pan: '지금 자리에서 옮겨 가며', snap: '바로 대상에게' } },
+                 { k: 'smooth', t: 'bool', label: '부드럽게 따라감 (끄면 대상에 딱 붙음)' },
+                 { k: 'speed', t: 'number', label: '따라가는 세기 (1초에 남은 거리의 몇 배 — 1 느림 ~ 30 빠름, 원작 영웅 = 5)' },
+                 { k: 'ax', t: 'number', label: '대상의 화면 자리 → (화면 폭의 % — 0 = 가운데, -45 ~ 45)' },
+                 { k: 'ay', t: 'number', label: '대상의 화면 자리 ↓ (화면 높이의 % — 0 = 가운데)' }],
+               sum: c => `스크린 팔로우: ${c.kind === 'event' ? '이벤트 ' + PDM.refName('event', c.event) : PDM.refName('character', c.ref || '$hero')}${c.smooth === false ? ' (딱 붙음)' : ''}  — 스크린 리셋 · 이벤트가 끝나면 해제` },
+  camShake:  { g: '카메라 / 스크린', name: '스크린 쉐이크', defaults: { power: 4, time: 5, freq: 12, decay: 'linear', axis: 'both', wait: true }, params: [
+                 { k: 'power', t: 'number', label: '강도 (게임 픽셀 — 칸 하나 = 16, 1 ~ 32)' },
+                 { k: 'time', t: 'number', label: '지속 시간 (0.1초)' },
+                 { k: 'freq', t: 'number', label: '흔들림 속도 (초당 횟수 Hz, 1 ~ 60)' },
+                 { k: 'decay', t: 'select', label: '감쇠', options: { linear: '점점 약하게 (일정하게)', smooth: '점점 약하게 (끝에서 부드럽게)', none: '같은 세기로 계속' } },
+                 { k: 'axis', t: 'select', label: '방향', options: { both: '상하좌우', x: '좌우만', y: '상하만' } },
+                 { k: 'wait', t: 'bool', label: '끝날 때까지 기다림' }],
+               sum: c => `스크린 쉐이크 ${c.power ?? 4}px · ${(c.time ?? 5) / 10}초 · ${c.freq ?? 12}Hz${c.axis && c.axis !== 'both' ? ' · ' + (c.axis === 'x' ? '좌우' : '상하') : ''}${c.wait === false ? ' (기다리지 않음)' : ''}` },
+  camReset:  { g: '카메라 / 스크린', name: '스크린 리셋', defaults: { mode: 'smooth', time: 5, follow: true, wait: true }, params: [
+                 { k: 'mode', t: 'select', label: '돌아가기', redraw: true, options: { smooth: '부드럽게', instant: '바로' } },
+                 { k: 'time', t: 'number', label: '돌아가는 시간 (0.1초)', when: c => c.mode !== 'instant' },
+                 { k: 'follow', t: 'bool', label: '영웅 따라가기로 돌아감 (끄면 영웅 자리에 멈춰 둠)' },
+                 { k: 'wait', t: 'bool', label: '다 돌아갈 때까지 기다림', when: c => c.mode !== 'instant' }],
+               sum: c => `스크린 리셋 — ${c.mode === 'instant' ? '바로' : `${(c.time ?? 5) / 10}초 동안`} 영웅에게${c.follow === false ? ' (멈춰 둠)' : ' · 따라가기'}` },
+  waitInput: { g: '흐름', name: '입력 기다리기', params: [], sum: () => '입력 기다리기 (화면을 누르거나 확인 키)' },
   illustHide:{ g: '연출', name: '일러스트 숨김', params: [{ k: 'slot', t: 'number', label: '번호(0=전부)' }, { k: 'fade', t: 'number', label: '페이드(0.1초)' }], sum: c => `일러스트 숨김 #${c.slot || '전부'}` },
   quest:     { g: '데이터', name: '퀘스트 (수주 창 · 수락 · 완료 · 포기)', params: [{ k: 'id', t: 'quest', label: '퀘스트' }, { k: 'op', t: 'select', label: '동작', options: { offer: '수주 창 띄우기 (수락 / 거절)', accept: '바로 수락', complete: '완료 처리 (보상 지급)', abandon: '포기', reset: '처음 상태로 (다시 받을 수 있게)' } }], sum: c => `퀘스트 ${({ offer: '수주 창', accept: '수락', complete: '완료', abandon: '포기', reset: '초기화' })[c.op || 'offer']}: ${(((PDM.store.get('quests') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
   questLog:  { g: '데이터', name: '퀘스트 목록 창 열기', params: [], sum: () => '퀘스트 목록 창' },
@@ -288,7 +366,7 @@ PDM.COMMANDS = {
                sum: c => `예고편 컷신: ${(((PDM.store.get('trailers') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
   filter:    { g: '연출', name: '화면 필터', params: [{ k: 'mode', t: 'select', label: '동작', options: { set: '이 필터로 바꾸기', map: '맵 설정대로 되돌리기', off: '필터 끄기' } }, { k: 'id', t: 'filter', label: '필터 (바꾸기일 때)' }],
                sum: c => c.mode === 'map' ? '화면 필터: 맵 설정대로' : c.mode === 'off' ? '화면 필터: 끄기' : `화면 필터: ${(((PDM.store.get('filters') || {}).list || []).find(x => x.id === c.id) || {}).name || c.id || '?'}` },
-  shake:     { g: '연출', name: '화면 흔들림', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
+  shake:     { g: '연출', name: '화면 흔들림 (간단 · 원작 방식 — 기다리지 않음, 자세히는 「스크린 쉐이크」)', params: [{ k: 'power', t: 'number', label: '세기' }, { k: 'time', t: 'number', label: '시간(0.1초)' }], sum: c => `흔들림 ${c.power || 3}` },
   effect:    { g: '연출', name: '이펙트 재생', params: [{ k: 'fx', t: 'effect', label: '이펙트' }, { k: 'at', t: 'select', label: '위치', options: { char: '캐릭터 위치', xy: '칸 좌표' } },
                { k: 'target', t: 'charHero', label: '캐릭터 (위치가 캐릭터일 때)' }, { k: 'x', t: 'number', label: 'x (칸 좌표일 때)' }, { k: 'y', t: 'number', label: 'y' }],
                sum: c => `이펙트: ${(((PDM.store.get('effects') || {}).list || []).find(x => x.id === c.fx) || {}).name || c.fx || '?'} @ ${c.at === 'xy' ? `(${c.x || 0}, ${c.y || 0})` : (!c.target || c.target === '$hero' ? '영웅' : PDM.refName('char', c.target))}` },
@@ -299,7 +377,8 @@ PDM.COMMANDS = {
   fade:      { g: '연출', name: '화면 어둡게 / 밝게', params: [{ k: 'op', t: 'select', label: '무엇을', options: { out: '어둡게 (페이드 아웃)', in: '밝게 (페이드 인)' } }, { k: 'time', t: 'number', label: '시간(0.1초)' }, { k: 'color', t: 'text', label: '색(#rrggbb, 기본 검정)' }, { k: 'wait', t: 'bool', label: '끝날 때까지 대기' }],
                sum: c => `화면 ${c.op === 'in' ? '밝게' : '어둡게'} (${(c.time ?? 5) / 10}초)` },
   face:      { g: '연출', name: '표정 바꾸기', params: [{ k: 'char', t: 'char', label: '캐릭터' }, { k: 'face', t: 'face', label: '표정' }], sum: c => `${PDM.refName('character', c.char)} 표정 → ${c.face || '기본'}` },
-  sound:     { g: '연출', name: '효과음/음악', params: [{ k: 'kind', t: 'select', label: '종류', options: { se: '효과음', bgm: '배경음' } }, { k: 'file', t: 'sound', label: '소리 (사운드 편집기 목록 · 게임 소리)' }], sum: c => `${c.kind === 'bgm' ? '배경음' : '효과음'} ${PDM.audio ? PDM.audio.label(c.file) : c.file || ''}` },
+  sound:     { g: '연출', name: '효과음/음악', params: [{ k: 'kind', t: 'select', label: '종류', options: { se: '효과음', bgm: '배경음 (바꾸기)', bgmStop: '배경음 끄기' } }, { k: 'file', t: 'sound', label: '소리 (사운드 편집기 목록 · 게임 소리 — 끄기면 비움)' }, { k: 'fade', t: 'number', label: '끌 때 페이드 아웃 (0.1초, 배경음 끄기만)' }],
+               sum: c => c.kind === 'bgmStop' ? `배경음 끄기${c.fade ? ` (${c.fade / 10}초)` : ''}` : `${c.kind === 'bgm' ? '배경음' : '효과음'} ${PDM.audio ? PDM.audio.label(c.file) : c.file || ''}` },
   anim:      { g: '캐릭터', name: '애니메이션 재생', params: [{ k: 'target', t: 'charHero', label: '대상' }, { k: 'anim', t: 'text', label: '애니메이션 이름 (idle·attack·fly… 또는 시트에서 만든 추가 애니메이션)' }],
                sum: c => `${c.target === '$hero' || !c.target ? '영웅' : PDM.refName('character', c.target)} 애니메이션 「${c.anim || '?'}」` },
   move:      { g: '캐릭터', name: '이동 경로 설정', params: [{ k: 'char', t: 'charHero', label: '대상 (비우면 영웅)' }, { k: 'route', t: 'route', label: '이동 명령 (오른쪽 버튼을 누르면 왼쪽 목록에 추가)' }],

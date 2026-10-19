@@ -10,12 +10,14 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
 | `run.sh <작업 폴더> <프로젝트> 단계…` | xvfb 화면에서 게임을 켜고, 단계대로 조작하면서 `<작업 폴더>/shots/*.png`에 스크린샷을 남김 |
 | `PlayTest.java` | 단계 실행기 |
 | `Hooks.java` | `eval:` 단계에서 쓰는 검사·조작 모음 |
+| `scenarios.js` · `platform-matrix.sh <작업 폴더> <프로젝트> [환경…]` | 화면 환경별(PC · 휴대폰 가로/세로 비율 · 안전 영역 · 화면 돌림) 연출 시나리오를 돌리고 배치 문제 · 이벤트 종료를 판정 (4차) |
 
 환경 변수:
 
 - `JARS`: libGDX·lwjgl jar가 있는 폴더입니다. 기본값은 `/tmp/jars`이고, 하위 폴더 `lw`도 포함합니다.
 - `NOMP3=1`: mp3 디코더가 없는 환경에서 mod-2 타이틀 곡을 theme_1.ogg로 바꿉니다.
 - `TIMEOUT`: 최대 실행 시간(초)입니다.
+- `XVFB_SCREEN`: 가상 화면 크기 (기본 `1280x800x24`). 세로 비율 창을 띄우려면 `1800x1800x24` 처럼 크게.
 
 ## 단계
 
@@ -33,10 +35,19 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
   - `adv` / `pick,<n>`: 대사창 넘기기 / 선택지 고르기
   - `click,<x>,<y>` / `click,<캐릭터id>`: 맵 칸 누르기(사람이 누른 것처럼) · `tp,<칸>`: 순간이동
   - `press,<글자>` / `slot,<n>` / `buttons`: 화면 버튼 누르기 / 저장 슬롯 누르기 / 버튼 목록 · `savetitle`: 저장하고 타이틀로
-  - `touch,<x>,<y>`: 진짜 마우스 입력처럼 창 좌표 누르기 · `wnds`: 떠 있는 창·카메라·화면 목록 순서
+  - `touch,<x>,<y>`: 진짜 마우스 입력처럼 창 좌표 누르기 · `drag,<x1>,<y1>,<x2>,<y2>`: 누른 채 끌기 (프레임에 걸쳐) · `wnds`: 떠 있는 창·카메라·화면 목록 순서
+  - `winsize,<가로>,<세로>`: 창 크기 바꾸기 (최소 크기 제한을 풀어 세로 비율도 됨 · 실행 중에 바꾸면 = 화면 돌림 · 창 크기 조절)
+  - `uisize,<0|1|2>`: 인터페이스 크기 (0 = 휴대폰 기본 — 세로 창이면 세로 배치)
+  - `insets,<왼>,<위>,<오른>,<아래>`: 안전 영역 흉내 (노치 · 상태 줄 · 내비게이션 바, 화면 px)
+  - `layout`: 대사창 · 글 · 이름표 · 선택지 · 일러스트가 화면 · 안전 영역 밖으로 나가는지 (`LAYOUT-PROBLEM` 줄)
+  - `cutinfo`: 이벤트 실행 중 · 페이드 · 일러스트 · 떠 있는 창
+  - `wshot,<이름>`: 게임 창만 캡처
+  - 5차 · 테스트 실행 환경(`TESTENV`)과 함께: `testenv`(환경 · 배속 · 창 · UI · 안전 영역 상태) · `speed,<1|2|4|16>` · `skip`(켜기/끄기) · `complete`(대사 완성) · `next`(다음 대사) · `rotate`(F9 화면 돌리기)
+  - `typing`: 떠 있는 대사창의 글자 진행(`shown`) · 실제 시간(`real`) · 실제 1초당 글자(`perRealSec`) · 연출 · 자간 · 글 크기 · 선택지 열림
+  - `layercells`: 레이어별 칸 → 사용자 타일 id · 칸 지형 (게임이 만든 타일맵 기준 — `compare-layers.js` 로 편집기 저장 배열과 비교)
   - `interact,<캐릭터id>[,menu]`: 다른 스레드에서 말 걸기 · `leavetalk`: 층을 떠나는 순간 대사
   - `tap`: 타이틀 "화면을 누르세요"
-  - `title`: 타이틀 구성 출력
+  - `title`: 타이틀 구성 출력 · `titlegeo`: 타이틀 배치 · 상태 JSON (7차) · `titlewin,<창 id>` · `titlehover,@<버튼 id>` 또는 `titlehover,x,y` · `titleclick,<버튼 id>` · `key,<키 이름 ENTER · ESCAPE · DOWN · TAB …>`
   - `music`: 지금 음악 출력
   - `herowin`: 영웅 창
   - `spells`: 주문 창 · `cast,<n>`: n번째 주문 (가까운 적에게)
@@ -51,6 +62,20 @@ Linux, Java 17, xvfb, ImageMagick(`import`), node가 필요합니다. 윈도우�
   - `talk`: 대화
   - `fight,<n>`: 싸움
   - …
+
+## 6차 — 연출 배속 · 카메라 연출 · 게임 UI 테마 검사
+
+- `tools/playtest/cutscene-check.sh <게임 저장소> <작업 폴더> [환경…]` — 환경마다(기본 pc · pc-small · phone-land · phone-port · 작은 맵 `small:pc`) 일반 플레이 1× · 카메라 이동/경계/멈춤(영웅이 움직여도) · 취소 · 쉐이크 두 번(오프셋 0 · 밀림 없음) · 1×/4× 이동 시간 · 16× 취소 · 중첩 이벤트 · 오류 명령 · 팔로우/없는 대상/리셋 · 대사 중 표시줄(안전 영역 · 대사창 위) · 화면 돌리기 · 저장 → 불러오기. 기록 `<작업 폴더>/cutscene-check/`.
+- `tools/playtest/title-check.sh <게임 저장소> <작업 폴더> [환경…]` (7차) — 타이틀 검사용 프로젝트(`title-project.js` full · base · broken)를 만들어 환경마다(기본 pc · phone-land · phone-port) 상태 모양 · 키보드 · 창 열기/닫기 · 바깥 누르기 · 연속 클릭 · 비활성 이어하기 · 화면 돌리기 · 손상된 값을 게임에서 확인하고, `title-compare.js` 가 같은 데이터 · 같은 화면 크기의 편집기 미리보기와 자리를 비교. 기록 · 캡처 `<작업 폴더>/title-check/` (`editor-*.png` = 편집기 캔버스)
+- 새 단계: `eval:cam` 카메라 상태 · `eval:cutscene` 연출 상태 · 배속 · 표시줄 · `eval:theme` 게임 UI 테마 · `eval:evcancel` 실행 중 이벤트 취소 · `eval:bartouch,<1x|2x|4x|16x|스킵>` 표시줄을 진짜 마우스로 · `eval:mark,<이름>` 기록 구간 · `eval:drag,…` 누른 채 끌기
+- `SYNC_RESIZE=1` (run.sh): 창 크기를 바꾸는 그 자리에서 resize → render (Windows LWJGL3 흉내) — cutscene-check · testenv-check 의 기본
+
+## 5차 — 테스트 실행 환경 · 배속 · 스킵 · 대사 연출 검사
+
+- `TESTENV="$(node tools/playtest/testenv.js phone-port '{"safeArea":"notch"}')" tools/playtest/run.sh …` — 편집기 ▶ 테스트 플레이와 같은 실행 환경으로 켬 (`testenv.js <환경> [JSON 덮어쓰기]` = `PDM.testEnv.resolve` 결과). 세로 창은 `XVFB_SCREEN=1800x1800x24`.
+- `tools/playtest/testenv-check.sh <게임 저장소> <작업 폴더>` — 검사용 프로젝트(`testenv-project.js`)를 만들어 빌드하고 11항목을 검사(12): 배속 1 · 2 · 4 · 16 (실제 시간당 글자 수) · 화면 단추 · 스킵(선택지 · 입력 기다리기에서 멈춤, 끝나면 원래 배속) · 화면 돌리기(세로 ↔ 가로 논리 화면 · 안전 영역 · 나온 글자 이어받기) · 배치 문제 0 · 줄마다 글꼴. 기록 · 캡처 = `<작업 폴더>/testenv-check/`.
+- `node tools/playtest/compare-layers.js <expected-layers.json> <run.sh 출력 로그>` — `tools/tests/ui-layers.js <폴더>` 가 남긴 편집기 배열과 게임의 `eval:layercells` 출력을 비교.
+- 모두 **PC 화면 시뮬레이션**입니다 (에뮬레이터 · 실제 기기 아님).
 
 ## 예
 

@@ -60,8 +60,8 @@ public class MakerShop {
 			JsonValue c = MakerRuntime.character(charId);
 			String ttl = s.getString("title", ""); if (ttl.isEmpty()) ttl = c == null ? "" : c.getString("name", "");
 			RenderedTextBlock title = PixelScene.renderTextBlock(StoryState.expand(ttl), 9);
-			title.hardlight(TITLE_COLOR); title.setPos(2, 2); add(title);
-			gold = PixelScene.renderTextBlock("", 7); gold.hardlight(0xFFFF44); add(gold);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44)); title.setPos(2, 2); add(title);
+			gold = PixelScene.renderTextBlock("", 7); gold.hardlight(MakerTheme.or("accent", 0xFFFF44)); add(gold);
 			float y = title.bottom() + 3;
 			String gr = s.getString("greet", "");
 			if (!gr.isEmpty()) { RenderedTextBlock g = PixelScene.renderTextBlock(StoryState.expand(gr), 6); g.maxWidth(W - 4); g.setPos(2, y); add(g); y = g.bottom() + 3; }
@@ -85,7 +85,7 @@ public class MakerShop {
 		void row(float y, Item it, String label, String price, boolean dim, Runnable act) {
 			ColorBlock bg = new ColorBlock(W, 19, rows.size() % 2 == 0 ? 0x22FFFFFF : 0x11FFFFFF); bg.y = y; content.add(bg);
 			ItemSprite sp = new ItemSprite(it); sp.x = 2 + (16 - sp.width()) / 2f; sp.y = y + 1.5f + (16 - sp.height()) / 2f; content.add(sp);
-			RenderedTextBlock pr = PixelScene.renderTextBlock(price, 7); pr.hardlight(dim ? 0xFF6666 : 0xFFFF44); pr.setPos(W - pr.width() - 3, y + (19 - pr.height()) / 2f); content.add(pr);
+			RenderedTextBlock pr = PixelScene.renderTextBlock(price, 7); pr.hardlight(dim ? MakerTheme.or("error", 0xFF6666) : MakerTheme.or("accent", 0xFFFF44)); pr.setPos(W - pr.width() - 3, y + (19 - pr.height()) / 2f); content.add(pr);
 			RenderedTextBlock nm = PixelScene.renderTextBlock(label, 7); nm.maxWidth((int) (W - 26 - pr.width() - 4)); nm.setPos(21, y + (19 - nm.height()) / 2f); if (dim) nm.alpha(0.5f); content.add(nm);
 			rows.add(new float[]{ y, y + 19 }); acts.add(act);
 		}
@@ -93,7 +93,7 @@ public class MakerShop {
 		void refill() {
 			content.clear(); rows.clear(); acts.clear();
 			gold.text(T("shop.gold", "금화") + " " + Dungeon.gold); gold.setPos(W - gold.width() - 2, 3);
-			bBuy.textColor(selling ? 0xFFFFFF : TITLE_COLOR); if (bSell != null) bSell.textColor(selling ? TITLE_COLOR : 0xFFFFFF);
+			bBuy.textColor(selling ? MakerTheme.or("text", 0xFFFFFF) : MakerTheme.or("accent", 0xFFFF44)); if (bSell != null) bSell.textColor(selling ? MakerTheme.or("accent", 0xFFFF44) : MakerTheme.or("text", 0xFFFFFF));
 			float y = 0; final Hero h = Dungeon.hero;
 			if (!selling) {
 				JsonValue its = s.get("items"); int i = 0;

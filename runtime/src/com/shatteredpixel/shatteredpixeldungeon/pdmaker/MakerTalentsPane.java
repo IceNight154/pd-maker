@@ -66,7 +66,7 @@ public class MakerTalentsPane extends TalentsPane {
 		}
 		if (MakerSpells.any()) {
 			skillTitle = PixelScene.renderTextBlock("주문", 9);
-			skillTitle.hardlight(Window.TITLE_COLOR);
+			skillTitle.hardlight(MakerTheme.or("accent", 0xFFFF44));
 			content.add(skillTitle);
 			chargeText = PixelScene.renderTextBlock("충전 " + MakerSpells.charge + "/" + MakerSpells.maxCharge(), 6);
 			content.add(chargeText);
@@ -214,7 +214,7 @@ public class MakerTalentsPane extends TalentsPane {
 			open = why == null;
 			boolean early = !open && tier == 1 && hero.lvl < def.getInt("unlockLevel", 2);   // 1단계: 레벨이 모자라도 원작처럼 빈 별로 보여 줌
 			title = PixelScene.renderTextBlock(def.getString("name", tier + "단계"), 9);
-			title.hardlight(open || early ? Window.TITLE_COLOR : 0x888888);
+			title.hardlight(open || early ? MakerTheme.or("accent", 0xFFFF44) : MakerTheme.or("textDim", 0x888888));
 			add(title);
 			if (open || early) {
 				int tot = def.getInt("points", 5), avail = Math.max(0, MakerTalents.available(tier, hero)), used = MakerTalents.spent(tier);
@@ -226,7 +226,7 @@ public class MakerTalentsPane extends TalentsPane {
 				}
 			} else {
 				lock = PixelScene.renderTextBlock(why, 6);
-				lock.hardlight(0x888888); add(lock);
+				lock.hardlight(MakerTheme.or("textDim", 0x888888)); add(lock);
 			}
 			JsonValue h = HeroRuntime.data();
 			for (JsonValue t : h.get("talents")) if (t.getInt("tier", 1) == tier) total++;
@@ -290,7 +290,7 @@ public class MakerTalentsPane extends TalentsPane {
 			this.hero = hero; this.t = t; this.open = open;
 			hotArea.blockLevel = PointerArea.NEVER_BLOCK;
 			int max = Math.max(1, Math.min(6, MakerTalents.maxPts(t)));
-			fill = new ColorBlock(0, 4, 0xFFFFFF44); add(fill);
+			fill = new ColorBlock(0, 4, 0xFF000000 | MakerTheme.or("accent", 0xFFFF44)); add(fill);
 			bg = new Image(Assets.Interfaces.TALENT_BUTTON); add(bg);
 			bg.frame(20 * (max - 1), 0, TalentButton.WIDTH, TalentButton.HEIGHT);
 			icon = talentIcon(t); add(icon);
@@ -318,14 +318,14 @@ public class MakerTalentsPane extends TalentsPane {
 			Image ic = talentIcon(t); ic.x = 0; ic.y = 0; add(ic);
 			String id = t.getString("id", "");
 			RenderedTextBlock title = PixelScene.renderTextBlock(t.getString("name", id) + "  " + MakerTalents.get(id) + "/" + MakerTalents.maxPts(t), 9);
-			title.hardlight(TITLE_COLOR); title.setPos(20, (16 - title.height()) / 2f); add(title);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44)); title.setPos(20, (16 - title.height()) / 2f); add(title);
 			RenderedTextBlock b = PixelScene.renderTextBlock(MakerTalents.desc(t), 6);
 			b.maxWidth(w); b.setPos(0, 20); add(b);
 			float y = b.bottom() + 4;
 			final String why = MakerTalents.blocked(t, hero);
 			if (why != null && !why.equals("이 단계의 포인트가 없음")) {
 				RenderedTextBlock r = PixelScene.renderTextBlock("(" + why + ")", 6);
-				r.hardlight(0xCC6666); r.setPos(0, y); add(r); y = r.bottom() + 4;
+				r.hardlight(MakerTheme.or("error", 0xCC6666)); r.setPos(0, y); add(r); y = r.bottom() + 4;
 			}
 			if (why == null) {
 				RedButton up = new RedButton("올리기") {

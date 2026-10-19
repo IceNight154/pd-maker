@@ -116,7 +116,7 @@ public class HeartUI {
 			resize(W, H);
 			float y = 0;
 			RenderedTextBlock title = PixelScene.renderTextBlock(MakerRuntime.term("sys.heartWindow", "마음"), 9);
-			title.hardlight(TITLE_COLOR);
+			title.hardlight(MakerTheme.or("accent", 0xFFFF44));
 			title.setPos((W - title.width()) / 2f, 1);
 			add(title);
 			y = title.bottom() + 3;
@@ -131,7 +131,7 @@ public class HeartUI {
 					b.setSize(Math.min(W, b.reqWidth() + 4), 14);
 					if (x + b.width() > W) { x = 0; y += 15; }
 					b.setPos(x, y);
-					if (id.equals(sel)) b.textColor(TITLE_COLOR);
+					if (id.equals(sel)) b.textColor(MakerTheme.or("accent", 0xFFFF44));
 					add(b);
 					x += b.width() + 2;
 				}
@@ -223,7 +223,7 @@ public class HeartUI {
 			super();
 			int w = 120;
 			RenderedTextBlock t = PixelScene.renderTextBlock(title, 9);
-			t.hardlight(TITLE_COLOR); t.setPos((w - t.width()) / 2f, 1); add(t);
+			t.hardlight(MakerTheme.or("accent", 0xFFFF44)); t.setPos((w - t.width()) / 2f, 1); add(t);
 			RenderedTextBlock b = PixelScene.renderTextBlock(text, 6);
 			b.maxWidth(w); b.setPos(0, t.bottom() + 4); add(b);
 			resize(w, (int) b.bottom() + 2);
