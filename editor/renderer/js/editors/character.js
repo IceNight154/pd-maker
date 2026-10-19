@@ -427,6 +427,7 @@
               h('button', { class: 'btn sm', title: '제자리에 고정 · 공격하지 않음 · 체력 무한', onclick: () => store.edit(key, '샌드백으로', o => { o.ai = o.ai || {}; o.ai.mode = 'fixed'; o.ai.fixedAttack = false; o.stats = o.stats || {}; o.stats.infiniteHp = true; }) }, '🎯 샌드백으로 (고정 · 체력 무한)'),
               h('span', { class: 'hint' }, '체력 무한이면 살펴보기 설명에 받은 피해(합계 · 횟수 · 평균 · 마지막)가 붙습니다 — 무기 · 마법봉 · 폭탄 피해를 재 보세요. 게임 캐릭터를 바탕으로 한 캐릭터에도 됩니다.'))) : null),
         section('AI · 경로',
+          ['mob', 'boss', 'npc', 'companion'].includes(c.kind) && PDM.combatSummary ? PDM.combatSummary(c) : null,
           row(F.select(key, ['ai', 'mode'], PDM.AI_MODES, { label: '행동 방식', rerender: true }), ['patrol', 'schedule'].includes(c.ai.mode) ? F.num(key, ['ai', 'wait'], { label: '점마다 쉬는 턴', int: true, min: 0 }) : null,
             c.ai.mode === 'fixed' && ['mob', 'boss'].includes(c.kind) ? F.bool(key, ['ai', 'fixedAttack'], { label: '옆에 온 적은 공격 (끄면 가만히 맞기만 함)' }) : null),
           c.ai.mode === 'fixed' ? h('p', { class: 'hint' }, '그 자리에서 움직이지 않고, 밀치기(넉백) · 자리 바꾸기에도 밀려나지 않습니다.') : null,

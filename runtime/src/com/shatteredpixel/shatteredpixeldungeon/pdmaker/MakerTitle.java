@@ -572,9 +572,10 @@ public class MakerTitle {
 	static { for (Chrome.Type ty : Chrome.Type.values()) CHROME.add(ty.name()); }
 
 	/** JsonValue → 공통 규칙(MakerTitleModel) 값 읽기 */
-	static final class JV implements MakerTitleModel.Val {
+	static final class JV implements MakerTitleModel.Val, MakerAIModel.KeyList {
 		final JsonValue v;
 		JV(JsonValue v) { this.v = v; }
+		@Override public java.util.List<String> keys() { java.util.List<String> out = new java.util.ArrayList<>(); if (v != null && v.isObject()) for (JsonValue x : v) out.add(x.name); return out; }
 		JsonValue c(String k) { return v == null || !v.isObject() ? null : v.get(k); }
 		@Override public boolean has(String k) { JsonValue x = c(k); return x != null && !x.isNull(); }
 		@Override public MakerTitleModel.Val get(String k) { JsonValue x = c(k); return x == null || x.isNull() ? null : new JV(x); }

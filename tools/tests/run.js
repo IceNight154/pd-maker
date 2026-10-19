@@ -861,7 +861,7 @@ test('타이틀 공통 규칙: 편집기 PDM.titleModel = 런타임 MakerTitleMo
   let javac = true; try { execFileSync('javac', ['-version'], { stdio: 'ignore' }); } catch (_) { javac = false; }
   if (!javac) return 'javac 가 없어 자바 쪽 비교는 건너뜀 (편집기 쪽 계산만 함) — JDK 를 설치하면 비교함';
   const out = tmp();
-  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(__dirname, 'TitleModelCheck.java')], { stdio: 'pipe' });
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(__dirname, 'TitleModelCheck.java')], { stdio: 'pipe' });
   const res = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'TitleModelCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
   eq(res.length, cases.length);
   cases.forEach((c, i) => near(J(js[i]), res[i], `#${i} ${c.fn} ${JSON.stringify(c).slice(0, 160)}`));
@@ -927,6 +927,217 @@ test('타이틀 데이터 호환: 예전 title.json 은 그대로 · 모르는 �
   const bad = { elements: 'x', windows: [null, 5, { content: 'x' }, { id: 'w', content: [null, 5, { type: 'button', action: 7 }] }], buttons: { items: [null, 5, { id: 3 }, { id: 'a', states: 'x', effects: [null, 'x', { type: 9 }] }], states: [1, 2], layout: 9 } };
   assert.doesNotThrow(() => { M.check(bad); M.buttonList(bad.buttons, {}); M.buttonRects(bad.buttons, 3, 427, 267, true, { y: 0, h: 0 }, null, [null, 'x', 5]); M.resolveStyle(bad.buttons, bad.buttons.items[3], { hover: true }); M.fxValue(null, 1); M.fxValue('x', 1); M.windowLayout(bad.windows[2], 427, 267, { x: 0, y: 0, w: 427, h: 267 }, [6, 6, 6, 6], [], 0); });
   assert.ok(M.check(bad).some(x => x.level === 'error'));
+});
+
+// ------------------------------------------------------------ 8차: 레이어 타일 목록 (PDM.layerTiles)
+test('레이어 타일 목록: 예전 프로젝트는 전부 보임 · 처음 고칠 때 모든 레이어를 지금 목록으로 · 새 타일은 그 레이어에만 · 같은 칸은 다시 씀', async () => {
+  const { ctx } = await newProject(), P = ctx.PDM, LT = P.layerTiles;
+  const w = { userTiles: [{ id: 'a', name: 'A', image: 'x.png', x: 0, y: 0, size: 16 }] };
+  eq(LT.list(w, 'base').tiles.map(t => t.id), ['a']); assert.ok(LT.list(w, 'base').all);
+  const ids = LT.addRegion(w, 'grass', 'x.png', 16, 0, 0, 1, 1, { name: '풀', category: '식생' });
+  eq(ids.length, 4); eq(ids[0], 'a', '같은 칸 (0,0) 은 이미 있는 타일');
+  eq(w.userTiles.length, 4, '새 타일 3개');
+  eq(w.tileLayers.find(l => l.id === 'grass').tiles, ids);
+  eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a'], '다른 레이어 = 고치기 전 목록 (새 타일 없음)');
+  eq(w.userTiles.slice(1).map(t => [t.x, t.y, t.category, t.terrain]), [[1, 0, '식생', -2], [0, 1, '식생', -2], [1, 1, '식생', -2]]);
+  eq(LT.addRegion(w, 'grass', 'x.png', 16, 1, 1, 1, 1), [ids[3]], '다시 가져와도 새로 만들지 않음');
+  eq(w.tileLayers.find(l => l.id === 'grass').tiles.length, 4);
+});
+test('레이어 타일 목록: 복제 · 순서 · 목록에서 빼기 · 삭제(모든 목록에서) · 쓰는 곳 · 분류 · 손상된 목록', async () => {
+  const { ctx } = await newProject(), LT = ctx.PDM.layerTiles;
+  const w = { userTiles: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B', category: '벽' }] };
+  const c = LT.duplicate(w, 'base', 'a');
+  eq(w.userTiles.map(t => t.id), ['a', c.id, 'b']); eq(c.name, 'A 사본');
+  eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a', c.id, 'b']);
+  assert.ok(LT.move(w, 'base', 'b', -1)); eq(w.tileLayers.find(l => l.id === 'base').tiles, ['a', 'b', c.id]);
+  assert.ok(!LT.move(w, 'base', 'a', -1), '맨 앞에서 앞으로');
+  LT.detach(w, 'base', 'a'); eq(w.tileLayers.find(l => l.id === 'base').tiles, ['b', c.id]); assert.ok(w.userTiles.some(t => t.id === 'a'));
+  LT.remove(w, 'b'); assert.ok(!w.userTiles.some(t => t.id === 'b')); assert.ok(w.tileLayers.every(l => !l.tiles.includes('b')));
+  eq(LT.categories([{ category: '벽' }, { category: ' 바닥 ' }, {}, { category: '벽' }]), ['바닥', '벽']);
+  const maps = [['node:a', { layers: { tiles: { base: ['a', '', 'a'], grass: ['a'] } } }], ['room:r', { layers: { utile: ['a'] } }], ['node:b', { layers: null }]];
+  eq(LT.usage(maps, 'a'), { total: 4, places: [['node:a', 3], ['room:r', 1]] });
+  const bad = { userTiles: [null, 3, { id: 'z' }], tileLayers: [null, { id: 'base', tiles: ['z', 'gone', 'z', 5] }] };
+  const L = LT.list(bad, 'base'); eq(L.tiles.map(t => t.id), ['z']); eq(L.missing, ['gone']);
+});
+test('레이어 타일 검사: 그림 없음 · 칸이 그림 밖 · 불투명도 범위 · 효과 타일(그림 없음)은 문제 아님', async () => {
+  const { ctx } = await newProject(), LT = ctx.PDM.layerTiles;
+  eq(LT.check({ image: 'a.png', x: 3, y: 0, size: 16 }, { width: 64, height: 16 }), []);
+  assert.ok(/밖/.test(LT.check({ image: 'a.png', x: 4, y: 0, size: 16 }, { width: 64, height: 16 })[0]));
+  assert.ok(/밖/.test(LT.check({ image: 'a.png', x: -1, y: 0 }, { width: 64, height: 16 })[0]));
+  assert.ok(/찾을 수 없/.test(LT.check({ image: 'a.png' }, null)[0]));
+  assert.ok(/불투명도/.test(LT.check({ image: 'a.png', alpha: 2 }, { width: 16, height: 16 })[0]));
+  eq(LT.check({ image: '', gameFx: 'torch' }, null), []);
+  eq(LT.check({ image: 'a.png' }, undefined), [], '아직 불러오는 중이면 판단하지 않음');
+});
+test('사용자 타일 불투명도: 런타임 MakerUserTiles.render 가 alpha(숫자)를 읽고 묶음을 나눔 · 편집기 그리기도 같은 값', () => {
+  const src = read(path.join(PDMK, 'MakerUserTiles.java'));
+  assert.ok(/av != null && av\.isNumber\(\)\) a = av\.asFloat\(\)/.test(src), '런타임 alpha 읽기');
+  assert.ok(/Math\.max\(0f, Math\.min\(1f, a\)\)/.test(src), '0~1 로 자름');
+  assert.ok(/\+ "\|" \+ rd\[2\] \+/.test(src), '불투명도가 다르면 다른 타일맵 묶음');
+  assert.ok(/t\.alpha < 1\) g\.globalAlpha = ga \* Math\.max\(0, t\.alpha\)/.test(read(path.join(ROOT, 'editor/renderer/js/editors/map.js'))), '편집기 맵 그리기');
+});
+
+// ------------------------------------------------------------ 8차: 캐릭터 AI · 공격 프로필 (PDM.aiModel ↔ 런타임 MakerAIModel)
+/** 시험용 프로필: 체력이 낮으면 도망 · 멀면 원거리(재사용 3) · 붙으면 베기(준비 1 · 회복 1 · 넉백) · 맞으면 반격 · 확률 · 가중치 · 이어지는 콤보 */
+const AI_PROFILE = {
+  version: 1, enabled: true, detect: 8,
+  attacks: [
+    { id: 'slash', name: '베기', type: 'melee', range: 1, windup: 1, recovery: 1, mult: 1.2, flat: 1, knockback: 1, stun: 1 },
+    { id: 'bolt', name: '화살', type: 'ranged', range: 5, mult: 0.8, cooldown: 3, status: 'poison', statusTurns: 4 },
+    { id: 'quake', name: '땅울림', type: 'area', range: 2, radius: 2, mult: 0.5, cooldown: 6, hpCost: 3 },
+    { id: 'combo2', name: '연속 베기', type: 'melee', range: 1, hits: 2, mult: 0.7 }],
+  behaviors: [
+    { id: 'flee', name: '도망', priority: 100, when: { op: 'and', items: [{ k: 'hp', cmp: '<=', v: 30 }, { k: 'dist', cmp: '<=', v: 3 }] }, action: 'flee', cooldown: 2 },
+    { id: 'counter', name: '반격', priority: 60, on: 'hit', action: 'attack', attack: 'slash', next: 'combo' },
+    { id: 'combo', name: '이어 베기', priority: -5, action: 'attack', attack: 'combo2', when: { k: 'dist', cmp: '<=', v: 1 } },
+    { id: 'shoot', name: '쏘기', priority: 50, when: { op: 'and', items: [{ k: 'dist', cmp: '>', v: 1 }, { k: 'visible' }, { k: 'ready', v: 'bolt' }] }, action: 'attack', attack: 'bolt', chance: 70 },
+    { id: 'quake', name: '땅울림', priority: 50, weight: 2, when: { op: 'or', items: [{ k: 'enemies', cmp: '>=', v: 2 }, { k: 'chance', v: 25 }] }, action: 'attack', attack: 'quake' },
+    { id: 'melee', name: '베기', priority: 40, action: 'attack', attack: 'slash', fail: 'approach' },
+    { id: 'approach', name: '다가가기', priority: 10, when: { k: 'hasTarget' }, action: 'approach' },
+    { id: 'heal', name: '회복', priority: 20, when: { op: 'and', not: false, items: [{ k: 'hp', cmp: '<', v: 50 }, { k: 'targetHp', cmp: '>', v: 50, not: true }] }, action: 'heal', amount: 4, target: 'self', cooldown: 10 },
+    { id: 'off', name: '꺼진 행동', enabled: false, priority: 999, action: 'wait' },
+    { id: 'boom', name: '쓰러질 때 폭발', on: 'death', action: 'attack', attack: 'quake' }]
+};
+function aiCases() {
+  let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const cases = [];
+  const T = () => ({ hp: Math.round(rnd() * 20), ht: 20, dist: 1 + Math.floor(rnd() * 7), visible: rnd() > .2, line: rnd() > .25, st: rnd() > .7 ? ['poison'] : [] });
+  for (let i = 0; i < 160; i++) {
+    const sit = { turn: Math.floor(rnd() * 30), self: { hp: Math.round(rnd() * 20), ht: 20, st: rnd() > .8 ? ['slow'] : [] },
+      targets: { enemy: rnd() > .15 ? T() : null, hero: T(), weakestAlly: rnd() > .5 ? T() : null }, allies: Math.floor(rnd() * 3), enemies: Math.floor(rnd() * 4),
+      ev: { hit: rnd() > .7, attacked: rnd() > .8, targetLost: rnd() > .9 }, cd: rnd() > .5 ? { 'a:bolt': Math.floor(rnd() * 30), 'b:flee': Math.floor(rnd() * 30) } : {},
+      next: rnd() > .8 ? ['combo', 'approach', 'nope', 'off'][Math.floor(rnd() * 4)] : '', rolls: [rnd(), rnd(), rnd(), rnd(), rnd()] };
+    cases.push({ fn: 'decide', profile: AI_PROFILE, sit });
+    cases.push({ fn: 'after', profile: AI_PROFILE, sit, id: ['melee', 'shoot', 'counter', 'flee', 'quake', 'x'][i % 6], ok: i % 3 !== 0 });
+  }
+  for (const id of ['melee', 'shoot', 'flee', 'combo', 'none']) cases.push({ fn: 'turns', profile: Object.assign({}, AI_PROFILE, { behaviors: AI_PROFILE.behaviors.map(b => b.id === 'melee' ? Object.assign({}, b, { delay: 0.5 }) : b) }), id });
+  // 손상된 · 이상한 값: 정리 · 고르기 · 검사가 같은 결과 (멈추지 않음)
+  const broken = [null, 5, 'x', [], {}, { behaviors: 'x' }, { enabled: false, behaviors: [{ id: 'a', action: 'wait' }] },
+    { behaviors: [null, 7, { id: 'a', priority: '5', chance: '50', action: 'attack', attack: 'nope' }, { id: 'a', action: 'fly', when: { k: 'mana', cmp: '~' } }], attacks: [{ id: '', windup: -1, type: 'laser', status: 'curse', crit: 300 }] },
+    { behaviors: [{ id: 'p', action: 'wait', next: 'q' }, { id: 'q', action: 'wait', next: 'p' }, { id: 's', action: 'wait', next: 's' }, { id: 'c', action: 'wait', next: 'd', cooldown: 2 }, { id: 'd', action: 'wait', next: 'c' }] },
+    { version: 3, behaviors: [{ id: 'x', when: { op: 'and', items: [] }, action: 'say', say: 1 }, { id: 'y', on: 'death', action: 'approach', when: { k: 'event', v: 'boom' } }, { id: 'z', action: 'attack', target: 'self', attack: 'k', when: { k: 'ready', v: 'nope' } }], attacks: [{ id: 'k', range: '3', hits: 99, mult: 'abc' }] },
+    { behaviors: [{ id: 'w1', action: 'wait', weight: 0 }, { id: 'w2', action: 'wait', weight: 0 }] },
+    { behaviors: [{ id: 'w1', action: 'wait', weight: 1 }, { id: 'w2', action: 'wander', weight: 3 }, { id: 'w3', action: 'say', priority: -1 }] }];
+  broken.forEach((raw, i) => {
+    cases.push({ fn: 'validate', raw });
+    for (const r of [0.01, 0.4, 0.99]) cases.push({ fn: 'decide', profile: raw, sit: i % 2 ? { turn: 3, self: { hp: 5, ht: 10 }, targets: { enemy: { hp: 3, ht: 9, dist: 2 } }, rolls: [r] } : { rolls: [r], ev: { hit: 'yes' }, cd: { 'b:a': 'x' } } });
+  });
+  cases.push({ fn: 'validate', raw: AI_PROFILE });
+  return cases;
+}
+test('AI 프로필 규칙: 편집기 PDM.aiModel = 런타임 MakerAIModel (javac 로 실제 실행 — 고르기 · 이유 · 난수 · 재사용 대기 · 이어지는 행동 · 턴 · 검사 · 손상된 값)', async () => {
+  const { execFileSync } = require('child_process');
+  const ctx = env.load(), M = ctx.PDM.aiModel, cases = aiCases();
+  const js = cases.map(c => {
+    if (c.fn === 'decide') { const r = M.decide(c.profile, c.sit); return { id: r.id, action: r.action, attack: r.attack, target: r.target, reason: r.reason, trace: r.trace.map(t => [t.id, t.why]), rolls: r.rolls }; }
+    if (c.fn === 'after') { const r = M.after(c.profile, c.sit, c.id, c.ok); return { cd: Object.fromEntries(Object.entries(r.cd).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)), next: r.next }; }
+    if (c.fn === 'turns') return M.turns(c.profile, c.id);
+    return M.validate(c.raw).map(i => [i.level, i.code, i.path]);
+  });
+  const out = tmp();
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(__dirname, 'TitleModelCheck.java'), path.join(__dirname, 'AIModelCheck.java')], { stdio: 'pipe' });
+  const java = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'AIModelCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
+  let bad = 0; const first = [];
+  cases.forEach((c, i) => { try { eq(java[i], js[i]); } catch (e) { bad++; if (first.length < 3) first.push(`#${i} ${c.fn}: 편집기 ${JSON.stringify(js[i]).slice(0, 300)}\n      런타임 ${JSON.stringify(java[i]).slice(0, 300)}`); } });
+  assert.strictEqual(bad, 0, `${bad}/${cases.length} 다름\n    ` + first.join('\n    '));
+  const dec = js.filter((r, i) => cases[i].fn === 'decide' && r.id), by = {}; dec.forEach(r => { by[r.id] = (by[r.id] || 0) + 1; });
+  const reasons = {}; js.filter((r, i) => cases[i].fn === 'decide').forEach(r => { reasons[r.reason] = (reasons[r.reason] || 0) + 1; });
+  assert.ok(Object.keys(by).length >= 6, '여러 행동이 골라져야 ' + JSON.stringify(by));
+  console.log(`    ${cases.length}개 같음 · 고른 행동 ${JSON.stringify(by)} · 이유 ${JSON.stringify(reasons)}`);
+});
+test('AI 프로필 규칙: 우선순위 · 조건(AND/OR/NOT) · 사거리 · 재사용 대기 · 확률 · 이어지는 행동 · 쓰러질 때만 · 원래 AI 로 돌아감', async () => {
+  const ctx = env.load(), M = ctx.PDM.aiModel, P = AI_PROFILE;
+  const sit = (o) => Object.assign({ turn: 10, self: { hp: 20, ht: 20 }, targets: { enemy: { hp: 20, ht: 20, dist: 1, visible: true, line: true } }, rolls: [0.5] }, o);
+  eq(M.decide(P, sit()).id, 'melee', '붙어 있으면 베기 (쏘기 · 땅울림은 조건 불만족)');
+  eq(M.decide(P, sit({ self: { hp: 5, ht: 20 } })).id, 'flee', '체력 25% · 거리 1 → 도망 (가장 높은 우선순위)');
+  eq(M.decide(P, sit({ self: { hp: 5, ht: 20 }, cd: { 'b:flee': 12 } })).id, 'melee', '도망 재사용 대기 중');
+  const far = sit({ targets: { enemy: { hp: 20, ht: 20, dist: 4, visible: true, line: true } } });
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.9, 0.5] })).id, 'approach', '쏘기 확률 70% 에서 떨어짐(0.9) → 땅울림 조건 확률(0.5 ≥ 25%) 불만족 → 베기 사거리 밖 → 다가가기');
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.1, 0.1] })).id, 'shoot', '쏘기 확률 통과(0.1) — 땅울림은 조건(0.1 < 25%)은 맞지만 사거리 2 밖');
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.1, 0.1] })).trace.find(t => t.id === 'quake').why, 'range');
+  const r = M.decide(P, Object.assign({}, far, { rolls: [0.9, 0.5] }));
+  eq(r.trace.find(t => t.id === 'melee').why, 'range'); eq(r.trace.find(t => t.id === 'off').why, 'disabled'); eq(r.trace.find(t => t.id === 'boom').why, 'lower'); eq(M.decide({ behaviors: [{ id: 'boom', on: 'death', action: 'say' }] }, sit()).trace[0].why, 'death', '쓰러질 때 행동은 평소에 고르지 않음'); eq(r.trace.find(t => t.id === 'counter').why, 'event');
+  eq(M.decide(P, Object.assign({}, far, { targets: { enemy: { hp: 20, ht: 20, dist: 4, visible: true, line: false } }, rolls: [0.1, 0.1] })).trace.find(t => t.id === 'shoot').why, 'line', '사이가 막히면 투사체 못 씀');
+  eq(M.decide(P, sit({ ev: { hit: true } })).id, 'counter', '맞으면 반격');
+  const a = M.after(P, sit(), 'counter', true); eq(a.next, 'combo');
+  eq(M.decide(P, sit({ next: 'combo' })).reason, 'chain', '이어지는 행동은 우선순위가 낮아도 먼저');
+  eq(M.after(P, sit(), 'melee', false).next, 'approach', '실패하면 fail 행동');
+  eq(M.after(P, sit({ turn: 10 }), 'shoot', true).cd, { 'a:bolt': 13 }, '공격 재사용 대기 = 지금 턴 + 3');
+  eq(M.decide(P, sit({ targets: {} })).trace.find(t => t.id === 'melee').why, 'noTarget');
+  eq(M.decide(Object.assign({}, P, { enabled: false }), sit()).id, null, '꺼진 프로필 → 원래 AI');
+  eq(M.decide({ behaviors: [] }, sit()).reason, 'empty');
+  eq(M.turns(P, 'melee'), 3, '베기 = 준비 1 + 공격 1 + 회복 1');
+  eq(M.validate(P).filter(i => i.level === 'error'), [], '시험 프로필은 오류 없음');
+  const v = M.validate({ behaviors: [{ id: 's', action: 'wait', next: 's' }, { id: 'a', action: 'attack', attack: 'zz' }], attacks: [{ id: 'k', windup: -2 }] }).map(i => i.code);
+  eq(v.sort(), ['attackRef', 'negative', 'selfNext'].sort());
+});
+test('AI 프로필 런타임 연결: MakerCharAI 가 combat(검사 오류 없을 때만)을 원래 AI 보다 먼저 · 오류면 원래 AI + 경고 · 디버그 기록', () => {
+  const src = read(path.join(PDMK, 'MakerCombat.java')), ai = read(path.join(PDMK, 'MakerCharAI.java'));
+  assert.ok(/MakerAIModel\.validate\(/.test(src) && /MakerAIModel\.hasErrors\(/.test(src), '검사 후 오류면 쓰지 않음');
+  assert.ok(/MakerAIModel\.decide\(/.test(src) && /MakerAIModel\.after\(/.test(src), '같은 규칙으로 고르고 재사용 대기 · 이어지는 행동');
+  assert.ok(/static Boolean act\(Mob self, String charId, JsonValue d\)/.test(src), '전투 프로필 실행');
+  assert.ok(/d\.get\("combat"\) != null\) \{[^\n]*\n[^\n]*\n\s*Boolean r = MakerCombat\.act/.test(ai) && ai.indexOf('MakerCombat.act') < ai.indexOf('mode.equals("fixed")) {\n\t\t\t\thold(self);\n\t\t\t\tif (ai.getBoolean'), '원래 방식(고정 · 코드)보다 먼저');
+  assert.ok(/MakerCombat\.onHit\(c\)/.test(ai) && /MakerCombat\.onDeath\(m\)/.test(ai), '맞음 · 쓰러짐 연결');
+});
+
+// ------------------------------------------------------------ 8차: 아이템 공격 모션 타임라인 (PDM.atkMotion ↔ 런타임 MakerAtkMotion)
+function atkCases(ctx) {
+  const P = ctx.PDM, cases = [], ts = []; for (let i = 0; i <= 40; i++) ts.push(i / 40); ts.push(-0.1, 1.2, 0.333333, 0.999999);
+  for (const [k, m] of Object.entries(P.SWING_MOTIONS)) cases.push({ fn: 'sample', fx: { keys: m.keys, hits: m.hits, dur: m.dur }, ts, legacy: k });
+  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let n = 0; n < 30; n++) {
+    const tracks = {}; for (const p of P.atkMotion.PROPS) { if (rnd() < 0.3) continue; const k = []; const c = 1 + Math.floor(rnd() * 5); for (let i = 0; i < c; i++) k.push([Math.round(rnd() * 100) / 100, Math.round((rnd() * 200 - 100) * 10) / 10, P.atkMotion.EASES[Math.floor(rnd() * 8) % 7]]); tracks[p] = k; }
+    const fx = { v: 2, tracks, dur: 0.1 + rnd(), speed: 0.5 + rnd() * 2, hits: [rnd(), rnd()].map(x => Math.round(x * 100) / 100), sync: rnd() > .5 ? 'hit' : 'game',
+      hitWindows: rnd() > .5 ? [[0.3, 0.5], [0.7, 0.65]] : undefined,
+      events: [{ id: 'a', type: 'image', t: rnd(), dur: rnd(), ease: P.atkMotion.EASES[n % 7], alpha: 0.8, size: 2, grow: 1.5, ref: 'x.png' }, { id: 'b', type: 'flash', t: 0.5, dur: 0, role: 'hit' }, { id: 'c', type: 'shake', t: 0.2, dur: 0.3, power: 4 }, { id: 'd', type: 'effect', t: 0.9, role: 'hit' }] };
+    cases.push({ fn: 'sample', fx, ts }, { fn: 'event', fx, ts: ts.map(t => t * 1.5) }, { fn: 'windows', fx }, { fn: 'judge', fx, anim: n % 3 ? 0.2667 : undefined, frames: 4 + (n % 3) }, { fn: 'validate', fx, anim: 0.2667 });
+  }
+  const broken = [null, 5, {}, { keys: 'x' }, { keys: [[0, 1, 2, 3, 4]] }, { tracks: { angle: 'x', dist: [[2, 1], ['a', 3], [0.5, 'b'], [0.5]] } }, { tracks: {} }, { keys: [[0, 0, 0, 1, 1], [1, 90, 4, 1, 0]], dur: -1, speed: 0, hits: [2, 'x', 0.5], hitWindows: [[0.1], 'x'] },
+    { keys: [[0, 0, 0, 1, 1], [1, 90, 4, 1, 0]], hits: [0.9], sync: 'game', dur: 0.3, events: [{ type: 'trail' }, { type: 'nope', t: 3, dur: 99, role: 'hit' }] }, { keys: [[0, 0, 0, 1, 1], [1, 9, 4, 1, 0]], sync: 'hit', dur: 0.2 }];
+  broken.forEach(fx => cases.push({ fn: 'validate', fx, anim: 0.2667 }, { fn: 'sample', fx, ts: [0, 0.5, 1] }, { fn: 'windows', fx }, { fn: 'judge', fx, frames: 4 }, { fn: 'event', fx, ts: [0, 0.1, 5] }));
+  return cases;
+}
+test('공격 모션 규칙: 편집기 PDM.atkMotion = 런타임 MakerAtkMotion (javac 실행 — 트랙 · 이징 7종 · 1판 keys · 이펙트 상태 · 판정 구간 · 판정 시각 · 검사 · 손상된 값)', async () => {
+  const { execFileSync } = require('child_process');
+  const ctx = env.load(), A = ctx.PDM.atkMotion, cases = atkCases(ctx);
+  const ES = s => [{ before: 0, active: 1, after: 2, fire: 3 }[s.phase], s.u, s.p, s.alpha, s.size];
+  const js = cases.map(c => {
+    if (c.fn === 'sample') { const T = A.tracksOf(c.fx); return c.ts.map(t => { const o = A.sample(c.fx, t, T); return A.PROPS.map(p => o[p]); }); }
+    if (c.fn === 'event') { const D = A.durOf(c.fx), out = []; A.eventsOf(c.fx).forEach(e => c.ts.forEach(t => out.push(ES(A.eventState(e, D, t))))); return out; }
+    if (c.fn === 'windows') return { w: A.windowsOf(c.fx), hits: A.hitsOf(c.fx), dur: A.durOf(c.fx) };
+    if (c.fn === 'judge') return { judge: A.judgeSec(c.fx, c.anim), delay: A.syncDelay(c.fx, c.frames) };
+    return A.validate(c.fx, c.anim).map(i => [i.level, i.code, i.path]);
+  });
+  const out = tmp();
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(PDMK, 'MakerAtkMotion.java'), path.join(__dirname, 'TitleModelCheck.java'), path.join(__dirname, 'AtkMotionCheck.java')], { stdio: 'pipe' });
+  const java = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'AtkMotionCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
+  const close = (a, b) => { if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-9; if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => close(x, b[i])); if (a && b && typeof a === 'object') return Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => close(a[k], b[k])); return a === b; };
+  let bad = 0; const first = [];
+  cases.forEach((c, i) => { if (!close(J(js[i]), java[i])) { bad++; if (first.length < 3) first.push(`#${i} ${c.fn}: 편집기 ${JSON.stringify(js[i]).slice(0, 240)}\n      런타임 ${JSON.stringify(java[i]).slice(0, 240)}`); } });
+  assert.strictEqual(bad, 0, `${bad}/${cases.length} 다름\n    ` + first.join('\n    '));
+  // 1판 그대로: 예전 PDM.swingSample (모션 프리셋) 과 같은 값
+  let n = 0; cases.filter(c => c.legacy).forEach(c => c.ts.forEach(t => { const a = ctx.PDM.swingSample(c.fx.keys, t), b = A.sample(c.fx, t); [b.angle, b.dist, b.scale, b.alpha].forEach((v, j) => assert.ok(Math.abs(v - a[j]) < 1e-9, `${c.legacy} t=${t}`)); n++; }));
+  const codes = new Set(); js.forEach((r, i) => { if (cases[i].fn === 'validate') r.forEach(x => codes.add(x[1])); });
+  for (const k of ['noKeys', 'negative', 'visualNoJudge', 'multiHitVisual', 'desync', 'syncNoHit', 'noRef', 'track', 'keyRange']) assert.ok(codes.has(k), '검사 코드 ' + k);
+  console.log(`    ${cases.length}개 같음 · 1판 모션 ${n}점이 예전 계산과 같음 · 검사 코드 ${[...codes].join(' ')}`);
+});
+test('공격 모션 규칙: 이징 · 판정 시각 · 게임 동작 한 칸 시간 · 이펙트 진행 · 프레임 환산', async () => {
+  const A = env.load().PDM.atkMotion;
+  eq([A.ease('linear', .25), A.ease('in', .5), A.ease('out', .5), A.ease('step', .99), A.ease('step', 1)], [.25, .25, .75, 0, 1]);
+  assert.ok(A.ease('back', .8) > 1, 'back 은 살짝 넘침');
+  const fx = { tracks: { angle: [[0, 0, 'linear'], [1, 100]] }, dur: 0.4, speed: 2, hits: [0.5], sync: 'hit' };
+  eq(A.sample(fx, .5).angle, 50); eq(A.durOf(fx), 0.2); eq(A.judgeSec(fx), 0.1); eq(A.syncDelay(fx, 4), 0.025);
+  eq(A.judgeSec(Object.assign({}, fx, { sync: 'game' })), 4 / 15, '원작 = 영웅 공격 동작이 끝날 때');
+  eq(A.frameOf(0.1), 6); eq(A.frameOf(4 / 15), 16);
+  const s = A.eventState(A.normEvent({ t: .5, dur: .2, ease: 'linear', alpha: 1, size: 2, grow: 1 }), 0.2, 0.2);
+  eq([s.phase, +s.u.toFixed(6), +s.alpha.toFixed(6), +s.size.toFixed(6)], ['active', .5, .5, 3]);
+  eq(A.validate({ keys: [[0, 0, 0, 1, 1], [1, 9, 4, 1, 0]], hits: [0.5], sync: 'hit', events: [{ type: 'flash', t: 0.9, role: 'hit' }] }).map(i => i.code), ['visualNoJudge']);
+});
+test('공격 모션 런타임 연결: MakerSwing 이 MakerAtkMotion 으로 자리 · 이펙트 · 판정 맞추기 · 정리', () => {
+  const src = read(path.join(PDMK, 'MakerSwing.java'));
+  assert.ok(/MakerAtkMotion\.sample\(/.test(src) && /MakerAtkMotion\.eventsOf\(/.test(src) && /MakerAtkMotion\.eventState\(/.test(src), '같은 규칙으로 그림 자리 · 이펙트');
+  assert.ok(/MakerAtkMotion\.syncDelay\(/.test(src), '판정을 첫 타격에 맞춤');
+  assert.ok(/public void destroy\(\)/.test(src) || /killAndErase\(\)/.test(src), '끝나면 정리');
 });
 
 // ------------------------------------------------------------ 실행

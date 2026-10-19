@@ -470,21 +470,23 @@ PDM.pixelEditor = function (o) {
     o.onSave ? h('button', { class: 'btn pri', onclick: e => { e.preventDefault(); commitFloating(); o.onSave(baseCv().toDataURL('image/png')); } }, '저장') : null,
     o.onSaveAs ? h('button', { class: 'btn', title: '원래 파일은 그대로 두고 새 파일로 저장합니다', onclick: e => { e.preventDefault(); commitFloating(); o.onSaveAs(baseCv().toDataURL('image/png')); } }, '다른 이름으로 저장…') : null);
   // 보기 창: 오른쪽 아래 모서리(◢)를 끌면 창 크기와 배율이 함께 커지거나 작아짐 (두 번 누르면 처음 크기로)
-  const pane = h('div', { class: 'px-pane', style: { overflow: 'auto', maxWidth: 'min(70vw, 900px)', maxHeight: '70vh' } }, view);
+  //   8차: 그림 칸의 크기는 CSS(.px-pane — 화면 크기로 정한 고정 크기)가 처음부터 정함. 캔버스(그림 × 배율)는 그 안에서 스크롤 —
+  //   확대/축소가 창 크기를 바꾸지 않고, 모서리를 누르기만 해서는 아무 크기도 바뀌지 않음 (예전: 누르면 창 max-width 를 98vw 로 바꿔 창이 갑자기 커짐)
+  const pane = h('div', { class: 'px-pane' }, view);
   const grip = h('div', { class: 'px-grip', title: '끌어서 표시 크기·배율 바꾸기 (두 번 누르면 처음 크기로)' });
   const paneBox = h('div', { class: 'px-panebox' }, pane, grip);
   const scale0 = scale;
   grip.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
-    const r = pane.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, s0 = scale;
-    const modal = wrap.closest('.modal'); if (modal) { modal.style.maxWidth = '98vw'; modal.style.maxHeight = '96vh'; }
-    // 옆의 도구 칸(최소 너비)과 실시간 미리보기 칸이 차지할 자리는 남겨 둠 — 그 위로 겹치지 않게
-    const pvEl = wrap.parentNode && wrap.parentNode.classList && wrap.parentNode.classList.contains('px-preview') ? wrap.parentNode.querySelector('.lp-panel') : null;
-    const maxW = Math.max(200, innerWidth - 270 - (pvEl ? pvEl.getBoundingClientRect().width + 12 : 0) - 90), maxH = Math.max(160, innerHeight - 190);
+    const r = { width: pane.offsetWidth, height: pane.offsetHeight }, sx = e.clientX, sy = e.clientY, s0 = scale;   // 레이아웃 크기 (창이 나타나는 애니메이션의 transform 과 상관없이)
+    // 창(.modal — CSS 로 처음부터 화면의 98vw × 96vh 까지)이 화면 밖으로 넘지 않는 만큼만: 그림 칸 밖의 부분(도구 칸 · 미리보기 칸 · 여백)은 그대로 두고 계산
+    const modal = wrap.closest('.modal');
+    const chromeW = modal ? modal.offsetWidth - r.width : 400, chromeH = modal ? modal.offsetHeight - r.height : 220;
+    const maxW = Math.max(160, Math.floor(innerWidth * 0.98 - chromeW)), maxH = Math.max(120, Math.floor(innerHeight * 0.96 - chromeH));
     const move = ev => {
       const nw = Math.max(160, Math.min(maxW, r.width + ev.clientX - sx)), nh = Math.max(120, Math.min(maxH, r.height + ev.clientY - sy));
-      pane.style.maxWidth = 'none'; pane.style.maxHeight = 'none'; pane.style.width = nw + 'px'; pane.style.height = nh + 'px';
+      pane.style.width = nw + 'px'; pane.style.height = nh + 'px';
       // 창이 커진 비율만큼 배율도 (가로·세로 중 더 많이 바뀐 쪽 기준)
       const f = Math.abs(nw / r.width - 1) >= Math.abs(nh / r.height - 1) ? nw / r.width : nh / r.height;
       const ns = Math.max(1, Math.min(48, Math.round(s0 * f)));
@@ -493,7 +495,7 @@ PDM.pixelEditor = function (o) {
     const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); document.body.style.cursor = ''; };
     addEventListener('pointermove', move); addEventListener('pointerup', up); document.body.style.cursor = 'nwse-resize';
   });
-  grip.addEventListener('dblclick', e => { e.preventDefault(); pane.style.width = ''; pane.style.height = ''; pane.style.maxWidth = 'min(70vw, 900px)'; pane.style.maxHeight = '70vh'; scale = scale0; draw(); });
+  grip.addEventListener('dblclick', e => { e.preventDefault(); pane.style.width = ''; pane.style.height = ''; scale = scale0; draw(); });   // CSS 의 처음 크기로
   const wrap = h('div', { class: 'px-wrap' }, paneBox, side);
 
   if (o.src) { const img = new Image(); img.onload = () => { dg.drawImage(img, 0, 0); draw(); }; img.src = o.src; }

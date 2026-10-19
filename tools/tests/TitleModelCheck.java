@@ -11,8 +11,9 @@ import java.util.*;
 
 public class TitleModelCheck {
 	// ---------------- 작은 JSON ----------------
-	static final class J implements Val {
+	static final class J implements Val, com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAIModel.KeyList {
 		final Object v; J(Object v) { this.v = v; }
+		public List<String> keys() { return m() == null ? new ArrayList<>() : new ArrayList<>(m().keySet()); }
 		@SuppressWarnings("unchecked") Map<String, Object> m() { return v instanceof Map ? (Map<String, Object>) v : null; }
 		@SuppressWarnings("unchecked") List<Object> l() { return v instanceof List ? (List<Object>) v : null; }
 		public boolean has(String k) { return m() != null && m().containsKey(k) && m().get(k) != null; }

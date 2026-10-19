@@ -3,6 +3,7 @@
  *   world.json  userTiles [{ id, name, image, x, y (칸 — size 단위), size (그림의 한 칸 px, 기본 16), terrain (-2 = 칠한 지형 그대로 · 지형 번호), over (캐릭터 위에 그림),
  *                            fx (effects.json id — 그 칸에서 계속 재생), gameFx (게임 효과: sink · torch · vein · smoke · greenflame · stream · alchemy · sacrificial · healing),
  *                            title · desc (살펴보기 창의 이름 · 설명 — 비우면 지형 그대로) }]
+ *   category (편집기 팔레트 분류 — 런타임은 안 씀) · alpha (0~1, 8차 — 그 타일을 그 불투명도로)
  *   flow (true) · flowX · flowY (px/초 — 물은 0, -5) = 그림 전체를 칸에 이어 붙여 물처럼 흐르게 (FlowTiles — 물 그림을 타일로 쓸 때)
  *   그림이 없는(image "") 타일 = 지형 + 효과만 (희생의 재단 · 연금술 솥 · 배수구처럼 "효과가 붙은 타일")
  *   노드 · 방 템플릿  layers.tiles { 레이어 id: [칸 → 타일 id] } (예전 layers.utile = base 레이어) — 레이어 정의 · 읽기는 MakerTileLayers.
@@ -155,6 +156,10 @@ public class MakerUserTiles extends CustomTilemap {
 				int h = id.indexOf('#');
 				JsonValue c = MakerCombos.combo(id.substring(6, h)), sp = c == null ? null : c.get("sprites").get(Integer.parseInt(id.substring(h + 1)));
 				if (sp != null) { ox = sp.getFloat("ox", 0); oy = sp.getFloat("oy", 0); a = sp.getFloat("alpha", 1f); if ("add".equals(sp.getString("blend", "normal"))) add = 1; }
+			}
+			else {   // 8차: 사용자 타일의 불투명도 (world.userTiles[].alpha 0~1 — 없거나 숫자가 아니면 1)
+				JsonValue d = def(id), av = d == null ? null : d.get("alpha");
+				if (av != null && av.isNumber()) a = av.asFloat();
 			}
 			if ("add".equals(MakerTileLayers.blend(layer))) add = 1;
 		} catch (Throwable ignored) { }

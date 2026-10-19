@@ -503,6 +503,15 @@ table.tbl { border-collapse: collapse; font-size: var(--fs-sm); } table.tbl td, 
 .lp-edge { position: absolute; left: -8px; top: 0; bottom: 18px; width: 8px; cursor: col-resize; }
 .lp-edge:hover { background: var(--accent-soft); border-radius: var(--r-xs); }
 .px-canvas { image-rendering: pixelated; border: 1px solid var(--line); cursor: crosshair; background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
+/* 8차: 픽셀 편집기 창 크기 — 창 규칙(98vw × 96vh 까지)과 그림 칸 크기를 처음부터 정함. 그림 칸은 화면 크기로만 정하고(그림 · 배율과 상관없음) 캔버스는 그 안에서 스크롤
+   (예전: 그림 칸 = 캔버스 크기(70vw · 70vh 까지) · 창 900px 까지 → 모서리를 누르면 JS 가 창을 98vw 로 바꿔 갑자기 커지고, 확대/축소가 창 크기를 바꿈) */
+.modal:has(.px-wrap) { width: auto; max-width: 98vw; max-height: 96vh; }
+.px-pane { overflow: auto; width: clamp(160px, calc(98vw - 420px), 720px); height: clamp(120px, calc(96vh - 210px), 640px); }
+.px-preview .px-pane { width: clamp(160px, calc(97vw - 440px - min(30vw, 420px)), 600px); }
+@media (max-width: 720px) {   /* 좁은 화면: 도구 칸을 그림 아래로 — 그림 칸은 창 너비 */
+  .px-wrap { flex-wrap: wrap; }
+  .px-pane { width: calc(98vw - 76px); height: clamp(120px, 50vh, 480px); }
+}
 .px-panebox { position: relative; flex: 0 0 auto; padding: 0 12px 12px 0; }   /* 줄어들지 않음 — 크게 늘려도 옆의 도구 칸을 덮지 않고 밀어냄 */
 .px-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: var(--r-xs);
   background: linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 55%, transparent 55% 65%, var(--accent) 65% 75%, transparent 75% 85%, var(--accent) 85%); opacity: .75; }
@@ -824,3 +833,89 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .tp-issues { margin-bottom: 8px; font-size: var(--fs-sm); }
 .tp-states details, .tp-fx .li { margin: 2px 0; }
 .tp-list { margin: 4px 0; }
+/* 8차: 레이어 타일 목록 (맵 그리기 → 그릴 것, 레이어 편집 중) */
+.pal-t.bad { border-color: var(--bad); border-style: dashed; }
+.pal-target.layer { display: flex; align-items: center; gap: var(--sp-2, 6px); flex-wrap: wrap; }
+.pal-target .lt-to-terrain { margin-left: auto; }
+.lt-cat { width: 100%; margin: 2px 0 4px; }
+.lt-empty { border: 1px dashed var(--line-strong); border-radius: var(--r-sm); padding: 8px; color: var(--dim); font-size: var(--fs-sm); }
+.lt-empty p { margin: 0 0 6px; }
+.lt-bad { color: var(--bad); font-size: var(--fs-xs); margin: 4px 0; }
+.lt-sel { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px; margin: 6px 0; background: var(--accent-soft); }
+.lt-sel-head { font-size: var(--fs-sm); margin-bottom: 4px; overflow-wrap: anywhere; }
+.lt-sel-fields { display: grid; grid-template-columns: 1fr 1fr 64px; gap: 4px; }
+.lt-sel-fields label { display: flex; flex-direction: column; min-width: 0; }
+.lt-sel-fields input { width: 100%; min-width: 0; }
+.lt-import { max-width: min(760px, 86vw); }
+.lt-pick-wrap { max-height: 56vh; overflow: auto; margin: 6px 0; }
+.lt-pick { image-rendering: pixelated; cursor: crosshair; display: block; touch-action: none; }
+.lt-pick:focus-visible { outline: 2px solid var(--accent); }
+/* 8차: AI · 전투 편집기 (editors/charcombat.js) */
+.cc-head { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.cc-head h1 { margin: 0; }
+.cc-status { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; margin-left: auto; }
+.cc-issues { display: flex; flex-direction: column; gap: 2px; margin: var(--sp-3) 0; max-height: 120px; overflow: auto; }
+.cc-issue { text-align: left; background: none; border: 1px solid var(--line); border-radius: var(--r-xs); padding: 2px 6px; font-size: var(--fs-sm); color: var(--fg); cursor: pointer; }
+.cc-issue.error { border-color: var(--bad); background: var(--bad-bg); }
+.cc-issue.warn { border-color: var(--warn); background: var(--warn-bg); }
+.cc-cols { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(260px, 340px); gap: var(--sp-5); align-items: start; margin-top: var(--sp-4); }
+.cc-page { container-type: inline-size; }   /* 편집 칸 너비로 (창 너비가 아니라 — 옆 패널이 있으면 더 좁음) */
+@container (max-width: 980px) { .cc-cols { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); } .cc-right { grid-column: 1 / -1; } }
+@container (max-width: 620px) { .cc-cols { grid-template-columns: minmax(0, 1fr); } .cc-head h1 { font-size: var(--fs-lg); } }
+.cc-left, .cc-right { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.cc-list { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px; max-height: 46vh; overflow: auto; }
+.cc-list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.cc-li { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "c n b" "c s b"; gap: 0 6px; align-items: center; padding: 4px 6px; border-radius: var(--r-xs); cursor: pointer; border: 1px solid transparent; }
+.cc-li > input { grid-area: c; } .cc-li-name { grid-area: n; font-weight: var(--fw-bold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-li-sub { grid-area: s; font-size: var(--fs-xs); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-li-btns { grid-area: b; display: flex; gap: 1px; }
+.cc-li:hover { background: var(--hover); } .cc-li.on { border-color: var(--accent); background: var(--accent-soft); }
+.cc-li.off .cc-li-name { opacity: .55; text-decoration: line-through; } .cc-li.bad { border-color: var(--bad); }
+.cc-li:focus-visible { outline: 2px solid var(--accent); }
+.cc-center { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.cc-q { width: 100%; }
+.cc-sec { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 10px 8px; }
+.cc-sec > summary { cursor: pointer; font-weight: var(--fw-bold); padding: 4px 0; }
+.cc-cond { display: flex; flex-direction: column; gap: 4px; }
+.cc-cg { border-left: 2px solid var(--accent-line); padding-left: 8px; display: flex; flex-direction: column; gap: 4px; }
+.cc-cg-head, .cc-c { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.cc-right { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; position: sticky; top: 0; }
+.cc-sim-head { display: flex; justify-content: space-between; align-items: center; }
+.cc-sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+.cc-sim-f { display: flex; flex-direction: column; font-size: var(--fs-xs); color: var(--dim); }
+.cc-sim-f input[type=number] { width: 100%; }
+.cc-sim-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: var(--fs-sm); }
+.cc-sim-out { border-radius: var(--r-xs); padding: 6px 8px; border: 1px solid var(--line); }
+.cc-sim-out.ok { border-color: var(--accent); background: var(--accent-soft); } .cc-sim-out.none { border-color: var(--warn); }
+.cc-sim-pick { font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.cc-trace { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.cc-trace th, .cc-trace td { text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--line); }
+.cc-trace tr.pick td { color: var(--accent); font-weight: var(--fw-bold); } .cc-trace tr.no td { color: var(--dim); }
+.cc-empty { padding: var(--sp-6); }
+.cc-c select, .cc-cg-head select, .cc-c input[type=number] { width: auto; min-width: 0; max-width: 100%; }
+/* 8차: 아이템 공격 모션 타임라인 (editors/atkmotionedit.js) */
+.am-page { container-type: inline-size; }
+.am-head { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+.am-head h1 { margin: 0; }
+.am-status { display: flex; align-items: center; gap: var(--sp-4); margin-left: auto; flex-wrap: wrap; }
+.am-basic { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 10px; align-items: end; margin: var(--sp-3) 0; }
+.am-top { display: flex; gap: var(--sp-5); align-items: flex-start; flex-wrap: wrap; }
+.am-pv { image-rendering: pixelated; border: 1px solid var(--line); border-radius: var(--r-sm); background: #16131f; width: 224px; height: 192px; flex: none; }
+.am-legend { max-width: 360px; }
+.am-transport { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.am-transport select { width: auto; }
+.am-tlbl { margin-left: 6px; }
+.am-tlwrap { border: 1px solid var(--line); border-radius: var(--r-sm); overflow-x: auto; }
+.am-tl { display: block; width: 100%; cursor: pointer; touch-action: none; }
+.am-tl:focus-visible { outline: 2px solid var(--accent); }
+.am-bottom { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr); gap: var(--sp-5); margin-top: var(--sp-4); align-items: start; }
+@container (max-width: 820px) { .am-bottom { grid-template-columns: minmax(0, 1fr); } }
+.am-insp, .am-evs, .am-checks { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.am-f { display: flex; flex-direction: column; font-size: var(--fs-sm); }
+.am-f input, .am-f select { width: 100%; }
+.am-evs-head { display: flex; justify-content: space-between; align-items: center; }
+.am-ev { display: flex; gap: 4px; align-items: center; padding: 3px 6px; border-radius: var(--r-xs); cursor: pointer; border: 1px solid transparent; }
+.am-ev > .hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-ev.on { border-color: var(--accent); background: var(--accent-soft); } .am-ev:hover { background: var(--hover); }
+.am-checks ul { margin: 0; padding-left: 16px; font-size: var(--fs-sm); } .am-checks li.error { color: var(--bad); } .am-checks li.warn { color: var(--warn); }
+.am-empty { padding: var(--sp-6); }

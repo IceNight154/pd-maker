@@ -460,6 +460,193 @@
       function pushRecent(k, id) { ui.recent = [{ k, id }, ...(ui.recent || []).filter(r => !(r.k === k && r.id === id))].slice(0, 8); }
       function pickTerrain(v) { ui.terrain = v; pushRecent('t', v); setTarget('terrain'); if (!tileTool() || ui.tool === 'pick') setTool('pen', true); drawPalette(); drawTools(); }
       function pickUtile(id) { ui.utile = id; if (id) pushRecent('u', id); setTarget('layer', ui.tileLayer); if (ui.tool !== 'utile') setTool(['rect', 'fill'].includes(ui.tool) ? ui.tool : 'pen', true); drawPalette(); drawTools(); }
+      // ---- 8차: 레이어 타일 목록 (PDM.layerTiles) — 고른 레이어에 놓을 타일 · 추가(타일셋 영역 · 이미지 · 새로 그리기 · 복제) · 순서 · 삭제 · 검사
+      //   레이어 편집 중에는 "그릴 것"이 이 목록 — 지형 타일 격자는 숨기고 지형 편집은 버튼으로만 바꿈 (대상이 저절로 바뀌지 않음)
+      const LT = PDM.layerTiles;
+      /** 이 맵 테마의 타일셋 그림 경로 (게임 테마 · 사용자 테마 — 없으면 바탕 테마) */
+      function themeSheet() {
+        const t = PDM.THEMES[theme]; if (t) return 'game:' + t.tiles;
+        const c = ((store.get('world') || {}).customThemes || []).find(x => x.id === theme);
+        return c && c.tiles ? c.tiles : 'game:' + PDM.THEMES[(c && PDM.THEMES[c.base]) ? c.base : 'SEWER'].tiles;
+      }
+      const ltDims = new Map();   // 그림 경로 → { width, height } · null(못 찾음) · undefined(불러오는 중)
+      function dimsOf(img) {
+        if (!img) return undefined;
+        if (ltDims.has(img)) return ltDims.get(img);
+        ltDims.set(img, undefined);
+        PDM.assets.load(img).then(im => im, () => null).then(im => { ltDims.set(img, im ? { width: im.width, height: im.height } : null); if (palette.isConnected) drawPalette(); });
+        return undefined;
+      }
+      /** 맵 데이터 전부 (쓰는 곳 세기) */
+      const allMaps = () => store.keys().filter(k => k.startsWith('node:') || k.startsWith('room:')).map(k => [k, store.get(k)]);
+      /** world 를 고치고 (실행 취소 한 번) 레이어 타일 하나를 고른 상태로 — fn 이 고를 타일 id 를 돌려주면 그것 */
+      function editLT(label, fn) {
+        let pick;
+        store.edit('world', label, w => { pick = fn(w); });
+        if (typeof pick === 'string' && pick) { ui.utile = pick; ui.target = 'layer'; if (ui.tool !== 'utile') { ui.utShape = ['rect', 'fill'].includes(ui.tool) ? ui.tool : 'pen'; ui.tool = 'utile'; } pushRecent('u', pick); }
+        if (palette.isConnected) { drawPalette(); drawTools(); paint(); }
+      }
+      /** 그림의 칸(영역)을 골라 지금 레이어에 타일로 — 타일셋에서 가져오기 · 이미지 가져오기 공용 */
+      async function importRegion(image, title) {
+        const img = await PDM.assets.load(image).catch(() => null);
+        if (!img) { toast('그림을 불러올 수 없습니다: ' + image, 'bad'); return; }
+        const lid = ui.tileLayer, lay = LAYERS().find(l => l.id === lid), w0 = store.get('world') || {};
+        let size = Math.min(16, img.width, img.height) >= 16 ? 16 : 8, sel = { x0: 0, y0: 0, x1: 0, y1: 0 }, drag = false;
+        const k = img.width <= 160 ? 3 : img.width <= 320 ? 2 : 1;
+        const cvs = h('canvas', { class: 'checker lt-pick', tabindex: '0', 'aria-label': '칸 고르기 — 끌어서 여러 칸 · 화살표 · Shift+화살표' });
+        const info = h('div', { class: 'hint' });
+        const nameIn = h('input', { type: 'text', placeholder: '비우면 "타일 (x, y)"', 'aria-label': '이름' });
+        const catIn = h('input', { type: 'text', value: ui.ltCat || '', placeholder: '예: 바닥 · 장식 · 벽', 'aria-label': '분류' });
+        const sizeSel = h('select', { 'aria-label': '칸 크기' }, [8, 16, 32, 48, 64].filter(v => v <= Math.min(img.width, img.height)).map(v => h('option', { value: v }, v + 'px')));
+        sizeSel.value = String(size);
+        const cols = () => Math.max(1, Math.floor(img.width / size)), rows = () => Math.max(1, Math.floor(img.height / size));
+        const clampSel = () => { for (const a of ['x0', 'x1']) sel[a] = Math.max(0, Math.min(cols() - 1, sel[a])); for (const a of ['y0', 'y1']) sel[a] = Math.max(0, Math.min(rows() - 1, sel[a])); };
+        const draw = () => {
+          cvs.width = img.width * k; cvs.height = img.height * k;
+          const g = cvs.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, cvs.width, cvs.height);
+          g.strokeStyle = 'rgba(255,255,255,.18)'; g.beginPath();
+          for (let x = 0; x <= img.width; x += size) { g.moveTo(x * k + .5, 0); g.lineTo(x * k + .5, cvs.height); }
+          for (let y = 0; y <= img.height; y += size) { g.moveTo(0, y * k + .5); g.lineTo(cvs.width, y * k + .5); }
+          g.stroke();
+          let reuse = 0; const xa = Math.min(sel.x0, sel.x1), xb = Math.max(sel.x0, sel.x1), ya = Math.min(sel.y0, sel.y1), yb = Math.max(sel.y0, sel.y1);
+          for (let y = 0; y < rows(); y++) for (let x = 0; x < cols(); x++) if (LT.findRegion(w0, image, size, x, y)) {   // 이미 타일로 만든 칸 = 작은 점
+            g.fillStyle = '#4fd8c6'; g.fillRect(x * size * k + 2, y * size * k + 2, 4, 4);
+            if (x >= xa && x <= xb && y >= ya && y <= yb) reuse++;
+          }
+          g.strokeStyle = '#ffd166'; g.lineWidth = 2; g.strokeRect(xa * size * k + 1, ya * size * k + 1, (xb - xa + 1) * size * k - 2, (yb - ya + 1) * size * k - 2);
+          const n = (xb - xa + 1) * (yb - ya + 1);
+          info.textContent = `칸 (${xa}, ${ya})${n > 1 ? ` – (${xb}, ${yb})` : ''} · ${n}칸 → 타일 ${n}개${reuse ? ` (이미 있는 ${reuse}개는 새로 만들지 않고 목록에 붙임)` : ''} · 그림 ${img.width}×${img.height}`;
+        };
+        const cellAt = e => { const r = cvs.getBoundingClientRect(), sx = cvs.width / r.width; return [Math.floor((e.clientX - r.left) * sx / k / size), Math.floor((e.clientY - r.top) * sx / k / size)]; };
+        cvs.addEventListener('pointerdown', e => { const [x, y] = cellAt(e); sel = { x0: x, y0: y, x1: x, y1: y }; drag = true; cvs.setPointerCapture(e.pointerId); clampSel(); draw(); });
+        cvs.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = cellAt(e); sel.x1 = x; sel.y1 = y; clampSel(); draw(); });
+        cvs.addEventListener('pointerup', () => { drag = false; });
+        cvs.addEventListener('keydown', e => {
+          const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!d) return;
+          e.preventDefault(); e.stopPropagation();
+          if (e.shiftKey) { sel.x1 += d[0]; sel.y1 += d[1]; } else { const x = sel.x1 + d[0], y = sel.y1 + d[1]; sel = { x0: x, y0: y, x1: x, y1: y }; }
+          clampSel(); draw();
+        });
+        sizeSel.onchange = () => { size = +sizeSel.value; clampSel(); draw(); };
+        draw();
+        const box = h('div', { class: 'lt-import' },
+          h('p', { class: 'hint' }, `${image} 의 칸을 골라 레이어 「${lay ? lay.name : lid}」에 타일로 추가합니다. 그림은 복사하지 않고 그림 경로 + 칸 위치를 가리킵니다 (그림 파일을 고치면 타일도 함께 바뀜). 여러 칸을 끌어 고르면 칸마다 타일 하나.`),
+          h('div', { class: 'lt-pick-wrap' }, cvs), info,
+          h('div', { class: 'row' },
+            h('label', { class: 'field' }, h('span', { class: 'fl' }, '이름'), nameIn),
+            h('label', { class: 'field' }, h('span', { class: 'fl' }, '분류'), catIn),
+            h('label', { class: 'field' }, h('span', { class: 'fl' }, '그림의 한 칸 크기'), sizeSel)));
+        const ok = await PDM.ui.modal(title, box, [['취소', null], ['레이어에 추가', () => true, 'pri']]);
+        if (!ok) return;
+        editLT('레이어 타일 추가', w => LT.addRegion(w, lid, image, size, sel.x0, sel.y0, sel.x1, sel.y1, { name: nameIn.value.trim(), category: catIn.value.trim() })[0]);
+      }
+      /** 이미지 파일을 프로젝트로 가져와 칸 고르기 */
+      async function importImage() {
+        const f = await PDM.ui.pickImage('tiles'); if (!f) return;
+        PDM.assets.invalidate && PDM.assets.invalidate(f);
+        await importRegion(f, '이미지 가져오기');
+      }
+      /** 새 그림(한 칸 PNG)을 그려 타일로 — 그림은 assets/tiles/utile_<id>.png */
+      async function drawNewTile() {
+        const lid = ui.tileLayer, id = PDM.uid('ut'), rel = `assets/tiles/utile_${id}.png`;
+        const name = await PDM.ui.prompt('새 타일 이름', '', '예: 이끼 낀 바닥'); if (name === null || name === undefined) return;
+        const out = await PDM.editPixelsModal('새 타일 그림 — ' + (name || id), rel, 16, 16, 16, null, {});
+        if (!out) return;
+        PDM.assets.invalidate && PDM.assets.invalidate(out);
+        editLT('레이어 타일 추가 (새로 그림)', w => LT.add(w, lid, { id, name: name || '새 타일', image: out, x: 0, y: 0, size: 16, terrain: -2, over: false, fx: '', category: ui.ltCat || '' }).id);
+      }
+      /** 타일 삭제 — 놓인 칸이 있으면 알려 주고 "목록에서만 빼기"를 권함 */
+      async function deleteLayerTile(id) {
+        const t = utDef(id); if (!t) return;
+        const u = LT.usage(allMaps(), id), lid = ui.tileLayer;
+        const where = u.places.slice(0, 6).map(([k, n]) => `· ${k.startsWith('room:') ? '방 ' + ((store.get(k) || {}).name || k) : (PDM.World && PDM.World.fullName ? PDM.World.fullName(k.slice(5)) : k)} ${n}칸`).join('\n');
+        const body = h('div', {}, h('p', {}, u.total ? `「${t.name || id}」 타일이 ${u.places.length}개 맵에 ${u.total}칸 놓여 있습니다.` : `「${t.name || id}」 타일을 삭제할까요?`),
+          u.total ? h('pre', { class: 'hint' }, where + (u.places.length > 6 ? `\n… 그 밖 ${u.places.length - 6}곳` : '')) : null,
+          u.total ? h('p', { class: 'hint' }, '삭제하면 그 칸들은 "없는 타일"로 남아 게임에서 그려지지 않습니다 (다른 그림으로 바뀌지 않음 · 지형 판정은 그대로). 이 레이어 팔레트에서만 치우려면 "목록에서만 빼기".') : h('p', { class: 'hint' }, '실행 취소(Ctrl+Z)로 되돌릴 수 있습니다.'));
+        const r = await PDM.ui.modal('타일 삭제', body, [['취소', null], ['목록에서만 빼기', 'detach'], ['삭제', 'del', 'danger']]);
+        if (r === 'detach') { if (ui.utile === id) ui.utile = ''; editLT('레이어 목록에서 빼기', w => { LT.detach(w, lid, id); }); }
+        else if (r === 'del') { if (ui.utile === id) ui.utile = ''; editLT('사용자 타일 삭제', w => { LT.remove(w, id); }); }
+      }
+      /** 이 레이어 전체 지우기 (확인 후 · 실행 취소 가능 · 다른 레이어 · 지형은 그대로) */
+      async function clearLayer() {
+        const lid = ui.tileLayer, lay = LAYERS().find(l => l.id === lid), n = ((tilesL || {})[lid] || []).filter(Boolean).length;
+        if (!n) { toast('이 레이어에 칠한 칸이 없습니다'); return; }
+        if (ui.lockLayers[lid]) { toast('잠긴 레이어입니다 — 잠금을 풀고 지우세요', 'bad'); return; }
+        if (!(await PDM.ui.confirm(`레이어 「${lay ? lay.name : lid}」의 ${n}칸을 모두 지울까요?\n다른 레이어와 지형은 그대로입니다. (실행 취소로 되돌릴 수 있음)`, { ok: '이 레이어 지우기' }))) return;
+        tilesL[lid] = blankL(); if (ui.tileLayer === lid) utileL = tilesL[lid];
+        for (let i = 0; i < W * H; i++) retop(i);   // 지형은 남은 레이어에 맞춤 (지우개와 같음)
+        commitUtile('레이어 전체 지우기');
+      }
+      /** 레이어 편집 중의 "그릴 것" 내용 */
+      function layerTilesBlock(lay) {
+        const w = store.get('world') || {}, lid = ui.tileLayer, L = LT.list(w, lid), lname = lay ? lay.name : lid;
+        const q = (ui.palQ || '').trim().toLowerCase(), cats = LT.categories(L.tiles);
+        if (ui.ltCat && !cats.includes(ui.ltCat)) ui.ltCat = '';
+        const shown = L.tiles.filter(t => (!q || ((t.name || '') + ' ' + t.id + ' ' + (t.category || '')).toLowerCase().includes(q)) && (!ui.ltCat || String(t.category || '').trim() === ui.ltCat));
+        const inList = new Set(L.tiles.map(t => t.id)), sel = ui.utile && inList.has(ui.utile) ? utDef(ui.utile) : null;
+        const tile = (t, extra) => {
+          const on = ui.tool === 'utile' && ui.utile === t.id, bad = LT.check(t, dimsOf(t.image));
+          const c = h('canvas', { width: 16, height: 16, class: 'pal-t' + (on ? ' on' : '') + (bad.length ? ' bad' : ''), role: 'option', tabindex: '0', 'aria-selected': String(on), 'data-ut': t.id,
+            title: `${t.name || t.id}${t.category ? ' · ' + t.category : ''} — 레이어 「${lname}」에 칠함${extra || ''}${bad.length ? '\n⚠ ' + bad.join('\n⚠ ') : ''}`,
+            onclick: () => pickUtile(t.id), onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickUtile(t.id); } } });
+          PDM.drawUserTile(c.getContext('2d'), t, 0, 0, 16, tilesImg).catch(() => { });
+          return c;
+        };
+        const grid = h('div', { class: 'pal-grid lt-grid', role: 'listbox', 'aria-label': `레이어 「${lname}」의 타일` }, ...shown.map(t => tile(t)));
+        const rec = (ui.recent || []).filter(r => r.k === 'u' && inList.has(r.id)).map(r => utDef(r.id)).filter(Boolean);
+        const search = h('input', { type: 'search', class: 'pal-search', placeholder: '타일 찾기 (이름 · 분류)', value: ui.palQ || '', 'aria-label': '타일 찾기',
+          oninput: e => { ui.palQ = e.target.value; const pos = e.target.selectionStart; drawPalette(); const n = palette.querySelector('.pal-search'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
+        const catSel = cats.length ? h('select', { class: 'lt-cat', 'aria-label': '분류로 걸러 보기', onchange: e => { ui.ltCat = e.target.value; drawPalette(); } },
+          h('option', { value: '' }, `모든 분류 (${L.tiles.length})`), ...cats.map(c => h('option', { value: c, selected: c === ui.ltCat }, `${c} (${L.tiles.filter(t => String(t.category || '').trim() === c).length})`))) : null;
+        const others = UT().filter(t => !inList.has(t.id));
+        const addBar = h('div', { class: 'pal-row lt-add' },
+          h('button', { class: 'btn xs pri', title: `이 맵 테마의 타일셋(${themeSheet()})에서 칸을 골라 타일로`, onclick: () => importRegion(themeSheet(), '타일셋에서 가져오기') }, '▦ 타일셋에서 가져오기'),
+          h('button', { class: 'btn xs', title: 'PNG 를 프로젝트 assets/tiles 로 가져와 칸을 골라 타일로', onclick: importImage }, '⤓ 이미지 가져오기'),
+          h('button', { class: 'btn xs', title: '빈 16×16 그림을 직접 그려 타일로', onclick: drawNewTile }, '✎ 새로 그리기'),
+          others.length ? PDM.ui.dropBtn(`다른 타일 (${others.length})`, () => others.map(t => ({ label: `${t.name || t.id}${t.category ? ' · ' + t.category : ''}`, run: () => editLT('레이어 목록에 타일 붙이기', w2 => { LT.attach(w2, lid, t.id); return t.id; }) })), { cls: 'btn xs', title: '다른 레이어용으로 만든 사용자 타일을 이 레이어 목록에도' }) : null);
+        const empty = !L.tiles.length ? h('div', { class: 'lt-empty' },
+          h('p', {}, `레이어 「${lname}」에 놓을 타일이 아직 없습니다.`),
+          h('div', { class: 'pal-row' },
+            h('button', { class: 'btn xs pri', onclick: drawNewTile }, '＋ 타일 추가'),
+            h('button', { class: 'btn xs', onclick: () => importRegion(themeSheet(), '타일셋에서 가져오기') }, '▦ 타일셋에서 가져오기'),
+            h('button', { class: 'btn xs', onclick: importImage }, '⤓ 이미지 가져오기'))) : null;
+        let selBox = null;
+        if (sel) {
+          const issues = LT.check(sel, dimsOf(sel.image)), u = LT.usage([[key, { layers: { tiles: tilesL || {} } }]], sel.id).total;
+          const nameIn = h('input', { type: 'text', value: sel.name || '', 'aria-label': '타일 이름', onchange: e => editLT('타일 이름', w2 => { const t = (w2.userTiles || []).find(x => x.id === sel.id); if (t) t.name = e.target.value.trim() || t.name; }) });
+          const catIn = h('input', { type: 'text', value: sel.category || '', list: 'lt-cats', placeholder: '분류', 'aria-label': '타일 분류', onchange: e => editLT('타일 분류', w2 => { const t = (w2.userTiles || []).find(x => x.id === sel.id); if (t) { const v = e.target.value.trim(); if (v) t.category = v; else delete t.category; } }) });
+          const alphaIn = h('input', { type: 'number', min: 0, max: 1, step: 0.05, value: sel.alpha ?? 1, 'aria-label': '불투명도 (0~1)', title: '게임에서 이 타일의 불투명도 (0~1, 기본 1)',
+            onchange: e => { const v = Math.max(0, Math.min(1, +e.target.value)); editLT('타일 불투명도', w2 => { const t = (w2.userTiles || []).find(x => x.id === sel.id); if (t) { if (!Number.isFinite(v) || v >= 1) delete t.alpha; else t.alpha = Math.round(v * 100) / 100; } }); } });
+          const idx = L.all ? -1 : L.tiles.indexOf(sel);
+          selBox = h('div', { class: 'lt-sel' },
+            h('div', { class: 'lt-sel-head' }, h('b', {}, sel.name || sel.id), h('span', { class: 'hint' }, ` ${sel.image ? `${sel.image.split('/').pop()} (${sel.x || 0}, ${sel.y || 0}) · ${Math.max(1, sel.size || 16)}px` : '그림 없음 (지형 그림)'} · 이 맵 ${u}칸`)),
+            h('datalist', { id: 'lt-cats' }, ...LT.categories(UT()).map(c => h('option', { value: c }))),
+            h('div', { class: 'lt-sel-fields' },
+              h('label', {}, h('span', { class: 'fl' }, '이름'), nameIn), h('label', {}, h('span', { class: 'fl' }, '분류'), catIn), h('label', {}, h('span', { class: 'fl' }, '불투명도'), alphaIn)),
+            issues.length ? h('div', { class: 'lt-bad', role: 'alert' }, ...issues.map(m => h('div', {}, '⚠ ' + m))) : null,
+            h('div', { class: 'pal-row' },
+              h('button', { class: 'ib', title: '목록에서 앞으로', 'aria-label': '앞으로', disabled: idx <= 0 && !L.all, onclick: () => editLT('레이어 타일 순서', w2 => { LT.move(w2, lid, sel.id, -1); return sel.id; }) }, '◀'),
+              h('button', { class: 'ib', title: '목록에서 뒤로', 'aria-label': '뒤로', disabled: !L.all && (idx < 0 || idx >= L.tiles.length - 1), onclick: () => editLT('레이어 타일 순서', w2 => { LT.move(w2, lid, sel.id, 1); return sel.id; }) }, '▶'),
+              h('button', { class: 'btn xs', title: '같은 설정으로 새 타일 (원본 바로 뒤)', onclick: async () => { if (!(await PDM.ui.confirm(`「${sel.name || sel.id}」을 복제할까요?`))) return; editLT('레이어 타일 복제', w2 => (LT.duplicate(w2, lid, sel.id) || {}).id); } }, '복제'),
+              h('button', { class: 'btn xs', title: '그림 파일을 다시 읽어 썸네일 · 맵을 새로 그림 (밖에서 그림을 고쳤을 때)', onclick: () => { PDM.assets.invalidate && PDM.assets.invalidate(sel.image); ltDims.delete(sel.image); utImgs.delete(sel.image); drawPalette(); paint(); } }, '↻ 그림'),
+              h('button', { class: 'btn xs', title: '그림 · 칸 · 효과 · 살펴보기 이름 등 자세한 설정 (맵 그림 화면)', onclick: () => PDM.tabs.open('mapart') }, '자세히…'),
+              h('button', { class: 'btn xs danger', title: '삭제 (놓인 칸이 있으면 먼저 알려 줌)', onclick: () => deleteLayerTile(sel.id) }, '삭제')));
+        }
+        const missingHere = ((tilesL || {})[lid] || []).filter(v => v && !utDef(v)).length;
+        return [
+          h('div', { class: 'pal-target layer' }, `칠할 곳: ▦ 레이어 「${lname}」`,
+            h('button', { class: 'btn xs lt-to-terrain', title: '지형(바닥 · 벽 · 문 — 게임 판정)을 그리려면 — 레이어 목록의 "지형 · 전체"와 같음', onclick: () => { setTarget('terrain'); drawPalette(); drawTools(); paint(); } }, '⛰ 지형 편집으로')),
+          search, catSel,
+          rec.length && !q ? h('div', { class: 'fl' }, '최근') : null, rec.length && !q ? h('div', { class: 'pal-grid pal-recent' }, ...rec.map(t => tile(t, ' — 최근'))) : null,
+          h('div', { class: 'fl' }, `이 레이어의 타일 (${L.tiles.length})${L.all && L.tiles.length ? ' — 목록을 고치기 전까지는 모든 사용자 타일' : ''}`),
+          empty || (shown.length ? grid : h('div', { class: 'hint' }, '찾는 타일이 없습니다.')),
+          L.missing.length ? h('div', { class: 'lt-bad' }, `⚠ 목록에 있지만 정의가 없는 타일 ${L.missing.length}개 `, h('button', { class: 'btn xs', onclick: () => editLT('레이어 목록 정리', w2 => { const d = LT.ensure(w2, lid); d.tiles = d.tiles.filter(x => !L.missing.includes(x)); }) }, '목록 정리')) : null,
+          missingHere ? h('div', { class: 'lt-bad' }, `⚠ 이 레이어에 정의가 없는 타일이 놓인 칸 ${missingHere}개 — 맵에 ✕ 로 표시 · 게임에서 그려지지 않음`) : null,
+          addBar, selBox,
+          h('div', { class: 'pal-row' },
+            h('button', { class: 'btn xs' + (ui.tool === 'utile' && !ui.utile ? ' on' : ''), title: '지금 레이어에 칠한 사용자 타일만 지움 (지형 · 다른 레이어는 그대로)', onclick: () => pickUtile('') }, '레이어 지우개'),
+            h('button', { class: 'btn xs danger', title: '이 레이어에 칠한 칸 전부 (확인 후)', onclick: clearLayer }, '이 레이어 전체 지우기…'))];
+      }
       function drawPalette() {
         palette.innerHTML = '';
         if (drawable) {
@@ -492,7 +679,8 @@
           const search = h('input', { type: 'search', class: 'pal-search', placeholder: '타일 찾기 (이름 · 번호)', value: ui.palQ || '', 'aria-label': '타일 찾기',
             oninput: e => { ui.palQ = e.target.value; const pos = e.target.selectionStart; drawPalette(); const n = palette.querySelector('.pal-search'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
           const what = onLayer() ? (ui.utile ? `▦ ${(utDef(ui.utile) || {}).name || ui.utile}` : '▦ 지우개 (사용자 타일)') : (ui.terrain === -1 ? '빈 칸' : PDM.terrainName(PDM.TERRAIN_BY_ID[ui.terrain], up));
-          palette.append(pgroup('tiles', '그릴 것', what,
+          if (onLayer()) palette.append(pgroup('tiles', '그릴 것', what, ...layerTilesBlock(lay)));   // 8차: 레이어 편집 중 = 그 레이어의 타일 목록 (지형 타일을 골라 대상이 바뀌는 일 없음)
+          else palette.append(pgroup('tiles', '그릴 것', what,
             h('div', { class: 'pal-target' + (onLayer() ? ' layer' : '') }, onLayer() ? `칠할 곳: ▦ 레이어 「${lay ? lay.name : ui.tileLayer}」` : '칠할 곳: ⛰ 지형 (게임 판정)'),
             search,
             rec.length && !q ? h('div', { class: 'fl' }, '최근') : null, rec.length && !q ? rg : null,
@@ -795,13 +983,14 @@
         g.save(); if (l.visible === false) g.globalAlpha = .35;
         if (ui.dimOthers && onLayer() && l.id !== ui.tileLayer) g.globalAlpha *= .3;   // 다른 레이어 흐리게 (편집기만)
         for (let i = 0; i < W * H; i++) {
-          const t = utDef(arr[i]); if (!t) continue;
+          const t = utDef(arr[i]);
+          if (!t) { if (arr[i]) { const x = (i % W) * s, y = Math.floor(i / W) * s; g.strokeStyle = '#ff5a6a'; g.lineWidth = Math.max(1, s / 10); g.beginPath(); g.moveTo(x + s * .2, y + s * .2); g.lineTo(x + s * .8, y + s * .8); g.moveTo(x + s * .8, y + s * .2); g.lineTo(x + s * .2, y + s * .8); g.stroke(); } continue; }   // 8차: 정의가 없는 타일 = ✕ (게임에서 안 그려짐)
           if (!t.image) { if (t.fx || t.gameFx) PDM.drawUserTile(g, t, (i % W) * s, Math.floor(i / W) * s, s, tilesImg).catch(() => { }); continue; }   // 그림 없는 효과 타일: 지형 위에 ✦ (지형은 이미 그림)
           const img = utImgs.get(t.image);
           if (img === undefined) { utImgs.set(t.image, null); PDM.assets.load(t.image).then(im => { utImgs.set(t.image, im || false); if (im) paint(); }); continue; }
           if (!img) continue;
           if (t.flow) { const cx = i % W, cy = Math.floor(i / W), sx = (cx * 16) % img.width, sy = (cy * 16) % img.height; g.drawImage(img, sx, sy, Math.min(16, img.width - sx), Math.min(16, img.height - sy), cx * s, cy * s, s, s); }   // 흐르는 그림: 게임처럼 이어 붙임 (멈춘 모습)
-          else { const z = Math.max(1, t.size || 16); g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, (i % W) * s, Math.floor(i / W) * s, s, s); }
+          else { const z = Math.max(1, t.size || 16), ga = g.globalAlpha; if (typeof t.alpha === 'number' && t.alpha < 1) g.globalAlpha = ga * Math.max(0, t.alpha); g.drawImage(img, (t.x || 0) * z, (t.y || 0) * z, z, z, (i % W) * s, Math.floor(i / W) * s, s, s); g.globalAlpha = ga; }   // 8차: 타일 불투명도 (런타임 MakerUserTiles.render 와 같음)
           if (t.fx || t.gameFx) { g.font = `bold ${Math.max(7, s * .45)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#ffe27a'; g.fillText('✦', (i % W) * s + s - 1, Math.floor(i / W) * s); }
           if (l.solid && l.id === ui.tileLayer && ui.tool === 'utile') { g.strokeStyle = 'rgba(255,90,90,.75)'; g.lineWidth = 1; g.strokeRect((i % W) * s + 1.5, Math.floor(i / W) * s + 1.5, s - 3, s - 3); }   // 막는 레이어: 칠한 칸 빨간 테두리
         }

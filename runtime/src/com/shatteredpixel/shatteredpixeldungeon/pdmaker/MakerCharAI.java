@@ -7,6 +7,7 @@
  *             regen (지속 회복: 회복량), regenEvery (몇 턴마다, 기본 1), regenDelay (마지막으로 맞은 뒤 몇 턴 지나야 회복, 기본 0) }
  *   연결 줄: Mob.act 의 super.act() 바로 뒤 (act) · Char.damage 의 "if (HP < 0) HP = 0;" 바로 앞 (afterDamage) · Mob.die 맨 앞 (preventDeath)
  *            MakerNPC.act 는 직접 부름
+ *   전투 프로필 (8차): combat 이 있으면 MakerCombat 이 먼저 (편집기와 같은 규칙 MakerAIModel) — 없거나 꺼졌거나 오류면 아래 원래 방식 그대로
  *   코드 방식: GenCharAI.act(charId, self, ai) — true = 이번 턴을 씀(ai 의 도우미가 spend 함), null · false = 원래 AI 로
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
@@ -48,13 +49,13 @@ public class MakerCharAI {
 	public static void tag(Mob m, String charId) { if (m != null && charId != null && !(m instanceof MakerMob) && !(m instanceof MakerNPC)) tags.put(m, charId); }
 	static String tagOf(Mob m) { return tags.get(m); }
 	/** Mob.storeInBundle · restoreFromBundle 연결 줄 */
-	public static void store(Mob m, com.watabou.utils.Bundle b) { String t = tags.get(m); if (t != null) b.put("pdm_charTag", t); }
-	public static void restore(Mob m, com.watabou.utils.Bundle b) { if (b.contains("pdm_charTag")) { tags.put(m, b.getString("pdm_charTag")); onCreate(m); } }
+	public static void store(Mob m, com.watabou.utils.Bundle b) { String t = tags.get(m); if (t != null) b.put("pdm_charTag", t); MakerCombat.store(m, b); }
+	public static void restore(Mob m, com.watabou.utils.Bundle b) { if (b.contains("pdm_charTag")) { tags.put(m, b.getString("pdm_charTag")); onCreate(m); } MakerCombat.restore(m, b); }
 	static JsonValue data(Char c) { String id = charId(c); return id == null ? null : MakerRuntime.character(id); }
 	static JsonValue part(JsonValue d, String k) { return d == null ? null : d.get(k); }
 
 	/** 같은 캐릭터 데이터가 바뀌어도 (게임을 새로 켜면) 다시 찾도록 */
-	public static void reset() { byClass.clear(); }
+	public static void reset() { byClass.clear(); MakerCombat.reset(); }
 
 	// ------------------------------------------------------------ 상태 (몬스터마다 — 저장하지 않음: 회복 대기 · 받은 피해)
 
@@ -74,6 +75,11 @@ public class MakerCharAI {
 			JsonValue ai = part(d, "ai");
 			String mode = ai == null ? "" : ai.getString("mode", "");
 			if (self.paralysed > 0) return null;
+			if (d.get("combat") != null) {   // 8차: 전투 프로필 (MakerCombat — 없거나 꺼졌거나 오류면 null → 아래 원래 방식)
+				if (mode.equals("fixed")) hold(self);
+				Boolean r = MakerCombat.act(self, charId(self), d);
+				if (r != null) return r;
+			}
 			if (mode.equals("fixed")) {
 				hold(self);
 				if (ai.getBoolean("fixedAttack", false) && !(self instanceof MakerNPC)) return null;   // 원래 AI — 걷지 못하니 옆에 오면 공격만
@@ -135,6 +141,7 @@ public class MakerCharAI {
 			if (!(c instanceof Mob) || !MakerRuntime.isActive()) return;
 			JsonValue d = data(c), s = part(d, "stats"), ai = part(d, "ai");
 			if (ai != null && "fixed".equals(ai.getString("mode", ""))) hold(c);   // 아직 차례가 오지 않았어도 맞자마자 밀려나지 않게
+			if (dmg > 0 && d != null && d.get("combat") != null) MakerCombat.onHit(c);   // 8차: 전투 프로필의 사건 hit
 			if (s == null) return;
 			St t = st(c);
 			if (dmg > 0) { t.sinceHit = 0; t.total += dmg; t.hits++; t.last = dmg; }
@@ -145,8 +152,8 @@ public class MakerCharAI {
 	public static boolean preventDeath(Mob m) {
 		try {
 			if (!MakerRuntime.isActive()) return false;
-			JsonValue s = part(data(m), "stats");
-			if (s == null || !s.getBoolean("infiniteHp", false)) return false;
+			JsonValue dd = data(m), s = part(dd, "stats");
+			if (s == null || !s.getBoolean("infiniteHp", false)) { if (dd != null && dd.get("combat") != null) MakerCombat.onDeath(m); return false; }   // 8차: 쓰러질 때 행동
 			m.HP = m.HT;
 			return true;
 		} catch (Throwable t) { return false; }
