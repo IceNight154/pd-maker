@@ -861,7 +861,7 @@ test('타이틀 공통 규칙: 편집기 PDM.titleModel = 런타임 MakerTitleMo
   let javac = true; try { execFileSync('javac', ['-version'], { stdio: 'ignore' }); } catch (_) { javac = false; }
   if (!javac) return 'javac 가 없어 자바 쪽 비교는 건너뜀 (편집기 쪽 계산만 함) — JDK 를 설치하면 비교함';
   const out = tmp();
-  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(__dirname, 'TitleModelCheck.java')], { stdio: 'pipe' });
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(__dirname, 'TitleModelCheck.java')], { stdio: 'pipe' });
   const res = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'TitleModelCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
   eq(res.length, cases.length);
   cases.forEach((c, i) => near(J(js[i]), res[i], `#${i} ${c.fn} ${JSON.stringify(c).slice(0, 160)}`));
@@ -975,6 +975,109 @@ test('사용자 타일 불투명도: 런타임 MakerUserTiles.render 가 alpha(�
   assert.ok(/Math\.max\(0f, Math\.min\(1f, a\)\)/.test(src), '0~1 로 자름');
   assert.ok(/\+ "\|" \+ rd\[2\] \+/.test(src), '불투명도가 다르면 다른 타일맵 묶음');
   assert.ok(/t\.alpha < 1\) g\.globalAlpha = ga \* Math\.max\(0, t\.alpha\)/.test(read(path.join(ROOT, 'editor/renderer/js/editors/map.js'))), '편집기 맵 그리기');
+});
+
+// ------------------------------------------------------------ 8차: 캐릭터 AI · 공격 프로필 (PDM.aiModel ↔ 런타임 MakerAIModel)
+/** 시험용 프로필: 체력이 낮으면 도망 · 멀면 원거리(재사용 3) · 붙으면 베기(준비 1 · 회복 1 · 넉백) · 맞으면 반격 · 확률 · 가중치 · 이어지는 콤보 */
+const AI_PROFILE = {
+  version: 1, enabled: true, detect: 8,
+  attacks: [
+    { id: 'slash', name: '베기', type: 'melee', range: 1, windup: 1, recovery: 1, mult: 1.2, flat: 1, knockback: 1, stun: 1 },
+    { id: 'bolt', name: '화살', type: 'ranged', range: 5, mult: 0.8, cooldown: 3, status: 'poison', statusTurns: 4 },
+    { id: 'quake', name: '땅울림', type: 'area', range: 2, radius: 2, mult: 0.5, cooldown: 6, hpCost: 3 },
+    { id: 'combo2', name: '연속 베기', type: 'melee', range: 1, hits: 2, mult: 0.7 }],
+  behaviors: [
+    { id: 'flee', name: '도망', priority: 100, when: { op: 'and', items: [{ k: 'hp', cmp: '<=', v: 30 }, { k: 'dist', cmp: '<=', v: 3 }] }, action: 'flee', cooldown: 2 },
+    { id: 'counter', name: '반격', priority: 60, on: 'hit', action: 'attack', attack: 'slash', next: 'combo' },
+    { id: 'combo', name: '이어 베기', priority: -5, action: 'attack', attack: 'combo2', when: { k: 'dist', cmp: '<=', v: 1 } },
+    { id: 'shoot', name: '쏘기', priority: 50, when: { op: 'and', items: [{ k: 'dist', cmp: '>', v: 1 }, { k: 'visible' }, { k: 'ready', v: 'bolt' }] }, action: 'attack', attack: 'bolt', chance: 70 },
+    { id: 'quake', name: '땅울림', priority: 50, weight: 2, when: { op: 'or', items: [{ k: 'enemies', cmp: '>=', v: 2 }, { k: 'chance', v: 25 }] }, action: 'attack', attack: 'quake' },
+    { id: 'melee', name: '베기', priority: 40, action: 'attack', attack: 'slash', fail: 'approach' },
+    { id: 'approach', name: '다가가기', priority: 10, when: { k: 'hasTarget' }, action: 'approach' },
+    { id: 'heal', name: '회복', priority: 20, when: { op: 'and', not: false, items: [{ k: 'hp', cmp: '<', v: 50 }, { k: 'targetHp', cmp: '>', v: 50, not: true }] }, action: 'heal', amount: 4, target: 'self', cooldown: 10 },
+    { id: 'off', name: '꺼진 행동', enabled: false, priority: 999, action: 'wait' },
+    { id: 'boom', name: '쓰러질 때 폭발', on: 'death', action: 'attack', attack: 'quake' }]
+};
+function aiCases() {
+  let seed = 12345; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const cases = [];
+  const T = () => ({ hp: Math.round(rnd() * 20), ht: 20, dist: 1 + Math.floor(rnd() * 7), visible: rnd() > .2, line: rnd() > .25, st: rnd() > .7 ? ['poison'] : [] });
+  for (let i = 0; i < 160; i++) {
+    const sit = { turn: Math.floor(rnd() * 30), self: { hp: Math.round(rnd() * 20), ht: 20, st: rnd() > .8 ? ['slow'] : [] },
+      targets: { enemy: rnd() > .15 ? T() : null, hero: T(), weakestAlly: rnd() > .5 ? T() : null }, allies: Math.floor(rnd() * 3), enemies: Math.floor(rnd() * 4),
+      ev: { hit: rnd() > .7, attacked: rnd() > .8, targetLost: rnd() > .9 }, cd: rnd() > .5 ? { 'a:bolt': Math.floor(rnd() * 30), 'b:flee': Math.floor(rnd() * 30) } : {},
+      next: rnd() > .8 ? ['combo', 'approach', 'nope', 'off'][Math.floor(rnd() * 4)] : '', rolls: [rnd(), rnd(), rnd(), rnd(), rnd()] };
+    cases.push({ fn: 'decide', profile: AI_PROFILE, sit });
+    cases.push({ fn: 'after', profile: AI_PROFILE, sit, id: ['melee', 'shoot', 'counter', 'flee', 'quake', 'x'][i % 6], ok: i % 3 !== 0 });
+  }
+  for (const id of ['melee', 'shoot', 'flee', 'combo', 'none']) cases.push({ fn: 'turns', profile: Object.assign({}, AI_PROFILE, { behaviors: AI_PROFILE.behaviors.map(b => b.id === 'melee' ? Object.assign({}, b, { delay: 0.5 }) : b) }), id });
+  // 손상된 · 이상한 값: 정리 · 고르기 · 검사가 같은 결과 (멈추지 않음)
+  const broken = [null, 5, 'x', [], {}, { behaviors: 'x' }, { enabled: false, behaviors: [{ id: 'a', action: 'wait' }] },
+    { behaviors: [null, 7, { id: 'a', priority: '5', chance: '50', action: 'attack', attack: 'nope' }, { id: 'a', action: 'fly', when: { k: 'mana', cmp: '~' } }], attacks: [{ id: '', windup: -1, type: 'laser', status: 'curse', crit: 300 }] },
+    { behaviors: [{ id: 'p', action: 'wait', next: 'q' }, { id: 'q', action: 'wait', next: 'p' }, { id: 's', action: 'wait', next: 's' }, { id: 'c', action: 'wait', next: 'd', cooldown: 2 }, { id: 'd', action: 'wait', next: 'c' }] },
+    { version: 3, behaviors: [{ id: 'x', when: { op: 'and', items: [] }, action: 'say', say: 1 }, { id: 'y', on: 'death', action: 'approach', when: { k: 'event', v: 'boom' } }, { id: 'z', action: 'attack', target: 'self', attack: 'k', when: { k: 'ready', v: 'nope' } }], attacks: [{ id: 'k', range: '3', hits: 99, mult: 'abc' }] },
+    { behaviors: [{ id: 'w1', action: 'wait', weight: 0 }, { id: 'w2', action: 'wait', weight: 0 }] },
+    { behaviors: [{ id: 'w1', action: 'wait', weight: 1 }, { id: 'w2', action: 'wander', weight: 3 }, { id: 'w3', action: 'say', priority: -1 }] }];
+  broken.forEach((raw, i) => {
+    cases.push({ fn: 'validate', raw });
+    for (const r of [0.01, 0.4, 0.99]) cases.push({ fn: 'decide', profile: raw, sit: i % 2 ? { turn: 3, self: { hp: 5, ht: 10 }, targets: { enemy: { hp: 3, ht: 9, dist: 2 } }, rolls: [r] } : { rolls: [r], ev: { hit: 'yes' }, cd: { 'b:a': 'x' } } });
+  });
+  cases.push({ fn: 'validate', raw: AI_PROFILE });
+  return cases;
+}
+test('AI 프로필 규칙: 편집기 PDM.aiModel = 런타임 MakerAIModel (javac 로 실제 실행 — 고르기 · 이유 · 난수 · 재사용 대기 · 이어지는 행동 · 턴 · 검사 · 손상된 값)', async () => {
+  const { execFileSync } = require('child_process');
+  const ctx = env.load(), M = ctx.PDM.aiModel, cases = aiCases();
+  const js = cases.map(c => {
+    if (c.fn === 'decide') { const r = M.decide(c.profile, c.sit); return { id: r.id, action: r.action, attack: r.attack, target: r.target, reason: r.reason, trace: r.trace.map(t => [t.id, t.why]), rolls: r.rolls }; }
+    if (c.fn === 'after') { const r = M.after(c.profile, c.sit, c.id, c.ok); return { cd: Object.fromEntries(Object.entries(r.cd).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)), next: r.next }; }
+    if (c.fn === 'turns') return M.turns(c.profile, c.id);
+    return M.validate(c.raw).map(i => [i.level, i.code, i.path]);
+  });
+  const out = tmp();
+  execFileSync('javac', ['-nowarn', '-encoding', 'UTF-8', '-d', out, path.join(PDMK, 'MakerTitleModel.java'), path.join(PDMK, 'MakerAIModel.java'), path.join(__dirname, 'TitleModelCheck.java'), path.join(__dirname, 'AIModelCheck.java')], { stdio: 'pipe' });
+  const java = JSON.parse(execFileSync('java', ['-Dfile.encoding=UTF-8', '-cp', out, 'AIModelCheck'], { input: Buffer.from(JSON.stringify(cases), 'utf8'), maxBuffer: 64 << 20, stdio: ['pipe', 'pipe', 'pipe'] }).toString('utf8'));
+  let bad = 0; const first = [];
+  cases.forEach((c, i) => { try { eq(java[i], js[i]); } catch (e) { bad++; if (first.length < 3) first.push(`#${i} ${c.fn}: 편집기 ${JSON.stringify(js[i]).slice(0, 300)}\n      런타임 ${JSON.stringify(java[i]).slice(0, 300)}`); } });
+  assert.strictEqual(bad, 0, `${bad}/${cases.length} 다름\n    ` + first.join('\n    '));
+  const dec = js.filter((r, i) => cases[i].fn === 'decide' && r.id), by = {}; dec.forEach(r => { by[r.id] = (by[r.id] || 0) + 1; });
+  const reasons = {}; js.filter((r, i) => cases[i].fn === 'decide').forEach(r => { reasons[r.reason] = (reasons[r.reason] || 0) + 1; });
+  assert.ok(Object.keys(by).length >= 6, '여러 행동이 골라져야 ' + JSON.stringify(by));
+  console.log(`    ${cases.length}개 같음 · 고른 행동 ${JSON.stringify(by)} · 이유 ${JSON.stringify(reasons)}`);
+});
+test('AI 프로필 규칙: 우선순위 · 조건(AND/OR/NOT) · 사거리 · 재사용 대기 · 확률 · 이어지는 행동 · 쓰러질 때만 · 원래 AI 로 돌아감', async () => {
+  const ctx = env.load(), M = ctx.PDM.aiModel, P = AI_PROFILE;
+  const sit = (o) => Object.assign({ turn: 10, self: { hp: 20, ht: 20 }, targets: { enemy: { hp: 20, ht: 20, dist: 1, visible: true, line: true } }, rolls: [0.5] }, o);
+  eq(M.decide(P, sit()).id, 'melee', '붙어 있으면 베기 (쏘기 · 땅울림은 조건 불만족)');
+  eq(M.decide(P, sit({ self: { hp: 5, ht: 20 } })).id, 'flee', '체력 25% · 거리 1 → 도망 (가장 높은 우선순위)');
+  eq(M.decide(P, sit({ self: { hp: 5, ht: 20 }, cd: { 'b:flee': 12 } })).id, 'melee', '도망 재사용 대기 중');
+  const far = sit({ targets: { enemy: { hp: 20, ht: 20, dist: 4, visible: true, line: true } } });
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.9, 0.5] })).id, 'approach', '쏘기 확률 70% 에서 떨어짐(0.9) → 땅울림 조건 확률(0.5 ≥ 25%) 불만족 → 베기 사거리 밖 → 다가가기');
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.1, 0.1] })).id, 'shoot', '쏘기 확률 통과(0.1) — 땅울림은 조건(0.1 < 25%)은 맞지만 사거리 2 밖');
+  eq(M.decide(P, Object.assign({}, far, { rolls: [0.1, 0.1] })).trace.find(t => t.id === 'quake').why, 'range');
+  const r = M.decide(P, Object.assign({}, far, { rolls: [0.9, 0.5] }));
+  eq(r.trace.find(t => t.id === 'melee').why, 'range'); eq(r.trace.find(t => t.id === 'off').why, 'disabled'); eq(r.trace.find(t => t.id === 'boom').why, 'lower'); eq(M.decide({ behaviors: [{ id: 'boom', on: 'death', action: 'say' }] }, sit()).trace[0].why, 'death', '쓰러질 때 행동은 평소에 고르지 않음'); eq(r.trace.find(t => t.id === 'counter').why, 'event');
+  eq(M.decide(P, Object.assign({}, far, { targets: { enemy: { hp: 20, ht: 20, dist: 4, visible: true, line: false } }, rolls: [0.1, 0.1] })).trace.find(t => t.id === 'shoot').why, 'line', '사이가 막히면 투사체 못 씀');
+  eq(M.decide(P, sit({ ev: { hit: true } })).id, 'counter', '맞으면 반격');
+  const a = M.after(P, sit(), 'counter', true); eq(a.next, 'combo');
+  eq(M.decide(P, sit({ next: 'combo' })).reason, 'chain', '이어지는 행동은 우선순위가 낮아도 먼저');
+  eq(M.after(P, sit(), 'melee', false).next, 'approach', '실패하면 fail 행동');
+  eq(M.after(P, sit({ turn: 10 }), 'shoot', true).cd, { 'a:bolt': 13 }, '공격 재사용 대기 = 지금 턴 + 3');
+  eq(M.decide(P, sit({ targets: {} })).trace.find(t => t.id === 'melee').why, 'noTarget');
+  eq(M.decide(Object.assign({}, P, { enabled: false }), sit()).id, null, '꺼진 프로필 → 원래 AI');
+  eq(M.decide({ behaviors: [] }, sit()).reason, 'empty');
+  eq(M.turns(P, 'melee'), 3, '베기 = 준비 1 + 공격 1 + 회복 1');
+  eq(M.validate(P).filter(i => i.level === 'error'), [], '시험 프로필은 오류 없음');
+  const v = M.validate({ behaviors: [{ id: 's', action: 'wait', next: 's' }, { id: 'a', action: 'attack', attack: 'zz' }], attacks: [{ id: 'k', windup: -2 }] }).map(i => i.code);
+  eq(v.sort(), ['attackRef', 'negative', 'selfNext'].sort());
+});
+test('AI 프로필 런타임 연결: MakerCharAI 가 combat(검사 오류 없을 때만)을 원래 AI 보다 먼저 · 오류면 원래 AI + 경고 · 디버그 기록', () => {
+  const src = read(path.join(PDMK, 'MakerCombat.java')), ai = read(path.join(PDMK, 'MakerCharAI.java'));
+  assert.ok(/MakerAIModel\.validate\(/.test(src) && /MakerAIModel\.hasErrors\(/.test(src), '검사 후 오류면 쓰지 않음');
+  assert.ok(/MakerAIModel\.decide\(/.test(src) && /MakerAIModel\.after\(/.test(src), '같은 규칙으로 고르고 재사용 대기 · 이어지는 행동');
+  assert.ok(/static Boolean act\(Mob self, String charId, JsonValue d\)/.test(src), '전투 프로필 실행');
+  assert.ok(/d\.get\("combat"\) != null\) \{[^\n]*\n[^\n]*\n\s*Boolean r = MakerCombat\.act/.test(ai) && ai.indexOf('MakerCombat.act') < ai.indexOf('mode.equals("fixed")) {\n\t\t\t\thold(self);\n\t\t\t\tif (ai.getBoolean'), '원래 방식(고정 · 코드)보다 먼저');
+  assert.ok(/MakerCombat\.onHit\(c\)/.test(ai) && /MakerCombat\.onDeath\(m\)/.test(ai), '맞음 · 쓰러짐 연결');
 });
 
 // ------------------------------------------------------------ 실행

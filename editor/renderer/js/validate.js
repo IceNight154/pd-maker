@@ -228,6 +228,7 @@ PDM.validate = function () {
   // 캐릭터
   s.all('char').forEach(c => {
     const k = 'char:' + c.id, where = `캐릭터 ${c.name}`;
+    if (c.combat !== undefined && PDM.aiModel) PDM.aiModel.validate(c.combat).forEach(i => add(i.level, where + ' · AI · 전투', i.msg + (i.level === 'error' ? ' — 게임은 원래 AI 로 움직입니다' : ''), 'combat:' + c.id, { path: 'combat.' + i.path }));   // 8차
     if (!c.sprite || !c.sprite.sheet) add('warn', where, '스프라이트 시트가 없습니다 (게임에서 기본 모습으로 보임)', k);
     (c.heart && c.heart.traits || []).forEach(t => { if (!(heart.traits || []).some(x => x.key === t)) add('warn', where, `없는 성격 "${t}"`, k); });
     Object.entries(c.dialogue || {}).forEach(([tp, lines]) => (lines || []).forEach((l, i) => cond(l.when, `${where} › 대사 ${tp} ${i + 1}`, k)));

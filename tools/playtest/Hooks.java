@@ -587,6 +587,17 @@ public class Hooks {
 					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
 						if (p[1].equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m))) { System.out.println("[TEST] charclick " + p[1] + " at " + m.pos + " HP " + m.HP + "/" + m.HT + " state " + m.state.getClass().getSimpleName() + " hero " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos); com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.handleCell(m.pos); break; }
 					break; }
+				case "aistat": { // aistat,<캐릭터 id> — 8차 전투 프로필: 위치 · 체력 · 영웅과 거리 · 영웅 버프 · 마지막 결정 · 고른 횟수 · 재사용 대기
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
+						if (p[1].equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m)))
+							System.out.println("[TEST] aistat " + p[1] + " pos " + m.pos + " HP " + m.HP + "/" + m.HT + " dist " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, h.pos) + " heroHP " + h.HP + " heroPos " + h.pos + " heroBuffs " + h.buffs() + " state " + m.state.getClass().getSimpleName() + " | " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCombat.debug(m));
+					break; }
+				case "aisethp": { // aisethp,<캐릭터 id>,<체력>
+					for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs)
+						if (p[1].equals(com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m))) { m.HP = Integer.parseInt(p[2]); System.out.println("[TEST] aisethp " + p[1] + " " + m.HP + "/" + m.HT); }
+					break; }
+				case "herotank": { com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero h = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; h.HT = h.HP = 999; System.out.println("[TEST] herotank"); break; }
 				case "charstat": { for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob m : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.mobs) { String id = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.charId(m); if (id != null && !id.equals("moss_rat")) System.out.println("[TEST] charstat " + id + " pos " + m.pos + " HP " + m.HP + "/" + m.HT + " alive " + m.isAlive() + " heroDist " + com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.distance(m.pos, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos)); } break; }
 				case "waterfx": { // 테마 물 타일: 물 칸 수 · 효과 타일 수 · 첫 물 칸의 살펴보기 이름
 					com.shatteredpixel.shatteredpixeldungeon.levels.Level l = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
