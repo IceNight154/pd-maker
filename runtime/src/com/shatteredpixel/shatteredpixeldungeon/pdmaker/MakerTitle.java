@@ -194,7 +194,7 @@ public class MakerTitle {
 					btnHide = new com.shatteredpixel.shatteredpixeldungeon.ui.IconButton(Icons.get(Icons.valueOf("CHEVRON"))) {
 						@Override protected void onClick() { idleT = 0; uiHidden = true; }
 					};
-					btnHide.icon().originToCenter(); btnHide.icon().angle = 180f;
+					{ Image ic = btnHide.icon(); ic.origin.set(ic.width / 2f, ic.height / 2f); ic.angle = 180f; }
 					btnHide.setRect((w - 16) / 2f, h - 16, 16, 16);
 					add(btnHide);
 				} catch (Throwable ignored) { btnHide = null; }   // 이 아이콘이 없는 게임 버전
@@ -526,17 +526,28 @@ public class MakerTitle {
 				break;
 			case "support": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.SupporterScene.class); break;
 			case "rankings": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.RankingsScene.class); break;
-			case "journal": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.JournalScene.class); break;
+			case "journal": goScene("JournalScene"); break;
+			case "badges": goScene("BadgesScene"); break;   // 예전 판 · 파생작의 배지 화면 (모험 일지 대신)
 			case "news": ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.NewsScene.class); break;
 			case "changes": try { com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.class.getField("changesSelected").setInt(null, 0); } catch (Throwable ignored) { /* 이 칸이 없는 저장소 */ } ShatteredPixelDungeon.switchNoFade(com.shatteredpixel.shatteredpixeldungeon.scenes.ChangesScene.class); break;
 			case "settings": scene.add(new WndSettings()); break;
 			default: ShatteredPixelDungeon.switchScene(com.shatteredpixel.shatteredpixeldungeon.scenes.AboutScene.class);
 		}
 	}
+	/** 화면 이름으로 이동 (판 · 파생작마다 있는 화면이 다름 — 없으면 알리고 그대로) */
+	@SuppressWarnings("unchecked")
+	boolean goScene(String name) {
+		Class<?> c = com.watabou.utils.Reflection.forName("com.shatteredpixel.shatteredpixeldungeon.scenes." + name);
+		if (c == null || !PixelScene.class.isAssignableFrom(c)) { MakerRuntime.log("타이틀 동작: 이 게임에는 " + name + " 화면이 없습니다"); if (root != null) root.leaving = false; return false; }
+		ShatteredPixelDungeon.switchNoFade((Class<? extends PixelScene>) c);
+		return true;
+	}
+	/** 버튼 투명도 (StyledButton.alpha() 가 없는 판은 1) */
+	static float alphaOf(Object b) { Object v = MakerCompat.invoke(b, "alpha"); return v instanceof Float ? (Float) v : 1f; }
 	/** 저장된 게임이 있는가 (이어하기 버튼) */
 	static boolean hasSaves() { try { return GamesInProgress.checkAll().size() > 0; } catch (Throwable t) { return false; } }
 	/** 이 플랫폼에서 게임을 끌 수 있는가 — PC · Android 만 (iOS 는 앱이 스스로 끄면 안 됨, 웹은 끌 수 없음) */
-	static boolean canQuit() { return DeviceCompat.isDesktop() || DeviceCompat.isAndroid(); }
+	static boolean canQuit() { return DeviceCompat.isDesktop() || MakerCompat.isAndroid(); }
 
 	/** 정보 칸 값 (게임이 실제로 아는 것만 — 없으면 넣지 않음 = "값 없음" → 대체 문구) */
 	Map<String, String> info;
@@ -1241,7 +1252,7 @@ public class MakerTitle {
 	public static List<String> describe() {
 		List<String> out = new ArrayList<>();
 		if (current == null || current.root == null) return out;
-		for (Root.Btn b : current.root.btns) if (b.b.visible) out.add(b.b.text() + "@" + (int) b.b.left() + "," + (int) b.b.top() + " a" + String.format("%.2f", b.b.alpha()));
+		for (Root.Btn b : current.root.btns) if (b.b.visible) out.add(b.b.text() + "@" + (int) b.b.left() + "," + (int) b.b.top() + " a" + String.format("%.2f", alphaOf(b.b)));
 		out.add("revealed=" + current.root.revealed);
 		return out;
 	}
@@ -1276,7 +1287,7 @@ public class MakerTitle {
 			Root.Btn x = R.btns.get(i); TitleBtn t = x.b; MakerTitleModel.Style st = t.last;
 			if (i > 0) b.append(',');
 			b.append("{\"id\":").append(q(t.id)).append(",\"label\":").append(q(t.text())).append(",\"base\":").append(r4(new double[]{ x.x, x.y, x.bw, x.bh }))
-				.append(",\"r\":").append(r4(new double[]{ t.left(), t.top(), t.width(), t.height() })).append(",\"a\":").append(String.format(java.util.Locale.ROOT, "%.3f", t.alpha()))
+				.append(",\"r\":").append(r4(new double[]{ t.left(), t.top(), t.width(), t.height() })).append(",\"a\":").append(String.format(java.util.Locale.ROOT, "%.3f", alphaOf(t)))
 				.append(",\"vis\":").append(t.visible).append(",\"active\":").append(t.active).append(",\"hover\":").append(t.hover).append(",\"focus\":").append(t.focus).append(",\"pressed\":").append(t.pressed).append(",\"dis\":").append(t.disabled)
 				.append(",\"skin\":").append(q(st == null ? "" : st.skin)).append(",\"tc\":").append(q(st == null ? "" : st.textColor)).append(",\"bright\":").append(st == null ? 1 : st.bright).append("}");
 		}

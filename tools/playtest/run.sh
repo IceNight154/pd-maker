@@ -9,7 +9,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$1"; PROJ="$(cd "$2" && pwd)"; shift 2; JARS="${JARS:-/tmp/jars}"
 CP="$WORK/out:$WORK/hout:$WORK/src/core/src/main/assets:$WORK/src/desktop/src/main/assets:$(ls "$JARS"/*.jar "$JARS"/lw/*.jar | tr '\n' ':')"
 mkdir -p "$WORK/hout" "$WORK/home"
-javac -nowarn -encoding UTF-8 -d "$WORK/hout" -cp "$CP" "$HERE"/*.java 2>&1 | grep -v "^Note\|JAVA_TOOL" | sed "s/^/[HARNESS] /"
+# 11차: 검사 도구도 그 게임 저장소 구조에 맞춰 (게임 본체 이름 · 옮겨진 클래스 · //#if 블록) — 원본 tools/playtest 는 그대로
+rm -rf "$WORK/hsrc"; node "$HERE/../../editor/runtime-adapt.js" --dir "$WORK/src" "$HERE" "$WORK/hsrc" | sed "s/^/[HARNESS] /"
+LC_ALL=C.UTF-8 LANG=C.UTF-8 javac -J-Dsun.jnu.encoding=UTF-8 -Xmaxerrs 500 -nowarn -encoding UTF-8 -d "$WORK/hout" -cp "$CP" "$WORK/hsrc"/*.java 2>&1 | grep -v "^Note\|JAVA_TOOL" | sed "s/^/[HARNESS] /"
 rm -rf "$WORK/shots"; mkdir -p "$WORK/shots"
 cd "$WORK/home"
 LC_ALL=C.UTF-8 LANG=C.UTF-8 timeout ${TIMEOUT:-240} xvfb-run -a -s "-screen 0 ${XVFB_SCREEN:-1280x800x24}" java -Dsun.jnu.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Duser.home="$WORK/home" -Dpdmaker.project="$PROJ" -Dshots="$WORK/shots" ${TESTENV:+"-Dpdmaker.testenv=$TESTENV"} ${SYNC_RESIZE:+-Dpdmaker.testSyncResize=true} \

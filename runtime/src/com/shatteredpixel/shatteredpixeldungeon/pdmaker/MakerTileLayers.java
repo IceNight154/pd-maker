@@ -96,9 +96,9 @@ public class MakerTileLayers {
 		if (cell < 0 || cell >= l.length()) return;
 		int t = l.map[cell];
 		if ((Terrain.flags[t] & Terrain.PASSABLE) == 0 || (Terrain.flags[t] & Terrain.SOLID) != 0) return;
-		l.map[cell] = t == Terrain.WATER && DECO_WTR >= 0 ? DECO_WTR : Terrain.CUSTOM_DECO;
+		l.map[cell] = t == Terrain.WATER && DECO_WTR >= 0 ? DECO_WTR : MakerCompat.T_CUSTOM_DECO;
 	}
-	/** Terrain.CUSTOM_DECO_WTR (판마다 없을 수 있음 → -1) */
+	/** MakerCompat.T_CUSTOM_DECO_WTR (판마다 없을 수 있음 → -1) */
 	static final int DECO_WTR;
 	static { int v = -1; try { v = Terrain.class.getField("CUSTOM_DECO_WTR").getInt(null); } catch (Throwable ignored) { } DECO_WTR = v; }
 }

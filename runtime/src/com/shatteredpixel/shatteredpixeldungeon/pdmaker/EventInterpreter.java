@@ -559,7 +559,7 @@ public class EventInterpreter {
 				return !twait;
 			}
 			case "filter": { String m = c.getString("mode", "set"); MakerFilter.set(m.equals("map") ? "" : m.equals("off") ? "-" : c.getString("id", "")); return true; }   // 화면 필터: id · "" = 맵 설정대로 · "-" = 끄기
-			case "shake": PixelScene.shake(c.getInt("power", 3), c.getInt("time", 5) / 10f); return true;
+			case "shake": if (MakerCompat.invoke(PixelScene.class, "shake", c.getInt("power", 3), c.getInt("time", 5) / 10f) == MakerCompat.NONE && com.watabou.noosa.Camera.main != null) com.watabou.noosa.Camera.main.shake(c.getInt("power", 3), c.getInt("time", 5) / 10f); return true;
 			case "flash": {
 				String hex = c.getString("color", "#ffffff").replace("#", "");
 				int col; try { col = Integer.parseInt(hex, 16); } catch (Exception e) { col = 0xFFFFFF; }
@@ -1023,7 +1023,7 @@ public class EventInterpreter {
 			Image icon = null;
 			JsonValue ch = MakerRuntime.character(l.speaker);
 			if (ch != null) icon = new MakerSprite(ch);
-			else if (l.speaker.equals("$hero") && Dungeon.hero != null) icon = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(Dungeon.hero);
+			else if (l.speaker.equals("$hero") && Dungeon.hero != null) icon = heroAvatar();
 			return new WndMakerText(icon, l.name, l.text, this::resume);
 		});
 	}
@@ -1067,5 +1067,11 @@ public class EventInterpreter {
 			if (r != null) r.run();   // 다음 명령의 창은 다음 프레임에 뜨므로 먼저 이어도 됨
 			super.hide();
 		}
+	}
+	/** 영웅 얼굴 (HeroSprite.avatar(Hero) — 예전 판은 avatar(직업, 갑옷 단계)) */
+	public static Image heroAvatar() {
+		Object v = MakerCompat.invoke(com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.class, "avatar", Dungeon.hero);
+		if (v == MakerCompat.NONE) v = MakerCompat.invoke(com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.class, "avatar", Dungeon.hero.heroClass, Dungeon.hero.tier());
+		return v instanceof Image ? (Image) v : null;
 	}
 }

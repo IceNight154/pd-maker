@@ -28,7 +28,11 @@ public class TemplateSpecialRoom extends SpecialRoom {
 	@Override public boolean canPlaceWater(Point p) { return false; }
 	@Override public boolean canPlaceGrass(Point p) { return false; }
 	@Override public boolean canPlaceTrap(Point p) { return false; }
+//#if method:levels.rooms.Room#canPlaceItem @ 특수 방 템플릿 "깨끗하게" 의 아이템 자리 제한
 	@Override public boolean canPlaceItem(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("keepClean", false)) && super.canPlaceItem(p, l); }
+//#else
+	//#| // (예전 판: 방마다 아이템 자리 판정이 없음)
+//#endif
 	@Override public boolean canPlaceCharacter(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("noMobs", t.getBoolean("keepClean", false))) && super.canPlaceCharacter(p, l); }
 
 	@Override

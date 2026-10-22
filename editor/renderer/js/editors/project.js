@@ -69,14 +69,29 @@ PDM.registerEditor({
         const cmp = h('div', { class: 'hint mt-2' });
         const refresh = () => pdm.runtimeStatus(repo).then(s => {
           const c = s.compat;
-          st.textContent = s.web ? '웹 모드에서는 확인할 수 없습니다' : c && !c.ok ? '✕ 이 게임 저장소에는 설치할 수 없습니다' : s.pkg ? `✓ 설치됨 — 연결 줄 ${s.hooks}/${s.total - ((c && c.missing.length) || 0)}` : '✕ 설치 안 됨 — 테스트 플레이 전에 설치하세요';
-          st.style.color = c && !c.ok ? 'var(--bad)' : s.pkg && s.hooks >= s.total - ((c && c.missing.length) || 0) ? 'var(--good)' : 'var(--warn)';
+          const ad = s.adapt, rs = s.state, cantMiss = ad && ad.missing && ad.missing.length;
+          const need = rs && rs.need != null ? rs.need : s.total - ((c && c.missing.length) || 0);
+          st.textContent = s.web ? '웹 모드에서는 확인할 수 없습니다' : c && !c.ok ? '✕ 이 게임 저장소에는 설치할 수 없습니다' : cantMiss ? `✕ 이 저장소에 없는 게임 클래스 ${ad.missing.length}개 — 설치하지 않습니다` : s.pkg ? (rs && !rs.upToDate ? `△ 설치됨 — 갱신 필요 (${rs.reason})` : `✓ 설치됨 — 연결 줄 ${s.hooks}/${need}`) : '✕ 설치 안 됨 — 테스트 플레이 전에 설치하세요 (▶ 테스트 플레이가 자동으로 설치)';
+          st.style.color = (c && !c.ok) || cantMiss ? 'var(--bad)' : s.pkg && (!rs || rs.upToDate) ? 'var(--good)' : 'var(--warn)';
           cmp.innerHTML = '';
           if (c) {
-            cmp.append(h('div', {}, `게임: ${c.game || '(이름 없음)'}${c.version ? ' ' + c.version : ''} · 패키지 ${c.pkg || '?'} — 지원: Shattered Pixel Dungeon 2.5 ~ 4.0 과 그 패키지를 그대로 쓰는 모드`));
+            cmp.append(h('div', {}, `게임: ${c.game || '(이름 없음)'}${c.version ? ' ' + c.version : ''} · 패키지 ${c.pkg || '?'} — Shattered Pixel Dungeon 계열 (판 · 파생작마다 다른 부분은 설치할 때 이 저장소 구조에 맞춤)`));
             c.problems.forEach(x => cmp.append(h('div', { class: 'c-bad' }, '✕ ' + x)));
             c.warnings.forEach(x => cmp.append(h('div', { class: 'c-warn' }, '⚠ ' + x)));
-            if (c.missing.length) cmp.append(h('details', {}, h('summary', {}, `위치를 찾지 못한 연결 줄 ${c.missing.length}개`), ...c.missing.map(x => h('div', {}, '· ' + x))));
+          }
+          // 11차: 이 저장소에 맞춘 것 (게임 본체 · 옮겨진 클래스 · 다른 방식으로 동작하는 기능 · 붙일 구조가 없는 기능)
+          if (ad && !ad.error) {
+            const off = (ad.features || []).filter(f => !f.on);
+            const pt = s.patches || [], na = pt.filter(x => x.state === 'na'), alt = pt.filter(x => x.state === 'alt'), miss = pt.filter(x => x.state === 'missing' || x.state === 'nofile');
+            const rows = [];
+            if (ad.mainGame && ad.mainGame !== 'ShatteredPixelDungeon') rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge info' }, '맞춤'), `게임 본체 클래스 ${ad.mainGame} — 런타임 사본의 이름을 이것으로`));
+            (ad.relocations || []).forEach(r => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge info' }, '맞춤'), `${r.from.split('.').slice(-2).join('.')} → ${r.to} (${r.note})`)));
+            off.forEach(f => rows.push(h('div', { class: 'ra-row', title: f.cond + '\n' + f.where.join('\n') }, h('span', { class: 'badge ' + (/^직업 능력/.test(f.label) ? 'warn' : 'info') }, /^직업 능력/.test(f.label) ? '안 됨' : '다른 방식'), f.label || f.cond)));
+            na.forEach(x => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge warn' }, '구조 없음'), `${x.name} (${x.file})`)));
+            if (alt.length) rows.push(h('div', { class: 'ra-note' }, `같은 기능을 이 저장소의 다른 자리에 넣는 연결 줄 ${alt.length}개 (예: 텐구의 가면 대신 숙련의 서 · MobSpawner 대신 MobRotation)`));
+            if (cantMiss) ad.missing.forEach(m => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge bad' }, '없음'), `${m.cls} (${m.uses.join(', ')})`)));
+            if (miss.length) rows.push(h('details', {}, h('summary', {}, `위치를 찾지 못한 연결 줄 ${miss.length}개 — 그 기능만 동작하지 않음`), ...miss.map(x => h('div', {}, '· ' + x.file + ' — ' + x.name))));
+            if (rows.length) cmp.append(h('details', { class: 'ra-grp mt-2', open: !!cantMiss }, h('summary', { class: 'pointer' }, h('b', {}, '이 게임 저장소에 맞춤'), ' ', h('span', { class: 'ra-note' }, `다른 방식 ${off.length} · 구조 없음 ${na.length} · 다른 자리 ${alt.length}` + (cantMiss ? ` · 없는 클래스 ${ad.missing.length}` : ''))), ...rows));
           }
         }).catch(e => { st.textContent = e.message; });
         refresh();

@@ -138,10 +138,24 @@ public class HeroSelect {
 				sc.add(b);
 				list.add(b);
 			}
+			defaultLayout(list);
 			return true;
 		} catch (Throwable t) { MakerRuntime.log("영웅 선택 화면 오류: " + t); return false; }
 	}
 
+	/** 기본 배치: 화면 아래 한 줄 — 새 판(SPD 2.x+)은 장면이 나중에 다시 배치하고, 예전 판 · 파생작은 직업 반복문 안에서 배치해서
+	 *  (그 반복문 대신 우리 버튼을 넣었으므로) 여기서 놓지 않으면 버튼이 0×0 으로 남음. 버튼 높이 · 최소 너비는 그 장면의 HeroBtn 상수 */
+	static void defaultLayout(ArrayList<StyledButton> list) {
+		if (list.isEmpty() || com.watabou.noosa.Camera.main == null) return;
+		Class<?> hb = com.watabou.utils.Reflection.forName("com.shatteredpixel.shatteredpixeldungeon.scenes.HeroSelectScene$HeroBtn");
+		Object hv = hb == null ? null : MakerCompat.staticValue(hb, "HEIGHT", null), wv = hb == null ? null : MakerCompat.staticValue(hb, "MIN_WIDTH", null);
+		int bh = hv instanceof Integer ? (Integer) hv : 26, minW = wv instanceof Integer ? (Integer) wv : 20;
+		float sw = com.watabou.noosa.Camera.main.width, sh = com.watabou.noosa.Camera.main.height;
+		int n = list.size();
+		float bw = Math.max(16, Math.min(minW + 15, (sw - 8) / n));
+		float x = (sw - bw * n) / 2f;
+		for (StyledButton b : list) { b.setRect(x, sh - bh + 3, bw, bh); x += bw; }
+	}
 	/** 영웅 편집기 "캐릭터 선택 화면"의 글자 (select.title · desc · info) — 비면 "" */
 	static String sel(JsonValue h, String k) {
 		JsonValue s = h.get("select");
@@ -154,7 +168,7 @@ public class HeroSelect {
 	}
 	static String desc(JsonValue h) {
 		if (!sel(h, "desc").trim().isEmpty()) return sel(h, "desc");
-		if (stockDesc(h)) return classOf(h).shortDesc();
+		if (stockDesc(h)) { Object d = MakerCompat.invoke(classOf(h), "shortDesc"); return d instanceof String ? (String) d : classOf(h).desc(); }   // 짧은 설명이 없는 판은 설명
 		String d = h.getString("desc", "").replace("\\n", "\n");
 		if (d.trim().isEmpty()) d = h.getString("title", "");
 		if (d.trim().isEmpty()) d = " ";          // 빈 글자는 바뀌지 않아 직업 설명이 남음
@@ -249,8 +263,10 @@ public class HeroSelect {
 		big = img;
 	}
 
+	/** 장면의 필드 (없는 판 · 파생작은 null — 예: 이름 · 설명 글이 없고 시작 버튼에 직업 이름을 쓰는 화면) */
 	static Object field(Object o, String n) throws Exception {
-		java.lang.reflect.Field f = HeroSelectScene.class.getDeclaredField(n);
+		java.lang.reflect.Field f;
+		try { f = HeroSelectScene.class.getDeclaredField(n); } catch (NoSuchFieldException e) { return null; }
 		f.setAccessible(true);
 		return f.get(o);
 	}
@@ -348,7 +364,7 @@ public class HeroSelect {
 
 	static void labels(Object sc, JsonValue h) throws Exception {
 		String name = name(h);
-		if (PixelScene.landscape()) {
+		if (PixelScene.landscape() && field(sc, "heroName") != null) {
 			RenderedTextBlock heroName = (RenderedTextBlock) field(sc, "heroName");
 			RenderedTextBlock heroDesc = (RenderedTextBlock) field(sc, "heroDesc");
 			Component info = (Component) field(sc, "infoButton");

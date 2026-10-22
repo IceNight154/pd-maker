@@ -17,7 +17,6 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.Button;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RedButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TalentButton;
-import com.shatteredpixel.shatteredpixeldungeon.ui.TalentIcon;
 import com.shatteredpixel.shatteredpixeldungeon.ui.TalentsPane;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndHero;
@@ -49,7 +48,11 @@ public class MakerTalentsPane extends TalentsPane {
 	final List<ColorBlock> seps = new ArrayList<>();
 
 	MakerTalentsPane() {
+//#if re:ui.TalentsPane#TalentsPane\s*\(\s*TalentButton\.Mode @ 특성 창 만들기 (예전 판 생성자로)
 		super(TalentButton.Mode.UPGRADE, new ArrayList<>());
+//#else
+		//#| super(true, new ArrayList<>());   // 예전 판: 올릴 수 있는지만 받음
+//#endif
 		Hero hero = Dungeon.hero;
 		if (MakerAbilities.anySubclass() || MakerAbilities.anyAbility()) {
 			StringBuilder sb = new StringBuilder();
@@ -59,7 +62,7 @@ public class MakerTalentsPane extends TalentsPane {
 				String ab = MakerAbilities.abilityId();
 				sb.append("직업 능력: ").append(ab.isEmpty() ? "아직 (왕의 왕관)" : "_" + MakerAbilities.abilityName(ab) + "_");
 				if (!ab.isEmpty() && hero.belongings.armor() instanceof com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor)
-					sb.append(" (갑옷 충전 ").append((int) ((com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor) hero.belongings.armor()).charge).append("%)");
+					sb.append(" (갑옷 충전 ").append(chargeOf(hero.belongings.armor())).append("%)");
 			}
 			pathText = PixelScene.renderTextBlock(sb.toString(), 6);
 			content.add(pathText);
@@ -278,7 +281,10 @@ public class MakerTalentsPane extends TalentsPane {
 				return im;
 			}
 		} catch (Throwable e) { MakerRuntime.warnOnce("특성 아이콘을 읽지 못했습니다: " + e); }
-		return new TalentIcon(Math.max(0, t.getInt("icon", 0)));
+		// talent_icons.png 의 16×16 칸 (원작 TalentIcon 과 같은 그림 — 예전 판에는 TalentIcon 클래스가 없음)
+		Image im = new Image(com.shatteredpixel.shatteredpixeldungeon.Assets.Interfaces.TALENT_ICONS);
+		im.frame(new com.watabou.noosa.TextureFilm(im.texture, 16, 16).get(Math.max(0, t.getInt("icon", 0))));
+		return im;
 	}
 
 	/** 원작 TalentButton 과 같은 그림 (talent_button.png + talent_icons.png) */
@@ -341,4 +347,6 @@ public class MakerTalentsPane extends TalentsPane {
 			resize(w, (int) y);
 		}
 	}
+	/** 직업 갑옷 충전 % (필드가 protected 인 판도) */
+	static int chargeOf(Object armor) { Object v = MakerCompat.getField(armor, "charge"); return v instanceof Number ? ((Number) v).intValue() : 0; }
 }

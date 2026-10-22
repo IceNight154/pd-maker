@@ -252,14 +252,26 @@ public class MakerRuntime {
 		} catch (Throwable t) { log("층 클래스를 만들지 못했습니다: " + name + " — " + t); return null; }
 	}
 
+	/** 게임의 몬스터 재생성 액터 (SPD 2.x+ = actors.mobs.MobSpawner, 예전 판 = levels.Level$Respawner) */
+	public static boolean isMobSpawner(Object a) {
+		String n = a == null ? "" : a.getClass().getName();
+		return n.equals("com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner") || n.equals("com.shatteredpixel.shatteredpixeldungeon.levels.Level$Respawner");
+	}
+	static Level bossOr(String cls, String theme) {
+		Level l = gameLevel(cls);
+		if (l != null) return l;
+		log("이 게임에는 보스 층 클래스 " + cls + " 가 없습니다 — " + theme + " 테마의 일반 층으로 만듦 (맵 그래프의 \"게임 원래 맵\" 노드로 이 게임의 보스 층을 고를 수 있음)");
+		return themeLevel(theme, false);
+	}
 	/** 테마 이름 → SPD 레벨 생성기 */
 	static Level themeLevel(String theme, boolean boss) {
 		switch (theme) {
-			case "SEWER":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.SewerBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel();
-			case "PRISON": return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonBossLevel() : new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel();
-			case "CAVES":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.CavesBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.CavesLevel();
-			case "CITY":   return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.CityBossLevel()   : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel();
-			case "HALLS":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.HallsBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel();
+			// 11차: 보스 층 클래스는 판 · 파생작마다 이름이 다를 수 있어 이름으로 찾음 (없으면 그 테마의 일반 층 + 로그 — 보스를 가장하지 않음)
+			case "SEWER":  return boss ? bossOr("SewerBossLevel", "SEWER")  : new com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel();
+			case "PRISON": return boss ? bossOr("PrisonBossLevel", "PRISON") : new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel();
+			case "CAVES":  return boss ? bossOr("CavesBossLevel", "CAVES")  : new com.shatteredpixel.shatteredpixeldungeon.levels.CavesLevel();
+			case "CITY":   return boss ? bossOr("CityBossLevel", "CITY")   : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel();
+			case "HALLS":  return boss ? bossOr("HallsBossLevel", "HALLS")  : new com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel();
 			default: return null;
 		}
 	}
@@ -397,7 +409,7 @@ public class MakerRuntime {
 		try {
 			if (f != null && f.getBoolean("noMobs", false) && !(Dungeon.level instanceof MakerLevel))
 				for (com.shatteredpixel.shatteredpixeldungeon.actors.Actor a : new java.util.ArrayList<>(com.shatteredpixel.shatteredpixeldungeon.actors.Actor.all()))
-					if (a instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner) com.shatteredpixel.shatteredpixeldungeon.actors.Actor.remove(a);
+					if (isMobSpawner(a)) com.shatteredpixel.shatteredpixeldungeon.actors.Actor.remove(a);
 		} catch (Throwable t) { log("몬스터 스폰 끄기 실패: " + t); }
 		HeroRuntime.onFloorEnter();
 		HeartUI.attach();

@@ -171,7 +171,7 @@ public class MakerCombat {
 			case "wander": ctl.wander(); break;
 			case "patrol": if (s.home >= 0 && Dungeon.level.distance(self.pos, s.home) > 4) ctl.stepTo(s.home); else ctl.wander(); break;
 			case "protect": if (Dungeon.level.distance(self.pos, t.pos) > 1) ctl.stepTo(t.pos); else ctl.waitTurn(); break;
-			case "heal": { int add = Math.min(b.amount, self.HT - self.HP); ok = add > 0; if (add > 0) { self.HP += add; if (self.sprite != null && self.sprite.visible) self.sprite.showStatusWithIcon(CharSprite.POSITIVE, Integer.toString(add), com.shatteredpixel.shatteredpixeldungeon.effects.FloatingText.HEALING); } ctl.waitTurn(); break; }
+			case "heal": { int add = Math.min(b.amount, self.HT - self.HP); ok = add > 0; if (add > 0) { self.HP += add; if (self.sprite != null && self.sprite.visible) MakerCompat.status(self.sprite, CharSprite.POSITIVE, Integer.toString(add), "HEALING"); } ctl.waitTurn(); break; }
 			case "say": if (self.sprite != null && self.sprite.visible && !b.say.isEmpty()) self.sprite.showStatus(CharSprite.NEUTRAL, b.say); ctl.waitTurn(); break;
 			default: ctl.waitTurn();
 		}
@@ -302,7 +302,13 @@ public class MakerCombat {
 		status(t, a.status, (float) a.statusTurns);
 		if (a.knockback > 0 && t != self) knock(self, t, a.knockback);
 	}
-	static boolean hit(Char a, Char d, float acc) { try { return Char.hit(a, d, acc, false); } catch (Throwable e) { return Random.Float() < 0.8f; } }
+	static boolean hit(Char a, Char d, float acc) {
+		try {
+			Object r = MakerCompat.invoke(Char.class, "hit", a, d, acc, false);   // SPD: hit(공격, 방어, 정확도 배율, 마법)
+			if (r == MakerCompat.NONE) r = MakerCompat.invoke(Char.class, "hit", a, d, false);   // 예전 판: 배율 없음
+			return r instanceof Boolean ? (Boolean) r : Random.Float() < 0.8f;
+		} catch (Throwable e) { return Random.Float() < 0.8f; }
+	}
 	static void status(Char t, String s, float turns) {
 		try {
 			switch (s) {
@@ -325,7 +331,8 @@ public class MakerCombat {
 			int dx = Integer.signum(tx - sx), dy = Integer.signum(ty - sy);
 			int ex = Math.max(0, Math.min(w - 1, tx + dx * power)), ey = Math.max(0, Math.min(Dungeon.level.height() - 1, ty + dy * power));
 			Ballistica tr = new Ballistica(t.pos, ex + ey * w, Ballistica.MAGIC_BOLT);
-			com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.throwChar(t, tr, power, false, true, self);
+			Class<?> bw = com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.class;
+			if (MakerCompat.invoke(bw, "throwChar", t, tr, power, false, true, self) == MakerCompat.NONE) MakerCompat.invoke(bw, "throwChar", t, tr, power, false, true);   // 예전 판: 던진 쪽 인자 없음
 		} catch (Throwable e) { MakerRuntime.warnOnce("전투 밀치기 오류: " + e); }
 	}
 

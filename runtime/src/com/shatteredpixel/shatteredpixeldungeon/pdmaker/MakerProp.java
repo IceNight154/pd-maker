@@ -173,14 +173,14 @@ public class MakerProp extends CustomTilemap {
 		if (cell < 0 || cell >= l.length() || at(l, cell) != null) return null;
 		MakerProp p = new MakerProp();
 		p.propId = id; p.state = d.getInt("start", 0);
-		p.pos(cell, l);
+		MakerCompat.tilePos(p, cell, l);
 		p.under = l.map[cell];
 		java.util.List<Integer> cs = p.cells(l);
 		for (int c : cs) if (c != cell && at(l, c) != null) return null;   // 다른 오브젝트와 겹침
 		p.unders = new int[cs.size()];
 		for (int i = 0; i < cs.size(); i++) p.unders[i] = l.map[cs.get(i)];
 		l.customTiles.add(p);
-		if (p.over()) { MakerPropTop t = new MakerPropTop(); t.propId = id; t.pos(cell, l); l.customWalls.add(t); }
+		if (p.over()) { MakerPropTop t = new MakerPropTop(); t.propId = id; MakerCompat.tilePos(t, cell, l); l.customWalls.add(t); }
 		p.applyTerrain(l, false);
 		p.applySwitch(-1);
 		return p;
@@ -190,7 +190,7 @@ public class MakerProp extends CustomTilemap {
 		java.util.List<Integer> cs = cells(l);
 		for (int i = 0; i < cs.size(); i++) {
 			int c = cs.get(i), u = i == 0 || unders == null || i >= unders.length ? under : unders[i];
-			Level.set(c, solid() ? Terrain.CUSTOM_DECO : u, l);
+			Level.set(c, solid() ? MakerCompat.T_CUSTOM_DECO : u, l);
 			if (live && l == Dungeon.level) GameScene.updateMap(c);
 		}
 		if (live && l == Dungeon.level) Dungeon.observe();
@@ -245,7 +245,7 @@ public class MakerProp extends CustomTilemap {
 			unders = new int[now.size()];
 			for (int i = 0; i < now.size(); i++) unders[i] = l.map[now.get(i)];
 			under = unders.length > 0 ? unders[0] : under;
-			for (int nc : now) Level.set(nc, solid() ? Terrain.CUSTOM_DECO : l.map[nc], l);
+			for (int nc : now) Level.set(nc, solid() ? MakerCompat.T_CUSTOM_DECO : l.map[nc], l);
 			for (int oc : old) GameScene.updateMap(oc);
 			for (int nc : now) GameScene.updateMap(nc);
 			refresh();

@@ -351,7 +351,7 @@ public class MakerEffect {
 	/** 층을 만들 때 놓기 */
 	public static void place(Level l, String id, int cell) {
 		if (cell < 0 || cell >= l.length()) return;
-		Spot s = new Spot(); s.fxId = id; s.pos(cell, l);
+		Spot s = new Spot(); s.fxId = id; MakerCompat.tilePos(s, cell, l);
 		l.customTiles.add(s);
 	}
 }

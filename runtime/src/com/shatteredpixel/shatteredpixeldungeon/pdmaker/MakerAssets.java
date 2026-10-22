@@ -80,7 +80,7 @@ public class MakerAssets {
 				}
 			}
 			if (items) installItems();
-			if (!customIcons().isEmpty()) installHeroIcons();
+			if (!customIcons().isEmpty() && HERO_ICONS != null) installHeroIcons();
 		} catch (Throwable t) {
 			MakerRuntime.log("게임 그림 바꾸기 실패: " + t);
 		}
@@ -210,7 +210,7 @@ public class MakerAssets {
 	//    { "file": "assets/icons/sheet.png", "size": 16, "index": 3 } → 시트의 칸 하나
 	//  hero_icons.png 아래에 줄을 더해 붙이고 번호(원래 칸 수 + n)를 줌 → 게임의 HeroIcon·행동 버튼이 그대로 그림
 
-	static final String HERO_ICONS = Assets.Interfaces.HERO_ICONS;
+	static final String HERO_ICONS = MakerCompat.staticStr(Assets.Interfaces.class, "HERO_ICONS", null);   // 없는 판(예전 SPD)은 null → 직접 지정한 아이콘 붙이기를 안 함
 	static final Map<String, Integer> iconIdx = new HashMap<>();
 	static SmartTexture iconTex;
 	static List<JsonValue> iconVals;
@@ -279,7 +279,8 @@ public class MakerAssets {
 		all.put(HERO_ICONS, tx);
 		iconTex = tx;
 		// 게임·PDMaker 가 만들어 둔 16×16 칸 목록을 버려서 새 크기로 다시 만들게 함
-		for (Class<?> c : new Class<?>[]{ com.shatteredpixel.shatteredpixeldungeon.ui.HeroIcon.class, MakerSpells.class }) {
+		for (Class<?> c : new Class<?>[]{ com.watabou.utils.Reflection.forName("com.shatteredpixel.shatteredpixeldungeon.ui.HeroIcon"), MakerSpells.class }) {   // HeroIcon 이 없는 판은 null
+			if (c == null) continue;
 			try { java.lang.reflect.Field f = c.getDeclaredField("film"); f.setAccessible(true); f.set(null, null); } catch (Exception ignored) { }
 		}
 	}
@@ -400,17 +401,14 @@ public class MakerAssets {
 		if (m != null && m.get("tracks") != null) for (JsonValue t : m.get("tracks")) if (!t.asString().isEmpty()) l.add(t.asString());
 		if (l.isEmpty() && (!menu || !d.getBoolean("enabled", true))) return;   // 타이틀: 게임이 튼 곡 그대로
 		if (!l.isEmpty()) {
-			if (l.size() == 1 && l.get(0).equals("none")) { Music.INSTANCE.end(); return; }
+			if (l.size() == 1 && l.get(0).equals("none")) { MakerCompat.musicStop(); return; }
 			MakerAudio.playList(l);
 			return;
 		}
 		// 비어 있으면 게임의 타이틀 곡 (mod-2: Assets.Music.TITLE, 원작: theme_1·2)
-		try {
-			String t = (String) Assets.Music.class.getField("TITLE").get(null);
-			Music.INSTANCE.playTracks(new String[]{t}, new float[]{1}, false);
-		} catch (Throwable ignored) {
-			Music.INSTANCE.playTracks(new String[]{Assets.Music.THEME_1, Assets.Music.THEME_2}, new float[]{1, 1}, false);
-		}
+		String[] t = MakerCompat.titleTracks();
+		float[] ch = new float[t.length]; java.util.Arrays.fill(ch, 1f);
+		MakerCompat.musicTracks(t, ch, false);
 	}
 
 	/** 타이틀 배경이 게임 기본과 다른지 (다르면 메뉴 화면에도 같은 배경을 그림) */

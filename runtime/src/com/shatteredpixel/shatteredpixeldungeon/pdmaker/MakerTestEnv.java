@@ -78,7 +78,7 @@ public class MakerTestEnv {
 	static void applyWindow() {
 		try {
 			int iface = env.getInt("iface", -1), z = env.getInt("winZoom", 0);
-			if (iface >= 0) SPDSettings.interfaceSize(iface);
+			if (iface >= 0) MakerCompat.invoke(SPDSettings.class, "interfaceSize", iface);   // 인터페이스 크기 설정이 없는 판은 건너뜀
 			if (z > 0) SPDSettings.scale(z);
 			JsonValue w = env.get("window");
 			if (w != null && w.size == 2) setWindow(w.getInt(0), w.getInt(1));
@@ -104,7 +104,7 @@ public class MakerTestEnv {
 		JsonValue o = turned ? r : env;
 		JsonValue in = o.get("insets");
 		for (int i = 0; i < 4; i++) insets[i] = in != null && in.size == 4 ? Math.max(0, in.getFloat(i)) : 0;
-		SPDSettings.interfaceSize(env.getInt("iface", 0));
+		MakerCompat.invoke(SPDSettings.class, "interfaceSize", env.getInt("iface", 0));
 		if (o.getInt("winZoom", 0) > 0) SPDSettings.scale(o.getInt("winZoom", 0));
 		JsonValue w = o.get("window");
 		int ow = Gdx.graphics.getWidth(), oh = Gdx.graphics.getHeight();

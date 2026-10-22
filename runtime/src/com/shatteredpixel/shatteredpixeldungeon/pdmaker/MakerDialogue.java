@@ -346,7 +346,11 @@ public class MakerDialogue {
 					if (!g.equals(" ") && !g.equals("\n")) emList.add(on);
 				}
 			}
+//#if method:ui.RenderedTextBlock#tokens @ 대사창 강조 글자 나누기 (예전 판 방식으로)
 			tokens(tk.toArray(new String[0]));
+//#else
+			//#| this.tokens = tk.toArray(new String[0]); MakerCompat.invoke(this, "build");   // 예전 판: tokens 함수가 없음 — 필드에 넣고 다시 짜기
+//#endif
 			total = wordsOf().size();
 			em = new boolean[total]; for (int k = 0; k < total && k < emList.size(); k++) em[k] = emList.get(k);
 			if (emScale != 1f) { int k = 0; for (RenderedText w : wordsOf()) { if (k < em.length && em[k]) w.scale.set(w.scale.x * emScale, w.scale.y * emScale); k++; } layout(); }

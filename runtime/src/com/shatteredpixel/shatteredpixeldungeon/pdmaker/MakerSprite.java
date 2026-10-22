@@ -117,7 +117,7 @@ public class MakerSprite extends MobSprite {
 	}
 
 	private void fallback() {
-		texture(Assets.Sprites.MAKER);
+		texture(MakerCompat.staticStr(Assets.Sprites.class, "MAKER", MakerCompat.staticStr(Assets.Sprites.class, "RAT", Assets.Sprites.ITEMS)));   // MAKER 그림이 없는 판은 쥐 그림 (그것도 없으면 아이템 시트)
 		TextureFilm film = new TextureFilm(texture, 12, 14);
 		idle = new Animation(10, true); idle.frames(film, 0, 0, 0, 1);
 		run = new Animation(20, true); run.frames(film, 0);

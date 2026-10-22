@@ -203,7 +203,7 @@ public class MakerCombos extends CustomTilemap {
 		}
 		return false;
 	}
-	static boolean isDoorish(int t) { return t == Terrain.DOOR || t == Terrain.OPEN_DOOR || t == Terrain.LOCKED_DOOR || t == Terrain.SECRET_DOOR || t == Terrain.CRYSTAL_DOOR; }
+	static boolean isDoorish(int t) { return t == Terrain.DOOR || t == Terrain.OPEN_DOOR || t == Terrain.LOCKED_DOOR || t == Terrain.SECRET_DOOR || t == MakerCompat.T_CRYSTAL_DOOR; }
 	static boolean openNear(Level l, int i) {
 		for (int d : com.watabou.utils.PathFinder.NEIGHBOURS4) { int c = i + d; if (c >= 0 && c < l.length() && (Terrain.flags[l.map[c]] & Terrain.PASSABLE) != 0) return true; }
 		return false;

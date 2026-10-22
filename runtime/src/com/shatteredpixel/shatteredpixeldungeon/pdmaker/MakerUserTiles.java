@@ -111,7 +111,7 @@ public class MakerUserTiles extends CustomTilemap {
 				// 효과 (그림과 따로 — 그림이 없어도)
 				if (!quiet && shown) {
 					String fx = d.getString("fx", ""); if (!fx.isEmpty()) MakerEffect.place(l, fx, cell);
-					String gf = d.getString("gameFx", ""); if (!gf.isEmpty()) { GameFx g = new GameFx(); g.kind = gf; g.pos(cell, l); l.customTiles.add(g); }
+					String gf = d.getString("gameFx", ""); if (!gf.isEmpty()) { GameFx g = new GameFx(); g.kind = gf; MakerCompat.tilePos(g, cell, l); l.customTiles.add(g); }
 				}
 				String img = water || !shown ? "" : d.getString("image", "");   // 테마 물: 그림은 물 그림으로 (칸에 덮지 않음) · 숨긴 레이어: 그림 없음 (이름 · 설명만)
 				if (d.getBoolean("flow", false) && !img.isEmpty()) {   // 흐르는 그림: 따로 (이름 · 설명만 아래 타일맵에)
@@ -297,8 +297,8 @@ public class MakerUserTiles extends CustomTilemap {
 			case "vein":   return only(l, cell, WD, com.shatteredpixel.shatteredpixeldungeon.levels.CavesLevel::addCavesVisuals);      // 동굴 광맥 반짝임
 			case "stream": return only(l, cell, com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.WATER, com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel::addHallsVisuals);   // 전당 물 김
 			case "torch":  return new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel.Torch(cell);   // 감옥 횃불
-			case "smoke":  return new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel.Smoke(cell);     // 도시 연기
-			case "greenflame": { Object g = MakerCompat.make("com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel$GreenFlame", cell); return g instanceof com.watabou.noosa.Gizmo ? (com.watabou.noosa.Gizmo) g : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel.Smoke(cell); }   // GreenFlame 은 SPD 3.1 부터 — 없으면 연기   // 도시 초록 불꽃
+			case "smoke":  { Object g = MakerCompat.make("com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel$Smoke", cell); return g instanceof com.watabou.noosa.Gizmo ? (com.watabou.noosa.Gizmo) g : null; }     // 도시 연기
+			case "greenflame": { Object g = MakerCompat.make("com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel$GreenFlame", cell); return g instanceof com.watabou.noosa.Gizmo ? (com.watabou.noosa.Gizmo) g : (com.watabou.noosa.Gizmo) MakerCompat.make("com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel$Smoke", cell); }   // GreenFlame 은 SPD 3.1 부터 — 없으면 연기   // 도시 초록 불꽃
 			case "alchemy": { CellEmitter e = new CellEmitter(cell); e.start(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.factory(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.BUBBLE), 0.33f, 0); return e; }   // 연금술 솥 거품
 			case "sacrificial": { CellEmitter e = new CellEmitter(cell); e.pour(com.shatteredpixel.shatteredpixeldungeon.effects.particles.SacrificialParticle.FACTORY, 0.04f); return e; }   // 희생의 불꽃
 			case "healing": { CellEmitter e = new CellEmitter(cell); e.start(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.factory(com.shatteredpixel.shatteredpixeldungeon.effects.Speck.HEALING), 0.5f, 0); return e; }   // 치유의 샘

@@ -19,11 +19,13 @@ import com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroClass;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroSubClass;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.Talent;
+//#if has:actors.hero.abilities.ArmorAbility && has:items.KingsCrown && has:windows.WndChooseAbility @ 직업 능력 (영웅 편집기 abilities — 왕관 · 직업 갑옷)
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.abilities.ArmorAbility;
-import com.shatteredpixel.shatteredpixeldungeon.items.Item;
 import com.shatteredpixel.shatteredpixeldungeon.items.KingsCrown;
-import com.shatteredpixel.shatteredpixeldungeon.items.TengusMask;
 import com.shatteredpixel.shatteredpixeldungeon.items.armor.ClassArmor;
+import com.shatteredpixel.shatteredpixeldungeon.windows.WndChooseAbility;
+//#endif
+import com.shatteredpixel.shatteredpixeldungeon.items.Item;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene;
 import com.shatteredpixel.shatteredpixeldungeon.scenes.PixelScene;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSprite;
@@ -33,7 +35,6 @@ import com.shatteredpixel.shatteredpixeldungeon.ui.RedButton;
 import com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock;
 import com.shatteredpixel.shatteredpixeldungeon.ui.Window;
 import com.shatteredpixel.shatteredpixeldungeon.utils.GLog;
-import com.shatteredpixel.shatteredpixeldungeon.windows.WndChooseAbility;
 import com.shatteredpixel.shatteredpixeldungeon.windows.WndOptions;
 import com.watabou.noosa.audio.Sample;
 import com.watabou.utils.Bundle;
@@ -66,8 +67,8 @@ public class MakerAbilities {
 		return sum;
 	}
 
-	/** TengusMask.execute 연결 줄: 이 영웅에게 전직 목록이 있으면 우리 창 (true = 처리함) */
-	public static boolean chooseSubclass(TengusMask mask, Hero hero) {
+	/** 전직 아이템 연결 줄 (SPD = TengusMask.execute · 다른 판은 그 게임의 전직 아이템 — 예: TomeOfMastery): 이 영웅에게 전직 목록이 있으면 우리 창 (true = 처리함) */
+	public static boolean chooseSubclass(Item mask, Hero hero) {
 		try {
 			if (!anySubclass()) {
 				if (!HeroRuntime.zeroBase()) return false;
@@ -86,7 +87,7 @@ public class MakerAbilities {
 		com.watabou.noosa.Game.runOnRenderThread(() -> GameScene.show(new WndMakerSubclass(null, hero)));
 	}
 
-	static void choose(TengusMask mask, Hero hero, JsonValue s) {
+	static void choose(Item mask, Hero hero, JsonValue s) {
 		if (mask != null) mask.detach(hero.belongings.backpack);
 		subclass = s.getString("id", "");
 		String base = s.getString("base", "");
@@ -108,8 +109,8 @@ public class MakerAbilities {
 	/** WndChooseSubclass 와 같은 모양 */
 	public static class WndMakerSubclass extends Window {
 		static final int WIDTH = 130;
-		public WndMakerSubclass(final TengusMask mask, final Hero hero) {
-			ItemSprite is = new ItemSprite(mask == null ? com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.MASK : mask.image(), null);
+		public WndMakerSubclass(final Item mask, final Hero hero) {
+			ItemSprite is = new ItemSprite(mask == null ? MakerCompat.staticInt(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.class, "MASK", MakerCompat.staticInt(com.shatteredpixel.shatteredpixeldungeon.sprites.ItemSpriteSheet.class, "MASTERY", 0)) : mask.image(), null);
 			is.x = 0; is.y = 0; add(is);
 			RenderedTextBlock t = PixelScene.renderTextBlock(mask == null ? "전직" : mask.name(), 9);
 			t.hardlight(MakerTheme.or("accent", 0xFFFF44)); t.setPos(20, (16 - t.height()) / 2f); add(t);
@@ -144,10 +145,13 @@ public class MakerAbilities {
 
 	// ------------------------------------------------------------ 직업 능력
 
+//#if has:actors.hero.abilities.ArmorAbility && has:items.KingsCrown && has:windows.WndChooseAbility @ 직업 능력 (영웅 편집기 abilities — 왕관 · 직업 갑옷)
 	public static String abilityId() {
 		Hero h = Dungeon.hero;
 		return h != null && h.armorAbility instanceof MakerArmorAbility ? ((MakerArmorAbility) h.armorAbility).abilityId : "";
 	}
+	/** 영웅이 게임 원래 직업 능력을 가졌는지 (특성 4단계 열림 판정) */
+	public static boolean nativeAbility(Hero hero) { return hero != null && hero.armorAbility != null; }
 	public static String abilityName(String id) { JsonValue s = find("abilities", id); return s == null ? id : s.getString("name", id); }
 
 	/** HeroClass.armorAbilities() 첫 줄: 이 영웅에게 직업 능력 목록이 있으면 그것 (null = 게임 원래) */
@@ -207,6 +211,13 @@ public class MakerAbilities {
 		@Override public void storeInBundle(Bundle bundle) { super.storeInBundle(bundle); bundle.put("pdm_ab", abilityId); }
 		@Override public void restoreFromBundle(Bundle bundle) { super.restoreFromBundle(bundle); abilityId = bundle.getString("pdm_ab"); applyData(); }
 	}
+//#else
+	//#| // 이 게임에는 직업 능력(ArmorAbility · 왕관 · 능력 고르기 창) 구조가 없음 — 영웅 편집기의 직업 능력은 이 게임에서 동작하지 않음
+	//#| public static String abilityId() { return ""; }
+	//#| public static String abilityName(String id) { JsonValue s = find("abilities", id); return s == null ? id : s.getString("name", id); }
+	//#| public static boolean nativeAbility(Hero hero) { return false; }
+	//#| public static void openAbility() { GLog.w("이 게임에는 직업 능력이 없다."); MakerRuntime.log("직업 능력 고르기: 이 게임 저장소에는 ArmorAbility 구조가 없어 동작하지 않습니다"); }
+//#endif
 
 	/** Hero.className() 첫 줄: 전직했으면 그 이름 (null = 게임 원래) */
 	public static String className(Hero hero) {

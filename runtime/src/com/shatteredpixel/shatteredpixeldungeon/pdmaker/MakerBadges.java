@@ -89,6 +89,7 @@ public class MakerBadges {
 				if (own != null) banner.texture(own);   // 따로 저장한 배지 그림 (16×16)
 				s.add(banner);
 				float offset = Camera.main == null ? 0 : Camera.main.centerOffset.y;
+//#if field:effects.BadgeBanner#showing @ 배지 띠 여러 개 늘어놓기 (없으면 가운데 하나)
 				int left = PixelScene.uiCamera.width / 2 - BadgeBanner.SIZE / 2;
 				left -= (BadgeBanner.SIZE * BadgeBanner.DEFAULT_SCALE * (BadgeBanner.showing.size() - 1)) / 2;
 				for (int i = 0; i < BadgeBanner.showing.size(); i++) {
@@ -98,6 +99,12 @@ public class MakerBadges {
 					b.y = PixelScene.align(PixelScene.uiCamera, (PixelScene.uiCamera.height - b.height) / 2 - b.height / 2 - 16 - offset);
 					left += BadgeBanner.SIZE * BadgeBanner.DEFAULT_SCALE;
 				}
+//#else
+				//#| // 예전 판: 여러 띠를 늘어놓는 목록(showing)이 없음 — 화면 가운데에 하나
+				//#| banner.camera = PixelScene.uiCamera;
+				//#| banner.x = PixelScene.align(banner.camera, (PixelScene.uiCamera.width - banner.width) / 2);
+				//#| banner.y = PixelScene.align(PixelScene.uiCamera, (PixelScene.uiCamera.height - banner.height) / 2 - banner.height / 2 - 16 - offset);
+//#endif
 			} catch (Throwable t) { MakerRuntime.log("배지 띠 오류: " + t); }
 		});
 		String ev = d.getString("event", "");

@@ -149,7 +149,9 @@ public class MakerSpells {
 		}
 	}
 	public static Image heroIcon(int idx) {
-		Image im = new Image(Assets.Interfaces.HERO_ICONS);
+		String tx = MakerCompat.staticStr(Assets.Interfaces.class, "HERO_ICONS", null);
+		if (tx == null) return com.shatteredpixel.shatteredpixeldungeon.ui.Icons.get(com.shatteredpixel.shatteredpixeldungeon.ui.Icons.INFO);   // hero_icons 가 없는 판: 정보 아이콘
+		Image im = new Image(tx);
 		if (film == null) film = new TextureFilm(im.texture, 16, 16);
 		im.frame(film.get(idx));
 		return im;
@@ -287,7 +289,7 @@ public class MakerSpells {
 			Item.updateQuickslot();
 			return true;
 		}
-		@Override protected String hoverText() { return sp.getString("name", ""); }
+		protected String hoverText() { return sp.getString("name", ""); }   // (예전 판 버튼에는 없음 — @Override 없이)
 	}
 
 	/** 주문 정보 (영웅 창·주문 창에서) */

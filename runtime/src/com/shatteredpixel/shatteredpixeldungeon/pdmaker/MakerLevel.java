@@ -77,7 +77,7 @@ public class MakerLevel extends Level {
 		JsonValue t = f.get("layers").get("terrain");
 		for (int i = 0; i < w * h && i < t.size; i++) { int v = t.getInt(i); map[i] = v < 0 ? Terrain.WALL : v; }   // 음수 = 에디터의 빈 칸 → 벽
 		for (int i = 0; i < map.length; i++) {
-			if (map[i] == Terrain.ENTRANCE || map[i] == Terrain.ENTRANCE_SP) {
+			if (map[i] == Terrain.ENTRANCE || map[i] == MakerCompat.T_ENTRANCE_SP) {
 				transitions.add(new LevelTransition(this, i, LevelTransition.Type.REGULAR_ENTRANCE));   // 목적지·출구는 WorldGraph.wire 에서
 			}
 		}
@@ -212,15 +212,20 @@ public class MakerLevel extends Level {
 		return super.createMob();
 	}
 	@Override public Actor addRespawner() { return spawn() == null ? null : super.addRespawner(); }
-	@Override public int mobLimit() { JsonValue s = spawn(); return s == null ? 0 : Math.max(0, s.getInt("max", 6)); }
+	public int mobLimit() { JsonValue s = spawn(); return s == null ? 0 : Math.max(0, s.getInt("max", 6)); }
+	public int nMobs() { return mobLimit(); }   // 예전 판의 이름
 	@Override public float respawnCooldown() {
 		JsonValue s = spawn();
 		return s == null ? super.respawnCooldown() : Math.max(1f, s.getFloat("respawn", 50f));
 	}
+//#if method:levels.Level#spawnMob @ 직접 그린 맵 몬스터 재생성 최소 거리 (minDist)
 	@Override public boolean spawnMob(int disLimit) {
 		JsonValue s = spawn();
 		return s != null && super.spawnMob(Math.min(disLimit, Math.max(0, s.getInt("minDist", 8))));
 	}
+//#else
+	//#| // (예전 판: 재생성기가 직접 몬스터를 놓음 — 거리 제한은 randomRespawnCell 에서)
+//#endif
 	@Override public int randomRespawnCell(Char ch) {
 		JsonValue s = spawn();
 		if (s == null) return super.randomRespawnCell(ch);
@@ -231,7 +236,7 @@ public class MakerLevel extends Level {
 			if (Dungeon.level == this && heroFOV != null && heroFOV[c]) continue;
 			if (!passable[c] || Actor.findChar(c) != null) continue;
 			if (Char.hasProp(ch, Char.Property.LARGE) && !openSpace[c]) continue;
-			if (map[c] == Terrain.ENTRANCE || map[c] == Terrain.ENTRANCE_SP) continue;
+			if (map[c] == Terrain.ENTRANCE || map[c] == MakerCompat.T_ENTRANCE_SP) continue;
 			return c;
 		}
 		return -1;
@@ -265,7 +270,7 @@ public class MakerLevel extends Level {
 		if (ch == Dungeon.hero && Dungeon.level == this && !locked && !EventInterpreter.busy()
 				&& Dungeon.hero.curAction instanceof com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroAction.Move && warpCells().contains(ch.pos)) {
 			LevelTransition t = getTransition(ch.pos);
-			if (t != null && activateTransition(Dungeon.hero, t)) Dungeon.hero.curAction = null;
+			if (t != null && takeTransition(t)) Dungeon.hero.curAction = null;
 		}
 	}
 	private java.util.Set<Integer> warp;
@@ -296,4 +301,6 @@ public class MakerLevel extends Level {
 		int[] cells = bundle.getIntArray("pdm_ev_cells"); String[] ids = bundle.getStringArray("pdm_ev_ids");
 		if (cells != null && ids != null) for (int i = 0; i < cells.length && i < ids.length; i++) eventCells.put(cells[i], ids[i]);
 	}
+	/** 통로로 넘어가기 (activateTransition 이 없는 판도 — MakerCompat.takeTransition) */
+	boolean takeTransition(LevelTransition t) { return MakerCompat.takeTransition(this, Dungeon.hero, t); }
 }

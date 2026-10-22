@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PKG = 'com.shatteredpixel.shatteredpixeldungeon.pdmaker';
+const adapt = require('./runtime-adapt');
 const MARK = '// >>> pdmaker';
 const JAVA_ROOT = ['core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon'];
 
@@ -38,17 +39,25 @@ const PATCHES = [
   { file: 'levels/RegularLevel.java', name: '구성 블럭: 층 구조·분위기',
     anchor: /\n([ \t]*)builder = builder\(\);[^\n]*\n/, where: 'after', line: `builder = ${PKG}.LevelHooks.builder(this, builder);` },
   { file: 'scenes/GameScene.java', name: '진행 방향(탑 모드) 계단 그림',
-    anchor: /\n([ \t]*)Dungeon\.level\.playLevelMusic\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerRuntime.beforeScene();` },
+    // 11차: 음악 고르는 함수가 없는 판(예전 SPD · 파생작)은 create() 의 super.create() 바로 다음 (지형을 그리기 전)
+    anchor: [/\n([ \t]*)Dungeon\.level\.playLevelMusic\(\);[^\n]*\n/, /public void create\(\)\s*\{[\s\S]*?\n([ \t]*)super\.create\(\);[^\n]*\n/], where: 'after', line: `${PKG}.MakerRuntime.beforeScene();` },
   { file: 'scenes/InterlevelScene.java', name: '소개 화면: 로딩 배경 그림',
-    anchor: /\n([ \t]*)background = new Image\(\s*loadingAsset\s*\);/, where: 'before', line: `loadingAsset = ${PKG}.MakerRuntime.splash(loadingAsset);` },
+    anchor: [/\n([ \t]*)background = new Image\(\s*loadingAsset\s*\);/, /\n([ \t]*)[\w.<>]+ \w+ = new \w+\([^;\n]*\bloadingAsset\b/], where: 'before', line: `loadingAsset = ${PKG}.MakerRuntime.splash(loadingAsset);` },
   { file: 'scenes/InterlevelScene.java', name: '소개 화면: 구역 이야기 글',
-    anchor: /\n([ \t]*)if \(mode == Mode\.DESCEND && lastRegion <= 5/, where: 'before', line: `{ int[] pdmS = ${PKG}.MakerRuntime.storyGate(loadingDepth, lastRegion); loadingDepth = pdmS[0]; lastRegion = pdmS[1]; }` },
+    needs: /\blastRegion\b/, anchor: /\n([ \t]*)if \(mode == Mode\.DESCEND && lastRegion <= 5/, where: 'before', line: `{ int[] pdmS = ${PKG}.MakerRuntime.storyGate(loadingDepth, lastRegion); loadingDepth = pdmS[0]; lastRegion = pdmS[1]; }` },
   { file: 'Dungeon.java', name: '플레이어 스폰 위치 (맵에 놓은 시작 위치 오브젝트)',
     anchor: /public static void switchLevel\(\s*final Level level,\s*int pos\s*\)\s*\{[^\n]*\n/, where: 'after', line: `pos = ${PKG}.LevelHooks.heroSpawn(level, pos);` },
   { file: 'Badges.java', name: '게임 원래 배지의 얻는 조건 끄기 · 바꾸기',
     anchor: /private static void displayBadge\(\s*Badge badge\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (badge != null && ${PKG}.MakerBadges.blocked(badge.name())) { local.remove(badge); return; }` },
-  { file: 'levels/Level.java', name: '잠긴 맵 (조건이 맞아야 들어감)',
+  { file: 'levels/Level.java', name: '잠긴 맵 (조건이 맞아야 들어감)', group: 'lock', variant: 'level',
     anchor: /public boolean activateTransition\(\s*Hero hero,\s*LevelTransition transition\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.LevelHooks.lockedNode(transition)) return false;` },
+  // 11차: 층에 activateTransition 이 없는 판 — 영웅이 계단을 직접 처리 (내려가기 · 올라가기 두 곳)
+  { file: 'actors/hero/Hero.java', name: '잠긴 맵 (조건이 맞아야 들어감) — 내려갈 때', group: 'lock', variant: 'hero',
+    anchor: /\n[ \t]*LevelTransition transition = Dungeon\.level\.getTransition\(\s*pos\s*\);[^\n]*\n(?=([ \t]*)InterlevelScene\.curTransition = transition;[^\n]*\n[ \t]*InterlevelScene\.mode = InterlevelScene\.Mode\.DESCEND;)/, where: 'after',
+    line: `if (${PKG}.LevelHooks.lockedNode(transition)) { ready(); return false; }` },
+  { file: 'actors/hero/Hero.java', name: '잠긴 맵 (조건이 맞아야 들어감) — 올라갈 때', group: 'lock', variant: 'hero',
+    anchor: /private boolean actAscend\([\s\S]*?\n[ \t]*LevelTransition transition = Dungeon\.level\.getTransition\(\s*pos\s*\);[^\n]*\n(?=([ \t]*))/, where: 'after',
+    line: `if (${PKG}.LevelHooks.lockedNode(transition)) { ready(); return false; }` },
   { file: 'tiles/DungeonTilemap.java', name: '큰 타일셋 (한 칸이 16px 이 아닌 타일셋)',
     anchor: /\n([ \t]*)super\(\s*tex,\s*new TextureFilm\(\s*tex,\s*SIZE,\s*SIZE\s*\)\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.LevelHooks.hiresTiles(this, tex);` },
   { file: 'tiles/DungeonTilemap.java', name: '큰 타일셋: 발견 연출 타일 크기',
@@ -61,7 +70,10 @@ const PATCHES = [
     anchor: /private boolean actMove\(\s*HeroAction\.Move action\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.LevelHooks.propInteract(this, action.dst)) return false;` },
   { file: 'actors/mobs/Mob.java', name: '드랍 테이블: 몬스터가 죽을 때',
     anchor: /public void rollToDropLoot\(\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.MakerDrops.mobDrop(this)) return;` },
-  { file: 'actors/mobs/MobSpawner.java', name: '등장 금지한 몬스터 빼기',
+  { file: 'actors/mobs/MobSpawner.java', name: '등장 금지한 몬스터 빼기', group: 'mobs', variant: 'spawner',
+    anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
+  // 11차: 층별 몬스터 목록 클래스 이름이 MobRotation 인 판 (같은 getMobRotation 구조)
+  { file: 'actors/mobs/MobRotation.java', name: '등장 금지한 몬스터 빼기', group: 'mobs', variant: 'rotation',
     anchor: /\n([ \t]*)Random\.shuffle\(mobs\);/, where: 'before', line: `${PKG}.MakerDrops.filterMobs(mobs);` },
   { file: 'levels/Level.java', name: '테마별 몬스터 (드랍 테이블 › 테마별 몬스터)',
     anchor: /public Mob createMob\(\)\s*\{[^\n]*\n/, where: 'after', line: `{ Mob pdmTm = ${PKG}.MakerDrops.themeMob(this); if (pdmTm != null) return pdmTm; }` },
@@ -70,7 +82,7 @@ const PATCHES = [
   { file: 'items/Item.java', name: '버리기 금지 (아이템 noDrop)',
     anchor: /\n([ \t]*)actions\.add\(\s*AC_THROW\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.flagActions(this, actions);` },
   { file: 'actors/mobs/npcs/Shopkeeper.java', name: '판매 불가 (아이템 noSell)',
-    anchor: /public static boolean canSell\(\s*Item item\s*\)\s*\{[^\n]*\n/, where: 'after', line: `if (${PKG}.MakerItem.noSell(item)) return false;` },
+    anchor: [/public static boolean canSell\(\s*Item item\s*\)\s*\{[^\n]*\n/, /public static boolean willBuyItem\(\s*Item item\s*\)\s*\{[^\n]*\n/], where: 'after', line: `if (${PKG}.MakerItem.noSell(item)) return false;` },   // 예전 판: willBuyItem
   { file: 'windows/WndBag.java', name: '새 가방의 탭 아이콘 (아이템 kind bag)',
     anchor: /private Image icon\(\s*Bag bag\s*\)\s*\{[^\n]*\n/, where: 'after', line: `{ Image pdmI = ${PKG}.MakerBag.icon(bag); if (pdmI != null) return pdmI; }` },
   { file: 'ui/InventoryPane.java', name: '새 가방의 탭 아이콘 (아이템 kind bag)',
@@ -90,16 +102,16 @@ const PATCHES = [
     line: `container = ${PKG}.MakerFacets.detachFrom(this, container);` },
   { file: 'items/weapon/missiles/MissileWeapon.java', name: '아이템 추가 기능: 투척 무기가 맞혔을 때 던지기 효과', anchor: /protected void rangedHit\(\s*Char enemy,\s*int cell\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerFacets.missileHit(this, cell);` },
-  { file: 'actors/Actor.java', name: '아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기', anchor: /\n([ \t]*)for \(Blob blob : Dungeon\.level\.blobs\.values\(\)\) \{\s*add\( blob \);\s*\}[^\n]*\n/, where: 'after',
+  { file: 'actors/Actor.java', name: '아이템 추가 기능: 불러온 층에서 폭탄 퓨즈 이어서 타기', anchor: /\n([ \t]*)for \(\s*Blob blob : Dungeon\.level\.blobs\.values\(\)\s*\) \{\s*add\(\s*blob\s*\);\s*\}[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerFacets.reviveFuses();` },
   // ---- 캐릭터 AI · 체력 (MakerCharAI — 제자리 고정 · 코드로 직접 · 체력 무한 · 지속 회복) ----
   { file: 'actors/mobs/Mob.java', name: '캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복', anchor: /protected boolean act\(\)\s*\{\s*\n\s*super\.act\(\);[^\n]*\n/, where: 'after',
     line: `{ Boolean pdmAi = ${PKG}.MakerCharAI.act(this); if (pdmAi != null) return pdmAi; }` },
   { file: 'actors/Char.java', name: '캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로)', anchor: /\n([ \t]*)if \(HP < 0\) HP = 0;/, where: 'before',
     line: `${PKG}.MakerCharAI.afterDamage(this, dmg + shielded);` },
-  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (세로)', anchor: /\n([ \t]*)waterOfs -= 5 \* Game\.elapsed;/, where: 'before',
+  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (세로)', needs: /\bwaterOfs\b/, anchor: /\n([ \t]*)waterOfs -= 5 \* Game\.elapsed;/, where: 'before',
     line: `waterOfs = ${PKG}.LevelHooks.waterFlowY(waterOfs);` },
-  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (가로)', anchor: /\n([ \t]*)water\.offsetTo\( 0, waterOfs \);[^\n]*\n/, where: 'after',
+  { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (가로)', needs: /\bwaterOfs\b/, anchor: /\n([ \t]*)water\.offsetTo\(\s*0,\s*waterOfs\s*\);[^\n]*\n/, where: 'after',
     line: `${PKG}.LevelHooks.waterFlowX(water);` },
   { file: 'actors/mobs/Mob.java', name: '캐릭터: 어느 프로젝트 캐릭터로 만든 게임 몬스터인지 저장', anchor: /public void storeInBundle\(\s*Bundle bundle\s*\)\s*\{\s*\n\s*super\.storeInBundle\(\s*bundle\s*\);[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerCharAI.store(this, bundle);` },
@@ -107,12 +119,12 @@ const PATCHES = [
     line: `${PKG}.MakerCharAI.restore(this, bundle);` },
   { file: 'actors/mobs/Mob.java', name: '샌드백: 받은 피해를 살펴보기에', anchor: /public String info\(\)\s*\{\s*\n\s*String desc = description\(\);[^\n]*\n/, where: 'after',
     line: `desc += ${PKG}.MakerCharAI.damageInfo(this);` },
-  { file: 'sprites/CharSprite.java', name: '무기 공격 모션 (무기 그림이 휘둘러짐 — 아이템 편집기 › 공격 모션)', anchor: /public synchronized void attack\(\s*int cell,\s*Callback callback\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/, where: 'after',
+  { file: 'sprites/CharSprite.java', name: '무기 공격 모션 (무기 그림이 휘둘러짐 — 아이템 편집기 › 공격 모션)', anchor: /public (?:synchronized )?void attack\(\s*int cell,\s*Callback callback\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/, where: 'after',
     line: `${PKG}.MakerSwing.onAttack(this, cell);` },
   { file: 'sprites/ItemSprite.java', name: '세밀한 아이템 그림 (배율 적용으로 키운 PNG — 한 칸 크기로 그림)', anchor: /public void frame\(\s*int image\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.MakerAssets.hiresItem(this, image)) return;` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
-    anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.IntRange[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
+    anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.(?:IntRange|Int)\b[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
     anchor: /public void link\(\s*Heap heap\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.heapScale(this, heap);` },
   // ---- 영웅 코드 (영웅 편집기의 "코드" 칸 · 세부 능력치) ----
@@ -133,56 +145,64 @@ const PATCHES = [
   { file: 'actors/mobs/Mob.java', name: '영웅 코드: 몬스터 처치', anchor: /public void die\(\s*Object cause\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `${PKG}.HeroRuntime.onMobDie(this, cause);` },
   { file: 'windows/WndHero.java', name: '영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문',
-    anchor: /\n([ \t]*)pane = new TalentsPane\(\s*TalentButton\.Mode\.UPGRADE\s*\);[^\n]*\n/, where: 'after',
+    anchor: [/\n([ \t]*)pane = new TalentsPane\(\s*TalentButton\.Mode\.UPGRADE\s*\);[^\n]*\n/, /\n([ \t]*)pane = new TalentsPane\(\s*true\s*\);[^\n]*\n/], where: 'after',   // 예전 판: TalentsPane(true)
     line: `{ TalentsPane pdmPane = ${PKG}.MakerTalentsPane.forHero(); if (pdmPane != null) { pane.destroy(); pane = pdmPane; } }` },
   { file: 'actors/hero/Hero.java', name: '특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)',
     anchor: /public int talentPointsAvailable\(\s*int tier\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `{ int pdmT = ${PKG}.MakerTalents.nativeOverride(tier); if (pdmT >= 0) return pdmT; }` },
   // ---- 전직 · 직업 능력 (영웅 편집기의 subclasses · abilities) ----
-  { file: 'actors/hero/HeroClass.java', name: '직업 능력: 왕관으로 고르는 목록 → 영웅 편집기의 직업 능력',
+  { file: 'actors/hero/HeroClass.java', name: '직업 능력: 왕관으로 고르는 목록 → 영웅 편집기의 직업 능력', needs: /\barmorAbilities\s*\(/,
     anchor: /public ArmorAbility\[\] armorAbilities\(\)\s*\{[^\n]*\n/, where: 'after',
     line: `{ ArmorAbility[] pdmA = ${PKG}.MakerAbilities.armorAbilities(this); if (pdmA != null) return pdmA; }` },
-  { file: 'items/TengusMask.java', name: '전직: 텐구의 가면 → 영웅 편집기의 전직',
+  { file: 'items/TengusMask.java', name: '전직: 텐구의 가면 → 영웅 편집기의 전직', group: 'subclass', variant: 'mask',
     anchor: /\n([ \t]*)GameScene\.show\(\s*new WndChooseSubclass\(\s*this,\s*hero\s*\)\s*\);/, where: 'before',
+    line: `if (${PKG}.MakerAbilities.chooseSubclass(this, hero)) return;` },
+  // 11차: 전직 아이템이 숙련의 서(TomeOfMastery)인 판 — 같은 자리(전직 고르기 창을 띄우기 직전)
+  { file: 'items/TomeOfMastery.java', name: '전직: 숙련의 서 → 영웅 편집기의 전직', group: 'subclass', variant: 'tome',
+    anchor: /\n([ \t]*)GameScene\.show\(\s*new WndChooseSubclass\(\s*this,\s*(?:Dungeon\.)?hero\s*\)\s*\);/, where: 'before',
     line: `if (${PKG}.MakerAbilities.chooseSubclass(this, hero)) return;` },
   { file: 'actors/hero/Hero.java', name: '전직 이름 (영웅 정보 창)',
     anchor: /public String className\(\)\s*\{[^\n]*\n/, where: 'after',
     line: `{ String pdmN = ${PKG}.MakerAbilities.className(this); if (pdmN != null) return pdmN; }` },
   { file: 'scenes/PixelScene.java', name: '게임 그림 바꾸기(assets/game) · 메뉴 화면 배경·음악',
-    anchor: /\n([ \t]*)float minWidth, minHeight, scaleFactor;/, where: 'before', line: `${PKG}.MakerAssets.onSceneCreate(this);` },
+    anchor: /\n([ \t]*)float minWidth, minHeight(?:, scaleFactor)?;/, where: 'before', line: `${PKG}.MakerAssets.onSceneCreate(this);` },
   { file: 'scenes/PixelScene.java', name: '스크린 · 카메라 연출 (6차): 카메라 기본 위치 · 흔들림 오프셋 (이벤트 camMove · camFollow · camShake · camReset)',
     anchor: /\n([ \t]*)@Override\s*\n[ \t]*protected void updateMatrix\(\) \{\s*\n[ \t]*float sx = align\( this, scroll\.x \+ shakeX \);/, where: 'before',
     line: `@Override public synchronized void update() { ${PKG}.MakerCamera.before(this); super.update(); if (${PKG}.MakerCamera.offX != 0 || ${PKG}.MakerCamera.offY != 0) { shakeX += ${PKG}.MakerCamera.offX; shakeY += ${PKG}.MakerCamera.offY; updateMatrix(); } }` },
   { file: 'scenes/GameScene.java', name: '게임 UI 테마 (6차): PDMaker 가 띄우는 원작 모양 창(선택지 · 확인 창)의 제목 · 버튼 글자 색',
-    anchor: /public static void show\( Window wnd \) \{[^\n]*\n/, where: 'after', line: `${PKG}.MakerTheme.onShow(wnd);` },
-  { file: 'scenes/TitleScene.java', name: '타이틀 음악 이어 틀기: 타이틀 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
-    anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
-  { file: 'scenes/RankingsScene.java', name: '타이틀 음악 이어 틀기: 랭킹 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
-    anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
-  { file: 'scenes/JournalScene.java', name: '타이틀 음악 이어 틀기: 모험 일지 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
-    anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
-  { file: 'scenes/ChangesScene.java', name: '타이틀 음악 이어 틀기: 변경 사항 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
-    anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
-  { file: 'scenes/WelcomeScene.java', name: '타이틀 음악 이어 틀기: 환영 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
-    anchor: /\n([ \t]*)Music\.INSTANCE\.playTracks\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+    anchor: /public static void show\(\s*Window wnd\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.MakerTheme.onShow(wnd);` },
+  { file: 'scenes/TitleScene.java', optional: true, name: '타이틀 음악 이어 틀기: 타이틀 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
+    anchor: /\n([ \t]*)Music\.INSTANCE\.play(?:Tracks)?\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+  { file: 'scenes/RankingsScene.java', optional: true, needs: /Music\.INSTANCE/, name: '타이틀 음악 이어 틀기: 랭킹 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
+    anchor: /\n([ \t]*)Music\.INSTANCE\.play(?:Tracks)?\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+  { file: 'scenes/JournalScene.java', optional: true, needs: /Music\.INSTANCE/, name: '타이틀 음악 이어 틀기: 모험 일지 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
+    anchor: /\n([ \t]*)Music\.INSTANCE\.play(?:Tracks)?\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+  { file: 'scenes/ChangesScene.java', optional: true, needs: /Music\.INSTANCE/, name: '타이틀 음악 이어 틀기: 변경 사항 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
+    anchor: /\n([ \t]*)Music\.INSTANCE\.play(?:Tracks)?\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
+  { file: 'scenes/WelcomeScene.java', optional: true, needs: /Music\.INSTANCE/, name: '타이틀 음악 이어 틀기: 환영 (프로젝트 곡이 흐르는 중이면 게임 곡으로 바꾸지 않음)',
+    anchor: /\n([ \t]*)Music\.INSTANCE\.play(?:Tracks)?\(/, where: 'before', line: `if (!${PKG}.MakerAssets.keepMenuMusic(this))` },
   // ---- 분리된(투명 배경) 타일셋: 지형 아래 밑그림 (MakerTileUnderlay) ----
   { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 지형 타일맵 아래에 넣기',
-    anchor: /\n([ \t]*)terrain\.add\( tiles \);/, where: 'before', line: `${PKG}.MakerTileUnderlay.addTo(terrain, tiles);` },
+    anchor: /\n([ \t]*)terrain\.add\(\s*tiles\s*\);/, where: 'before', line: `${PKG}.MakerTileUnderlay.addTo(terrain, tiles);` },
   { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 맵 전체 다시 그리기',
     anchor: /\n([ \t]*)scene\.tiles\.updateMap\(\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerTileUnderlay.refresh(-1);` },
   { file: 'scenes/GameScene.java', name: '분리 타일셋 밑그림: 칸 하나 다시 그리기',
-    anchor: /\n([ \t]*)scene\.tiles\.updateMapCell\( cell \);[^\n]*\n/, where: 'after', line: `${PKG}.MakerTileUnderlay.refresh(cell);` },
+    anchor: /\n([ \t]*)scene\.tiles\.updateMapCell\(\s*cell\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.MakerTileUnderlay.refresh(cell);` },
   { file: 'scenes/HeroSelectScene.java', name: '영웅 선택 화면: 게임 직업 대신 프로젝트 영웅 버튼',
-    anchor: /\n([ \t]*)for \(HeroClass cl : HeroClass\.values\(\)\)\s*\{/, where: 'before',
+    anchor: /\n([ \t]*)for \(HeroClass cl : (?:HeroClass\.values\(\)|\w+)\)\s*\{/, where: 'before',   // 예전 판 · 파생작: 직업 배열을 변수에 담아 돎
     line: `if (!${PKG}.HeroSelect.addButtons(this, heroBtns))` },
   // ---- 초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창 · 저장 슬롯) ----
-  { file: 'sprites/HeroSprite.java', name: '초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창)',
+  { file: 'sprites/HeroSprite.java', name: '초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창)', group: 'avatar', variant: 'hero',
     anchor: /public static Image avatar\(\s*Hero hero\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `{ Image pdmA = ${PKG}.HeroRuntime.avatar(hero); if (pdmA != null) return pdmA; }` },
+  // 11차: 초상화 함수가 (직업, 갑옷 단계) 를 받는 판 — 지금 영웅의 직업이면 영웅 편집기의 그림
+  { file: 'sprites/HeroSprite.java', name: '초상화: 영웅 편집기의 그림 (상태 창 · 영웅 창)', group: 'avatar', variant: 'class',
+    anchor: /public static Image avatar\(\s*HeroClass \w+,\s*int \w+\s*\)\s*\{[^\n]*\n/, where: 'after', argsFrom: /avatar\(\s*HeroClass (\w+)/,
+    line: `{ com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero pdmH = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero; Image pdmA = pdmH != null && pdmH.heroClass == $1 ? ${PKG}.HeroRuntime.avatar(pdmH) : null; if (pdmA != null) return pdmA; }` },
   { file: 'Dungeon.java', name: '저장 슬롯: 어떤 영웅인지 읽기',
     anchor: /\n([ \t]*)Statistics\.preview\(\s*info,\s*bundle\s*\);[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.preview(info, bundle);` },
   { file: 'GamesInProgress.java', name: '저장 슬롯: 지금 영웅 기억 (저장할 때)',
-    anchor: /public static void set\(\s*int slot\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.setSlot(slot);` },
+    anchor: /public static void set\(\s*int slot\b[^)]*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.setSlot(slot);` },   // 예전 판: set(slot, depth, challenges, hero)
   { file: 'scenes/StartScene.java', name: '저장 슬롯 초상화·이름 (시작 화면)',
     anchor: /\n([ \t]*)long diff = Game\.realTime - info\.lastPlayed;/, where: 'before',
     line: `{ com.watabou.noosa.Image pdmA = ${PKG}.HeroRuntime.slotAvatar(info); if (pdmA != null && hero != null) hero.copy(pdmA); String pdmN = ${PKG}.HeroRuntime.slotName(info); if (pdmN != null) name.text(Messages.titleCase(pdmN)); }` },
@@ -235,9 +255,13 @@ const PATCHES = [
     anchor: /\n([ \t]*)Gdx\.net\.sendHttpRequest\(\s*httpGet/, where: 'before',
     line: `{ String pdmN = System.getProperty("pdmaker.news.url"); if (pdmN != null) httpGet.setUrl(pdmN); }` },
   // 저장소 최상위 파일 (root: true). 안드로이드 SDK 가 없는 PC 에서도 데스크톱 빌드가 되도록 :android 모듈은 SDK 가 있을 때만 포함
-  { file: 'settings.gradle', root: true, name: '안드로이드 SDK 가 없으면 android 모듈 건너뛰기 (다른 PC 에서 테스트 플레이)',
-    anchor: /\n([ \t]*)include ':android'/, where: 'before',
+  { file: 'settings.gradle', root: true, name: '안드로이드 SDK 가 없으면 android 모듈 건너뛰기 (다른 PC 에서 테스트 플레이)', group: 'android', variant: 'line',
+    anchor: /\n([ \t]*)include ':android'\s*(?:\n|$)/, where: 'before',
     line: `if ({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }())` },
+  // 11차: 여러 모듈을 한 include 에 적은 저장소 (원본 줄은 고치지 않음 — 파일 끝에서 SDK 가 없으면 :android 를 설정에서 뺌. Gradle 8.14 에서 확인)
+  { file: 'settings.gradle', root: true, name: '안드로이드 SDK 가 없으면 android 모듈 건너뛰기 (다른 PC 에서 테스트 플레이)', group: 'android', variant: 'list',
+    needs: /include\b[^\n]*':android'|,\s*':android'/, anchor: /(?![\s\S])/, where: 'after', indent: '',
+    line: `if (!({ def s = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT'); def lp = new File(settingsDir, 'local.properties'); if (!s && lp.exists()) { def pp = new Properties(); lp.withInputStream { pp.load(it) }; s = pp.getProperty('sdk.dir') }; s != null && new File(s.toString()).exists() }())) { def pdmA = findProject(':android'); if (pdmA != null) { rootProject.children.remove(pdmA); try { settings.projectDescriptorRegistry.removeProject(':android') } catch (Throwable ignored) { } } }` },
   { file: 'scenes/InterlevelScene.java', name: '층을 떠날 때 (감정 결정화·일기)',
     anchor: /public void create\(\)\s*\{\s*\n([ \t]*)super\.create\(\);[^\n]*\n/, where: 'after',
     line: `if (com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero != null && (mode == Mode.DESCEND || mode == Mode.ASCEND || mode == Mode.FALL || mode == Mode.RETURN)) ${PKG}.MakerRuntime.onFloorLeave();` },
@@ -250,19 +274,58 @@ function javaDir(repo) { return path.join(repo, ...JAVA_ROOT); }
 /** 연결 줄을 넣을 파일의 실제 경로 (root: true 면 저장소 최상위 기준) */
 function patchFile(repo, file) { return PATCHES.some(p => p.file === file && p.root) ? path.join(repo, file) : path.join(javaDir(repo), file); }
 
+function findAnchor(src, p) {
+  for (const a of [].concat(p.anchor)) { a.lastIndex = 0; const m = a.exec(src); if (m) return m; }
+  return null;
+}
 function applyPatch(src, p) {
-  let m = null;
-  for (const a of [].concat(p.anchor)) { m = a.exec(src); if (m) break; }
+  const m = findAnchor(src, p);
   if (!m) return { src, ok: false };
-  // 들여쓰기: 캡처 그룹이 있으면 그것, 없으면 다음 줄 기준 두 탭
-  let indent = m[1] !== undefined ? m[1] : '\t\t';
+  // 넣을 줄: argsFrom 이 있으면 찾은 자리에서 이름을 읽어 $1 에 (예: 함수 인자 이름이 판마다 다름)
+  let line = p.line;
+  if (p.argsFrom) { const a = p.argsFrom.exec(m[0]); if (a) line = line.replace(/\$1/g, a[1]); }
+  // 들여쓰기: indent 를 정했으면 그것, 캡처 그룹이 있으면 그것, 없으면 다음 줄 기준 두 탭
+  let indent = p.indent !== undefined ? p.indent : m[1] !== undefined ? m[1] : '\t\t';
   if (p.where === 'before') {
     const at = m.index + (m[0].startsWith('\n') ? 1 : 0);
-    return { src: src.slice(0, at) + `${indent}${p.line} ${MARK}\n` + src.slice(at), ok: true };
+    return { src: src.slice(0, at) + `${indent}${line} ${MARK}\n` + src.slice(at), ok: true };
   }
   const at = m.index + m[0].length;
-  if (m[1] === undefined) { const next = src.slice(at).match(/^[ \t]*/); indent = next && next[0] ? next[0] : '\t\t'; }
-  return { src: src.slice(0, at) + `${indent}${p.line} ${MARK}\n` + src.slice(at), ok: true };
+  if (p.indent === undefined && m[1] === undefined) { const next = src.slice(at).match(/^[ \t]*/); indent = next && next[0] ? next[0] : '\t\t'; }
+  const nl = at > 0 && src[at - 1] !== '\n' ? '\n' : '';   // 파일 끝 (마지막 줄에 줄바꿈이 없을 때)
+  return { src: src.slice(0, at) + `${nl}${indent}${line} ${MARK}\n` + src.slice(at), ok: true };
+}
+const cleanOf = src => src.split('\n').filter(l => !l.includes(MARK)).join('\n');
+/** 이 저장소에서 연결 줄마다 어떻게 할지 → Map(patch → { state, why })
+ *  state: apply(넣을 수 있음) · missing(파일은 있는데 자리를 못 찾음) · nofile(파일 없음) · optional(없어도 되는 파일이 없음)
+ *         · na(이 게임에 그 구조가 없음 — needs) · alt(같은 기능을 다른 방식으로 넣음 — group/variant)
+ *  group/variant: 같은 group 에서 넣을 수 있는 줄이 하나라도 있는 첫 variant 만 씀 (예: settings.gradle 한 줄 include / 여러 모듈 include) */
+function planPatches(repo) {
+  const out = new Map(), cache = new Map();
+  const read = f => { if (!cache.has(f)) { const fp = patchFile(repo, f); cache.set(f, fs.existsSync(fp) ? cleanOf(fs.readFileSync(fp, 'utf8')) : null); } return cache.get(f); };
+  for (const p of PATCHES) {
+    const src = read(p.file);
+    if (src == null) { out.set(p, { state: p.optional || p.group ? 'optional' : 'nofile' }); continue; }
+    if (p.needs && !p.needs.test(src)) { out.set(p, { state: 'na', why: '이 게임에는 이 기능이 붙을 구조가 없음' }); continue; }
+    out.set(p, { state: findAnchor(src, p) ? 'apply' : 'missing' });
+  }
+  const groups = new Map();
+  for (const p of PATCHES) if (p.group) (groups.get(p.group) || groups.set(p.group, []).get(p.group)).push(p);
+  for (const [, list] of groups) {
+    const variants = [...new Set(list.map(p => p.variant || ''))];
+    const chosen = variants.find(v => list.some(p => (p.variant || '') === v && out.get(p).state === 'apply'));
+    const anyFile = list.some(p => out.get(p).state !== 'optional');
+    for (const p of list) {
+      const st = out.get(p);
+      if (chosen === undefined) { if (!anyFile && st.state === 'optional') out.set(p, { state: list[0].optional ? 'optional' : 'nofile' }); continue; }
+      if ((p.variant || '') !== chosen) out.set(p, { state: 'alt', why: '같은 기능을 이 저장소 구조에 맞는 다른 자리에 넣음' });
+    }
+    if (chosen === undefined && anyFile) {   // 어느 방식도 자리를 못 찾음 — 파일이 있는 첫 줄만 "못 찾음", 나머지는 대안
+      let first = true;
+      for (const p of list) { const st = out.get(p); if (st.state === 'na') continue; if (first && st.state !== 'optional') { out.set(p, { state: 'missing' }); first = false; } else out.set(p, { state: 'alt', why: '같은 기능의 다른 방식' }); }
+    }
+  }
+  return out;
 }
 
 function uninstall(repo, log = console.log) {
@@ -272,10 +335,16 @@ function uninstall(repo, log = console.log) {
     const fp = patchFile(repo, f);
     if (!fs.existsSync(fp)) continue;
     const src = fs.readFileSync(fp, 'utf8');
-    const out = src.split('\n').filter(l => !l.includes(MARK)).join('\n');
+    let out = src.split('\n').filter(l => !l.includes(MARK)).join('\n');
+    const bak = fp + '.pdmaker-backup';
+    // 백업과 (줄 끝 차이만 빼고) 같으면 백업 그대로 — 파일 끝에 붙였던 줄의 줄바꿈까지 원래대로
+    if (fs.existsSync(bak)) { const b = fs.readFileSync(bak, 'utf8'); if (b.replace(/\s+$/, '') === out.replace(/\s+$/, '')) out = b; }
     if (out !== src) { fs.writeFileSync(fp, out, 'utf8'); log(`연결 줄 제거: ${f}`); }
-    if (fs.existsSync(fp + '.pdmaker-backup')) fs.rmSync(fp + '.pdmaker-backup');
+    if (fs.existsSync(bak)) fs.rmSync(bak);
   }
+  // 게임 이름 · 패키지 (applyGameId) 를 바꿨으면 원래대로
+  const bg = path.join(repo, 'build.gradle'), bgb = bg + '.pdmaker-backup';
+  if (fs.existsSync(bgb)) { fs.copyFileSync(bgb, bg); fs.rmSync(bgb); log('build.gradle: 원래 게임 이름 · 패키지로 되돌림'); }
   const pkgDir = path.join(jd, 'pdmaker');
   if (fs.existsSync(pkgDir)) { fs.rmSync(pkgDir, { recursive: true }); log('pdmaker 패키지 제거'); }
 }
@@ -297,6 +366,9 @@ function generate(repo, projectDir, log = console.log) {
     }
   };
   sweep(gen, '');
+  // 11차: 생성 코드도 이 저장소 구조에 맞춤 (게임 본체 이름 · 옮겨진 클래스 · 없는 import)
+  const env = adapt.environment(repo);
+  for (const f of Object.keys(files)) files[f] = adapt.adaptSource(files[f], env, 'gen/' + f, { generated: true }).src;
   let changed = 0;
   for (const [f, src] of Object.entries(files)) {
     const fp = path.join(gen, ...f.split('/'));
@@ -340,36 +412,31 @@ function compat(repo) {
   if (!/BRANCH_EXIT/.test(read('levels/features/LevelTransition.java'))) out.problems.push('층 이동 · 갈림길(LevelTransition.BRANCH_EXIT)이 없는 예전 판입니다' + (out.version ? ' (' + out.version + ')' : '') + ' — SPD 2.5 이상이 필요합니다.');
   if (!fs.existsSync(path.join(repo, 'SPD-classes'))) out.warnings.push('SPD-classes 모듈이 없습니다 — 빌드 구조가 원작과 다를 수 있습니다.');
   // 연결 줄: 파일은 있는데 넣을 위치를 못 찾는 것 (그 기능만 동작하지 않음)
-  for (const p of PATCHES) {
-    const fp = patchFile(repo, p.file);
-    if (!fs.existsSync(fp)) { if (!p.optional) out.missing.push(`${p.file} (파일 없음) — ${p.name}`); continue; }
-    const src = fs.readFileSync(fp, 'utf8');
-    if (src.includes(p.line)) continue;
-    const clean = src.split('\n').filter(l => !l.includes(MARK)).join('\n');
-    if (![].concat(p.anchor).some(a => { a.lastIndex = 0; return a.test(clean); })) out.missing.push(`${p.file} — ${p.name}`);
+  out.notApplicable = [];
+  for (const [p, st] of planPatches(repo)) {
+    if (st.state === 'nofile') out.missing.push(`${p.file} (파일 없음) — ${p.name}`);
+    else if (st.state === 'missing') out.missing.push(`${p.file} — ${p.name}`);
+    else if (st.state === 'na') out.notApplicable.push(`${p.file} — ${p.name}`);
   }
   if (out.missing.length) out.warnings.push(`연결 줄 ${out.missing.length}개의 위치를 찾지 못했습니다 — 그 기능만 동작하지 않습니다 (runtime/INTEGRATION.md 를 보고 직접 넣을 수 있음).`);
   out.ok = !out.problems.length;
   return out;
 }
 
-/** 런타임(pdmaker 패키지)이 이름으로 부르는 게임 클래스 중 저장소에 없는 것 [{ cls, uses: ['파일:줄'] }] — 주석 · 문자열은 뺌. 저장소의 모든 소스 루트(src/main/java)에서 찾음 */
+/** 런타임(pdmaker 패키지)이 이름으로 부르는 게임 클래스 중 저장소에 없는 것 [{ cls, uses: ['파일:줄'] }]
+ *  11차: 이 저장소에 맞춰 적응한 뒤(게임 본체 이름 · 옮겨진 클래스 · 기능 조건 블록)에도 남는 것만 — 주석 · 문자열 · 꺼진 갈래는 뺌 */
 function missingClasses(repo, runtimeSrc) {
   const rdir = path.join(runtimeSrc || path.join(__dirname, '..', 'runtime', 'src'), ...JAVA_ROOT.slice(-3), 'pdmaker');
   if (!fs.existsSync(rdir)) return [];
-  const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '').replace(/"(?:\\.|[^"\\\n])*"/g, '""');
-  const uses = new Map();
-  for (const f of fs.readdirSync(rdir).filter(x => x.endsWith('.java'))) {
-    const src = strip(fs.readFileSync(path.join(rdir, f), 'utf8')), lines = src.split('\n');
-    lines.forEach((ln, i) => { for (const m of ln.matchAll(/\bcom\.shatteredpixel\.shatteredpixeldungeon\.((?:[a-z_]\w*\.)*[A-Z]\w*)/g)) { if (m[1].startsWith('pdmaker.')) continue; const l = uses.get(m[1]) || uses.set(m[1], []).get(m[1]); if (l.length < 3) l.push(`${f}:${i + 1}`); } });
-  }
-  // 저장소의 모든 java 소스 루트 (core · services …) 아래 com/shatteredpixel/shatteredpixeldungeon
-  const roots = []; const walk = (d, depth) => { if (depth > 6) return; let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { return; }
-    for (const e of es) { if (!e.isDirectory() || /^(\.git|build|\.gradle|node_modules|assets|res)$/.test(e.name)) continue; const p = path.join(d, e.name); if (e.name === 'java' && path.basename(d) === 'main') roots.push(path.join(p, 'com', 'shatteredpixel', 'shatteredpixeldungeon')); else walk(p, depth + 1); } };
-  walk(repo, 0);
-  const out = [];
-  for (const [cls, at] of uses) if (!roots.some(r => fs.existsSync(path.join(r, ...cls.split('.')) + '.java'))) out.push({ cls, uses: at });
-  return out;
+  return adapt.adaptRuntime(repo, rdir).missing;
+}
+/** 설치하면 무엇이 어떻게 맞춰지는지 (파일을 고치지 않음) → { ok, compat, adapt: { mainGame, relocations, features, missing, changes } } */
+function plan(repo, runtimeSrc) {
+  const cp = compat(repo);
+  const rdir = path.join(runtimeSrc || path.join(__dirname, '..', 'runtime', 'src'), ...JAVA_ROOT.slice(-3), 'pdmaker');
+  if (!cp.ok || !fs.existsSync(rdir)) return { ok: false, compat: cp, adapt: null };
+  const a = adapt.adaptRuntime(repo, rdir);
+  return { ok: !a.missing.length, compat: cp, adapt: { mainGame: a.env.mainGame, relocations: a.env.relocations, features: a.features, missing: a.missing, changes: a.changes, files: a.files } };
 }
 
 function install(repo, runtimeSrc, log = console.log, projectDir = null) {
@@ -378,27 +445,41 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   log(`게임 저장소: ${cp.game || '(이름 없음)'}${cp.version ? ' ' + cp.version : ''} — ${cp.pkg || '?'}`);
   if (!cp.ok) throw new Error('이 게임 저장소에는 설치할 수 없습니다:\n· ' + cp.problems.join('\n· '));
   // 10차: 런타임이 이름으로 부르는 게임 클래스가 없으면 설치해도 컴파일되지 않음 → 원본 파일을 고치기 전에 멈춤 (예: ARK 에는 MobSpawner · TengusMask … 가 없음)
-  const miss = missingClasses(repo, runtimeSrc);
+  //      11차: 먼저 런타임을 이 저장소 구조에 맞춰 메모리에서 적응 → 그래도 남는 클래스가 있을 때만 멈춤
+  const from = path.join(runtimeSrc, 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
+  const ad = adapt.adaptRuntime(repo, from);
+  const miss = ad.missing;
   if (miss.length) throw new Error(`이 게임 저장소에는 PDMaker 런타임이 쓰는 게임 클래스 ${miss.length}개가 없어 설치해도 컴파일되지 않습니다 — 원본 파일은 고치지 않았습니다:\n· ` + miss.slice(0, 12).map(m => `${m.cls} (${m.uses[0]})`).join('\n· ') + (miss.length > 12 ? `\n· … 외 ${miss.length - 12}` : '') + '\n(편집기의 "게임 저장소 분석" 화면에서 전체 목록을 볼 수 있습니다)');
   cp.warnings.forEach(w => log('⚠ ' + w));
-  // 1) 패키지 복사 (항상 최신으로 덮어씀)
-  const from = path.join(runtimeSrc, 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
+  if (ad.env.mainGame && ad.env.mainGame !== 'ShatteredPixelDungeon') log(`게임 본체 클래스: ${ad.env.mainGame} (런타임 사본의 ShatteredPixelDungeon 이름을 이것으로)`);
+  ad.env.relocations.forEach(r => log(`옮겨진 클래스: ${r.from.slice(adapt.GAME_PKG.length + 1)} → ${r.to} (${r.note})`));
+  ad.features.filter(f => !f.on).forEach(f => log(`이 게임 구조에 맞춤: ${f.label || f.cond} — ${f.where.join(', ')}`));
+  // 1) 패키지 복사 (항상 최신으로 덮어씀 — 적응한 사본)
   const to = path.join(jd, 'pdmaker');
   fs.mkdirSync(to, { recursive: true });
   // 예전 버전에만 있던 파일은 지움 (남아 있으면 컴파일 오류)
   // 내용이 빈(클래스가 없는) 파일은 "지워진 파일" 표시로 보고 복사하지 않음
-  const want = new Set(fs.readdirSync(from).filter(f => f.endsWith('.java') && /\bclass\s/.test(fs.readFileSync(path.join(from, f), 'utf8'))));
+  const want = new Set(Object.keys(ad.files).filter(f => !f.includes('/')));
   for (const f of fs.readdirSync(to)) if (f.endsWith('.java') && !want.has(f)) { fs.rmSync(path.join(to, f)); log(`예전 파일 지움: ${f}`); }
   let n = 0;
-  for (const f of want) { fs.copyFileSync(path.join(from, f), path.join(to, f)); n++; }
+  for (const f of want) { const fp = path.join(to, f); if (!fs.existsSync(fp) || fs.readFileSync(fp, 'utf8') !== ad.files[f]) fs.writeFileSync(fp, ad.files[f], 'utf8'); n++; }
   log(`pdmaker 패키지 복사: ${n}개 파일 → ${to}`);
   // 2) 연결 줄 (이미 있으면 건너뜀)
   const results = [];
   const byFile = {};
   for (const p of PATCHES) (byFile[p.file] = byFile[p.file] || []).push(p);
-  for (const [f, list] of Object.entries(byFile)) {
+  const pp = planPatches(repo);
+  for (const [f, all] of Object.entries(byFile)) {
     const fp = patchFile(repo, f);
-    if (!fs.existsSync(fp)) { list.forEach(p => results.push({ file: f, name: p.name, status: p.optional ? '건너뜀 — 이 저장소에 없는 파일 (선택)' : '파일 없음 — INTEGRATION.md 참고' })); continue; }
+    for (const p of all) {
+      const st = pp.get(p).state;
+      if (st === 'optional') results.push({ file: f, name: p.name, status: '건너뜀 — 이 저장소에 없는 파일 (선택)' });
+      else if (st === 'nofile') results.push({ file: f, name: p.name, status: '파일 없음 — INTEGRATION.md 참고' });
+      else if (st === 'na') results.push({ file: f, name: p.name, status: '해당 없음 — 이 게임에는 이 기능이 붙을 구조가 없음' });
+      else if (st === 'alt') results.push({ file: f, name: p.name, status: '대안 — 같은 기능을 다른 자리에 넣음' });
+    }
+    const list = all.filter(p => ['apply', 'missing'].includes(pp.get(p).state));
+    if (!fs.existsSync(fp) || !list.length) continue;
     const before = fs.readFileSync(fp, 'utf8');
     // 예전에 넣은 연결 줄은 지우고 새 위치에 다시 넣음 (에디터 업데이트 시 위치가 바뀔 수 있음)
     let src = before.split('\n').filter(l => !l.includes(MARK)).join('\n');
@@ -417,6 +498,26 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   results.forEach(r => log(`  [${r.status}] ${r.file} — ${r.name}`));
   if (projectDir) generate(repo, projectDir, log);
   return results;
+}
+
+/** 설치된 런타임이 이 에디터 · 이 저장소에 맞춘 것과 같은지 → { pkg, upToDate, reason, hooks, need }
+ *  11차: 비교 기준은 "이 저장소에 맞춰 적응한 사본" (판마다 런타임 사본이 원본과 다를 수 있음) · 연결 줄은 이 저장소에서 넣을 수 있는 것만 셈 */
+function state(repo, runtimeSrc) {
+  const pkgDir = path.join(javaDir(repo), 'pdmaker');
+  const from = path.join(runtimeSrc || path.join(__dirname, '..', 'runtime', 'src'), ...JAVA_ROOT.slice(-3), 'pdmaker');
+  if (!fs.existsSync(pkgDir)) return { pkg: false, upToDate: false, reason: 'pdmaker 패키지 없음' };
+  const ad = adapt.adaptRuntime(repo, from);
+  const want = Object.keys(ad.files).filter(f => !f.includes('/'));
+  if (fs.readdirSync(pkgDir).some(f => f.endsWith('.java') && !want.includes(f))) return { pkg: true, upToDate: false, reason: '예전 파일이 남아 있음' };
+  for (const f of want) {
+    const t = path.join(pkgDir, f);
+    if (!fs.existsSync(t) || fs.readFileSync(t, 'utf8') !== ad.files[f]) return { pkg: true, upToDate: false, reason: f + ' 이(가) 예전 것' };
+  }
+  let hooks = 0;
+  for (const f of [...new Set(PATCHES.map(p => p.file))]) { const fp = patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(MARK).length - 1; }
+  const need = [...planPatches(repo).values()].filter(v => v.state === 'apply').length;
+  if (hooks < need) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${need}`, hooks, need };
+  return { pkg: true, upToDate: true, hooks, need };
 }
 
 /** 게임 이름 · 패키지 이름 (프로젝트 설정 project.game) → 게임 저장소 맨 위 build.gradle 의 appName · appPackageName.
@@ -450,7 +551,7 @@ function applyGameId(repo, projectDir, log = console.log) {
   return { appName: name || cur.appName, appPackageName: want.appPackageName || cur.appPackageName };
 }
 
-module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat, missingClasses };
+module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat, missingClasses, plan, planPatches, state };
 
 if (require.main === module) {
   const [repo, flag] = process.argv.slice(2);
