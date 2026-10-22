@@ -684,12 +684,13 @@ return damage + Special.get("combo");`,
           { rename: renameHero, dup: dupHero }),
         h('p', { class: 'lead' }, '게임의 영웅 선택 화면에 이 영웅이 나옵니다 (시작 영웅을 정하면 그 영웅 하나만). ' + (zero
           ? '바탕 직업이 없는 완전히 새 영웅입니다 — 시작 아이템·감정된 아이템·특성·전직·직업 능력 모두 이 편집기에서 정한 것만 씁니다.'
-          : '바탕 직업 「' + (PDM.HERO_CLASSES[String(c.baseClass).toUpperCase()] || c.baseClass) + '」의 게임 기능(시작 아이템·특성·전직·직업 능력 등)을 물려받고, 여기서 정한 것을 더하거나 바꿉니다.')),
+          : '바탕 직업 「' + PDM.heroClassName(c.baseClass) + '」의 게임 기능(시작 아이템·특성·전직·직업 능력 등)을 물려받고, 여기서 정한 것을 더하거나 바꿉니다.')),
+        PDM.provBox ? PDM.provBox(key) : null,   // 10차: 이름 · 그림 · 시작 아이템이 어디서 왔는지
         section('기본',
           row((() => {   // 이름 하나로: 게임(선택 화면 · 시작 버튼 · 저장 슬롯)에 나오는 이름 = 리소스 목록의 이름
             const cur = String((c.select || {}).title || '').trim() || (vanillaHero(c) ? '' : c.name || '');
             const i = h('input', { type: 'text', value: cur, placeholder: vanillaHero(c) ? `(게임 이름 그대로 — ${c.name || c.id})` : c.id });
-            i.addEventListener('change', () => { const v = i.value.trim(); store.edit(key, '영웅 이름', r => { r.select = r.select || {}; r.select.title = v; r.name = v || (vanillaHero(r) ? (PDM.HERO_CLASSES[String(r.baseClass).toUpperCase()] || r.name) : r.id); }); });
+            i.addEventListener('change', () => { const v = i.value.trim(); store.edit(key, '영웅 이름', r => { r.select = r.select || {}; r.select.title = v; r.name = v || (vanillaHero(r) ? (PDM.heroClassName(r.baseClass) || r.name) : r.id); }); });
             return field('이름 (게임의 선택 화면 · 시작 버튼 · 저장 슬롯 · 리소스 목록)', i, vanillaHero(c) ? '비우면 게임의 원래 직업 이름' : '');
           })(), F.bool(key, ['enabled'], { label: '사용 (선택 화면에 나옴)' })),
           ...selectTextFields(key, c),
@@ -737,11 +738,14 @@ return damage + Special.get("combo");`,
           const items = inv.items || [];
           const hasGame = items.some(x => x.fromGame);
           const van = (PDM.SPD_HEROES || []).find(x => x.cls === String(c.baseClass || '').toUpperCase());
-          const restore = () => store.edit(key, '시작 아이템: 게임 기본으로', o => {
-            o.inventory = o.inventory || {}; o.inventory.clearDefault = false;
-            const own = (o.inventory.items || []).filter(x => !x.fromGame);
-            o.inventory.items = [...(van ? van.items : []).map(e => Object.assign({ item: '', count: 1, level: 0, equip: false, quickslot: false, identify: true, fromGame: true }, e)), ...own];
-          });
+          // 10차: 원작 SPD 묶음 목록은 그 목록이 이 저장소의 실제 시작 아이템과 같을 때만 다시 넣음 (아니면 비움 — 게임 코드가 줌)
+          const restore = async () => { let useVan = !!van;
+            if (van && PDM.gameHero) { try { const g = await PDM.gameHero(c.baseClass); if (g && g.inv) { const repoN = [...new Set(g.inv.common.concat(g.inv.own).map(i => i.cls).filter(Boolean))].sort(), spdN = [...new Set(van.items.map(i => String(i.item).split(':').pop().split('.').pop()))].sort(); useVan = JSON.stringify(repoN) === JSON.stringify(spdN); } } catch (_) { /* 못 읽음 — 원작 목록 */ } }
+            store.edit(key, '시작 아이템: 게임 기본으로', o => {
+              o.inventory = o.inventory || {}; o.inventory.clearDefault = false;
+              const own = (o.inventory.items || []).filter(x => !x.fromGame);
+              o.inventory.items = [...(useVan ? van.items : []).map(e => Object.assign({ item: '', count: 1, level: 0, equip: false, quickslot: false, identify: true, fromGame: true }, e)), ...own];
+            }); };
           return [
             PDM.gameHeroBox(c, 'inv', !clear, st),
             zero ? h('div', { class: 'hint mb-3' }, '완전히 새 영웅이라 이 목록대로만 줍니다 (게임 직업의 시작 아이템 없음).') : h('div', { class: 'hint mb-3' }, clear

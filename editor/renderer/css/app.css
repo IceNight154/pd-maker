@@ -935,3 +935,7 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .ra-support td:first-child { min-width: 170px; }
 .ra-support .badge { white-space: nowrap; }
 .ra-sum td:first-child { width: 180px; color: var(--mute); }
+
+/* 10차: 저장소 맵 — 추정 연결은 점선 · 출처 상자 */
+.wg-edge.derived { stroke-dasharray: 2 5; opacity: .8; }
+.prov-box { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 var(--sp-4); margin: 0 0 var(--sp-5); }

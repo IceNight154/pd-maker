@@ -36,7 +36,7 @@
       ops.take(st);
       if (!all.some(q => q.id === st.id)) st.id = (all[0] || {}).id;
       const chars = PDM.ui.refOptions('char'), nodes = PDM.ui.refOptions('node');
-      const mobs = [['', '(아무 적이나)'], ...store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, `${c.name} (${c.id})`])];
+      const mobs = [['', '(아무 적이나)'], ...store.all('char').filter(c => PDM.isHostile(c.kind)).map(c => [c.id, `${c.name} (${c.id})`])];
       const cards = all.map((q, qi) => {
         const P = ['list', qi], open = st.id === q.id;
         const ed = (lbl, fn, rr) => store.edit(K, lbl, r => fn(r.list[qi]), rr === false ? { silent: true } : undefined);

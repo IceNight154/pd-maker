@@ -41,6 +41,7 @@ public class MakerMob extends Mob {
 		maxLvl = Math.max(5, Dungeon.depth + 4);
 		JsonValue d = data();
 		if (d != null && "boss".equals(d.getString("kind", ""))) properties.add(Property.BOSS);
+		else if (d != null && "elite".equals(d.getString("kind", ""))) properties.add(Property.MINIBOSS);   // 10차: 엘리트 · 미니보스
 	}
 
 	@Override public CharSprite sprite() { return new MakerSprite(data()); }

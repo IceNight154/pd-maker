@@ -353,11 +353,33 @@ function compat(repo) {
   return out;
 }
 
+/** 런타임(pdmaker 패키지)이 이름으로 부르는 게임 클래스 중 저장소에 없는 것 [{ cls, uses: ['파일:줄'] }] — 주석 · 문자열은 뺌. 저장소의 모든 소스 루트(src/main/java)에서 찾음 */
+function missingClasses(repo, runtimeSrc) {
+  const rdir = path.join(runtimeSrc || path.join(__dirname, '..', 'runtime', 'src'), ...JAVA_ROOT.slice(-3), 'pdmaker');
+  if (!fs.existsSync(rdir)) return [];
+  const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, '').replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+  const uses = new Map();
+  for (const f of fs.readdirSync(rdir).filter(x => x.endsWith('.java'))) {
+    const src = strip(fs.readFileSync(path.join(rdir, f), 'utf8')), lines = src.split('\n');
+    lines.forEach((ln, i) => { for (const m of ln.matchAll(/\bcom\.shatteredpixel\.shatteredpixeldungeon\.((?:[a-z_]\w*\.)*[A-Z]\w*)/g)) { if (m[1].startsWith('pdmaker.')) continue; const l = uses.get(m[1]) || uses.set(m[1], []).get(m[1]); if (l.length < 3) l.push(`${f}:${i + 1}`); } });
+  }
+  // 저장소의 모든 java 소스 루트 (core · services …) 아래 com/shatteredpixel/shatteredpixeldungeon
+  const roots = []; const walk = (d, depth) => { if (depth > 6) return; let es = []; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of es) { if (!e.isDirectory() || /^(\.git|build|\.gradle|node_modules|assets|res)$/.test(e.name)) continue; const p = path.join(d, e.name); if (e.name === 'java' && path.basename(d) === 'main') roots.push(path.join(p, 'com', 'shatteredpixel', 'shatteredpixeldungeon')); else walk(p, depth + 1); } };
+  walk(repo, 0);
+  const out = [];
+  for (const [cls, at] of uses) if (!roots.some(r => fs.existsSync(path.join(r, ...cls.split('.')) + '.java'))) out.push({ cls, uses: at });
+  return out;
+}
+
 function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   const jd = javaDir(repo);
   const cp = compat(repo);
   log(`게임 저장소: ${cp.game || '(이름 없음)'}${cp.version ? ' ' + cp.version : ''} — ${cp.pkg || '?'}`);
   if (!cp.ok) throw new Error('이 게임 저장소에는 설치할 수 없습니다:\n· ' + cp.problems.join('\n· '));
+  // 10차: 런타임이 이름으로 부르는 게임 클래스가 없으면 설치해도 컴파일되지 않음 → 원본 파일을 고치기 전에 멈춤 (예: ARK 에는 MobSpawner · TengusMask … 가 없음)
+  const miss = missingClasses(repo, runtimeSrc);
+  if (miss.length) throw new Error(`이 게임 저장소에는 PDMaker 런타임이 쓰는 게임 클래스 ${miss.length}개가 없어 설치해도 컴파일되지 않습니다 — 원본 파일은 고치지 않았습니다:\n· ` + miss.slice(0, 12).map(m => `${m.cls} (${m.uses[0]})`).join('\n· ') + (miss.length > 12 ? `\n· … 외 ${miss.length - 12}` : '') + '\n(편집기의 "게임 저장소 분석" 화면에서 전체 목록을 볼 수 있습니다)');
   cp.warnings.forEach(w => log('⚠ ' + w));
   // 1) 패키지 복사 (항상 최신으로 덮어씀)
   const from = path.join(runtimeSrc, 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
@@ -428,7 +450,7 @@ function applyGameId(repo, projectDir, log = console.log) {
   return { appName: name || cur.appName, appPackageName: want.appPackageName || cur.appPackageName };
 }
 
-module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat };
+module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat, missingClasses };
 
 if (require.main === module) {
   const [repo, flag] = process.argv.slice(2);

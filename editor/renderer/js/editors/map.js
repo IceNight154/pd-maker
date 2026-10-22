@@ -282,6 +282,7 @@
     render(key, ctx) {
       const fl = store.get(key);
       if (!fl) return h('div', { class: 'page' }, '층 데이터가 없습니다');
+      if (fl.mode === 'game' && PDM.repoMaps) return PDM.repoMaps.nodePage(key);   // 10차: 게임 원래 맵 — 타일 대신 원본 정보
       const kind = kindOf(key);
       const ui = floorUI[key] = floorUI[key] || { tool: 'pen', terrain: 1, zoom: 2, objType: 'npc', objRef: '', sel: -1, grid: true, spawnVal: 1, spawnShape: 'pen', showSpawn: true, showPorts: true };
       if (focusReq && focusReq.key === key) { const c = focusReq.cell; focusReq = null; ui.tool = 'select'; ui.selIds = []; ui.sel = -1; ui.area = { x0: c.x, y0: c.y, x1: c.x, y1: c.y }; }   // 검사 결과에서 칸으로 이동
@@ -441,7 +442,7 @@
       /** 오브젝트 종류의 대상 목록 [[id, 이름]] (팔레트 · 여러 오브젝트 일괄 수정 공용) */
       function refOpts(type) {
         const refKind = (PDM.OBJECT_TYPES[type] || {}).ref;
-        const opts = refKind === 'character' ? store.all('char').filter(c => type === 'mob' ? ['mob', 'boss'].includes(c.kind) : !['mob', 'boss', 'hero'].includes(c.kind)).map(c => [c.id, c.name])
+        const opts = refKind === 'character' ? store.all('char').filter(c => type === 'mob' ? PDM.isHostile(c.kind) : !PDM.isHostile(c.kind) && c.kind !== 'hero').map(c => [c.id, c.name])
           : refKind === 'trap' ? PDM.TRAPS.map(t => [t.id, t.name]) : refKind === 'item' ? store.all('item').map(c => [c.id, c.name]) : refKind === 'event' ? store.all('event').map(c => [c.id, c.name]) : refKind === 'prop' ? store.all('prop').map(c => [c.id, c.name]) : refKind === 'effect' ? PDM.ui.refOptions('effect') : refKind === 'combo' ? PDM.ui.refOptions('combo') : [];
         if (refKind === 'character' && type === 'mob') opts.push(...['rat', 'gnoll', 'crab', 'slime', 'snake', 'albino'].map(m => ['spd:' + m, `(게임) ${m}`]));
         return opts;
@@ -843,7 +844,7 @@
           }, { cls: 'tool', title: '맵에 겹쳐 보일 것 켜고 끄기' }),
           h('span', { class: 'grow' }),
           kind === 'node' ? h('select', { onchange: e => { const m = e.target.value; store.edit(key, '생성 방식', r => { r.mode = m; if (m === 'hybrid' && r.size.w > 16) { r.size = { w: 11, h: 11 }; r.layers.terrain = blankTerrain(11, 11, true); } }); } },
-            Object.entries(PDM.FLOOR_MODES).map(([k, v]) => h('option', { value: k, selected: fl.mode === k }, v.name)))
+            Object.entries(PDM.FLOOR_MODES).filter(([k, v]) => !v.repoOnly || fl.mode === k).map(([k, v]) => h('option', { value: k, selected: fl.mode === k }, v.name)))
             : h('span', { class: 'badge gold' }, fl.kind === 'special' ? '특수 방 템플릿' : '일반 방 템플릿'),
           kind === 'node' ? h('button', { class: 'tool', title: '맵 그래프에서 이 노드 보기', onclick: () => { PDM.tabs.open('world'); setTimeout(() => PDM.worldFocus && PDM.worldFocus(fl.id), 50); } }, '⌘ 그래프') : '',
           kind !== 'room' ? h('span', { class: 'badge' }, up ? '▲ 올라가기' : '▼ 내려가기') : '',

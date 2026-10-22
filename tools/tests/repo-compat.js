@@ -252,7 +252,7 @@ for (const key of Object.keys(REPOS)) {
     const ctx = await editorScan(key, true), P = ctx.PDM, sc = P.GAME_SCAN;
     assert.ok(sc && sc.analysis && sc.analysis.summary.recognized === r.summary.recognized, '편집기가 같은 분석 결과를 씀');
     const dir = path.join(tmp(), 'proj'); fs.mkdirSync(dir); await P.store.createNew(dir, 'compat');
-    const s1 = await P.gameSyncVanilla(), s2 = await P.gameSyncVanilla();
+    const s1 = await P.gameSyncVanilla(false, { remove: 'untouched' }), s2 = await P.gameSyncVanilla(false, { remove: 'untouched' });   // 새 프로젝트 흐름 (app.js newProject 와 같음)
     assert.deepStrictEqual([s2.charsAdded, s2.charsRemoved, s2.heroesAdded, s2.heroesRemoved], [0, 0, 0, 0], '두 번째는 바뀌는 것 없음 (중복 없음)');
     const chars = P.store.all('char'), ids = chars.map(c => c.id);
     assert.strictEqual(new Set(ids).size, ids.length, 'id 중복 없음');

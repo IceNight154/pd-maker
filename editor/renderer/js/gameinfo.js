@@ -106,7 +106,7 @@
     ['Bat', '흡혈 박쥐'], ['Brute', '놀 야만전사'], ['Shaman$RedShaman', '놀 주술사 (빨강)'], ['Spinner', '동굴 거미'], ['DM200', 'DM-200'],
     ['Ghoul', '드워프 구울'], ['Elemental$FireElemental', '불의 정령'], ['Warlock', '드워프 흑마법사'], ['Monk', '드워프 수도사'], ['Golem', '골렘'],
     ['Succubus', '서큐버스'], ['Eye', '악마의 눈'], ['Scorpio', '전갈'], ['RipperDemon', '찢는 악마']];
-  PDM.mobRefOptions = () => [...PDM.store.all('char').filter(c => ['mob', 'boss'].includes(c.kind) && c.enabled !== false).map(c => [c.id, c.name]),
+  PDM.mobRefOptions = () => [...PDM.store.all('char').filter(c => PDM.isHostile(c.kind) && c.enabled !== false).map(c => [c.id, c.name]),
     ...GAME_MOBS.map(([c, n]) => ['spd:' + c, `(게임) ${n}`])];
   PDM.gameSpawnBox = function (depth) {
     const body = h('span', {}, '읽는 중…');

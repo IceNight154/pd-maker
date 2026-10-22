@@ -5,7 +5,7 @@
 (function () {
   const { h } = PDM;
   const store = PDM.store;
-  const KIND_ICON = { npc: '☺', companion: '♥', mob: '☗', boss: '☠' };
+  const KIND_ICON = { npc: '☺', companion: '♥', mob: '☗', elite: '◆', boss: '☠', unsorted: '?' };
 
   async function newCharacter(kind) {
     const id = await PDM.ui.prompt('새 캐릭터 id (영문, 파일 이름이 됩니다)', '');
@@ -318,9 +318,9 @@
             menu: [{ label: `새 ${label}…`, run: () => newCharacter(kind) }],
             children: list.map(c => ({ id: 'c_' + c.id, label: c.name + ` (${c.id})` + (c.enabled === false ? ' (꺼짐)' : '') + (c.noSpawn ? ' — 등장 금지' : '') + (missing(c) ? ' — ⚠ 게임 저장소에 없음' : ''), icon: missing(c) ? '⚠' : c.noSpawn ? '⦸' : '', open: 'char:' + c.id, off: c.enabled === false,
               menu: [{ label: '열기', run: () => PDM.tabs.open('char:' + c.id) }, { label: '이름 바꾸기…', run: () => PDM.resOps.renameLabel('char', c.id) }, { label: 'id 바꾸기…', run: () => renameChar(c.id) }, { label: '복제', run: () => dupChar(c.id) }, { label: '쓰는 곳…', run: () => PDM.resOps.showUsage('char', c.id) }, PDM.resOps.useToggle('char', c), '-',
-                c.game && ['mob', 'boss'].includes(c.kind) ? { label: c.noSpawn ? '다시 등장하게 (등장 금지 풀기)' : '등장하지 않게 (등장 금지)', run: () => store.edit('char:' + c.id, '등장 금지', o => { o.noSpawn = !o.noSpawn; }) } : null,
+                c.game && PDM.isHostile(c.kind) ? { label: c.noSpawn ? '다시 등장하게 (등장 금지 풀기)' : '등장하지 않게 (등장 금지)', run: () => store.edit('char:' + c.id, '등장 금지', o => { o.noSpawn = !o.noSpawn; }) } : null,
                 { label: '삭제', run: async () => {
-                  if (!c.game || !['mob', 'boss'].includes(c.kind)) { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); return; }
+                  if (!c.game || !PDM.isHostile(c.kind)) { if (await PDM.ui.confirm(`「${c.name}」 캐릭터를 삭제할까요?`)) store.remove('char:' + c.id, '캐릭터 삭제'); return; }
                   // 원작 몬스터: 목록에서 지워도 게임 코드에는 남아 있으므로, 게임에서도 안 나오게 할지 물음
                   const r = await PDM.ui.modal('원작 캐릭터 삭제', h('div', {}, h('p', {}, `「${c.name}」 은(는) 게임에 원래 있는 몬스터입니다.`),
                     h('p', { class: 'hint' }, '목록에서만 지우면 게임에서는 계속 나옵니다. "삭제 + 등장 금지"를 고르면 던전에 자동으로 나오지 않게도 합니다 (프로젝트 설정 → 등장 금지 목록에서 되돌릴 수 있음).')),
@@ -374,6 +374,7 @@
             ? '끔: 아래 능력치·그림·AI·대사로 동작하는 PDMaker 캐릭터가 됩니다 (게임의 특수 능력은 없음).'
             : '켬: 아래 이름·능력치·그림은 참고용(편집기 미리보기)이고 게임에서는 원작 그대로입니다. 고쳐서 쓰려면 끄세요. 던전에 자동으로 나오는 몬스터는 이 설정과 관계없이 원작 그대로입니다.'),
           PDM.gameMobBox(c, st)) : null,
+        PDM.provBox ? PDM.provBox(key) : null,   // 10차: 칸마다 출처 (저장소 원본 · 추론 · 사용자 편집) · 분류 근거
         section('기본',
           row(F.select(key, ['kind'], PDM.CHAR_KINDS, { label: '종류' }), F.text(key, ['name'], { label: '이름', rerender: true }), F.text(key, ['title'], { label: '칭호' }), F.bool(key, ['enabled'], { label: '사용 (게임에 나옴)', def: true, rerender: true })),
           c.enabled === false ? h('p', { class: 'hint c-warn' }, '꺼져 있음 — 맵에 놓은 것 · 몬스터 스폰 목록 · 이벤트 소환 · 동료 합류 · 이주 어디서도 나오지 않습니다 (원작 몬스터면 층의 몬스터 목록에서도 빠짐). 대사의 화자 이름 · 초상화는 그대로 씁니다.') : null,
@@ -402,12 +403,12 @@
         section('소리',
           (() => {
             const S = (label, f, hint) => F.sound(key, ['sounds', f], { label, kind: 'se', allowNone: true, noneLabel: '(소리 없음)', empty: c.game && c.useGame !== false ? ({ attack: '(게임 소리: hit — Assets.Sounds.HIT)', hurt: '(게임: 소리 없음)', die: '(게임: 소리 없음 — 몬스터 코드에 따로 있으면 그 소리)', talk: '(게임: 소리 없음)' }[f] || '(게임 소리)') : ({ attack: '(기본: hit)', hurt: '(기본: 소리 없음)', die: '(기본: 소리 없음)', talk: '(기본: 소리 없음)' }[f] || '(기본)'), hint, rerender: true });
-            const fighter = ['mob', 'boss'].includes(c.kind);
+            const fighter = PDM.isHostile(c.kind);
             return h('div', {},
               row(fighter ? S('공격할 때', 'attack', '공격이 맞을 때') : null, fighter ? S('다칠 때', 'hurt') : null, fighter ? S('쓰러질 때', 'die') : null, !fighter ? S('말 걸 때', 'talk', '영웅이 말을 걸 때') : null),
               PDM.extensions.on('charPortrait') ? h('p', { class: 'hint' }, '목소리(대사 글자 소리)는 위의 "초상화 · 표정" 칸에 있습니다. 🎚 로 사운드 편집기에서 편집합니다.') : null);
           })()),
-        ['mob', 'boss'].includes(c.kind) ? section('등장 · 전리품',
+        PDM.isHostile(c.kind) ? section('등장 · 전리품',
           c.game ? F.bool(key, ['noSpawn'], { label: '던전에 자동으로 나오지 않게 (등장 금지) — 게임이 층마다 뽑는 몬스터 목록에서 뺍니다. 맵에 직접 놓거나 이벤트로 소환한 것은 그대로 나옵니다', rerender: true }) : null,
           F.bool(key, ['noGameLoot'], { label: '게임 코드의 전리품을 떨어뜨리지 않음 (아래 드랍 테이블만 적용)' }),
           c.game ? (() => { const el = h('p', { class: 'hint m-0 mt-1' }, '게임 코드의 전리품: 읽는 중…'); PDM.gameMobLoot(c.game).then(t => { el.textContent = '게임 코드의 전리품: ' + (t || '없음') + ' — 자세한 코드는 위 "게임 코드의 실제 값"'; }); return el; })() : h('p', { class: 'hint m-0 mt-1' }, '게임 클래스가 아닌 PDMaker 캐릭터라 게임 코드의 전리품은 없습니다.'),
@@ -417,7 +418,7 @@
         section('능력치',
           row(F.num(key, ['stats', 'hp'], { label: '체력', min: 1, int: true }), F.num(key, ['stats', 'attackMin'], { label: '공격 최소', int: true }), F.num(key, ['stats', 'attackMax'], { label: '공격 최대', int: true })),
           row(F.num(key, ['stats', 'defense'], { label: '방어', int: true }), F.num(key, ['stats', 'accuracy'], { label: '명중', int: true }), F.num(key, ['stats', 'evasion'], { label: '회피', int: true }), F.num(key, ['stats', 'speed'], { label: '속도', step: 0.1 })),
-          ['mob', 'boss'].includes(c.kind) ? h('div', {},
+          PDM.isHostile(c.kind) ? h('div', {},
             h('div', { class: 'fl mt-3' }, '체력 (아이템 시험용 샌드백 등)'),
             row(F.bool(key, ['stats', 'infiniteHp'], { label: '체력 무한 — 피해 숫자는 뜨지만 체력이 줄지 않고 쓰러지지 않음', rerender: true }),
               F.num(key, ['stats', 'regen'], { label: '지속 회복량 (0 = 없음)', int: true, min: 0, def: 0, rerender: true }),
@@ -427,9 +428,9 @@
               h('button', { class: 'btn sm', title: '제자리에 고정 · 공격하지 않음 · 체력 무한', onclick: () => store.edit(key, '샌드백으로', o => { o.ai = o.ai || {}; o.ai.mode = 'fixed'; o.ai.fixedAttack = false; o.stats = o.stats || {}; o.stats.infiniteHp = true; }) }, '🎯 샌드백으로 (고정 · 체력 무한)'),
               h('span', { class: 'hint' }, '체력 무한이면 살펴보기 설명에 받은 피해(합계 · 횟수 · 평균 · 마지막)가 붙습니다 — 무기 · 마법봉 · 폭탄 피해를 재 보세요. 게임 캐릭터를 바탕으로 한 캐릭터에도 됩니다.'))) : null),
         section('AI · 경로',
-          ['mob', 'boss', 'npc', 'companion'].includes(c.kind) && PDM.combatSummary ? PDM.combatSummary(c) : null,
+          (PDM.isHostile(c.kind) || ['npc', 'companion'].includes(c.kind)) && PDM.combatSummary ? PDM.combatSummary(c) : null,
           row(F.select(key, ['ai', 'mode'], PDM.AI_MODES, { label: '행동 방식', rerender: true }), ['patrol', 'schedule'].includes(c.ai.mode) ? F.num(key, ['ai', 'wait'], { label: '점마다 쉬는 턴', int: true, min: 0 }) : null,
-            c.ai.mode === 'fixed' && ['mob', 'boss'].includes(c.kind) ? F.bool(key, ['ai', 'fixedAttack'], { label: '옆에 온 적은 공격 (끄면 가만히 맞기만 함)' }) : null),
+            c.ai.mode === 'fixed' && PDM.isHostile(c.kind) ? F.bool(key, ['ai', 'fixedAttack'], { label: '옆에 온 적은 공격 (끄면 가만히 맞기만 함)' }) : null),
           c.ai.mode === 'fixed' ? h('p', { class: 'hint' }, '그 자리에서 움직이지 않고, 밀치기(넉백) · 자리 바꾸기에도 밀려나지 않습니다.') : null,
           c.ai.mode === 'code' ? h('div', {},
             F.code(key, ['ai', 'code'], { sig: 'Boolean act(Mob self, MakerCharAI.Ctl ai, Hero hero, Level level) {   // 이 캐릭터의 차례마다', doc: PDM.codegen.CHARAI_DOC + ' 오류가 나면 원래 AI 로 움직이고 게임 안 경고로 알려 줍니다.', rows: 10, rerender: true }),

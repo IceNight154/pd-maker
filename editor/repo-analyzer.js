@@ -12,7 +12,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const JS = require('./renderer/js/javasrc.js');
 
-const VERSION = 2;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인
+const VERSION = 3;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인
 const SKIP_DIRS = new Set(['.git', '.gradle', 'build', 'node_modules', '.idea', '.vscode', '.cxx', '.externalNativeBuild']);
 const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']), AUD = new Set(['mp3', 'ogg', 'wav']), FONT = new Set(['ttf', 'otf', 'fnt']);
 const TEXT = new Set(['properties', 'json', 'xml', 'txt', 'md']);
@@ -449,6 +449,11 @@ function analyze(input, opts = {}) {
       for (const r0 of (R.messages.roots || ['messages'])) for (const L of ['', '_ko']) for (const a of assetRoots) { const f = byRel.get(`${a}/${r0}/${bundle}/${bundle}${L}.properties`); if (!f) continue;
         try { readText(f.abs).split(/\r?\n/).forEach(line => { if (line.startsWith('#')) return; const i = line.indexOf('='); if (i > 0) d[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }); } catch (_) { /* 위에서 기록 */ } }
       return (msgP[bundle] = d); };
+    /** 한 언어만 (별칭 · 원문 확인용): L = '' (기본) | '_en' | '_ko' … */
+    const propsL = (bundle, L) => { const k = bundle + '|' + L; if (msgP[k]) return msgP[k]; const d = {};
+      for (const r0 of (R.messages.roots || ['messages'])) for (const a of assetRoots) { const f = byRel.get(`${a}/${r0}/${bundle}/${bundle}${L}.properties`); if (!f) continue;
+        try { readText(f.abs).split(/\r?\n/).forEach(line => { if (line.startsWith('#')) return; const i = line.indexOf('='); if (i > 0) d[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }); } catch (_) { /* 위에서 기록 */ } }
+      return (msgP[k] = d); };
     const clean = s => String(s || '').replace(/\\n/g, ' ').replace(/_([^_]+)_/g, '$1').slice(0, 300);
     const where = d => ({ file: d.file, line: d.line });
     const dotted = (d, base) => { const r = d.file.slice(J.pkgDir.length + 1).replace(/\.java$/, ''); if (!r.startsWith(base + '/')) return null; const p = r.slice(base.length + 1).split('/').join('.'); return d.outer && d.depth > 0 ? p.split('.').slice(0, -1).concat(d.file.split('/').pop().replace(/\.java$/, '') + '$' + d.name).join('.').replace(/^\./, '') : p; };
@@ -461,13 +466,20 @@ function analyze(input, opts = {}) {
       const hs = readJ('scenes/HeroSelectScene.java') || '', msg = props('actors');
       const hb = /==\s*HeroClass\.(\w+)\s*\)\s*break\s*;/.exec(hs), cutAt = hb ? names.indexOf(hb[1]) : -1, skip = new Set();
       for (const m of JS.scan(hs).code.matchAll(/\bif\s*\(([^;{}]{0,600}?)\)\s*continue\s*;/g)) { const parts = m[1].split('||').map(t => /^\s*\w+\s*==\s*HeroClass\s*\.\s*(\w+)\s*$/.exec(t)); if (parts.every(Boolean)) parts.forEach(c => skip.add(c[1])); }
-      const line = JS.lineIndex(hc);
+      const line = JS.lineIndex(hc), en = propsL('actors', '_en'), skins = JS.heroSkins(hc, AS.map);
+      O.heroSkins = skins.map(x => Object.assign({}, x, { found: !!(x.sheet && assetExists(x.sheet)) }));
       O.heroes = names.map((n, i) => {
         const sheet = sheets.map[n] || sheets.def || '', a = sheet ? assetExists(sheet) : null, im = a ? asset(a.rel.slice(assetRoots.find(x => a.rel.startsWith(x + '/')).length + 1)) : null;
         const at = hc.search(new RegExp('^\\s*' + n + '\\s*[(,;]', 'm'));
         return { cls: n, name: clean(msg['actors.hero.heroclass.' + n.toLowerCase()]) || '', file: J.pkgDir + '/actors/hero/HeroClass.java', line: at >= 0 ? line(at) : 0,
           sheet, sheetConst: sheets.consts[n] || '', sheetFound: !!a, sheetDecoded: !!(im && /decoded|header/.test(im.status)), sheetSize: im && im.w ? [im.w, im.h] : null,
-          conventional: sheet === 'sprites/' + n.toLowerCase() + '.png', hidden: (cutAt > 0 && i >= cutAt) || skip.has(n) };
+          conventional: sheet === 'sprites/' + n.toLowerCase() + '.png', hidden: (cutAt > 0 && i >= cutAt) || skip.has(n),
+          // 10차: 식별자(게임 enum 상수) · 번역 키 · 표시 이름 · 별칭을 따로 — 이름을 기준 저장소(WARRIOR → 전사)로 바꾸지 않음
+          id: n, nameKey: 'actors.hero.heroclass.' + n.toLowerCase(), descKey: 'actors.hero.heroclass.' + n.toLowerCase() + '_desc',
+          nameSource: msg['actors.hero.heroclass.' + n.toLowerCase()] ? 'repo' : 'class',
+          desc: clean(msg['actors.hero.heroclass.' + n.toLowerCase() + '_desc']),
+          aliases: [...new Set([n, clean(en['actors.hero.heroclass.' + n.toLowerCase()]), sheet ? sheet.split('/').pop().replace(/\.\w+$/, '').toUpperCase() : ''].filter(x => x && x !== clean(msg['actors.hero.heroclass.' + n.toLowerCase()])))],
+          spriteKind: !sheet ? 'none' : sheets.map[n] ? 'direct' : 'default', skinSheets: skins.length };
       });
       O.heroFrame = frame;
       const odd = O.heroes.filter(x => x.sheet && !x.conventional);
@@ -476,7 +488,47 @@ function analyze(input, opts = {}) {
       if (/Dungeon\.hero\s*\.\s*\w*[Ss]kin|switch\s*\(\s*Dungeon\.hero\./.test((JS.method(hc, /String\s+spritesheet\s*\(\s*\)\s*\{/) || {}).body || '')) R.features.push({ id: 'hero-skin', label: '게임 중 바뀌는 영웅 그림(스킨)', evidence: 'HeroClass.spritesheet() 가 Dungeon.hero 값으로 다른 시트를 고름', effect: '편집기는 기본 시트만 연결 — 스킨 시트는 미지원 (원본 코드 그대로 동작)' });
     }
 
-    // 몬스터 · NPC
+    // ---- 10차: 층 구성 (Dungeon.newLevel) · 층 연결 (LevelTransition) · 고정 맵 (build) — 몬스터 분류(보스 층에 나오는지)에도 씀
+    const terrainMap = JS.terrain(readJ('levels/Terrain.java'));
+    const dsrc = readJ('Dungeon.java'), LS = JS.levelSlots(dsrc);
+    const levelInfo = {};
+    const levelOf = cls => { if (levelInfo[cls] !== undefined) return levelInfo[cls]; const d = resolveType(cls); if (!d) return (levelInfo[cls] = null);
+      const lay = JS.staticLayout(d.src, terrainMap), proc = isA(d, 'RegularLevel');
+      return (levelInfo[cls] = { cls, file: d.file, line: d.line, parent: d.ext, generator: proc ? 'procedural' : lay.determined ? 'fixed' : lay.partial ? 'fixed-partial' : 'code',
+        layout: { w: lay.w, h: lay.h, determined: lay.determined, partial: !!lay.partial, ops: lay.ops, entrance: lay.entrance, exit: lay.exit, unresolved: lay.unresolved.slice(0, 20), buildLine: lay.line, tiles: lay.determined ? lay.tiles : null },
+        transitions: JS.levelTransitions(d.src).map(t => Object.assign(t, { file: d.file })),
+        spawns: [...new Set([...JS.scan(d.src).bare.matchAll(/\bnew\s+([A-Z]\w*)\s*\(/g)].map(x => x[1]))] }); };
+    O.maps = { file: J.pkgDir + '/Dungeon.java', line: LS.line, bossDepths: LS.bossDepths, problems: LS.problems, terrainCount: Object.keys(terrainMap).length,
+      slots: LS.slots.map(x => { const fb = x.cls === 'DeadEndLevel' || x.depth === 'default' || x.depth == null || x.branch === 'default';
+        const dl = Array.isArray(x.depth) ? x.depth.filter(n => n !== 'default') : [];
+        return Object.assign({}, x, { depth: dl, fallback: fb, boss: dl.length > 0 && dl.every(n => LS.bossDepths.includes(n)) }); }),
+      levels: {}, terrain: terrainMap };
+    for (const sl of O.maps.slots) if (!sl.fallback) { const li = levelOf(sl.cls); if (li) O.maps.levels[sl.cls] = li; else sl.missing = true; }
+    O.maps.unusedLevels = all().filter(d => d.kind === 'class' && !d.abstract && isA(d, 'Level') && !O.maps.levels[d.name] && d.name !== 'DeadEndLevel').map(d => ({ cls: d.name, file: d.file, line: d.line }));
+    // 보스 층 클래스에서 만드는 몬스터 → 분류 근거
+    const bossSpawn = {};
+    for (const sl of O.maps.slots) if (sl.boss && O.maps.levels[sl.cls]) for (const n of O.maps.levels[sl.cls].spawns) (bossSpawn[n] = bossSpawn[n] || []).push(`${O.maps.levels[sl.cls].file} (${sl.depth.join(',')}층)`);
+    // 원작 SPD 의 층 클래스 (구조 차이를 말할 때의 기준 — 이 밖의 층 클래스 · 자리가 "추가 맵")
+    const SPD_LEVELS = { SewerLevel: 'r', SewerBossLevel: 'b', PrisonLevel: 'r', PrisonBossLevel: 'b', CavesLevel: 'r', CavesBossLevel: 'b', CityLevel: 'r', CityBossLevel: 'b', HallsLevel: 'r', HallsBossLevel: 'b', LastLevel: 'l', MiningLevel: 'q', VaultLevel: 'q', DeadEndLevel: 'f', LastShopLevel: 'r' };
+    O.maps.slots.forEach(x => { x.extra = !x.fallback && !SPD_LEVELS[x.cls]; });
+    const extraSlots = O.maps.slots.filter(x => x.extra);
+    if (extraSlots.length) R.features.push({ id: 'extra-maps', label: `원작에 없는 맵 ${extraSlots.length}개 (추가 층 · 갈래 · 던전 밖 · 보스 층 교체)`,
+      evidence: extraSlots.map(x => `${x.cls}(${x.depth.join(',')}·${x.branch})`).slice(0, 6).join(', ') + (extraSlots.length > 6 ? ` 외 ${extraSlots.length - 6}` : '') + ` (${J.pkgDir}/Dungeon.java:${LS.line})`,
+      effect: '맵 그래프 "게임 저장소의 맵" 에 표시 · 게임 원래 맵 노드로 가져오기 (고정 맵은 타일까지)' });
+
+    /** 클래스 본문에서 메서드 본문 (자기 → 부모) */
+    const inheritMethod = (d, re) => { let cur = d, guard = 0; while (cur && guard++ < 30) { const m = JS.method(ownBody(cur), re); if (m) return { m, from: cur }; cur = cur.ext ? resolveType(cur.ext, cur) : null; } return null; };
+    /** properties.add(Property.X) — 자기 · 부모의 초기화 블록에서 (메서드 · 조건 안이면 conditional) */
+    const propsOf = d => { const out = []; let cur = d, guard = 0;
+      while (cur && guard++ < 30) { const b = ownBody(cur), sb = JS.scan(b).bare;
+        for (const q of sb.matchAll(/properties\.add\s*\(\s*(?:Char\.)?Property\.(\w+)\s*\)/g)) {
+          const ifs = JS.enclosingIfs(sb, q.index); let dd = 0, inMethod = false;
+          for (let k = q.index - 1; k >= 0; k--) { const ch = sb[k]; if (ch === '}') dd++; else if (ch === '{') { if (dd) { dd--; continue; } const pre = sb.slice(Math.max(0, k - 200), k); if (/\)\s*(throws[\w\s,.]*)?$/.test(pre) && !/\b(if|for|while|switch|catch|synchronized)\s*\([^()]*(\([^()]*\)[^()]*)*\)\s*$/.test(pre)) { inMethod = true; break; } } }
+          out.push({ prop: q[1], from: cur.name, file: cur.file, line: cur.line + b.slice(0, q.index).split('\n').length - 1, conditional: inMethod || ifs.length > 0 }); }
+        cur = cur.ext ? resolveType(cur.ext, cur) : null; }
+      return out; };
+    const STAT = { attack: /Random\.NormalIntRange\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/, int: /^\s*return\s+(\d+)\s*;\s*$/ };
+
     const spriteCache = {};
     const spriteOf = (ref, from) => {
       if (!ref) return null;
@@ -517,11 +569,50 @@ function analyze(input, opts = {}) {
       else if (!sp || !sp.sheet || !sp.frame || !sp.anims || !sp.anims.idle) reasons.push('스프라이트를 읽지 못함: ' + ((sp && sp.problems) || []).join(' · '));
       const spriteOk = !!(sp && sp.sheet && sp.sheetFound && sp.frame && sp.anims && sp.anims.idle);
       if (spr && sp && !spriteOk && !reasons.some(x => x.startsWith('스프라이트'))) reasons.push('스프라이트를 읽지 못함: ' + (sp.problems.length ? sp.problems.join(' · ') : !sp.sheetFound ? '그림 파일 없음 ' + (sp.sheet || '') : '알 수 없음'));
+      // 10차: 더 많은 능력치 (코드에 숫자로 적힌 것만 — 계산식이면 비움) · 어디서 왔는지
+      const dmg = inheritMethod(d, /int\s+damageRoll\s*\(\s*\)\s*\{/), acc = inheritMethod(d, /int\s+attackSkill\s*\(\s*Char\s+\w+\s*\)\s*\{/), dr = inheritMethod(d, /int\s+drRoll\s*\(\s*\)\s*\{/);
+      const dmgM = dmg && /^\s*return\s+Random\.NormalIntRange\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*;\s*$/.exec(dmg.m.body), accM = acc && STAT.int.exec(acc.m.body), drM = dr && /Random\.NormalIntRange\s*\(\s*0\s*,\s*(\d+)\s*\)/.exec(dr.m.body);
+      const spd = inherit(d, /\bbaseSpeed\s*=\s*([\d.]+)f?\s*;/), mx = inherit(d, /\bmaxLvl\s*=\s*(-?\d+)\s*;/), loot = inherit(d, /\bloot\s*=\s*(?:new\s+)?([\w.]+?)\s*(?:\.class|\(\s*\))\s*;/), lootCh = inherit(d, /\blootChance\s*=\s*([\d.]+)f?\s*;/);
+      const extra = { attackMin: dmgM ? +dmgM[1] : null, attackMax: dmgM ? +dmgM[2] : null, accuracy: accM ? +accM[1] : null, defense: drM ? +drM[1] : null, speed: spd ? +spd.v : null, maxLvl: mx ? +mx.v : null };
+      const extraFrom = {}; [['attackMin', dmg], ['attackMax', dmg], ['accuracy', acc], ['defense', dr], ['speed', spd], ['maxLvl', mx]].forEach(([k, v]) => { if (v && extra[k] != null && v.from.name !== d.name) extraFrom[k] = v.from.name; });
+      // 분류 근거 — 이름에 Boss 가 있는지만으로 정하지 않음
+      const props = propsOf(d), ev = [];
+      props.filter(x => x.prop === 'BOSS').forEach(x => ev.push({ kind: x.conditional ? 'boss-property-conditional' : 'boss-property', to: 'boss', weight: x.conditional ? 1 : 3, where: `${x.file}:${x.line}` + (x.from !== d.name ? ` (${x.from} 에서 이어받음)` : '') }));
+      props.filter(x => x.prop === 'MINIBOSS').forEach(x => ev.push({ kind: x.conditional ? 'miniboss-property-conditional' : 'miniboss-property', to: 'elite', weight: x.conditional ? 1 : 3, where: `${x.file}:${x.line}` + (x.from !== d.name ? ` (${x.from} 에서 이어받음)` : '') }));
+      if (/BossHealthBar\.assignBoss\s*\(\s*this\s*\)/.test(JS.scan(ownBody(d)).bare)) ev.push({ kind: 'boss-health-bar', to: 'boss', weight: 2, where: d.file });
+      if (bossSpawn[d.name]) ev.push({ kind: 'boss-level-spawn', to: 'boss', weight: 2, where: bossSpawn[d.name].join(', ') });
+      if (/(^|\/)miniboss\//.test(d.file)) ev.push({ kind: 'miniboss-package', to: 'elite', weight: 1, where: d.file });
+      if (/boss/i.test(d.name) && !/mini/i.test(d.name)) ev.push({ kind: 'name', to: 'boss', weight: 1, where: d.name });
+      const npcCls = isA(d, 'NPC'); if (npcCls) ev.push({ kind: 'npc-class', to: 'npc', weight: 3, where: 'extends NPC' });
+      const score = to => ev.filter(e => e.to === to).reduce((a, e) => a + e.weight, 0);
+      const sb = score('boss'), se = score('elite');
+      let category = npcCls ? 'npc' : 'mob', confidence = npcCls ? 'high' : 'none', review = false;
+      if (!npcCls) {
+        if (sb >= 3) { category = 'boss'; confidence = 'high'; }
+        else if (se >= 3) { category = 'elite'; confidence = 'high'; }
+        else if (sb >= 2) { category = 'boss'; confidence = 'medium'; }
+        else if (sb > 0 || se > 0) { category = 'review'; confidence = 'low'; review = true; }   // 약한 근거만 — 확인 필요
+        if (sb >= 3 && se >= 3 && !props.some(x => x.prop === 'BOSS' && !x.conditional)) { category = 'review'; review = true; confidence = 'low'; }
+      }
+      const classify = { category, confidence, review, evidence: ev, rule: '보스 속성(Property.BOSS) · 미니보스 속성 · 보스 체력 막대 · 보스 층에서 생성 · 패키지 · 이름 — 약한 근거만 있으면 확인 필요' };
+      const nameKey = key + '.name', nameSource = amsg[nameKey] ? 'repo' : 'class';
       return Object.assign(where(d), { cls: ref || d.name, simple: d.name, npc: isA(d, 'NPC'), abstract: d.abstract, base, parent: d.ext, name, desc: clean(amsg[key + '.desc']),
+        nameKey, nameSource, displayName: name || d.name, classify, properties: [...new Set(props.map(x => x.prop))], loot: loot ? loot.v : '', lootChance: lootCh ? +lootCh.v : null,
+        spriteKind: spr ? (spr.from.name !== d.name ? 'inherited' : 'direct') : sprDyn ? 'dynamic' : 'none', spriteExpr: sprDyn ? sprDyn.v.trim() : '',
+        statsExtra: extra, statsExtraFrom: extraFrom,
         sprite: spr ? { ref: spr.v, from: spr.from.name !== d.name ? spr.from.name : '', cls: sp && sp.cls, file: sp && sp.file, sheet: sp && sp.sheet, frame: sp && sp.frame, anims: sp && sp.anims, sheetFound: sp && sp.sheetFound, sheetSize: sp && sp.sheetSize, problems: sp ? sp.problems : [], inherited: sp && sp.inherited } : null,
         stats: { hp: hp ? +hp.v : null, evasion: def ? +def.v : null, exp: exp ? +exp.v : null, from: Object.fromEntries([['hp', hp], ['evasion', def], ['exp', exp]].filter(([, v]) => v && v.from.name !== d.name).map(([k, v]) => [k, v.from.name])) },
         convertible: !d.abstract && !base && !!ref, spriteOk, reasons });
     });
+    // 보스 · 엘리트 클래스 안에 든 소환수 (Pompeii.BossSlug extends LavaSlug 등) — 자기 보스 속성이 없으면 일반 몬스터로 (근거: 소환한 쪽)
+    for (const m of O.mobs) {
+      if (!m.cls.includes('$') || m.classify.category === 'npc' || m.properties.includes('BOSS') || m.properties.includes('MINIBOSS')) continue;
+      if (!['review', 'mob'].includes(m.classify.category)) continue;
+      const outerCls = m.cls.split('$')[0], outer = O.mobs.find(x => x.cls === outerCls);
+      if (!outer || !['boss', 'elite'].includes(outer.classify.category)) continue;
+      m.classify.evidence.push({ kind: 'summon-of', to: 'mob', weight: 2, where: `${outer.cls} (${outer.classify.category}) 안에 정의된 클래스 · 보스 속성 없음` });
+      m.classify.category = 'mob'; m.classify.confidence = 'medium'; m.classify.review = false; m.classify.summonOf = outer.cls;
+    }
 
     // 아이템
     const items = all().filter(d => d.kind === 'class' && isA(d, 'Item'));
@@ -541,12 +632,47 @@ function analyze(input, opts = {}) {
     O.charSprites = group('CharSprite', 'sprites'); O.windows = group('Window', 'windows'); O.scenes = group('PixelScene', 'scenes');
     const tal = readJ('actors/hero/Talent.java'); O.talents = tal ? JS.enumConstants(tal, 'Talent').length : 0;
     const sub = readJ('actors/hero/HeroSubClass.java'); O.subclasses = sub ? JS.enumConstants(sub, 'HeroSubClass').filter(x => x !== 'NONE') : [];
+
+    // ---- 10차: 업적 · 배지 (Badges.java enum Badge — 인자 없는 상수 · 탭/공백 들여쓰기 · 글자 키 두 형식 모두)
+    const bsrc = readJ('Badges.java');
+    if (bsrc) {
+      const mk = Object.assign({}, propsL('misc', '_en'), props('misc')), sk = AS.map['Interfaces.BADGES'] || 'interfaces/badges.png', sa = asset(sk);
+      const B = JS.badges(bsrc, { msgs: mk, banner: readJ('effects/BadgeBanner.java'), sheetSize: sa && sa.w ? [sa.w, sa.h] : null });
+      O.badges = { file: J.pkgDir + '/Badges.java', sheet: Object.assign({ file: sk, found: !!sa }, B.sheet, { cellFrom: B.sheet.cellFrom === 'BadgeBanner' ? J.pkgDir + '/effects/BadgeBanner.java' : B.sheet.cellFrom }), textKeys: B.textKeys, list: B.list.map(b => Object.assign(b, { name: clean(b.name), desc: clean(b.desc) })) };
+      const sheetCols = B.sheet.cols, cell = B.sheet.cell;
+      if (O.badges.textKeys === 'single') R.features.push({ id: 'badge-text-single', label: '배지 글자 키가 한 줄 (badges$badge.<이름> — 설명 키 없음)', evidence: 'messages/misc', effect: '배지 이름을 이 키에서 읽음 (예전: .title · .desc 만 찾아 이름이 비었음)' });
+      if (sheetCols && sheetCols !== 8) R.features.push({ id: 'badge-sheet-geometry', label: `배지 그림 시트 한 줄 ${sheetCols}칸 (${cell}px)`, evidence: `${sk} ${sa.w}×${sa.h}`, effect: '배지 그림 칸 계산을 시트 너비로 (예전: 8칸으로 고정)' });
+      if (/\n {2,}public\s+enum\s+Badge/.test(bsrc) && !/\n\t+public\s+enum\s+Badge/.test(bsrc)) R.features.push({ id: 'badge-indent-spaces', label: 'Badges.java 가 공백 들여쓰기', evidence: O.badges.file, effect: '얻는 조건 줄을 들여쓰기와 상관없이 찾음 (예전: 탭만)' });
+    }
+
+    // ---- 10차: 타이틀 화면 (TitleScene.create · BannerSprites)
+    const tsrc = readJ('scenes/TitleScene.java');
+    if (tsrc) {
+      const T = JS.titleScene(tsrc, AS.map), rects = JS.bannerRects(readJ('effects/BannerSprites.java')), smsg = props('scenes');
+      const bk = AS.map['Interfaces.BANNERS'] || 'interfaces/banners.png';
+      T.file = J.pkgDir + '/scenes/TitleScene.java';
+      T.banner = { file: bk, found: !!assetExists(bk), rects };
+      T.logoRect = T.logo ? { land: rects[T.logo.land] || null, port: rects[T.logo.port] || null } : null;
+      T.glowRect = T.glow ? { land: rects[T.glow.land] || null, port: rects[T.glow.port] || null } : null;
+      T.buttons.forEach(b => { b.label = clean(smsg['scenes.titlescene.' + b.key]) || ''; b.labelKey = 'scenes.titlescene.' + b.key; });
+      T.musicFound = T.music.map(x => ({ key: x.key, file: x.file, found: !!(x.file && assetExists(x.file)) }));
+      O.title = T;
+      const STD = ['play', 'support', 'rankings', 'journal', 'news', 'changes', 'settings', 'about'];
+      if (JSON.stringify(T.buttons.map(b => b.id)) !== JSON.stringify(STD)) R.features.push({ id: 'title-buttons', label: '타이틀 버튼 구성이 다름', evidence: T.buttons.map(b => b.id).join(', ') + ` (${T.file})`, effect: '타이틀 편집기 · 미리보기가 이 저장소의 버튼 · 줄 배치 · 아이콘을 씀' });
+      if (T.logo && T.logo.land === T.logo.port && !/TITLE_/.test(T.logo.land)) R.features.push({ id: 'title-classic-logo', label: `타이틀 로고 ${T.logo.land} (가로 · 세로 같은 그림)`, evidence: `${T.banner.file} ${JSON.stringify(T.logoRect.land)}`, effect: '미리보기 로고 · 빛 글씨 · 횃불 자리를 저장소 값으로' });
+    }
+
     // 층마다 나오는 몬스터 목록 (standardMobRotation 이 있는 클래스 — 원작 MobSpawner)
     const rot = [...parsed.entries()].find(([, p]) => /\bstandardMobRotation\s*\(/.test(p.src) && /ArrayList<\s*Class<\s*\?\s*extends\s+Mob\s*>\s*>\s+standardMobRotation|static\s+[\w<>?,\s]+standardMobRotation\s*\(/.test(p.src));
     O.mobRotation = rot ? { file: rot[0], rel: rot[0].slice(J.pkgDir.length + 1), line: JS.lineIndex(rot[1].src)(rot[1].src.search(/standardMobRotation\s*\(/)) } : null;
     if (O.mobRotation && O.mobRotation.rel !== 'actors/mobs/MobSpawner.java') R.features.push({ id: 'mob-rotation-class', label: '층별 몬스터 목록 클래스 이름이 다름', evidence: `${O.mobRotation.file}:${O.mobRotation.line} (standardMobRotation)`, effect: '맵 편집기 "몬스터 스폰" · 드랍 테이블 "게임 목록 가져오기" 가 이 파일을 읽음 (예전: MobSpawner.java 고정 → 읽지 못함)' });
     // 지역 Level 클래스 (편집기 테마 SEWER … HALLS 가 기대하는 것)
     O.regionLevels = ['SewerLevel', 'PrisonLevel', 'CavesLevel', 'CityLevel', 'HallsLevel'].map(n => ({ cls: n, found: !!types.get(n) }));
+    // ---- 10차: 저장소 프로파일 — 폴더 경로가 아니라 게임 구조로 (폴더를 옮겨도 같은 값)
+    const entry = ((R.source.entry || {}).game || [])[0];
+    const pidSrc = [J.pkg, entry ? entry.cls : '', (O.heroes || []).map(x => x.cls).join(','), (O.maps.slots || []).filter(x => !x.fallback).map(x => x.cls).join(',')].join('|');
+    let appName = R.build.appName; const bk2 = byRel.get('build.gradle.pdmaker-backup'); if (bk2) { try { const pb = JS.gradleProps(readText(bk2.abs)); if (pb.appName) appName = pb.appName; } catch (_) { /* 그대로 */ } }
+    R.profile = { id: crypto.createHash('sha1').update(pidSrc).digest('hex').slice(0, 12), label: appName || R.name, entry: entry ? entry.cls : '', pkg: J.pkg, heroes: (O.heroes || []).map(x => x.cls) };
     const heroMissing = (O.heroes || []).filter(x => !x.sheetFound).length;
     if (heroMissing) R.warnings.push({ phase: '게임 객체', reason: `영웅 ${heroMissing}명의 그림 파일을 찾지 못함` });
   });

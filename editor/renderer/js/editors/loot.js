@@ -60,7 +60,7 @@
       const p = store.get('project') || {};
       const loot = p.loot || {};
       const st = ctx.state = ctx.state || { page: 'chest' };
-      const mobs = store.all('char').filter(c => ['mob', 'boss'].includes(c.kind));
+      const mobs = store.all('char').filter(c => PDM.isHostile(c.kind));
       const ensure = k => store.edit('project', '상자 드랍 테이블', o => { o.loot = o.loot || {}; o.loot[k] = o.loot[k] || { mode: 'add', pick: 'each', rows: [] }; });
       // 쪽: 상자류 · 몬스터 · 아이템 · 금화 (예전에는 한 화면에 상자류 · 몬스터만)
       const PAGES = { chest: '▣ 상자류', mob: '☠ 몬스터', item: '🎁 아이템', gold: '🪙 금화', theme: '🗺 테마별 몬스터' };

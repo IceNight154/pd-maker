@@ -230,10 +230,26 @@ public class MakerRuntime {
 			l.nodeId = id;
 			return l;
 		}
+		if ("game".equals(f.getString("mode", "procedural"))) {   // 10차: 게임 저장소의 층 클래스를 그대로 (편집기 "게임 저장소의 맵"에서 가져온 노드)
+			Level g = gameLevel(f.getString("gameLevel", ""));
+			if (g != null) return g;
+			log("게임 원래 맵 " + id + " 의 층 클래스(" + f.getString("gameLevel", "") + ")가 이 게임에 없습니다 — 테마 기본 생성기로 만듦");
+		}
 		String theme = WorldGraph.theme(id);
 		if (theme.startsWith("custom:")) theme = LevelHooks.customBase(theme.substring(7));
 		Level l = themeLevel(theme, f.getBoolean("boss", false));
 		return l != null ? l : themeLevel("SEWER", false);
+	}
+
+	/** 층 클래스 이름 → 새 인스턴스 (levels 패키지 · 이름만 — 리플렉션이라 그 클래스가 없는 게임에서도 컴파일됨). 없거나 못 만들면 null */
+	static Level gameLevel(String cls) {
+		if (cls == null || cls.isEmpty() || !cls.matches("[A-Za-z_$][\\w$.]*")) return null;
+		String name = cls.contains(".") ? cls : "com.shatteredpixel.shatteredpixeldungeon.levels." + cls;
+		try {
+			Class<?> c = com.watabou.utils.Reflection.forName(name);
+			if (c == null || !Level.class.isAssignableFrom(c)) return null;
+			return (Level) com.watabou.utils.Reflection.newInstance(c);
+		} catch (Throwable t) { log("층 클래스를 만들지 못했습니다: " + name + " — " + t); return null; }
 	}
 
 	/** 테마 이름 → SPD 레벨 생성기 */

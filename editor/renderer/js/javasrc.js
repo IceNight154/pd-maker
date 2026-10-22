@@ -309,5 +309,302 @@
     return out;
   }
 
-  return { lineIndex, scan, matchClose, structure, body, enumConstants, method, caseBodies, assets, evalInt, itemSheet, sprite, heroSheets, heroFrame, gradleProps, gradleIncludes, gradleSrcDirs };
+  // ================================================================ 10차: 저장소 데이터 (영웅 스킨 · 배지 · 지형 · 층 구성 · 층 연결 · 고정 맵 · 타이틀)
+
+  /** enum 상수와 인자: [{ name, args: ['4', 'BadgeType.GLOBAL'], line }] — 인자 없는 상수도 (args: []) */
+  function enumEntries(src, name) {
+    const st = structure(src), t = st.types.find(x => x.kind === 'enum' && (!name || x.name === name));
+    if (!t || t.close < 0) return [];
+    const b = st._s.bare, out = [];
+    let i = t.open + 1, d = 0, start = i;
+    const flush = end => {
+      const seg = b.slice(start, end), m = /^\s*(?:@\w+\s*)*([A-Za-z_$][\w$]*)\s*(\(([\s\S]*)\))?\s*(\{[\s\S]*\})?\s*$/.exec(seg);
+      if (m) { const args = m[3] !== undefined ? splitArgs(String(src).slice(start + seg.indexOf('(') + 1, start + seg.lastIndexOf(')'))) : [];
+        out.push({ name: m[1], args, line: st._s.line(start + seg.search(/\S/)) }); }
+    };
+    for (; i < t.close; i++) {
+      const ch = b[i];
+      if (ch === '(' || ch === '{' || ch === '[') d++;
+      else if (ch === ')' || ch === '}' || ch === ']') d--;
+      else if (!d && (ch === ',' || ch === ';')) { flush(i); start = i + 1; if (ch === ';') return out; }
+    }
+    if (b.slice(start, t.close).trim()) flush(t.close);
+    return out;
+  }
+  /** 인자 목록 나누기 (괄호 · 문자열 안의 쉼표는 그대로) */
+  function splitArgs(txt) {
+    const out = []; let d = 0, cur = '', q = '';
+    for (let i = 0; i < txt.length; i++) {
+      const ch = txt[i];
+      if (q) { cur += ch; if (ch === '\\') { cur += txt[++i] || ''; } else if (ch === q) q = ''; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if ('([{'.includes(ch)) d++; else if (')]}'.includes(ch)) d--;
+      if (ch === ',' && !d) { out.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  }
+
+  /** HeroClass.spritesheet() 안에서 this 가 아닌 값으로 고르는 시트 (스킨 등) → [{ on, case, key, sheet }] */
+  function heroSkins(src, assetsMap) {
+    const m = method(src || '', /String\s+spritesheet\s*\(\s*\)\s*\{/); if (!m) return [];
+    const out = [], b = m.body;
+    for (const sw of b.matchAll(/switch\s*\(\s*([^)]+?)\s*\)\s*\{/g)) {
+      if (/^this$/.test(sw[1].trim())) continue;
+      const open = sw.index + sw[0].length - 1, close = matchClose(scan(b).bare, open), seg = b.slice(open + 1, close < 0 ? b.length : close);
+      for (const x of seg.matchAll(/((?:\s*(?:case\s+[\w.]+|default)\s*:)+)\s*return\s+Assets\.(\w+)\.(\w+)\s*;/g)) {
+        const key = x[2] + '.' + x[3];
+        for (const c of x[1].matchAll(/case\s+([\w.]+)|default/g)) out.push({ on: sw[1].trim(), case: c[1] || 'default', key, sheet: (assetsMap || {})[key] || '' });
+      }
+    }
+    return out;
+  }
+
+  /** Terrain.java → { EMPTY: 1, WALL: 4, … } */
+  function terrain(src) {
+    const out = {};
+    for (const m of scan(src || '').code.matchAll(/static\s+final\s+int\s+([A-Z][A-Z0-9_]*)\s*=\s*(-?(?:0x[0-9a-fA-F]+|\d+))\s*;/g)) out[m[1]] = /0x/i.test(m[2]) ? parseInt(m[2], 16) : +m[2];   // AVOID = 0x20 (ARK 은 플래그 값을 지형 칸에 그대로 씀)
+    return out;
+  }
+
+  /** 문장 단위 미니 해석기 (if · else · switch · case · 블록 · 한 문장) — 층 구성 읽기용. bare(주석 · 문자열 걷은 것) 기준 */
+  function parseStatements(txt, from, to, ctx, onStmt, line) {
+    let i = from;
+    const skipWs = () => { while (i < to && /\s/.test(txt[i])) i++; };
+    const parenAt = j => { const o = txt.indexOf('(', j); const c = matchClose(txt, o); return [o, c]; };
+    const stmt = c => {
+      skipWs(); if (i >= to) return;
+      if (txt[i] === '{') { const c2 = matchClose(txt, i); parseStatements(txt, i + 1, c2 < 0 ? to : c2, c, onStmt, line); i = (c2 < 0 ? to : c2) + 1; return; }
+      const head = txt.slice(i, Math.min(to, i + 12));
+      if (/^if\s*\(/.test(head)) {
+        const [o, cl] = parenAt(i); const cond = txt.slice(o + 1, cl).trim(); i = cl + 1;
+        stmt(c.concat([{ if: cond }]));
+        skipWs();
+        if (/^else\b/.test(txt.slice(i, i + 5))) { i += 4; stmt(c.concat([{ if: cond, not: true }])); }
+        return;
+      }
+      if (/^switch\s*\(/.test(head)) {
+        const [o, cl] = parenAt(i); const on = txt.slice(o + 1, cl).trim(); const bo = txt.indexOf('{', cl); const bc = matchClose(txt, bo);
+        const inner = txt.slice(bo + 1, bc); let labels = [], k = 0, segStart = 0; const segs = [];
+        const lab = /\b(case\s+([^:]+?)\s*:|default\s*:)/g; let lm; let lastEnd = 0;
+        // 같은 깊이의 case 라벨만 (안쪽 switch 의 라벨은 그 안에서)
+        const depthAt = pos => { let d = 0; for (let q = 0; q < pos; q++) { if (inner[q] === '{') d++; else if (inner[q] === '}') d--; } return d; };
+        const marks = []; while ((lm = lab.exec(inner))) if (depthAt(lm.index) === 0) marks.push({ at: lm.index, end: lm.index + lm[0].length, val: lm[2] ? lm[2].trim() : 'default' });
+        for (let mi = 0; mi < marks.length; mi++) {
+          const segFrom = marks[mi].end, segTo = mi + 1 < marks.length ? marks[mi + 1].at : inner.length;
+          labels.push(marks[mi].val);
+          if (inner.slice(segFrom, segTo).trim()) { parseStatements(txt, bo + 1 + segFrom, bo + 1 + segTo, c.concat([{ switch: on, cases: labels.slice() }]), onStmt, line); labels = []; }
+        }
+        i = bc + 1; return;
+      }
+      // 한 문장 (; 까지, 괄호 안의 ; 는 건너뜀)
+      let j = i, d = 0;
+      while (j < to) { const ch = txt[j]; if ('([{'.includes(ch)) d++; else if (')]}'.includes(ch)) d--; else if (ch === ';' && d <= 0) break; j++; }
+      onStmt(txt.slice(i, j).trim(), c, line ? line(i) : 0);
+      i = j + 1;
+    };
+    while (i < to) { const before = i; stmt(ctx); if (i <= before) i = before + 1; }
+  }
+
+  /** Dungeon.newLevel() → 층 자리 [{ depth: [n…] | 'default', branch: n | null, cls, conds: ['extrastage_Gavial', …], line }] + 판정 메서드 내용 */
+  function levelSlots(dungeonSrc) {
+    const src = String(dungeonSrc || ''), s = scan(src), out = { slots: [], line: 0, bossDepths: [], problems: [] };
+    const mm = /static\s+Level\s+newLevel\s*\(\s*\)\s*\{/.exec(s.bare); if (!mm) { out.problems.push('Dungeon.newLevel() 을 찾지 못함'); return out; }
+    out.line = s.line(mm.index);
+    const open = s.bare.indexOf('{', mm.index + mm[0].length - 1), close = matchClose(s.bare, open);
+    // 같은 파일의 boolean 판정 메서드 (isInRhodes() { return depth == 0 && … }) — 조건을 풀어 볼 때 씀
+    const preds = {};
+    for (const p of s.bare.matchAll(/static\s+boolean\s+(\w+)\s*\(\s*\)\s*\{\s*return\s+([^;]+);\s*\}/g)) preds[p[1]] = p[2].trim();
+    const bl = /static\s+boolean\s+bossLevel\s*\(\s*int\s+depth\s*\)\s*\{\s*return\s+([^;]+);/.exec(s.bare);
+    if (bl) for (const q of bl[1].matchAll(/depth\s*==\s*(\d+)/g)) out.bossDepths.push(+q[1]);
+    const atoms = cond => { const e = String(cond).replace(/\b(\w+)\s*\(\s*\)/g, (m, n) => preds[n] ? '(' + preds[n] + ')' : m); return e; };
+    parseStatements(s.bare, open + 1, close, [], (st, ctx, line) => {
+      const m = /^(\w+)\s*=\s*new\s+(\w+)\s*\(\s*\)$/.exec(st); if (!m) return;
+      let depth = null, branch = null; const conds = [];
+      for (const c of ctx) {
+        if (c.switch) {
+          const on = c.switch.replace(/^Dungeon\./, ''), vals = c.cases.filter(v => v !== 'default').map(v => +v).filter(Number.isFinite), def = c.cases.includes('default');
+          if (on === 'depth') depth = def && !vals.length ? 'default' : vals.concat(def ? ['default'] : []);
+          else if (on === 'branch') branch = def && !vals.length ? 'default' : (vals.length === 1 ? vals[0] : vals);
+          else conds.push(`switch(${on}) = ${c.cases.join('|')}`);
+          continue;
+        }
+        const e = atoms(c.if);
+        if (!c.not) {
+          const bq = /\bbranch\s*==\s*(\d+)/.exec(e); if (bq && branch == null) branch = +bq[1];
+          const dq = /\bdepth\s*==\s*(\d+)/.exec(e); if (dq && depth == null) depth = [+dq[1]];
+          const rest = e.split('&&').map(x => x.trim()).filter(x => !/\b(branch|depth)\s*(==|>=|<=|>|<)\s*\d+/.test(x.replace(/^\(|\)$/g, '')));
+          rest.forEach(x => { const t = x.replace(/^\(+|\)+$/g, '').trim(); if (t) conds.push(t); });
+        } else {
+          if (!/\b(branch|depth)\s*==/.test(e)) conds.push('!(' + c.if + ')');
+        }
+      }
+      out.slots.push({ depth, branch: branch == null ? 0 : branch, cls: m[2], conds, line });
+    }, s.line);
+    return out;
+  }
+
+  /** 이 파일에 있는 LevelTransition 생성 → [{ cell, type, destDepth, destBranch, destType, conds, line }] (도착지가 숫자로 적힌 것만 destDepth 를 채움) */
+  function levelTransitions(src) {
+    const s = scan(src || ''), out = [];
+    for (const m of s.bare.matchAll(/new\s+LevelTransition\s*\(/g)) {
+      const o = m.index + m[0].length - 1, c = matchClose(s.bare, o); if (c < 0) continue;
+      const a = splitArgs(String(src).slice(o + 1, c)), type = (/Type\.(\w+)/.exec(a[2] || '') || [])[1] || '';
+      const t = { cell: a[1] || '', type, destDepth: null, destBranch: null, destType: '', conds: enclosingIfs(s.bare, m.index), line: s.line(m.index) };
+      if (a.length >= 6) { t.destDepth = /^-?\d+$/.test(a[3]) ? +a[3] : a[3]; t.destBranch = /^-?\d+$/.test(a[4]) ? +a[4] : a[4]; t.destType = (/Type\.(\w+)/.exec(a[5]) || [])[1] || ''; }
+      out.push(t);
+    }
+    return out;
+  }
+  /** pos 를 둘러싼 if 조건들 (가까운 것이 뒤) */
+  function enclosingIfs(bare, pos) {
+    const out = []; let d = 0;
+    for (let i = pos - 1; i >= 0; i--) {
+      const ch = bare[i];
+      if (ch === '}') d++;
+      else if (ch === '{') { if (d > 0) { d--; continue; }
+        const before = bare.slice(Math.max(0, i - 400), i), m = /(else\s+)?if\s*\(([\s\S]*)\)\s*$/.exec(before);
+        if (m) { // 괄호 짝이 맞는 조건만
+          const txt = m[2]; let k = 0, ok = true; for (const c2 of txt) { if (c2 === '(') k++; else if (c2 === ')') { k--; if (k < 0) { ok = false; break; } } }
+          if (ok && k === 0) out.unshift(txt.trim().replace(/\s+/g, ' '));
+        } else if (/\belse\s*$/.test(before)) out.unshift('else');
+        else if (/\)\s*$/.test(before) && /\b(void|boolean|int|Level)\s+\w+\s*\([^)]*\)\s*$/.test(before)) break;   // 메서드 시작
+      }
+    }
+    return out;
+  }
+
+  /** 고정 맵: Level.build() 를 글자 그대로 따라 그림 (setSize · Arrays.fill · Painter.fill · map[n] = …) — 모르는 문장이 지도를 바꿀 수 있으면 "확정 못 함" */
+  function staticLayout(src, terrainMap) {
+    const out = { determined: false, w: 0, h: 0, tiles: null, entrance: null, exit: null, unresolved: [], ops: 0, line: 0 };
+    const m = method(src || '', /boolean\s+build\s*\(\s*\)\s*\{/); if (!m) { out.unresolved.push({ line: 0, text: 'build() 없음 — 지도를 다른 곳에서 만듦' }); return out; }
+    out.line = m.line;
+    const sc = scan(m.body), T = terrainMap || {}, env = {};
+    let map = null, W = 0, H = 0;
+    const lineOf = i => m.line + m.body.slice(0, i).split('\n').length - 1;
+    const tval = e => { e = String(e).trim(); const q = /^Terrain\.([A-Z][A-Z0-9_]*)$/.exec(e) || /^([A-Z][A-Z0-9_]*)$/.exec(e); return q && T[q[1]] !== undefined ? T[q[1]] : null; };
+    const ival = e => { const ex = Object.assign({ width: W, height: H }, env); if (out.entrance != null) ex.entrance = out.entrance; if (out.exit != null) ex.exit = out.exit;
+      return evalInt(String(e).replace(/\bwidth\s*\(\s*\)/g, 'width').replace(/\bheight\s*\(\s*\)/g, 'height'), ex); };
+    const touchesMap = st => /\bmap\b|Painter\.|setSize|buildFlagMaps|cleanWalls|\bset\s*\(/.test(st);
+    const IGNORE = /^(entrance|exit)\s*=|^feeling\s*=|^return\b|^(customTiles|customWalls|transitions|mobs|heaps|plants|traps)\b|^\w+(\.\w+)*\s+\w+\s*=\s*new\s+\w+(\.\w+)*\s*\(\s*\)$|^\w+\.setRect\(|^(super\.)?(addVisuals|createMobs|createItems)\b/;
+    parseStatements(sc.bare, 0, sc.bare.length, [], (st0, ctx, li) => {
+      const st = sc.code.slice(sc.bare.indexOf(st0), sc.bare.indexOf(st0) + st0.length) || st0, at = lineOf(sc.bare.indexOf(st0));
+      if (ctx.length) { if (touchesMap(st)) out.unresolved.push({ line: at, text: '조건 · 반복 안에서 지도를 바꿈: ' + st.slice(0, 80) }); return; }
+      let q;
+      if ((q = /^setSize\s*\(\s*([^,]+),\s*([^)]+)\)$/.exec(st))) { const w = ival(q[1]), h = ival(q[2]); if (w && h) { W = w; H = h; map = new Array(W * H).fill(0); out.ops++; } else out.unresolved.push({ line: at, text: st }); return; }
+      if ((q = /^(?:final\s+)?int\s+(\w+)\s*=\s*([^;]+)$/.exec(st))) { const v = ival(q[2]); if (v !== null) env[q[1]] = v; else if (touchesMap(st)) out.unresolved.push({ line: at, text: st }); return; }
+      if ((q = /^Arrays\.fill\s*\(\s*map\s*,\s*([^)]+)\)$/.exec(st))) { const v = tval(q[1]); if (map && v !== null) { map.fill(v); out.ops++; } else out.unresolved.push({ line: at, text: st }); return; }
+      if ((q = /^Painter\.fill\s*\(\s*this\s*,([\s\S]+)\)$/.exec(st))) {
+        const a = splitArgs(q[1]); if (a.length === 5 && map) { const [x, y, w, h] = a.slice(0, 4).map(ival), v = tval(a[4]);
+          if ([x, y, w, h].every(n => n !== null) && v !== null) { for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if (xx >= 0 && yy >= 0 && xx < W && yy < H) map[yy * W + xx] = v; out.ops++; return; } }
+        out.unresolved.push({ line: at, text: st }); return;
+      }
+      if (/^map\s*\[/.test(st)) {   // map[a] = map[b] = Terrain.X
+        const parts = st.split('=').map(x => x.trim()), v = tval(parts[parts.length - 1]);
+        const idx = parts.slice(0, -1).map(p => { const r = /^map\s*\[([^\]]+)\]$/.exec(p); return r ? ival(r[1]) : null; });
+        if (map && v !== null && idx.every(n => n !== null && n >= 0 && n < map.length)) { idx.forEach(n => { map[n] = v; }); out.ops++; } else out.unresolved.push({ line: at, text: st });
+        return;
+      }
+      if ((q = /^(entrance|exit)\s*=\s*([^;]+)$/.exec(st))) { const v = ival(q[2]); out[q[1]] = v; return; }
+      if (IGNORE.test(st)) return;
+      if (touchesMap(st) || /^\w+\s*\(/.test(st)) out.unresolved.push({ line: at, text: st.slice(0, 120) });
+    }, null);
+    out.w = W; out.h = H;
+    if (map && !out.unresolved.length && out.ops > 0) { out.determined = true; out.tiles = map; }
+    else if (map && out.ops > 0) out.partial = true;
+    return out;
+  }
+
+  /** BannerSprites.java → { PIXEL_DUNGEON: [x, y, w, h] } (uvRect(x1, y1, x2, y2)) */
+  function bannerRects(src) {
+    const out = {};
+    for (const m of scan(src || '').code.matchAll(/case\s+(\w+)\s*:\s*icon\.frame\(\s*icon\.texture\.uvRect\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*\)/g)) out[m[1]] = [+m[2], +m[3], +m[4] - +m[2], +m[5] - +m[3]];
+    return out;
+  }
+
+  /** TitleScene.create() → 음악 · 배경 · 로고 · 횃불 · 버튼(글 키 · 아이콘 · 여는 화면) · 줄 배치 (가로 · 세로) */
+  function titleScene(src, assetsMap) {
+    const out = { line: 0, music: [], background: [], logo: null, glow: null, torches: { land: [], port: [] }, buttons: [], rows: { land: [], port: [] }, btnHeight: null, version: false, problems: [] };
+    const m = method(src || '', /void\s+create\s*\(\s*\)\s*\{/); if (!m) { out.problems.push('TitleScene.create() 를 찾지 못함'); return out; }
+    out.line = m.line;
+    const sc = scan(m.body), code = sc.code, bare = sc.bare, lineOf = i => m.line + m.body.slice(0, i).split('\n').length - 1;
+    const A = assetsMap || {};
+    for (const q of code.matchAll(/Assets\.Music\.(\w+)/g)) { const k = 'Music.' + q[1]; if (!out.music.some(x => x.key === k)) out.music.push({ key: k, file: A[k] || '' }); }
+    for (const q of bare.matchAll(/\bnew\s+(Archs|TitleBackground|\w*Background\w*|\w*Archs\w*)\s*\(/g)) if (!out.background.includes(q[1])) out.background.push(q[1]);
+    // 로고 · 빛나는 글씨: BannerSprites.get(…) — 첫 번째 = 로고, new Image(BannerSprites.get(…)) = 글씨 빛
+    const typesOf = e => { const t = [...e.matchAll(/Type\.(\w+)/g)].map(x => x[1]); return /landscape\(\)\s*\?/.test(e) && t.length === 2 ? { land: t[0], port: t[1] } : { land: t[0], port: t[0] }; };
+    for (const q of code.matchAll(/BannerSprites\.get\s*\(([^;]*?Type\.\w+[^;]*?)\)\s*[;)]/g)) {
+      const t = typesOf(q[1]), isGlow = /new\s+Image\s*\(\s*$/.test(code.slice(Math.max(0, q.index - 30), q.index));
+      if (isGlow && !out.glow) out.glow = t; else if (!out.logo) out.logo = t;
+    }
+    // 횃불: placeTorch(title.x + A, title.y + B) / (title.x + title.width - A, …) — if (landscape()) { … } else { … } 안이면 방향별
+    for (const q of code.matchAll(/placeTorch\s*\(\s*title\.x\s*\+\s*(?:title\.width(?:\(\))?\s*-\s*)?(\d+)\s*,\s*title\.y\s*\+\s*(\d+)\s*\)/g)) {
+      const fromRight = /width/.test(q[0]), pt = { x: +q[1], y: +q[2], fromRight }, ifs = enclosingIfs(bare, q.index);
+      const land = ifs.some(c => /^landscape\(\)$/.test(c)), port = ifs.some(c => c === 'else') && !land;
+      if (land) out.torches.land.push(pt); else if (port) out.torches.port.push(pt); else { out.torches.land.push(pt); out.torches.port.push(pt); }
+    }
+    // 버튼
+    const KEY2ID = { enter: 'play', play: 'play' };
+    for (const q of code.matchAll(/(?:\w+\s+)?(\w+)\s*=\s*new\s+(\w+)\s*\(\s*[^,()]+\s*,\s*Messages\.get\s*\(\s*(?:this|TitleScene\.class)\s*,\s*"(\w+)"\s*\)\s*\)/g)) {
+      const v = q[1], key = q[3], ic = new RegExp('\\b' + v + '\\.icon\\s*\\(\\s*Icons\\.get\\s*\\(\\s*Icons\\.(\\w+)').exec(code);
+      // 누르면 여는 화면: 익명 클래스 본문 또는 이름 있는 안쪽 클래스의 onClick
+      let scene = '', window = '';
+      const after = code.slice(q.index + q[0].length, q.index + q[0].length + 900), anon = /^\s*\{/.test(after);
+      const look = anon ? after.slice(0, (matchClose(sc.bare.slice(q.index + q[0].length), after.indexOf('{')) + 1) || 900) : (() => { const ic2 = new RegExp('class\\s+' + q[2] + '\\b[\\s\\S]*?onClick\\s*\\(\\s*\\)\\s*\\{([\\s\\S]*?)\\n\\s{4,8}\\}').exec(String(src)); return ic2 ? ic2[1] : ''; })();
+      const sw = /switch(?:NoFade|Scene)?\s*\(\s*(\w+)\.class/.exec(look); if (sw) scene = sw[1];
+      const wn = /new\s+(Wnd\w+)/.exec(look); if (wn) window = wn[1];
+      let icon = ic ? ic[1] : '', iconAlt = [];
+      if (!icon) {   // 이름 있는 안쪽 클래스가 정하는 아이콘 — 조건에 따라 여럿이면 마지막(else = 보통 때)을 기본으로
+        const S0 = scan(String(src)), cs = new RegExp('class\\s+' + q[2] + '\\b').exec(S0.bare); if (cs) { const co = S0.bare.indexOf('{', cs.index), cc = matchClose(S0.bare, co), cb = S0.code.slice(cs.index, cc < 0 ? cs.index + 1500 : cc), all = [...cb.matchAll(/icon\s*\(\s*Icons\.get\s*\(\s*Icons\.(\w+)/g)].map(x => x[1]); if (all.length) { icon = all[all.length - 1]; iconAlt = all.slice(0, -1); } } }
+      out.buttons.push({ var: v, cls: q[2], key, id: KEY2ID[key] || key, icon, iconAlt, scene, window, line: lineOf(q.index) });
+    }
+    // 줄 배치: setRect 순서 — Y 가 .top() 이면 같은 줄, 아니면 새 줄
+    const vars = new Map(out.buttons.map(b => [b.var, b.id]));
+    // setRect 를 담은 if (landscape()) 블록 (앞의 횃불 자리 if 와 구별)
+    let ifL = null; for (const q of bare.matchAll(/if\s*\(\s*landscape\s*\(\s*\)\s*\)\s*\{/g)) { const c0 = matchClose(bare, q.index + q[0].length - 1); if (c0 > 0 && /\.setRect\s*\(/.test(bare.slice(q.index, c0))) { ifL = q; break; } }
+    const rowsOf = (from, to) => { const rows = []; for (const q of code.slice(from, to).matchAll(/(\w+)\.setRect\s*\(([^;]*)\)\s*;/g)) { const id = vars.get(q[1]); if (!id) continue; const a = splitArgs(q[2]); const same = /\.top\s*\(\s*\)/.test(a[1] || ''); if (same && rows.length) rows[rows.length - 1].push(id); else rows.push([id]); } return rows; };
+    if (ifL) { const o = ifL.index + ifL[0].length - 1, c = matchClose(bare, o); out.rows.land = rowsOf(o, c);
+      const el = /^\s*else\s*\{/.exec(bare.slice(c + 1)); if (el) { const o2 = c + 1 + el[0].length - 1, c2 = matchClose(bare, o2); out.rows.port = rowsOf(o2, c2); } }
+    else { const r = rowsOf(0, code.length); out.rows.land = r; out.rows.port = r; }
+    const bh = /BTN_HEIGHT\s*=\s*(\d+)/.exec(code); if (bh) out.btnHeight = +bh[1];
+    out.version = /BitmapText\s*\(\s*"v"\s*\+\s*Game\.version/.test(code) || /Game\.version/.test(code);
+    return out;
+  }
+
+  /** 배지 (Badges.java enum Badge) — 분석기 · 편집기가 같이 씀
+   *   o = { msgs: { 키: 글 } (misc 묶음, 언어 합친 것), banner: BadgeBanner.java 소스(칸 크기), sheetSize: [w, h] }
+   *   → { list: [{ id, key, image, type, args, line, name, desc, nameKey, descKey, nameSource, noImage, inSheet, conds[], condParsed }], sheet: { cell, cols, cells, cellFrom }, textKeys, statistics? } */
+  function badges(src, o) {
+    o = o || {}; src = String(src || '');
+    const ents = enumEntries(src, 'Badge'), S = scan(src), bl = lineIndex(src), mk = o.msgs || {};
+    const meths = []; for (const q of S.bare.matchAll(/(?:public|private|protected)?\s*static\s+[\w<>\[\],\s]+?\s+(\w+)\s*\(([^)]*)\)\s*\{/g)) { const op = q.index + q[0].length - 1, c = matchClose(S.bare, op); if (c > 0) meths.push({ name: q[1], args: q[2].trim(), from: op, to: c, line: bl(q.index), start: q.index }); }
+    const BOOK = /^(saveLocal|restore|filter|addReplaced|isObtainedLocally|unlock|isUnlocked|disown|allUnlocked|saveGlobal|loadGlobal|reset|load|save|store|displayBadge|loadLocal|isPlatinum|validateAll)/;
+    const enumT = structure(src).types.find(t => t.name === 'Badge');
+    const cellM = /new\s+TextureFilm\s*\(\s*\w+\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(o.banner || '') || /SIZE\s*=\s*(\d+)/.exec(o.banner || '');
+    const cell = cellM ? +cellM[1] : 16, size = o.sheetSize;
+    const cols = size ? Math.floor(size[0] / cell) : null, cells = size ? cols * Math.floor(size[1] / cell) : null;
+    const lines = src.split('\n');
+    const list = ents.map(e => {
+      const k = e.name.toLowerCase(), nums = e.args.filter(a => /^-?\d+$/.test(a)), type = (e.args.map(a => /BadgeType\.(\w+)/.exec(a)).find(Boolean) || [])[1] || '';
+      const image = nums.length ? +nums[0] : -1;
+      const kt = 'badges$badge.' + k + '.title', k1 = 'badges$badge.' + k, kd = 'badges$badge.' + k + '.desc';
+      const conds = [];
+      for (const q of S.bare.matchAll(new RegExp('\\bBadge\\.' + e.name + '\\b', 'g'))) {
+        if (enumT && q.index > enumT.open && q.index < enumT.close) continue;
+        const me = meths.find(x => q.index > x.from && q.index < x.to); if (!me || BOOK.test(me.name)) continue;
+        const ln = bl(q.index); conds.push({ method: me.name, args: me.args, line: ln, text: (lines[ln - 1] || '').trim().slice(0, 200), from: me.line, to: bl(me.to) });
+      }
+      const name = mk[kt] !== undefined ? mk[kt] : mk[k1] !== undefined ? mk[k1] : '';
+      return { id: e.name, key: k, image, type: type || (e.args.length ? 'LOCAL' : ''), args: e.args, line: e.line,
+        name, desc: mk[kd] || '', nameKey: mk[kt] !== undefined ? kt : mk[k1] !== undefined ? k1 : '', descKey: mk[kd] !== undefined ? kd : '', nameSource: mk[kt] !== undefined || mk[k1] !== undefined ? 'repo' : 'none',
+        noImage: image < 0, inSheet: image >= 0 && cells ? image < cells : null, conds, condParsed: conds.length > 0 };
+    });
+    const textKeys = list.some(b => /\.title$/.test(b.nameKey)) ? 'title-desc' : list.some(b => b.nameKey) ? 'single' : 'none';
+    return { list, sheet: { cell, cols, cells, size: size || null, cellFrom: cellM ? 'BadgeBanner' : '기본 16' }, textKeys, methods: meths.map(m => ({ name: m.name, args: m.args, line: m.line, to: bl(m.to) })) };
+  }
+  /** Statistics.java 의 public static 칸 (들여쓰기와 상관없이) → [{ name, bool }] */
+  function statistics(src) { const out = []; for (const m of scan(src || '').code.matchAll(/public\s+static\s+(int|float|long|boolean)\s+(\w+)\s*[;=]/g)) out.push({ name: m[2], bool: m[1] === 'boolean' }); return out; }
+
+  return { lineIndex, scan, matchClose, structure, body, enumConstants, method, caseBodies, assets, evalInt, itemSheet, sprite, heroSheets, heroFrame, gradleProps, gradleIncludes, gradleSrcDirs, enumEntries, splitArgs, heroSkins, terrain, parseStatements, levelSlots, levelTransitions, enclosingIfs, staticLayout, bannerRects, titleScene, badges, statistics };
 });

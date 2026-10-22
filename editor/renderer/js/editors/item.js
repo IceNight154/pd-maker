@@ -805,7 +805,7 @@
   /** 드랍 줄 편집: { src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond } */
   function dropsEditor(skey, path) {
     const { F, row } = PDM.ui;
-    const mobs = () => store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
+    const mobs = () => store.all('char').filter(c => PDM.isHostile(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
     const groups = () => ((store.get('world') || {}).groups || []).filter(g => !g.safe);
     return PDM.ui.listEditor(skey, path, { addLabel: '드랍 추가', emptyText: '드랍 없음 — 이 아이템은 시작 아이템·맵에 놓기·이벤트·게임의 무작위 생성(Generator)으로만 나옵니다',
       make: () => ({ src: 'mob', char: (mobs()[0] || [''])[0], chance: 10, min: 1, max: 1, cond: '' }),

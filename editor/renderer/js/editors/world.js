@@ -248,6 +248,7 @@
               '-', { label: '그룹 삭제 (노드는 남김)', run: async () => { if (await PDM.ui.confirm(`「${g.name}」 그룹을 삭제할까요? 노드는 그룹 없이 남습니다.`)) store.edit('world', '그룹 삭제', r => { r.groups = r.groups.filter(x => x.id !== g.id); r.nodes.forEach(x => { if (x.group === g.id) x.group = ''; }); }); } }],
             children: sortN((wd.nodes || []).filter(n => n.group === g.id)).map(nodeItem) })),
           ...sortN((wd.nodes || []).filter(n => !n.group || !W_.group(n.group))).map(nodeItem),
+          ...(PDM.repoMaps && PDM.repoMaps.treeItem() ? [PDM.repoMaps.treeItem()] : []),   // 10차: 게임 저장소의 맵 (Dungeon.newLevel)
           { id: 'rooms', label: '방 템플릿', icon: '▣', count: rooms.length + (PDM.SPD_ROOMS || []).length,
             menu: [{ label: '새 방 템플릿…', run: PDM.mapUtil.newRoom }, { label: '새 분류…', run: newRoomCat }, { label: '방 미리보기 (모아 보기)…', run: PDM.mapUtil.showRoomGallery }],
             actions: [{ label: '＋', title: '새 분류', run: newRoomCat }, { label: '▦', title: '방 미리보기 (모아 보기)', run: PDM.mapUtil.showRoomGallery }],
@@ -316,7 +317,7 @@
           const a = P(e.from), b = P(e.to); if (!a || !b) return;
           const n = pairN[[e.from, e.to].sort().join('|')], off = n > 1 ? (pairK[e.id] - (n - 1) / 2) * Math.min(14, (NH - 10) / (n - 1)) : 0;
           const ep = edgePath(e, a, b, off), d = ep.d;
-          const cls = 'wg-edge' + (e.kind === 'stair' ? ' stair' : '') + (e.kind === 'door' ? ' door' : '') + (e.cond ? ' cond' : '') + (sel.edge === e.id ? ' on' : '');
+          const cls = 'wg-edge' + (e.kind === 'stair' ? ' stair' : '') + (e.kind === 'door' ? ' door' : '') + (e.cond ? ' cond' : '') + (e.src && e.src.kind === 'derived' ? ' derived' : '') + (sel.edge === e.id ? ' on' : '');
           const hit = el('path', { d, class: 'wg-hit' }); hit.dataset.edge = e.id;
           el('path', { d, class: cls, 'marker-end': 'url(#wgArrow)' });
           const tags = [];
@@ -354,7 +355,7 @@
           cv,
           h('div', { class: 'wg-nt' }, h('b', {}, (n.id === wd.start ? '★ ' : '') + W_.label(n.id)),
             h('span', { class: 'badge' + (d.mode === 'handmade' ? ' gold' : d.mode === 'hybrid' ? ' good' : '') }, mode.name)),
-          h('div', { class: 'wg-ns' }, [d.name, PDM.mapUtil.themeName(W_.themeOf(n.id)), `깊이 ${I.depth[n.id]}`].filter(Boolean).join(' · ')),
+          h('div', { class: 'wg-ns' }, (d.src && d.src.kind === 'repo-level' ? [d.name !== d.src.cls ? d.name : '', '원본 ' + d.src.cls, d.mode === 'game' ? '게임이 만듦' : '원본 타일', `깊이 ${I.depth[n.id]}`] : [d.name, PDM.mapUtil.themeName(W_.themeOf(n.id)), `깊이 ${I.depth[n.id]}`]).filter(Boolean).join(' · ')),
           ...['r', 'l', 't', 'b'].map(sd => h('div', { class: 'wg-port out s-' + sd, 'data-port': n.id, 'data-side': sd, title: '끌어서 다른 노드와 연결 — 놓는 쪽 면에 붙음 (Shift = 갈림길 출구 · Alt = 샛길 계단)' })));
         nodeEls[n.id] = e; canvas.append(e);
       });
