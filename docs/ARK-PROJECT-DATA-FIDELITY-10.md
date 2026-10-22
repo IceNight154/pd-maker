@@ -215,4 +215,13 @@ BA 저장소는 9차 호환 테스트(`repo-compat`)로 회귀만 확인했습�
 
 ## 9. 커밋 · 푸시
 
-COMMIT_PLACEHOLDER
+| 커밋 | 내용 |
+|---|---|
+| `f7f7a48` | 10차 코드 · 테스트 · 이 문서 초안 · README · DESIGN |
+| 이 커밋 | 보고 마무리 (커밋 표) |
+
+- 푸시 대상: `origin/claude/modest-rubin-k9akxp`
+- 커밋하지 않은 것
+  - `game/ARK_PD-main` · `game/New-Blue-Archive-…`: 외부 저장소
+  - 사용자 PC 의 `game/shattered-…` 런타임 연결 줄
+- 사용자 PC 작업 폴더는 git bundle 로 같은 커밋에 맞춥니다. 작업 트리의 사용자 변경은 그대로 둡니다.
