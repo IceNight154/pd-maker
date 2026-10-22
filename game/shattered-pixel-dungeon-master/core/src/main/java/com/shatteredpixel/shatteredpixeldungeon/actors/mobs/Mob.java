@@ -169,6 +169,7 @@ public abstract class Mob extends Char {
 	public void storeInBundle( Bundle bundle ) {
 		
 		super.storeInBundle( bundle );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.store(this, bundle); // >>> pdmaker
 
 		if (state == SLEEPING) {
 			bundle.put( STATE, Sleeping.TAG );
@@ -207,6 +208,7 @@ public abstract class Mob extends Char {
 	public void restoreFromBundle( Bundle bundle ) {
 		
 		super.restoreFromBundle( bundle );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.restore(this, bundle); // >>> pdmaker
 
 		if (bundle.getBoolean(USING_STEALTH)) {
 			activateSteathGameplayBehaviour();
@@ -262,6 +264,7 @@ public abstract class Mob extends Char {
 	protected boolean act() {
 		
 		super.act();
+		{ Boolean pdmAi = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.act(this); if (pdmAi != null) return pdmAi; } // >>> pdmaker
 		
 		boolean justAlerted = alerted;
 		alerted = false;
@@ -983,6 +986,7 @@ public abstract class Mob extends Char {
 	
 	@Override
 	public void die( Object cause ) {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.preventDeath(this)) return; // >>> pdmaker
 		com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.onMobDie(this, cause); // >>> pdmaker
 
 		if (cause == Chasm.class){
@@ -1154,6 +1158,7 @@ public abstract class Mob extends Char {
 
 	public String info(){
 		String desc = description();
+		desc += com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.damageInfo(this); // >>> pdmaker
 
 		for (Buff b : buffs(ChampionEnemy.class)){
 			desc += "\n\n_" + Messages.titleCase(b.name()) + "_\n" + b.desc();

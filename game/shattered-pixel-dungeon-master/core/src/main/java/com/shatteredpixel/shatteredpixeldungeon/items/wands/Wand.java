@@ -764,6 +764,7 @@ public abstract class Wand extends Item {
 									}
 								});
 					} else {
+						if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerWand.zap(curWand, shot)) return; // >>> pdmaker
 						curWand.fx(shot, new Callback() {
 							public void call() {
 								curWand.onZap(shot);

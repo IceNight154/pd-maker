@@ -74,6 +74,7 @@ public class ChangesScene extends PixelScene {
 	public void create() {
 		super.create();
 
+		if (!com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAssets.keepMenuMusic(this)) // >>> pdmaker
 		Music.INSTANCE.playTracks(
 				new String[]{Assets.Music.THEME_1, Assets.Music.THEME_2},
 				new float[]{1, 1},

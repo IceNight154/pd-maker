@@ -279,6 +279,7 @@ public class GameScene extends PixelScene {
 		DungeonTileSheet.setupVariance(Dungeon.level.map.length, Dungeon.seedCurDepth());
 		
 		tiles = new DungeonTerrainTilemap();
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTileUnderlay.addTo(terrain, tiles); // >>> pdmaker
 		terrain.add( tiles );
 
 		customTiles = new Group();
@@ -888,8 +889,10 @@ public class GameScene extends PixelScene {
 		if (notifyDelay > 0) notifyDelay -= Game.elapsed;
 
 		if (!Emitter.freezeEmitters) {
+			waterOfs = com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.waterFlowY(waterOfs); // >>> pdmaker
 			waterOfs -= 5 * Game.elapsed;
 			water.offsetTo( 0, waterOfs );
+			com.shatteredpixel.shatteredpixeldungeon.pdmaker.LevelHooks.waterFlowX(water); // >>> pdmaker
 			waterOfs = water.offsetY(); //re-assign to account for auto adjust
 		}
 
@@ -1385,6 +1388,7 @@ public class GameScene extends PixelScene {
 	public static void updateMap() {
 		if (scene != null) {
 			scene.tiles.updateMap();
+			com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTileUnderlay.refresh(-1); // >>> pdmaker
 			scene.occlusion.updateMap();
 			scene.visualGrid.updateMap();
 			scene.terrainFeatures.updateMap();
@@ -1397,6 +1401,7 @@ public class GameScene extends PixelScene {
 	public static void updateMap( int cell ) {
 		if (scene != null) {
 			scene.tiles.updateMapCell( cell );
+			com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTileUnderlay.refresh(cell); // >>> pdmaker
 			scene.occlusion.updateMapCell( cell );
 			scene.visualGrid.updateMapCell( cell );
 			scene.terrainFeatures.updateMapCell( cell );
@@ -1420,6 +1425,7 @@ public class GameScene extends PixelScene {
 	}
 	
 	public static void show( Window wnd ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerTheme.onShow(wnd); // >>> pdmaker
 		if (scene != null) {
 			cancel();
 

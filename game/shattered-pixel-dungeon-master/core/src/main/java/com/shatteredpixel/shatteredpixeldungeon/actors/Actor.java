@@ -214,6 +214,7 @@ public abstract class Actor implements Bundlable {
 		for (Blob blob : Dungeon.level.blobs.values()) {
 			add( blob );
 		}
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.reviveFuses(); // >>> pdmaker
 		
 		current = null;
 	}

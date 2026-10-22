@@ -70,6 +70,7 @@ public class JournalScene extends PixelScene {
 		//need to re-initialize the texture here, as it may be invalid
 		new TerrainFeaturesTilemap(new SparseArray<>(), new SparseArray<>());
 
+		if (!com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAssets.keepMenuMusic(this)) // >>> pdmaker
 		Music.INSTANCE.playTracks(
 				new String[]{Assets.Music.THEME_1, Assets.Music.THEME_2},
 				new float[]{1, 1},

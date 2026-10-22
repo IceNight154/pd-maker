@@ -406,6 +406,7 @@ public class WndBag extends WndTabbed {
 	}
 	
 	private Image icon( Bag bag ) {
+		{ Image pdmI = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerBag.icon(bag); if (pdmI != null) return pdmI; } // >>> pdmaker
 		if (bag instanceof VelvetPouch) {
 			return Icons.get( Icons.SEED_POUCH );
 		} else if (bag instanceof ScrollHolder) {

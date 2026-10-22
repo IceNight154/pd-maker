@@ -111,10 +111,12 @@ public class Item implements Bundlable {
 		ArrayList<String> actions = new ArrayList<>();
 		actions.add( AC_DROP );
 		actions.add( AC_THROW );
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.flagActions(this, actions); // >>> pdmaker
 		return actions;
 	}
 
 	public String actionName(String action, Hero hero){
+		{ String pdmN = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.actionName(this, action); if (pdmN != null) return pdmN; } // >>> pdmaker
 		return Messages.get(this, "ac_" + action);
 	}
 
@@ -157,6 +159,7 @@ public class Item implements Bundlable {
 	
 	public void execute( Hero hero, String action ) {
 		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAudio.onItemAction(this, action); // >>> pdmaker
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.execute(this, hero, action)) return; // >>> pdmaker
 
 		GameScene.cancel();
 		curUser = hero;
@@ -190,6 +193,7 @@ public class Item implements Bundlable {
 	}
 	
 	protected void onThrow( int cell ) {
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.onThrow(this, cell)) return; // >>> pdmaker
 		Heap heap = Dungeon.level.drop( this, cell );
 		if (!heap.isEmpty()) {
 			heap.sprite.drop( cell );
@@ -345,6 +349,7 @@ public class Item implements Bundlable {
 	}
 	
 	public final Item detachAll( Bag container ) {
+		container = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.detachFrom(this, container); // >>> pdmaker
 		Dungeon.quickslot.clearItem( this );
 
 		for (Item item : container.items) {
@@ -591,6 +596,7 @@ public class Item implements Bundlable {
 	
 	@Override
 	public void storeInBundle( Bundle bundle ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.store(this, bundle); // >>> pdmaker
 		bundle.put( QUANTITY, quantity );
 		bundle.put( LEVEL, level );
 		bundle.put( LEVEL_KNOWN, levelKnown );
@@ -605,6 +611,7 @@ public class Item implements Bundlable {
 	
 	@Override
 	public void restoreFromBundle( Bundle bundle ) {
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.restore(this, bundle); // >>> pdmaker
 		quantity	= bundle.getInt( QUANTITY );
 		levelKnown	= bundle.getBoolean( LEVEL_KNOWN );
 		cursedKnown	= bundle.getBoolean( CURSED_KNOWN );

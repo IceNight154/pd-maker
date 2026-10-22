@@ -261,6 +261,7 @@ public class CharSprite extends MovieClip implements Tweener.Listener, MovieClip
 		animCallback = callback;
 		turnTo( ch.pos, cell );
 		play( attack );
+	com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerSwing.onAttack(this, cell); // >>> pdmaker
 	}
 	
 	public void operate( int cell ) {
