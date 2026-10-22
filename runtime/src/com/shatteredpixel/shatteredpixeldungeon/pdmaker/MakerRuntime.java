@@ -230,20 +230,48 @@ public class MakerRuntime {
 			l.nodeId = id;
 			return l;
 		}
+		if ("game".equals(f.getString("mode", "procedural"))) {   // 10차: 게임 저장소의 층 클래스를 그대로 (편집기 "게임 저장소의 맵"에서 가져온 노드)
+			Level g = gameLevel(f.getString("gameLevel", ""));
+			if (g != null) return g;
+			log("게임 원래 맵 " + id + " 의 층 클래스(" + f.getString("gameLevel", "") + ")가 이 게임에 없습니다 — 테마 기본 생성기로 만듦");
+		}
 		String theme = WorldGraph.theme(id);
 		if (theme.startsWith("custom:")) theme = LevelHooks.customBase(theme.substring(7));
 		Level l = themeLevel(theme, f.getBoolean("boss", false));
 		return l != null ? l : themeLevel("SEWER", false);
 	}
 
+	/** 층 클래스 이름 → 새 인스턴스 (levels 패키지 · 이름만 — 리플렉션이라 그 클래스가 없는 게임에서도 컴파일됨). 없거나 못 만들면 null */
+	static Level gameLevel(String cls) {
+		if (cls == null || cls.isEmpty() || !cls.matches("[A-Za-z_$][\\w$.]*")) return null;
+		String name = cls.contains(".") ? cls : "com.shatteredpixel.shatteredpixeldungeon.levels." + cls;
+		try {
+			Class<?> c = com.watabou.utils.Reflection.forName(name);
+			if (c == null || !Level.class.isAssignableFrom(c)) return null;
+			return (Level) com.watabou.utils.Reflection.newInstance(c);
+		} catch (Throwable t) { log("층 클래스를 만들지 못했습니다: " + name + " — " + t); return null; }
+	}
+
+	/** 게임의 몬스터 재생성 액터 (SPD 2.x+ = actors.mobs.MobSpawner, 예전 판 = levels.Level$Respawner) */
+	public static boolean isMobSpawner(Object a) {
+		String n = a == null ? "" : a.getClass().getName();
+		return n.equals("com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner") || n.equals("com.shatteredpixel.shatteredpixeldungeon.levels.Level$Respawner");
+	}
+	static Level bossOr(String cls, String theme) {
+		Level l = gameLevel(cls);
+		if (l != null) return l;
+		log("이 게임에는 보스 층 클래스 " + cls + " 가 없습니다 — " + theme + " 테마의 일반 층으로 만듦 (맵 그래프의 \"게임 원래 맵\" 노드로 이 게임의 보스 층을 고를 수 있음)");
+		return themeLevel(theme, false);
+	}
 	/** 테마 이름 → SPD 레벨 생성기 */
 	static Level themeLevel(String theme, boolean boss) {
 		switch (theme) {
-			case "SEWER":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.SewerBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel();
-			case "PRISON": return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonBossLevel() : new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel();
-			case "CAVES":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.CavesBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.CavesLevel();
-			case "CITY":   return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.CityBossLevel()   : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel();
-			case "HALLS":  return boss ? new com.shatteredpixel.shatteredpixeldungeon.levels.HallsBossLevel()  : new com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel();
+			// 11차: 보스 층 클래스는 판 · 파생작마다 이름이 다를 수 있어 이름으로 찾음 (없으면 그 테마의 일반 층 + 로그 — 보스를 가장하지 않음)
+			case "SEWER":  return boss ? bossOr("SewerBossLevel", "SEWER")  : new com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel();
+			case "PRISON": return boss ? bossOr("PrisonBossLevel", "PRISON") : new com.shatteredpixel.shatteredpixeldungeon.levels.PrisonLevel();
+			case "CAVES":  return boss ? bossOr("CavesBossLevel", "CAVES")  : new com.shatteredpixel.shatteredpixeldungeon.levels.CavesLevel();
+			case "CITY":   return boss ? bossOr("CityBossLevel", "CITY")   : new com.shatteredpixel.shatteredpixeldungeon.levels.CityLevel();
+			case "HALLS":  return boss ? bossOr("HallsBossLevel", "HALLS")  : new com.shatteredpixel.shatteredpixeldungeon.levels.HallsLevel();
 			default: return null;
 		}
 	}
@@ -381,7 +409,7 @@ public class MakerRuntime {
 		try {
 			if (f != null && f.getBoolean("noMobs", false) && !(Dungeon.level instanceof MakerLevel))
 				for (com.shatteredpixel.shatteredpixeldungeon.actors.Actor a : new java.util.ArrayList<>(com.shatteredpixel.shatteredpixeldungeon.actors.Actor.all()))
-					if (a instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.MobSpawner) com.shatteredpixel.shatteredpixeldungeon.actors.Actor.remove(a);
+					if (isMobSpawner(a)) com.shatteredpixel.shatteredpixeldungeon.actors.Actor.remove(a);
 		} catch (Throwable t) { log("몬스터 스폰 끄기 실패: " + t); }
 		HeroRuntime.onFloorEnter();
 		HeartUI.attach();

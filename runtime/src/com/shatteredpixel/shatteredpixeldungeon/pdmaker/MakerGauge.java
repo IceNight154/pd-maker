@@ -164,8 +164,8 @@ public class MakerGauge {
 			if (el != null && el.has("color")) { int c = MakerTitle.color(el.getString("color", ""), 0xFFFFFF); icon.hardlight(c); }
 		}
 		@Override public float iconFadePercent() { return 1f - Math.min(1f, gauge / (float) max()); }
-		@Override public String iconTextDisplay() { return Integer.toString(gauge); }
-		@Override public String name() {
+		public String iconTextDisplay() { return Integer.toString(gauge); }
+		public String name() {
 			JsonValue l = level(); JsonValue el = findElement(element);
 			return MakerGauge.name() + (l != null ? " " + l.getString("name", "") : "") + (el != null ? " (" + el.getString("name", "") + ")" : "");
 		}
@@ -178,9 +178,9 @@ public class MakerGauge {
 		}
 
 		// ---------- 행동 버튼 (원소 바꾸기)
-		@Override public String actionName() { return "원소 바꾸기"; }
-		@Override public int actionIcon() { JsonValue el = findElement(element); return el == null ? 0 : MakerSpells.iconOf(el, 0); }
-		@Override public Visual secondaryVisual() {
+		public String actionName() { return "원소 바꾸기"; }
+		public int actionIcon() { JsonValue el = findElement(element); return el == null ? 0 : MakerSpells.iconOf(el, 0); }
+		public Visual secondaryVisual() {
 			BitmapText t = new BitmapText(PixelScene.pixelFont);
 			t.text(gauge + "/" + max());
 			float k = gauge / (float) max();
@@ -188,7 +188,9 @@ public class MakerGauge {
 			t.scale.set(0.75f); t.measure();
 			return t;
 		}
-		@Override public int indicatorColor() { JsonValue el = findElement(element); return el == null ? 0x888888 : MakerTitle.color(el.getString("color", ""), 0x888888); }
+		public int indicatorColor() { JsonValue el = findElement(element); return el == null ? 0x888888 : MakerTitle.color(el.getString("color", ""), 0x888888); }
+		/** 예전 판 행동 버튼(ActionIndicator.Action.getIcon) — 새 판에서는 쓰지 않음 */
+		public Image getIcon() { return MakerSpells.heroIcon(actionIcon()); }
 		@Override public void doAction() {
 			final JsonValue g = def(); if (g == null || g.get("elements") == null || g.get("elements").size == 0) return;
 			if (switchCd > 0) { GLog.w("아직 바꿀 수 없다 (" + switchCd + "턴)"); return; }

@@ -298,7 +298,7 @@ public class HeroRuntime {
 		busy[MakerHeroCode.DAMAGE_ROLL] = false;
 		JsonValue st = stats();
 		if (st != null && st.getInt("unarmedMax", 0) > 0 && hero.belongings.weapon() == null)
-			v = Hero.heroDamageIntRange(st.getInt("unarmedMin", 1), Math.max(st.getInt("unarmedMin", 1), st.getInt("unarmedMax", 4)));
+			{ int lo = st.getInt("unarmedMin", 1), hi = Math.max(lo, st.getInt("unarmedMax", 4)); Object r = MakerCompat.invoke(Hero.class, "heroDamageIntRange", lo, hi); v = r instanceof Integer ? (Integer) r : com.watabou.utils.Random.NormalIntRange(lo, hi); }   // 예전 판: 보통 범위
 		v = Math.max(0, v + bonus("damage"));
 		try { return code == null || !code.overrides(MakerHeroCode.DAMAGE_ROLL) ? v : code.damageRoll(hero, v); } catch (Throwable t) { GenSupport.error("영웅 " + heroId, "damageRoll", t); return v; }
 	}

@@ -604,28 +604,8 @@ ipcMain.handle('runtime:install', wrap(arg => {
   const lines = []; installer.install(repo, runtimeSrc(), l => { lines.push(l); log(l); }, project || null); return lines;
 }));
 ipcMain.handle('runtime:uninstall', wrap(repo => { const lines = []; installer.uninstall(repo, l => { lines.push(l); log(l); }); return lines; }));
-/** 설치된 런타임이 에디터의 것과 같은지 (파일 내용 + 연결 줄 수) */
-function runtimeState(repo) {
-  const d = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon');
-  const pkgDir = path.join(d, 'pdmaker');
-  const src = path.join(runtimeSrc(), 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker');
-  if (!fs.existsSync(pkgDir)) return { pkg: false, upToDate: false, reason: 'pdmaker 패키지 없음' };
-  const srcFiles = fs.readdirSync(src).filter(f => f.endsWith('.java') && /\bclass\s/.test(fs.readFileSync(path.join(src, f), 'utf8')));
-  if (fs.readdirSync(pkgDir).some(f => f.endsWith('.java') && !srcFiles.includes(f))) return { pkg: true, upToDate: false, reason: '예전 파일이 남아 있음' };
-  for (const f of srcFiles) {
-    const t = path.join(pkgDir, f);
-    if (!fs.existsSync(t) || fs.readFileSync(t, 'utf8') !== fs.readFileSync(path.join(src, f), 'utf8')) return { pkg: true, upToDate: false, reason: f + ' 이(가) 예전 것' };
-  }
-  let hooks = 0;
-  for (const f of [...new Set(installer.PATCHES.map(p => p.file))]) {
-    const fp = installer.patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(installer.MARK).length - 1;
-  }
-  // 선택 연결 줄은 그 파일이 있을 때만, 이 저장소에서 위치를 찾을 수 없는 줄(compat.missing)은 빼고 셈 — 안 그러면 테스트 플레이마다 다시 설치함
-  const cp = installer.compat(repo);
-  const need = installer.PATCHES.filter(p => !p.optional || fs.existsSync(installer.patchFile(repo, p.file))).length - cp.missing.length;
-  if (hooks < need) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${need}` };
-  return { pkg: true, upToDate: true };
-}
+/** 설치된 런타임이 에디터의 것과 같은지 (이 저장소에 맞춘 사본 + 연결 줄 수 — runtime-installer.state) */
+function runtimeState(repo) { return installer.state(repo, runtimeSrc()); }
 ipcMain.handle('runtime:status', wrap(repo => {
   const d = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon');
   const pkg = fs.existsSync(path.join(d, 'pdmaker', 'MakerRuntime.java'));
@@ -634,5 +614,25 @@ ipcMain.handle('runtime:status', wrap(repo => {
     const fp = installer.patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(installer.MARK).length - 1;
   }
   const cp = installer.compat(repo);
-  return { pkg, hooks, total: installer.PATCHES.length, compat: cp };
+  // 11차: 이 저장소에 맞춘 적응 (게임 본체 이름 · 옮겨진 클래스 · 꺼지는 기능 · 그래도 없는 클래스) · 연결 줄 계획 · 설치 상태
+  let adapt = null, st = null, patches = [];
+  try { const pl = installer.plan(repo, runtimeSrc()); if (pl.adapt) adapt = { mainGame: pl.adapt.mainGame, relocations: pl.adapt.relocations, features: pl.adapt.features, missing: pl.adapt.missing }; } catch (e) { adapt = { error: e.message }; }
+  try { st = installer.state(repo, runtimeSrc()); } catch (_) { /* 없음 */ }
+  try { for (const [p, v] of installer.planPatches(repo)) patches.push({ file: p.file, name: p.name, state: v.state }); } catch (_) { /* 없음 */ }
+  return { pkg, hooks, total: installer.PATCHES.length, compat: cp, adapt, state: st, patches };
 }));
+
+// ---------------- 게임 저장소 분석 (9차 — editor/repo-analyzer.js · 읽기 전용) ----------------
+//  결과는 사용자 설정 폴더(userData/repo-analysis/)에 캐시 → 프로젝트를 닫았다 열어도 그대로, 저장소 파일(목록 · 크기 · 수정 시각)이 바뀌면 다시 분석
+//  분석은 worker 스레드에서 (큰 저장소를 읽는 동안 창이 멈추지 않게). worker 를 못 띄우면 여기서 바로
+function analyzeRepo(opts) {
+  const o = { dir: opts.dir, force: !!opts.force, cacheDir: path.join(app.getPath('userData'), 'repo-analysis'), runtimeSrc: runtimeSrc() };   // runtimeSrc: 런타임이 쓰는 게임 클래스 확인용
+  return new Promise((resolve, reject) => {
+    let w; try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'repo-analyzer.js'), { workerData: { pdmAnalyze: o } }); }
+    catch (_) { try { resolve(require('./repo-analyzer').analyze(o.dir, o)); } catch (e) { reject(e); } return; }
+    w.once('message', m => m && m.error ? reject(new Error(m.error)) : resolve(m.value));
+    w.once('error', reject);
+    w.once('exit', c => { if (c) reject(new Error('저장소 분석기가 멈췄습니다 (종료 코드 ' + c + ')')); });
+  });
+}
+ipcMain.handle('repo:analyze', wrap(opts => analyzeRepo(opts || {})));

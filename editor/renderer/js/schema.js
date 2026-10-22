@@ -60,7 +60,8 @@ PDM.BOSS_FLOORS = [5, 10, 15, 20, 25];
 PDM.FLOOR_MODES = {
   procedural: { name: '절차 생성', desc: 'SPD 원래 생성기 + 배치 규칙' },
   hybrid:     { name: '혼합', desc: '절차 생성 층 안에 직접 그린 방 끼워 넣기' },
-  handmade:   { name: '직접 그리기', desc: '타일을 모두 직접 그린 고정 맵' }
+  handmade:   { name: '직접 그리기', desc: '타일을 모두 직접 그린 고정 맵' },
+  game:       { name: '게임 원래 맵', desc: '게임 저장소의 층 클래스가 만듦 (10차 — 타일 편집 불가)', repoOnly: true }
 };
 PDM.OBJECT_TYPES = {
   npc:   { name: 'NPC',     color: '#5fd6b4', ref: 'character' },
@@ -152,7 +153,10 @@ PDM.migrateMapData = function (d) {
 PDM.PLACE_RULES = { xy: '좌표 지정', random: '아무 방', entrance: '입구 방', exit: '출구 방', special: '특수 방' };
 
 // ---------- 캐릭터 / 아이템 ----------
-PDM.CHAR_KINDS = { npc: 'NPC', companion: '동료', mob: '몬스터', boss: '보스' };
+PDM.CHAR_KINDS = { npc: 'NPC', companion: '동료', mob: '몬스터', elite: '엘리트 · 미니보스', boss: '보스', unsorted: '분류 확인 필요' };
+/** 싸우는 종류 (10차: 엘리트 · 분류 확인 필요도 — 게임에서는 원래 클래스대로 동작) */
+PDM.HOSTILE_KINDS = ['mob', 'elite', 'boss', 'unsorted'];
+PDM.isHostile = k => PDM.HOSTILE_KINDS.includes(k);
 PDM.AI_MODES = { stand: '제자리', fixed: '제자리에 고정 (움직이지도 밀려나지도 않음 — 샌드백)', wander: '돌아다님', patrol: '경로 순찰', follow: '플레이어 따라다님', schedule: '일과(턴마다 경로)', hunt: '적대(몬스터)', code: '코드로 직접 (Java)' };
 PDM.ANIM_KEYS = ['idle', 'run', 'attack', 'zap', 'die', 'operate'];
 /** 영웅 시트에만 있는 기본 동작 (게임 HeroSprite 의 fly · read) · 캐릭터는 fly 만 */
@@ -204,7 +208,11 @@ PDM.itemSubs = cat => {
   return out;
 };
 PDM.itemKinds = () => Object.fromEntries(Object.entries(PDM.ITEM_KINDS).filter(([k]) => PDM.isMod2() || !['codex', 'grimoire'].includes(k)));
-PDM.heroClasses = () => Object.fromEntries(Object.entries(PDM.HERO_CLASSES).filter(([k]) => PDM.isMod2() || k !== 'ARIA'));
+/** 바탕 직업 목록 { 직업 id: 표시 이름 } — 10차: 선택한 게임 저장소의 HeroClass (이름은 그 저장소의 글자). 분석 결과가 없을 때만 원작 표 */
+PDM.heroClasses = () => { const R = PDM.REPO_ANALYSIS, H = R && R.objects && R.objects.heroes; if (H && H.length) return Object.fromEntries(H.map(x => [x.cls, x.name || x.cls]));
+  return Object.fromEntries(Object.entries(PDM.HERO_CLASSES).filter(([k]) => PDM.isMod2() || k !== 'ARIA')); };
+/** 직업 id → 표시 이름 (저장소 글자 → 원작 표 → id 그대로) */
+PDM.heroClassName = cls => { cls = String(cls || '').toUpperCase(); const R = PDM.REPO_ANALYSIS, x = R && R.objects && (R.objects.heroes || []).find(q => q.cls === cls); return (x && x.name) || PDM.HERO_CLASSES[cls] || cls; };
 PDM.gameSubclasses = () => Object.fromEntries(Object.entries(PDM.GAME_SUBCLASSES).filter(([k]) => PDM.isMod2() || !k.startsWith('ARIA_')));
 PDM.BEHAVIOR_HOOKS = { onSpawn: '생성될 때', onInteract: '말을 걸었을 때', onSeeHero: '플레이어를 봤을 때', onTurn: '매 턴', onDamaged: '공격받았을 때', onDeath: '쓰러졌을 때' };
 
@@ -454,7 +462,7 @@ PDM.make = {
       sprite: { sheet: '', frame: [12, 15], anims: { idle: { frames: [0, 0, 0, 1], fps: 1, loop: true }, run: { frames: [2, 3, 4, 5], fps: 20, loop: true }, attack: { frames: [6, 7, 8], fps: 15, loop: false }, die: { frames: [9, 10, 11], fps: 12, loop: false } } },
       portrait: { default: '', expressions: [] },
       stats: { hp: 20, attackMin: 1, attackMax: 4, defense: 0, accuracy: 10, evasion: 5, speed: 1 },
-      ai: { mode: kind === 'mob' ? 'hunt' : 'stand', path: [], wait: 3 },
+      ai: { mode: ['mob', 'elite', 'unsorted'].includes(kind) ? 'hunt' : 'stand', path: [], wait: 3 },
       heart: { enabled: kind === 'npc' || kind === 'companion', traits: [], likes: [], dislikes: [], initial: { favor: 0, trust: 0 } },
       behaviors: {}, dialogue: { greet: [{ when: '', face: '', text: '안녕하세요.' }] } };
   },

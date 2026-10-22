@@ -487,6 +487,7 @@ public class PixelScene extends Scene {
 			fullScreen = true;
 		}
 		
+		@Override public synchronized void update() { com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.before(this); super.update(); if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.offX != 0 || com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.offY != 0) { shakeX += com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.offX; shakeY += com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCamera.offY; updateMatrix(); } } // >>> pdmaker
 		@Override
 		protected void updateMatrix() {
 			float sx = align( this, scroll.x + shakeX );

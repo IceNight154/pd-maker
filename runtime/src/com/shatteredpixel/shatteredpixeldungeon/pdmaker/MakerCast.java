@@ -49,7 +49,7 @@ public class MakerCast {
 			case "earth": return MagicMissile.EARTH;
 			case "shadow": return MagicMissile.SHADOW;
 			case "light": return MakerCompat.staticInt(MagicMissile.class, "LIGHT_MISSILE", MagicMissile.MAGIC_MISSILE);   // SPD 3.x 부터
-			case "poison": return MagicMissile.POISON;
+			case "poison": return MakerCompat.staticInt(MagicMissile.class, "POISON", MagicMissile.CORROSION);   // POISON 이 없는 판은 부식 색
 			case "foliage": return MagicMissile.FOLIAGE;
 			case "force": return MagicMissile.FORCE;
 			case "rainbow": return MagicMissile.RAINBOW;

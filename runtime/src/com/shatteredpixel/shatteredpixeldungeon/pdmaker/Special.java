@@ -129,8 +129,8 @@ public class Special {
 		@Override public int icon() { return iconId; }
 		@Override public void tintIcon(Image icon) { if (tint >= 0) icon.hardlight(tint); }
 		@Override public float iconFadePercent() { return max <= 0 ? 0 : Math.max(0, Math.min(1, 1f - get(key) / (float) max)); }
-		@Override public String iconTextDisplay() { return Integer.toString(get(key)); }
-		@Override public String name() { return label; }
+		public String iconTextDisplay() { return Integer.toString(get(key)); }
+		public String name() { return label; }
 		@Override public String desc() { return (text.isEmpty() ? "" : text + "\n\n") + label + ": " + get(key) + (max > 0 ? " / " + max : ""); }
 		@Override public void storeInBundle(Bundle b) {
 			super.storeInBundle(b);
@@ -149,9 +149,11 @@ public class Special {
 		String id = "", label = "";
 		int iconId = 0;
 		@Override public boolean act() { spend(TICK); return true; }
-		@Override public String actionName() { return label; }
-		@Override public int actionIcon() { return iconId; }
-		@Override public int indicatorColor() { return 0x5A3A8C; }
+		public String actionName() { return label; }
+		public int actionIcon() { return iconId; }
+		/** 예전 판 행동 버튼(ActionIndicator.Action.getIcon) — 새 판에서는 쓰지 않음 */
+		public Image getIcon() { return MakerSpells.heroIcon(actionIcon()); }
+		public int indicatorColor() { return 0x5A3A8C; }
 		@Override public void doAction() {
 			MakerHeroCode c = HeroRuntime.code();
 			Hero h = Dungeon.hero;

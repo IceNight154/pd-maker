@@ -17,7 +17,6 @@ import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Char;
 import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob;
-import com.shatteredpixel.shatteredpixeldungeon.effects.FloatingText;
 import com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite;
 import com.watabou.utils.PathFinder;
 
@@ -133,7 +132,7 @@ public class MakerCharAI {
 		t.tick = 0;
 		int add = Math.min(amt, self.HT - self.HP);
 		self.HP += add;
-		if (self.sprite != null && self.sprite.visible) self.sprite.showStatusWithIcon(CharSprite.POSITIVE, Integer.toString(add), FloatingText.HEALING);
+		if (self.sprite != null && self.sprite.visible) MakerCompat.status(self.sprite, CharSprite.POSITIVE, Integer.toString(add), "HEALING");
 	}
 	/** Char.damage 연결 줄 (체력을 깎은 뒤 · 쓰러짐 판정 전) */
 	public static void afterDamage(Char c, int dmg) {

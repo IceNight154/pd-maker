@@ -58,7 +58,7 @@ public class MakerAudio {
 	/** onEnd != null: 반복하지 않고 끝나면 onEnd (여러 곡 목록의 다음 곡) */
 	static void playBgm(String ref, Runnable onEnd) {
 		if (ref == null || ref.isEmpty()) return;
-		if (ref.equals("none")) { Music.INSTANCE.end(); current = ""; MakerRuntime.log("배경음: 끔"); return; }
+		if (ref.equals("none")) { MakerCompat.musicStop(); current = ""; MakerRuntime.log("배경음: 끔"); return; }
 		Ref r = resolve(ref);
 		if (r == null) { MakerRuntime.log("배경음: " + ref + " — 파일을 찾지 못해 틀지 않음"); return; }
 		if (r.game) {
@@ -95,7 +95,7 @@ public class MakerAudio {
 		if (sec <= 0) { playBgm("none"); return; }
 		try {
 			java.lang.reflect.Method m = Music.class.getMethod("fadeOut", float.class, com.watabou.utils.Callback.class);
-			m.invoke(Music.INSTANCE, sec, (com.watabou.utils.Callback) () -> { Music.INSTANCE.end(); current = ""; });
+			m.invoke(Music.INSTANCE, sec, (com.watabou.utils.Callback) () -> { MakerCompat.musicStop(); current = ""; });
 			MakerRuntime.log("배경음: " + sec + "초 동안 줄이며 끔");
 		} catch (Throwable t) { playBgm("none"); }
 	}
@@ -158,7 +158,7 @@ public class MakerAudio {
 		for (String r : refs) { Ref x = resolve(r); if (x == null) continue; if (!x.game) { files = null; break; } files.add(x.file); }
 		if (files != null && !files.isEmpty()) {
 			float[] ch = new float[files.size()]; java.util.Arrays.fill(ch, 1f);
-			Music.INSTANCE.playTracks(files.toArray(new String[0]), ch, true);
+			MakerCompat.musicTracks(files.toArray(new String[0]), ch, true);
 			current = String.join("|", refs);
 			return;
 		}

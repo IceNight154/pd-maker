@@ -37,7 +37,7 @@ public class MakerCatalog {
 			case "wand": return Catalog.WANDS;
 			case "ring": return Catalog.RINGS;
 			case "artifact": return Catalog.ARTIFACTS;
-			case "trinket": return Catalog.TRINKETS;
+			case "trinket": { Object t = MakerCompat.staticValue(Catalog.class, "TRINKETS", null); return t instanceof Catalog ? (Catalog) t : null; }   // 장신구가 없는 판
 			case "potion": return sub.equals("exotic") ? Catalog.EXOTIC_POTIONS : sub.equals("brew") || sub.equals("elixir") ? Catalog.BREWS_ELIXIRS : Catalog.POTIONS;
 			case "scroll": return sub.equals("exotic") ? Catalog.EXOTIC_SCROLLS : Catalog.SCROLLS;
 			case "stone": return Catalog.STONES;

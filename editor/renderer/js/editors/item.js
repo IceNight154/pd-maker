@@ -265,7 +265,7 @@
       const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, cv.width, cv.height);
       const i = PDM.assets.itemIndex(it.sprite, img);
       g.strokeStyle = '#ffde59'; g.lineWidth = 2; g.strokeRect((i % G.stride) * D + 1, Math.floor(i / G.stride) * D + 1, D - 2, D - 2);
-      info.textContent = `번호 ${i}${it.sprite.name ? ' · ' + it.sprite.name : ''} · ${G.mod2 ? 'mod-2 시트 (32px)' : '원작 시트 (16px)'}`;
+      info.textContent = `번호 ${i}${it.sprite.name ? ' · ' + it.sprite.name : ''} · ${G.mod2 ? 'mod-2 시트 (32px)' : G.geo && (G.base !== 16 || G.stride !== 16) ? `게임 시트 (${G.base}px · 한 줄 ${G.stride}칸 — ItemSpriteSheet)` : '원작 시트 (16px)'}`;
       cv.onclick = e => {
         const b = cv.getBoundingClientRect(), k = cv.width / b.width;
         const col = Math.floor((e.clientX - b.left) * k / D), row = Math.floor((e.clientY - b.top) * k / D);
@@ -805,7 +805,7 @@
   /** 드랍 줄 편집: { src: mob|floor, char, chance, min, max, depthMin, depthMax, groups, cond } */
   function dropsEditor(skey, path) {
     const { F, row } = PDM.ui;
-    const mobs = () => store.all('char').filter(c => ['mob', 'boss'].includes(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
+    const mobs = () => store.all('char').filter(c => PDM.isHostile(c.kind)).map(c => [c.id, `${c.name} (${c.id})`]);
     const groups = () => ((store.get('world') || {}).groups || []).filter(g => !g.safe);
     return PDM.ui.listEditor(skey, path, { addLabel: '드랍 추가', emptyText: '드랍 없음 — 이 아이템은 시작 아이템·맵에 놓기·이벤트·게임의 무작위 생성(Generator)으로만 나옵니다',
       make: () => ({ src: 'mob', char: (mobs()[0] || [''])[0], chance: 10, min: 1, max: 1, cond: '' }),

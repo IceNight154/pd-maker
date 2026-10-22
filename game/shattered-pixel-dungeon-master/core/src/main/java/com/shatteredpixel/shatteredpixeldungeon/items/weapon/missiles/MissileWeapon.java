@@ -409,6 +409,7 @@ abstract public class MissileWeapon extends Weapon {
 	}
 	
 	protected void rangedHit( Char enemy, int cell ){
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.missileHit(this, cell); // >>> pdmaker
 		decrementDurability();
 		if (durability > 0 && !spawnedForEffect){
 			//ALL projectiles stick to the vault boss elemental, as it has custom logic for it

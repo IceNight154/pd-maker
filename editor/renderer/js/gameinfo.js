@@ -83,7 +83,8 @@
 
   // ---------------------------------------------------------------- 층마다 나오는 몬스터 (MobSpawner)
   PDM.gameRotation = depth => memo('rot|' + depth, async () => {
-    const code = await read('actors/mobs/MobSpawner.java'); if (!code) return null;
+    const rotFile = (PDM.GAME_SCAN && PDM.GAME_SCAN.mobRotation) || 'actors/mobs/MobSpawner.java';   // 9차: 파생작은 클래스 이름이 다를 수 있음 (ARK: MobRotation)
+    const code = await read(rotFile); if (!code) return null;
     const s = strip(code), msg = await msgs();
     const std = method(s, /standardMobRotation\s*\([^)]*\)\s*\{/); if (!std) return null;
     let seg = caseBodies(std.body, String(depth))[0], fallback = false;
@@ -96,7 +97,7 @@
     const alts = [...s.matchAll(/RARE_ALTS\.put\(\s*(\w+)\.class\s*,\s*(\w+)\.class/g)].filter(m => count[m[1]]).map(m => `${nm(m[1])} → ${nm(m[2])}`);
     const ac = /altChance\s*=\s*([^;]+);/.exec(s);
     const raw = method(code, /standardMobRotation\s*\([^)]*\)\s*\{/);
-    return { depth, fallback, total, list: Object.entries(count).map(([c, n]) => ({ cls: c, name: nm(c), n, pct: Math.round(n / total * 100) })),
+    return { file: rotFile, depth, fallback, total, list: Object.entries(count).map(([c, n]) => ({ cls: c, name: nm(c), n, pct: Math.round(n / total * 100) })),
       rare: rm ? { cls: rm[2], name: nm(rm[2]), chance: Math.round(num(rm[1]) * 1000) / 10 } : null, alts, altChance: ac ? ac[1].trim() : '', code: raw ? raw.code : '', line: raw ? raw.line : 0 };
   });
   /** 몬스터 고르기 목록 [[ref, 표시]] — 프로젝트 몬스터 · 보스 캐릭터 + 게임 몬스터 (spd:<클래스>). 맵 "몬스터 스폰" · 드랍 테이블 "테마별 몬스터" */
@@ -105,17 +106,17 @@
     ['Bat', '흡혈 박쥐'], ['Brute', '놀 야만전사'], ['Shaman$RedShaman', '놀 주술사 (빨강)'], ['Spinner', '동굴 거미'], ['DM200', 'DM-200'],
     ['Ghoul', '드워프 구울'], ['Elemental$FireElemental', '불의 정령'], ['Warlock', '드워프 흑마법사'], ['Monk', '드워프 수도사'], ['Golem', '골렘'],
     ['Succubus', '서큐버스'], ['Eye', '악마의 눈'], ['Scorpio', '전갈'], ['RipperDemon', '찢는 악마']];
-  PDM.mobRefOptions = () => [...PDM.store.all('char').filter(c => ['mob', 'boss'].includes(c.kind) && c.enabled !== false).map(c => [c.id, c.name]),
+  PDM.mobRefOptions = () => [...PDM.store.all('char').filter(c => PDM.isHostile(c.kind) && c.enabled !== false).map(c => [c.id, c.name]),
     ...GAME_MOBS.map(([c, n]) => ['spd:' + c, `(게임) ${n}`])];
   PDM.gameSpawnBox = function (depth) {
     const body = h('span', {}, '읽는 중…');
     const box = h('div', { class: 'hint', style: { margin: '2px 0 6px', padding: '6px 10px', border: '1px solid var(--line)', borderRadius: '6px' } }, h('b', {}, `목록을 비우면 — 깊이 ${depth} 의 게임 몬스터: `), body);
     PDM.gameRotation(depth).then(r => { body.textContent = '';
-      if (!r) { body.textContent = G.repoOf() ? 'MobSpawner.java 에서 읽지 못했습니다.' : '게임 저장소를 찾지 못했습니다.'; return; }
+      if (!r) { body.textContent = G.repoOf() ? `층별 몬스터 목록(${(PDM.GAME_SCAN && PDM.GAME_SCAN.mobRotation) || 'MobSpawner.java'})에서 읽지 못했습니다.` : '게임 저장소를 찾지 못했습니다.'; return; }
       body.append(r.list.map(x => `${x.name} ×${x.n} (${x.pct}%)`).join(', ') + (r.fallback ? '  — 이 깊이는 게임 코드에 따로 없어 기본(default) 목록을 씀' : ''));
       if (r.rare) box.append(h('div', {}, `드물게 ${r.rare.chance}% 확률로 ${r.rare.name} 이(가) 목록에 더해짐`));
       if (r.alts.length) box.append(h('div', {}, `희귀 변종으로 바뀜 (확률 ${r.altChance || '1/50'}): ${r.alts.join(', ')}`));
-      if (r.code) box.append(fold(`코드 보기 — MobSpawner.standardMobRotation() (actors/mobs/MobSpawner.java : ${r.line})`, () => codeView(r.code, r.line)));
+      if (r.code) box.append(fold(`코드 보기 — ${r.file.split('/').pop().replace(/\.java$/, '')}.standardMobRotation() (${r.file} : ${r.line})`, () => codeView(r.code, r.line)));
     });
     return box;
   };

@@ -39,6 +39,8 @@ function nativeFs(opts = {}) {
     async readDataURL(p) { return 'data:application/octet-stream;base64,' + fs.readFileSync(p).toString('base64'); },
     async writeDataURL(p, d) { fs.mkdirSync(P.dirname(p), { recursive: true }); fs.writeFileSync(p, Buffer.from(d.split(',')[1], 'base64')); return true; },
     async paths() { return { gameRepo: '' }; },
+    // 9차: 저장소 분석기 (main.js 의 repo:analyze 와 같은 모듈). opts.analyzer 를 켤 때만 — 끄면 웹 모드와 같음 (분석기 없음)
+    analyzeRepo: !opts.analyzer ? undefined : async (dir, o) => require(P.join(__dirname, '..', '..', 'editor', 'repo-analyzer.js')).analyze(dir, Object.assign({ cacheDir: opts.analysisCache }, o || {})),
     on() { }
   };
 }

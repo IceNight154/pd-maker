@@ -170,7 +170,13 @@ PDM.assets = (function () {
 
   /** 아이템 스프라이트 (items.png 16x16 격자 번호, 또는 PNG 한 장) */
   /** items.png 칸 배치: 원작은 16px·한 줄 16칸, mod-2 는 32px(scale 2)·번호가 한 줄 32씩 (앞 16칸만 씀) */
+  //  9차: 게임 저장소의 ItemSpriteSheet(SIZE · WIDTH)를 읽었으면 그 격자 — ARK 계열은 32px × 한 줄 32칸 (그림 너비 ÷ 16 으로 추정하면 64px 로 어긋남)
   function itemGrid(img) {
+    const g = PDM.GAME_SCAN && PDM.GAME_SCAN.itemSheet;
+    if (g && img && g.cols > 0 && img.width % g.cols === 0) {
+      const cell = img.width / g.cols;   // 프로젝트에서 배율을 키운 복사본이면 칸도 같은 비율로
+      if (cell >= g.cell && Number.isInteger(cell / g.cell)) return { cell, stride: g.cols, cols: g.cols, mod2: false, geo: true, base: g.cell };
+    }
     const cell = Math.max(16, Math.round((img ? img.width : 256) / 16));
     return { cell, stride: 16 * (cell / 16), cols: 16, mod2: cell > 16 };
   }

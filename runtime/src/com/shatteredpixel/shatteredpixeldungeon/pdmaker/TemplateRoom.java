@@ -45,11 +45,16 @@ public class TemplateRoom extends StandardRoom {
 	@Override public int maxHeight() { return vh(tpl(), var); }
 
 	@Override public boolean canConnect(Point p) { return super.canConnect(p) && doorAllowed(this, tpl(), p, var); }
-	@Override public boolean canMerge(Level l, Room other, Point p, int mergeTerrain) { return false; }
+	public boolean canMerge(Level l, Room other, Point p, int mergeTerrain) { return false; }
+	public boolean canMerge(Level l, Point p, int mergeTerrain) { return false; }   // 예전 판 (방 인자 없음)
 	@Override public boolean canPlaceWater(Point p) { return false; }
 	@Override public boolean canPlaceGrass(Point p) { return false; }
 	@Override public boolean canPlaceTrap(Point p) { return false; }
+//#if method:levels.rooms.Room#canPlaceItem @ 방 템플릿 "깨끗하게" 의 아이템 자리 제한
 	@Override public boolean canPlaceItem(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("keepClean", false)) && super.canPlaceItem(p, l); }
+//#else
+	//#| // (예전 판: 방마다 아이템 자리 판정이 없음)
+//#endif
 	@Override public boolean canPlaceCharacter(Point p, Level l) { JsonValue t = tpl(); return (t == null || !t.getBoolean("noMobs", t.getBoolean("keepClean", false))) && super.canPlaceCharacter(p, l); }
 
 	@Override
@@ -136,7 +141,7 @@ public class TemplateRoom extends StandardRoom {
 		int x = p.x - r.left, y = p.y - r.top;
 		return x >= 0 && y >= 0 && x < w && y < h && isDoor(ter.getInt(src(t, var, x, y)));
 	}
-	static boolean isDoor(int t) { return t == Terrain.DOOR || t == Terrain.OPEN_DOOR || t == Terrain.LOCKED_DOOR || t == Terrain.SECRET_DOOR || t == Terrain.CRYSTAL_DOOR; }
+	static boolean isDoor(int t) { return t == Terrain.DOOR || t == Terrain.OPEN_DOOR || t == Terrain.LOCKED_DOOR || t == Terrain.SECRET_DOOR || t == MakerCompat.T_CRYSTAL_DOOR; }
 
 	static void paintTemplate(Level level, Room r, JsonValue t, int var) {
 		if (t == null) {   // 템플릿을 못 찾으면 빈 방

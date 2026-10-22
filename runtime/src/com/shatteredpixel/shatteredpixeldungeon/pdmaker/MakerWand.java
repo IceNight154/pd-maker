@@ -60,7 +60,7 @@ public class MakerWand {
 					String hs = c.getString("hitSound", ""); if (!hs.isEmpty()) MakerAudio.playSe(hs);
 					String he = c.getString("hitEffect", ""); if (!he.isEmpty()) MakerEffect.playAt(he, to);
 				} catch (Throwable t) { MakerRuntime.log("마법봉 맞은 효과 오류: " + t); }
-				w.onZap(shot);
+				MakerCompat.invoke(w, "onZap", shot);   // 판마다 공개 범위가 다름 (예전 판 protected)
 				MakerCompat.call(w, "wandUsed");   // 예전 판(SPD 2.x)은 protected
 			}
 		};
@@ -71,7 +71,7 @@ public class MakerWand {
 			switch (bolt) {
 				case "game":   // 게임 원래 날아가는 효과 (+ 소리 · 이펙트만 더하거나 바꿈)
 					if (!snd.isEmpty()) MakerAudio.playSe(snd);
-					w.fx(shot, done);
+					MakerCompat.invoke(w, "fx", shot, done);
 					break;
 				case "code": {   // 편집기 "코드로 직접" — 생성 파일 gen/GenWandFx.java (없거나 오류면 게임 원래 효과)
 					if (!snd.isEmpty()) MakerAudio.playSe(snd);
@@ -81,7 +81,7 @@ public class MakerWand {
 						ran = (Boolean) g.getMethod("fx", String.class, Wand.class, Ballistica.class, Callback.class).invoke(null, key, w, shot, done);
 					} catch (java.lang.reflect.InvocationTargetException e) { MakerRuntime.log("마법봉 이펙트 코드 오류 (" + key + "): " + e.getCause()); warn("마법봉 이펙트 코드 오류: " + e.getCause()); }
 					catch (Throwable e) { MakerRuntime.log("마법봉 이펙트 코드를 찾지 못함 (" + key + "): " + e); }
-					if (!ran) w.fx(shot, done);
+					if (!ran) MakerCompat.invoke(w, "fx", shot, done);
 					break;
 				}
 				case "none":

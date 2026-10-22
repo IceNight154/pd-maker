@@ -8,7 +8,10 @@
 // ================================================================
 (function () {
   const { h, store, toast } = PDM;
-  const K = 'badges', SHEET = 'interfaces/badges.png', COLS = 8;
+  const K = 'badges';
+  let SHEET = 'interfaces/badges.png', SHEET_REL = 'assets/game/interfaces/badges.png';   // 10차: 저장소의 Assets.Interfaces.BADGES
+  let GEO = { cell: 16, cols: 8, textKeys: 'title-desc' };   // 10차: 칸 크기 · 한 줄 칸 수는 저장소에서 (BadgeBanner · 시트 너비) — ARK 는 한 줄 16칸
+  const COLS_ = () => GEO.cols, CELL = () => GEO.cell;
   const list = () => (store.get(K) || {}).list || [];
   const TRIGGERS = { manual: '이벤트 명령 "배지 주기"로만', floorEnter: '층(맵)에 들어올 때 조건 검사', mobKilled: '몬스터를 처치했을 때 조건 검사', itemPickup: '아이템을 주웠을 때 조건 검사', turn: '매 턴 조건 검사' };
   const TYPES = { LOCAL: '한 판 안에서 얻음', GLOBAL: '여러 판에 걸쳐', JOURNAL: '도감 · 기록', HIDDEN: '숨김 (기록용)' };
@@ -84,7 +87,6 @@
   }
 
   // ---------------- 배지 그림: 칸 하나 편집 · 다른 이름으로 저장 · 불러오기
-  const SHEET_REL = 'assets/game/' + SHEET;
   const loadImg = src => new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = src; });
   async function askPath(def) {
     let out = (await PDM.ui.prompt('다른 이름으로 저장 — 프로젝트 안의 경로', def, '배지 그림 시트는 그대로 두고, 이 배지 그림만 새 PNG 파일(16×16)로 저장합니다.') || '').trim().replace(/\\/g, '/');
@@ -97,10 +99,10 @@
   /** 시트의 칸 하나를 그림 편집기로 고침. 저장 = 시트의 그 칸에 씀, 다른 이름으로 저장 = 새 파일 (경로를 돌려줌) */
   async function editCell(idx, title, defName) {
     const im = await PDM.assets.load('game:' + SHEET).catch(() => null); if (!im) { toast('배지 그림 시트를 읽을 수 없습니다 (게임 저장소 연결 확인)', 'bad'); return null; }
-    const sx = (idx % COLS) * 16, sy = Math.floor(idx / COLS) * 16;
-    const one = h('canvas', { width: 16, height: 16 }); one.getContext('2d').drawImage(im, sx, sy, 16, 16, 0, 0, 16, 16);
+    const sx = (idx % GEO.cols) * GEO.cell, sy = Math.floor(idx / GEO.cols) * GEO.cell;
+    const one = h('canvas', { width: GEO.cell, height: GEO.cell }); one.getContext('2d').drawImage(im, sx, sy, GEO.cell, GEO.cell, 0, 0, GEO.cell, GEO.cell);
     let result = null, asPath = null;
-    const ed = PDM.pixelEditor({ width: 16, height: 16, src: one.toDataURL('image/png'), scale: 20,
+    const ed = PDM.pixelEditor({ width: GEO.cell, height: GEO.cell, src: one.toDataURL('image/png'), scale: 20,
       onSave: d => { result = d; PDM.$('.modal-foot .pri').click(); },
       onSaveAs: async d => { const out = await askPath(`assets/sprites/badges/${defName || 'badge_' + idx}.png`); if (!out) return; asPath = out; result = d; PDM.$('.modal-foot .pri').click(); } });
     const ok = await PDM.ui.modal(title, h('div', {}, ed, h('p', { class: 'hint' }, `저장 = 배지 그림 시트의 ${idx}번 칸을 고침 (이 칸을 쓰는 모든 배지에 적용) · 다른 이름으로 저장 = 시트는 그대로 두고 새 파일로`)), [['취소', false], ['저장', () => true, 'pri']]);
@@ -109,7 +111,7 @@
     try {
       if (asPath) { await pdm.writeDataURL(store.abs(asPath), data); PDM.assets.invalidate(asPath); PDM.log('배지 그림 저장: ' + asPath, 'ok'); return { file: asPath }; }
       const cell = await loadImg(data), all = h('canvas', { width: im.width, height: im.height }), g = all.getContext('2d');
-      g.drawImage(im, 0, 0); g.clearRect(sx, sy, 16, 16); g.drawImage(cell, 0, 0, cell.width, cell.height, sx, sy, 16, 16);
+      g.drawImage(im, 0, 0); g.clearRect(sx, sy, GEO.cell, GEO.cell); g.drawImage(cell, 0, 0, cell.width, cell.height, sx, sy, GEO.cell, GEO.cell);
       await pdm.writeDataURL(store.abs(SHEET_REL), all.toDataURL('image/png'));
       PDM.assets.invalidate('game:' + SHEET); PDM.assets.invalidate(SHEET_REL); await PDM.assets.scanOverrides();
       PDM.log(`배지 그림 시트 ${idx}번 칸 저장 → ${SHEET_REL}`, 'ok');
@@ -120,38 +122,40 @@
   async function importCell(idx) {
     const f = await PDM.ui.pickImage('sprites/badges'); if (!f) return false;
     const im = await PDM.assets.load('game:' + SHEET).catch(() => null), src = await PDM.assets.load(f).catch(() => null); if (!im || !src) { toast('그림을 읽을 수 없습니다', 'bad'); return false; }
-    const sx = (idx % COLS) * 16, sy = Math.floor(idx / COLS) * 16, all = h('canvas', { width: im.width, height: im.height }), g = all.getContext('2d');
-    g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0); g.clearRect(sx, sy, 16, 16); g.drawImage(src, 0, 0, src.width, src.height, sx, sy, 16, 16);
+    const sx = (idx % GEO.cols) * GEO.cell, sy = Math.floor(idx / GEO.cols) * GEO.cell, all = h('canvas', { width: im.width, height: im.height }), g = all.getContext('2d');
+    g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0); g.clearRect(sx, sy, GEO.cell, GEO.cell); g.drawImage(src, 0, 0, src.width, src.height, sx, sy, GEO.cell, GEO.cell);
     await pdm.writeDataURL(store.abs(SHEET_REL), all.toDataURL('image/png'));
     PDM.assets.invalidate('game:' + SHEET); PDM.assets.invalidate(SHEET_REL); await PDM.assets.scanOverrides();
     return true;
   }
   const fileCv = (ref, size) => { const c = h('canvas', { width: size, height: size, class: 'pixelated flex-none' });
     PDM.assets.load(ref).then(im => { if (!im) return; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0, im.width, im.height, 0, 0, size, size); }).catch(() => { }); return c; };
+  /** 게임 원래 배지 — 10차: javasrc.badges (분석기와 같은 규칙) — 들여쓰기 · 글자 키 형식(.title/.desc 또는 한 줄) · 시트 칸 수를 저장소에서 읽음.
+   *  그림 · 이름 · 조건을 못 읽은 배지도 목록에서 빼지 않음 (r.noImage · r.nameSource 'none' · r.condParsed false) */
   async function scan() {
     const repo = await PDM.app.resolveRepo(true);
     if (cache.repo === repo && cache.rows) return cache.rows;
     const rows = [];
     try {
-      const src = await pdm.readText(pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'Badges.java'));
-      const body = (/enum\s+Badge\s*\{([\s\S]*?)\n\t\t;?\s*\n\s*public\s|enum\s+Badge\s*\{([\s\S]*?);\s*\n/.exec(src) || [])[1] || src;
-      const re = /^\s*([A-Z][A-Z0-9_]*)\s*\(\s*(\d+)\s*(?:,\s*BadgeType\.(\w+))?\s*\)/gm; let m;
-      let enumEnd = 0;
-      while ((m = re.exec(body))) { rows.push({ name: m[1], key: m[1].toLowerCase(), icon: +m[2], type: m[3] || 'LOCAL' }); enumEnd = Math.max(enumEnd, src.indexOf(m[0]) + m[0].length); }
-      // 얻는 조건 코드: 배지 이름이 나오는 줄을 메서드별로 모음
-      const lines = src.split('\n'), tail = enumEnd, methods = [];
-      let cur = null, off = 0;
-      lines.forEach((ln, i) => { const mm = /^\t(?:public|private|protected)\s+static\s+[\w<>\[\]]+\s+(\w+)\s*\(([^)]*)\)/.exec(ln); if (mm) { cur = { name: mm[1], args: mm[2].trim(), from: i, to: i }; methods.push(cur); } else if (cur && /^\t\}/.test(ln)) { cur.to = i; cur = null; } });
-      const byName = new Map(rows.map(r => [r.name, r]));
-      lines.forEach((ln, i) => { off += ln.length + 1; if (off <= tail) return; const re2 = /\bBadge\.([A-Z][A-Z0-9_]*)\b/g; let k;
-        while ((k = re2.exec(ln))) { const r = byName.get(k[1]); if (!r) continue; const m = methods.find(x => i >= x.from && i <= x.to); if (!m || /^(saveLocal|restore|filter|addReplaced|isObtainedLocally|unlock|isUnlocked|disown|allUnlocked|saveGlobal|loadGlobal)/.test(m.name)) continue;
-          (r.code = r.code || []).push({ m: m.name, args: m.args, line: i + 1, text: ln.trim(), src: lines.slice(m.from, m.to + 1).join('\n').replace(/\t/g, '  ') }); } });
-      rows.forEach(r => { const c = (r.code || []).find(x => /^if\s*\(/.test(x.text) && /!local\.contains/.test(x.text)) || (r.code || [])[0]; r.main = c || null; r.suggest = c ? suggest(c.text) : ''; });
-      try { const ss = await pdm.readText(pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'Statistics.java'));
-        const sr = /^\tpublic static (int|float|boolean) (\w+)/gm; let k; stats = []; while ((k = sr.exec(ss))) stats.push({ name: k[2], bool: k[1] === 'boolean' }); } catch (_) { /* 통계 목록 없이 진행 */ }
+      const base = pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon');
+      const rd = async rel => { try { return await pdm.readText(pdm.join(base, ...rel.split('/'))); } catch (_) { return ''; } };
+      const [src, banner, assetsSrc, statSrc] = await Promise.all(['Badges.java', 'effects/BadgeBanner.java', 'Assets.java', 'Statistics.java'].map(rd));
+      if (!src) throw new Error('Badges.java 없음');
+      const JSRC = window.PDMJava, sheetRel = (JSRC.assets(assetsSrc).map['Interfaces.BADGES']) || 'interfaces/badges.png';
+      SHEET = sheetRel; SHEET_REL = 'assets/game/' + sheetRel;
+      const im = await PDM.assets.load('game:' + sheetRel).catch(() => null);
       const T = PDM.gameTexts, c = await T.repoInfo(), lang = (c.langs || []).includes('ko') ? 'ko' : 'en';
       const txt = new Map((await T.loadRows('misc', lang)).map(r => [r.key, r.text]));
-      rows.forEach(r => { r.title = txt.get(`badges$badge.${r.key}.title`) || ''; r.desc = txt.get(`badges$badge.${r.key}.desc`) || ''; });
+      const B = JSRC.badges(src, { msgs: Object.fromEntries(txt), banner, sheetSize: im ? [im.width, im.height] : null });
+      GEO = { repo, cell: B.sheet.cell, cols: B.sheet.cols || Math.max(1, Math.floor(((im && im.width) || 128) / B.sheet.cell)), textKeys: B.textKeys };
+      const lines = src.split('\n');
+      B.list.forEach(b => {
+        const code = b.conds.map(x => ({ m: x.method, args: x.args, line: x.line, text: x.text, src: lines.slice(x.from - 1, x.to).join('\n').replace(/\t/g, '  ') }));
+        const main = code.find(x => /^if\s*\(/.test(x.text) && /!\s*(local|global)\.contains/.test(x.text)) || code[0] || null;
+        rows.push({ name: b.id, key: b.key, icon: b.image, type: b.type || '(내부)', noImage: b.noImage, inSheet: b.inSheet, title: b.name, desc: b.desc, nameKey: b.nameKey, descKey: b.descKey, nameSource: b.nameSource, line: b.line,
+          code, main, suggest: main ? suggest(main.text) : '', condParsed: b.condParsed });
+      });
+      const st2 = JSRC.statistics(statSrc); if (st2.length) stats = st2;
     } catch (e) { PDM.log && PDM.log('게임 원래 배지를 읽지 못했습니다: ' + (e.message || e), 'warn'); }
     cache = { repo, rows };
     return rows;
@@ -168,7 +172,7 @@
     h('p', { class: 'hint' }, `게임 저장소 Badges.java 에서 Badge.${r.name} 이(가) 나오는 메서드입니다. 이 메서드를 게임의 어느 곳에서 부르는지가 "얻는 때"입니다.`),
     ...[...new Map((r.code || []).map(c => [c.m, c])).values()].map(c => h('div', {}, h('div', { class: 'm-0 mt-3 mb-1 fw-bold' }, `${c.m}(${c.args})`), h('pre', { style: { fontSize: '11px', background: 'var(--bg2, #f3f1f8)', padding: '8px', borderRadius: '6px', whiteSpace: 'pre-wrap', userSelect: 'text' } }, c.src)))), [['닫기', true, 'pri']]);
   const iconCv = (idx, size, dim) => { const c = h('canvas', { width: size, height: size, style: { imageRendering: 'pixelated', flex: 'none', opacity: dim ? 0.35 : 1 } });
-    PDM.assets.load('game:' + SHEET).then(im => { if (!im) return; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, (idx % COLS) * 16, Math.floor(idx / COLS) * 16, 16, 16, 0, 0, size, size); }).catch(() => { }); return c; };
+    PDM.assets.load('game:' + SHEET).then(im => { if (!im) return; const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(im, (idx % GEO.cols) * GEO.cell, Math.floor(idx / GEO.cols) * GEO.cell, GEO.cell, GEO.cell, 0, 0, size, size); }).catch(() => { }); return c; };
   /** 배지 시트에서 칸 고르기 (원래 배지 · 내 배지가 쓰는 칸 표시) */
   async function pickCell(cur) {
     const im = await PDM.assets.load('game:' + SHEET).catch(() => null); if (!im) { toast('배지 그림 시트를 읽을 수 없습니다', 'bad'); return null; }
@@ -176,9 +180,9 @@
     const Z = 3, cv = h('canvas', { width: im.width * Z, height: im.height * Z, style: { imageRendering: 'pixelated', cursor: 'pointer', background: '#222' } }), info = h('div', { class: 'hint' }, '칸을 누르세요. 노란 테두리 = 지금 고른 칸 · 흐린 칸 = 다른 배지가 쓰는 칸');
     let sel = cur | 0;
     const draw = () => { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.clearRect(0, 0, cv.width, cv.height); g.drawImage(im, 0, 0, cv.width, cv.height);
-      const rows = Math.floor(im.height / 16);
-      for (let i = 0; i < COLS * rows; i++) { const x = (i % COLS) * 16 * Z, y = Math.floor(i / COLS) * 16 * Z; if (used.has(i) && i !== sel) { g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, y, 16 * Z, 16 * Z); } g.strokeStyle = i === sel ? '#ffd24a' : 'rgba(255,255,255,.12)'; g.lineWidth = i === sel ? 2 : 1; g.strokeRect(x + .5, y + .5, 16 * Z - 1, 16 * Z - 1); } };
-    cv.onclick = e => { const r = cv.getBoundingClientRect(); sel = Math.floor((e.clientY - r.top) / (16 * Z)) * COLS + Math.floor((e.clientX - r.left) / (16 * Z)); info.textContent = `${sel}번 칸` + (used.has(sel) ? ` — 쓰는 곳: ${used.get(sel)}` : ' — 비어 있음 (새 그림을 그려 넣기 좋은 칸)'); draw(); };
+      const rows = Math.floor(im.height / GEO.cell);
+      for (let i = 0; i < GEO.cols * rows; i++) { const x = (i % GEO.cols) * GEO.cell * Z, y = Math.floor(i / GEO.cols) * GEO.cell * Z; if (used.has(i) && i !== sel) { g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(x, y, 16 * Z, 16 * Z); } g.strokeStyle = i === sel ? '#ffd24a' : 'rgba(255,255,255,.12)'; g.lineWidth = i === sel ? 2 : 1; g.strokeRect(x + .5, y + .5, 16 * Z - 1, 16 * Z - 1); } };
+    cv.onclick = e => { const r = cv.getBoundingClientRect(); sel = Math.floor((e.clientY - r.top) / (GEO.cell * Z)) * GEO.cols + Math.floor((e.clientX - r.left) / (GEO.cell * Z)); info.textContent = `${sel}번 칸` + (used.has(sel) ? ` — 쓰는 곳: ${used.get(sel)}` : ' — 비어 있음 (새 그림을 그려 넣기 좋은 칸)'); draw(); };
     draw();
     const ok = await PDM.ui.modal('배지 그림 칸 고르기', h('div', {}, h('div', { style: { maxHeight: '60vh', overflow: 'auto' } }, cv), info), [['취소', false], ['고르기', true, 'pri']]);
     return ok ? sel : null;
@@ -219,7 +223,7 @@
           const out = await askPath(`assets/sprites/badges/${b.id}.png`); if (!out) return;
           const c = h('canvas', { width: 16, height: 16 }), g = c.getContext('2d'); g.imageSmoothingEnabled = false;
           const im = await PDM.assets.load(b.image || ('game:' + SHEET)).catch(() => null); if (!im) { toast('그림을 읽을 수 없습니다', 'bad'); return; }
-          if (b.image) g.drawImage(im, 0, 0, im.width, im.height, 0, 0, 16, 16); else g.drawImage(im, ((b.icon | 0) % COLS) * 16, Math.floor((b.icon | 0) / COLS) * 16, 16, 16, 0, 0, 16, 16);
+          if (b.image) g.drawImage(im, 0, 0, im.width, im.height, 0, 0, 16, 16); else g.drawImage(im, ((b.icon | 0) % GEO.cols) * GEO.cell, Math.floor((b.icon | 0) / GEO.cols) * GEO.cell, GEO.cell, GEO.cell, 0, 0, 16, 16);
           await pdm.writeDataURL(store.abs(out), c.toDataURL('image/png')); PDM.assets.invalidate(out);
           setB('배지 그림 (다른 이름으로 저장)', x => { x.image = out; });
         }
@@ -260,24 +264,30 @@
           }
           return td;
         };
-        show.forEach(r => { const kt = `badges$badge.${r.key}.title`, kd = `badges$badge.${r.key}.desc`;
-          const ti = h('input', { type: 'text', value: ov[kt] || '', placeholder: r.title || '(이름 없음)' }), di = h('input', { type: 'text', value: ov[kd] || '', placeholder: r.desc || '(설명 없음)' });
-          ti.onchange = () => setOv(kt, ti.value.trim()); di.onchange = () => setOv(kd, di.value.trim());
+        show.forEach(r => {
+          // 10차: 글자 키는 저장소 형식 그대로 (.title/.desc 또는 한 줄 키) — 저장소에 없는 키에 쓰면 게임이 읽지 않으므로 막음
+          const kt = r.nameKey || (GEO.textKeys === 'single' ? `badges$badge.${r.key}` : `badges$badge.${r.key}.title`), kd = r.descKey || (GEO.textKeys === 'single' ? '' : `badges$badge.${r.key}.desc`);
+          const ti = h('input', { type: 'text', value: ov[kt] || '', placeholder: r.title || (r.nameSource === 'none' ? '(이 저장소에 이름 글자 없음)' : '(이름 없음)') });
+          const di = kd ? h('input', { type: 'text', value: ov[kd] || '', placeholder: r.desc || '(설명 없음)' }) : h('div', { class: 'ra-note' }, '이 저장소는 배지 설명 글 키를 쓰지 않음');
+          ti.onchange = () => setOv(kt, ti.value.trim()); if (kd) di.onchange = () => setOv(kd, di.value.trim());
+          if (r.noImage) { tb.append(h('tr', {}, h('td', {}, h('div', { class: 'ra-note' }, '그림 없음')), h('td', {}, ti, h('div', { class: 'hint' }, r.title)), h('td', {}, di, h('div', { class: 'hint' }, r.desc)), condCell(r, og[r.name] || {}),
+            h('td', {}, h('div', { class: 'hint' }, TYPES[r.type] || r.type), h('code', { class: 'fs-2xs' }, r.name), h('div', { class: 'ra-note' }, 'enum 에 그림 번호가 없음 (내부 기록용 · 다른 배지로 대신 보임)')))); return; }
           const ic = iconCv(r.icon, 32); ic.style.cursor = 'pointer'; ic.title = '누르면 이 배지 그림 편집 (저장 · 다른 이름으로 저장)';
           ic.onclick = async () => { const x = await editCell(r.icon, `배지 그림 편집 — ${r.title || r.name}`, r.key); if (x && x.file) toast('새 파일로 저장했습니다: ' + x.file + ' (게임 원래 배지는 시트의 칸을 씁니다)'); if (x) ctx.refresh(); };
           const imp = h('button', { class: 'btn xs', title: 'PNG 파일을 이 칸에 넣기', onclick: async () => { if (await importCell(r.icon)) ctx.refresh(); } }, '불러오기');
           tb.append(h('tr', {}, h('td', {}, ic, imp), h('td', {}, ti, h('div', { class: 'hint' }, r.title)), h('td', {}, di, h('div', { class: 'hint' }, r.desc)), condCell(r, og[r.name] || {}),
-            h('td', {}, h('div', { class: 'hint' }, TYPES[r.type] || r.type), h('code', { class: 'fs-2xs' }, r.name), h('div', { class: 'hint' }, `${r.icon}번 칸`)))); });
-        orig.append(h('div', { class: 'hint mb-2' }, `${show.length} / ${rows.length}개`), tb);
+            h('td', {}, h('div', { class: 'hint' }, TYPES[r.type] || r.type), h('code', { class: 'fs-2xs' }, r.name), h('div', { class: r.inSheet === false ? 'c-bad' : 'hint' }, `${r.icon}번 칸` + (r.inSheet === false ? ' — 시트 밖' : ''))))); });
+        orig.append(h('div', { class: 'ra-note mb-2' }, `${show.length} / ${rows.length}개 · 저장소 원본 ${rows.length} · 이름 글자 있음 ${rows.filter(r => r.nameSource === 'repo').length} · 그림 있음 ${rows.filter(r => !r.noImage).length} · 얻는 조건을 Badges.java 에서 찾음 ${rows.filter(r => r.condParsed).length} (못 찾은 것은 다른 파일에서 주거나 미지원) · 시트 ${GEO.cell}px · 한 줄 ${GEO.cols}칸`), tb);
       };
-      scan().then(rows => { q.oninput = () => { st.q = q.value; fill(rows); }; fill(rows); });
+      const geoAt = GEO.repo;
+      scan().then(rows => { if (GEO.repo && GEO.repo !== geoAt) { ctx.refresh(); return; } q.oninput = () => { st.q = q.value; fill(rows); }; fill(rows); });   // 시트 칸 정보가 바뀌면 한 번 다시 그림
       return h('div', { class: 'page' }, h('h1', {}, '🏅 업적 (배지)'),
         h('p', { class: 'lead' }, '게임 원래 배지의 이름 · 설명 · 그림을 고치고, 내 배지를 만들어 얻는 조건과 때를 정합니다.'),
         section(`내 배지 (${all.length})`,
           h('p', { class: 'hint' }, '얻은 배지는 새 게임에도 남습니다 (조건식 badge.<id>). 얻으면 화면 가운데에 배지 띠와 "배지 획득: 이름"이 뜹니다. 게임 안에서 목록은 이벤트 명령 "배지 목록 창 열기"로 봅니다 — 게임 원래 배지 화면에는 나오지 않습니다. 그림은 아래 "배지 그림 시트"의 빈 칸에 그려 넣고 그 칸을 고르세요.'),
           mine, h('button', { class: 'btn sm add', onclick: () => ops.add() }, '+ 내 배지 추가')),
         section('배지 그림 시트',
-          h('p', { class: 'hint' }, '게임 원래 배지와 내 배지가 같이 쓰는 그림입니다 (16×16 칸, 한 줄 8칸). "고치기"로 열어 원래 배지 그림을 바꾸거나 빈 칸에 새 배지를 그려 넣으세요. 크기와 칸 배치는 그대로 두세요.'),
+          h('p', { class: 'hint' }, `게임 원래 배지와 내 배지가 같이 쓰는 그림입니다 (${GEO.cell}×${GEO.cell} 칸, 한 줄 ${GEO.cols}칸 — 이 게임 저장소 기준)` + '. "고치기"로 열어 원래 배지 그림을 바꾸거나 빈 칸에 새 배지를 그려 넣으세요. 크기와 칸 배치는 그대로 두세요.'),
           h('div', { class: 'spr-grid' }, PDM.sprites && PDM.sprites.gameCard ? [PDM.sprites.gameCard(SHEET, '배지 그림 시트'), PDM.sprites.gameCard('interfaces/locked_badge.png', '잠긴 배지 그림')] : h('p', { class: 'hint' }, '그림 관리 화면에서 interfaces/badges.png 를 고치세요.'))),
         section('게임 원래 배지',
           h('p', { class: 'hint' }, '게임 저장소에서 읽은 실제 목록입니다. 이름 · 설명 칸에 적으면 모든 언어에서 그 글로 바뀝니다 (게임 텍스트에 저장). "얻는 조건" 칸에는 게임 코드(Badges.java)의 실제 조건 줄이 나옵니다 — "코드"로 메서드 전체를 볼 수 있고, "내 조건식으로 바꾸기"를 고르면 게임 원래 조건 대신 내 조건식이 참일 때 얻습니다 (게임 통계는 stat.이름 — 예: stat.enemiesSlain, stat.goldCollected, stat.foodEaten · 그 밖에 hero.lvl, hero.str, gold, depth, switch.x, var.x, badge.이름). 조건을 바꾸면 설명 글도 맞게 고쳐 주세요.'),

@@ -475,6 +475,7 @@ public class InventoryPane extends Component {
 	}
 
 	private Image bagIcon(Bag bag ) {
+		{ Image pdmI = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerBag.icon(bag); if (pdmI != null) return pdmI; } // >>> pdmaker
 		if (bag instanceof VelvetPouch) {
 			return Icons.get( Icons.SEED_POUCH );
 		} else if (bag instanceof ScrollHolder) {

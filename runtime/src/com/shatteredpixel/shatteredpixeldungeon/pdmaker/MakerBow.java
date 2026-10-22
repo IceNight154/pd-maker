@@ -110,8 +110,14 @@ public abstract class MakerBow extends MeleeWeapon implements GenSupport.Coded {
 			String hs = p().getString("hitSound", ""); if (!hs.isEmpty()) MakerAudio.playSe(hs);
 			return d;
 		}
+//#if method:items.KindOfWeapon#delayFactor @ 원거리 무기 공격 시간 · 정확도 (예전 판 함수 이름으로)
 		@Override public float delayFactor(Char user) { return bow != null ? bow.delayFactor(user) : super.delayFactor(user); }
 		@Override public float accuracyFactor(Char owner, Char target) { return super.accuracyFactor(owner, target) * p().getFloat("accuracy", 1f); }
+//#else
+		//#| // 예전 판: 공격 시간 = speedFactor(사용자) · 정확도 = accuracyFactor(사용자)
+		//#| @Override public float speedFactor(Char user) { return bow != null ? bow.speedFactor(user) : super.speedFactor(user); }
+		//#| @Override public float accuracyFactor(Char owner) { return super.accuracyFactor(owner) * p().getFloat("accuracy", 1f); }
+//#endif
 		@Override public int STRReq(int lvl) { return bow != null ? bow.STRReq() : super.STRReq(lvl); }
 		@Override public void throwSound() { String s = p().getString("sound", ""); if (!s.isEmpty()) MakerAudio.playSe(s); else super.throwSound(); }
 

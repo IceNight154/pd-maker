@@ -61,11 +61,11 @@ public class LevelHooks {
 	/** 입구도 출구도 없는 맵(직접 그린 맵에 계단을 안 놓음)에서 게임이 멈추지 않게: 설 자리가 없으면 맵 가운데에서 가장 가까운 지나갈 수 있는 칸 */
 	static int safePos(Level level, int pos) {
 		try {
-			if (pos >= 0 && pos < level.length() && !level.invalidHeroPos(pos)) return pos;
+			if (pos >= 0 && pos < level.length() && !badHeroPos(level, pos)) return pos;
 			if (pos == -2 && level.getTransition(com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition.Type.REGULAR_EXIT) != null) return pos;
 			if (level.getTransition(null) != null) return pos;
 			int w = level.width(), cx = w / 2, cy = level.height() / 2, best = -1, bd = Integer.MAX_VALUE;
-			for (int i = 0; i < level.length(); i++) { if (level.invalidHeroPos(i) || Actor.findChar(i) != null) continue; int d = Math.abs(i % w - cx) + Math.abs(i / w - cy); if (d < bd) { bd = d; best = i; } }
+			for (int i = 0; i < level.length(); i++) { if (badHeroPos(level, i) || Actor.findChar(i) != null) continue; int d = Math.abs(i % w - cx) + Math.abs(i / w - cy); if (d < bd) { bd = d; best = i; } }
 			if (best >= 0) { MakerRuntime.warnOnce("이 맵에는 입구 · 출구 · 플레이어 스폰 위치가 없어서 가운데 근처 빈 칸에 세웠습니다 — 맵 그리기에서 「플레이어 스폰 위치」를 놓으세요"); return best; }
 		} catch (Throwable t) { MakerRuntime.log("스폰 위치 오류: " + t); }
 		return pos;
@@ -102,7 +102,7 @@ public class LevelHooks {
 				JsonValue at = o.get("at"); if (at == null || !at.has("x")) continue;
 				if (!Cond.eval(o.getString("cond", ""), StoryState.globalResolver())) continue;
 				int c = (off[0] + at.getInt("x")) + (off[1] + at.getInt("y")) * level.width();
-				if (c < 0 || c >= level.length() || level.invalidHeroPos(c)) { MakerRuntime.warnOnce("플레이어 스폰 위치가 설 수 없는 칸에 있습니다 (" + id + " 의 " + at.getInt("x") + "," + at.getInt("y") + ") — 지나갈 수 있는 바닥 위에 놓으세요"); continue; }
+				if (c < 0 || c >= level.length() || badHeroPos(level, c)) { MakerRuntime.warnOnce("플레이어 스폰 위치가 설 수 없는 칸에 있습니다 (" + id + " 의 " + at.getInt("x") + "," + at.getInt("y") + ") — 지나갈 수 있는 바닥 위에 놓으세요"); continue; }
 				String w = o.getString("when", "start");
 				int r = w.equals("from") ? (!first && from != null && from.equals(o.getString("from", "")) ? 3 : 0) : w.equals("start") ? (first ? 2 : 0) : 1;
 				if (r > rank) { rank = r; best = c; }
@@ -144,7 +144,7 @@ public class LevelHooks {
 							for (int i = 0; i < n; i++) {
 								com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom r;
 								do { r = com.shatteredpixel.shatteredpixeldungeon.levels.rooms.standard.StandardRoom.createRoom(); } while (!r.setSizeCat(big ? n - i : 1));
-								i += r.sizeFactor() - 1;
+								{ Object sf = MakerCompat.invoke(r, "sizeFactor"); i += (sf instanceof Integer ? (Integer) sf : 1) - 1; }   // 예전 판: 크기 배율 없음
 								initRooms.add(r);
 							}
 							break;
@@ -564,5 +564,11 @@ public class LevelHooks {
 		if (fr != null && fr.length == 2) { fromDepth = fr[0]; fromBranch = fr[1]; }
 		String ft = b.getString("pdm_fromType");
 		try { fromType = ft == null || ft.isEmpty() ? null : LevelTransition.Type.valueOf(ft); } catch (Exception e) { fromType = null; }
+	}
+	/** 영웅이 설 수 없는 칸 (Level.invalidHeroPos — 없는 판은 지나갈 수 없거나 단단한 칸) */
+	static boolean badHeroPos(Level level, int c) {
+		Object v = MakerCompat.invoke(level, "invalidHeroPos", c);
+		if (v instanceof Boolean) return (Boolean) v;
+		return !level.passable[c] || level.solid[c];
 	}
 }

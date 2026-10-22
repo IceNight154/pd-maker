@@ -291,9 +291,22 @@ PDM.titlePreview = (function () {
     if (opts.hasSaves) Object.assign(v, { lastHero: '전사', lastDepth: '3', lastLevel: '5' });   // 미리보기 예시 (게임에서는 실제 마지막 저장)
     return v;
   }
+  /** 10차: 선택한 게임 저장소의 원래 타이틀 구조 (TitleScene.create · BannerSprites — repo-analyzer). 원작과 다른 타이틀일 때만 (원작이면 null → 7차 모델 그대로)
+   *  → { buttons: [[id, 글 키, 아이콘]], order: { land, port }, rows, logo: { land: [x,y,w,h], port }, glow, torches: { land: [{x,y,fromRight}], port }, labels, file, background, music } */
+  function repoTitle() {
+    const R = PDM.REPO_ANALYSIS, T = R && R.objects && R.objects.title; if (!T || !T.buttons || !T.buttons.length || !T.logoRect) return null;
+    const f = (R.features || []).map(x => x.id); if (!f.includes('title-buttons') && !f.includes('title-classic-logo')) return null;
+    return { file: T.file, line: T.line, buttons: T.buttons.map(b => [b.id, b.key, b.icon || 'NONE']), order: { land: [].concat(...T.rows.land), port: [].concat(...T.rows.port) }, rows: T.rows,
+      logo: T.logoRect, glow: T.glowRect, torches: T.torches, labels: Object.fromEntries(T.buttons.map(b => [b.id, b.label])), background: T.background, music: T.musicFound || T.music, logoType: T.logo, glowType: T.glow,
+      sceneOf: Object.fromEntries(T.buttons.map(b => [b.id, b.window || b.scene || ''])) };
+  }
+  PDM.titleRepo = repoTitle;
+  /** 편집기 목록 · 미리보기가 같은 버튼 구성을 쓰게 (렌더 전에 부름) */
+  PDM.titleSyncGame = () => { const TR = repoTitle(); M.setGame(TR ? { buttons: TR.buttons, order: TR.order } : null); return TR; };
   /** t = title.json, S = screen(), opts = { tt(초), revealed, gateT(누른 뒤 초), states{버튼 id: 'hover'|...}, hover:[x,y], focus(버튼 id), window(창 id), hasSaves, winT(창 연 뒤 초) }
    *  → geo { W, H, logo, buttons[], elements[], windows[], version, exit } (편집 · 검사용 — 게임 MakerTitle.geo() 와 같은 칸) */
   function render(g, t, S, R, opts) {
+    const TR = repoTitle(); M.setGame(TR ? { buttons: TR.buttons, order: TR.order } : null);   // 10차: 저장소 원래 타이틀이면 그 버튼 구성 · 순서
     const { W, H, zoom } = S, tt = opts.tt || 0;
     const lg = t.logo || {}, gate = t.gate || {}, bs = t.buttons || {}, bg = t.background || {};
     const gateOn = !!gate.enabled, revealed = !gateOn || !!opts.revealed, revealT = gateOn ? Math.min(1, (opts.gateT || 0) * 2) : 1;
@@ -325,7 +338,8 @@ PDM.titlePreview = (function () {
     // 로고
     const mode = lg.mode || 'game', lsc = +lg.scale || 1;
     let lsize = { w: 0, h: 0 }, logoText = null, subText = null;
-    if (mode === 'game') lsize = { w: (S.land ? 240 : 139) * lsc, h: (S.land ? 57 : 100) * lsc };
+    const LR = TR ? (S.land ? TR.logo.land : TR.logo.port) : null;   // 저장소 로고 칸 (BannerSprites)
+    if (mode === 'game') lsize = LR ? { w: LR[2] * lsc, h: LR[3] * lsc } : { w: (S.land ? 240 : 139) * lsc, h: (S.land ? 57 : 100) * lsc };
     else if (mode === 'image') { const im = want(lg.image); if (im) lsize = { w: im.width * lsc, h: im.height * lsc }; }
     else if (mode === 'text') {
       logoText = textLayout(String(lg.text || '').replace(/\\n/g, '\n'), Math.max(6, Math.trunc(+lg.size || 16)), 0, zoom, 'center');
@@ -345,11 +359,14 @@ PDM.titlePreview = (function () {
         if (mode === 'game') {
           const im = want('game:interfaces/banners.png');
           if (im) {
-            const [sx, sy, sw, sh] = S.land ? [0, 100, 240, 57] : [0, 0, 139, 100];
+            const [sx, sy, sw, sh] = LR || (S.land ? [0, 100, 240, 57] : [0, 0, 139, 100]);
             g.drawImage(im, sx, sy, sw, sh, lx, ly, sw * lsc, sh * lsc);
-            if (lg.glow !== false) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = la * (0.8 + 0.2 * Math.sin(tt * 2)); const [gx, gy] = S.land ? [240, 100] : [139, 0]; g.drawImage(im, gx, gy, sw, sh, lx, ly, sw * lsc, sh * lsc); g.restore(); }
+            const GR = TR && TR.glow ? (S.land ? TR.glow.land : TR.glow.port) : null;   // 저장소의 빛 글자 (가운데 맞춤 — 원본 signs.x = title.x + (title.w - signs.w) / 2)
+            if (lg.glow !== false && GR) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = la * (0.8 + 0.2 * Math.sin(tt * 2)); g.drawImage(im, GR[0], GR[1], GR[2], GR[3], lx + (sw - GR[2]) / 2 * lsc, ly, GR[2] * lsc, GR[3] * lsc); g.restore(); }
+            else if (lg.glow !== false && !TR) { g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = la * (0.8 + 0.2 * Math.sin(tt * 2)); const [gx, gy] = S.land ? [240, 100] : [139, 0]; g.drawImage(im, gx, gy, sw, sh, lx, ly, sw * lsc, sh * lsc); g.restore(); }
             if (lg.torches !== false && la > 0.3) {   // 원작 Fireball (초록 불꽃) 흉내
-              const pts = S.land ? [[30, 35], [lsize.w / lsc - 30, 35]] : [[16, 70], [lsize.w / lsc - 16, 70]];
+              const tp = TR && TR.torches ? (S.land ? TR.torches.land : TR.torches.port) : null;   // 저장소의 placeTorch 자리
+              const pts = tp && tp.length ? tp.map(p => [p.fromRight ? lsize.w / lsc - p.x : p.x, p.y]) : S.land ? [[30, 35], [lsize.w / lsc - 30, 35]] : [[16, 70], [lsize.w / lsc - 16, 70]];
               pts.forEach(([px, py], i) => { const cx = lx + px * lsc, cy = ly + (py - 30) * lsc, fl = 1 + 0.12 * Math.sin(tt * 11 + i);   // 원작 Fireball: 그 점 위로 서는 불꽃 (입자라 모양은 비슷하게만)
                 const rg = g.createRadialGradient(cx, cy + 6 * lsc, 0, cx, cy, 16 * lsc * fl); rg.addColorStop(0, 'rgba(230,255,210,0.95)'); rg.addColorStop(0.35, 'rgba(110,240,90,0.85)'); rg.addColorStop(1, 'rgba(30,150,40,0)');
                 g.fillStyle = rg; g.beginPath(); g.ellipse(cx, cy, 7 * lsc * fl, 17 * lsc * fl, 0, 0, 7); g.fill(); });
@@ -371,13 +388,19 @@ PDM.titlePreview = (function () {
       if (pa > 0.01) { const P = textLayout(gate.text || '화면을 누르세요', 8, 0, zoom, 'left'); drawText(g, P, (W - P.w) / 2, Math.min(H - P.h - 12, logo.y + logo.h + 12), gate.color || '#dddddd', pa * (gate.blink !== false ? 0.55 + 0.45 * Math.sin(tt * 3) : 1), zoom); }
     }
     // 버튼
-    const ctx = { hasSaves: !!opts.hasSaves, canQuit: S.desktop || opts.android !== false };
+    const ctx = { hasSaves: !!opts.hasSaves, canQuit: S.desktop || opts.android !== false, land: S.land };
     const list = M.buttonList(bs, ctx);
     const places = list.map(e => e.item && e.item.place);
     const rects = M.buttonRects(bs, list.length, W, H, S.land, { y: logo.y, h: logo.h }, gate, places);
+    // 10차: 저장소 원래 타이틀 — 버튼이 원본 그대로(감춤 · 추가 없음)이면 원본 setRect 식 (3칸 줄 = floor(너비 / 3) - 1)
+    if (TR && (bs.layout || 'game') === 'game' && JSON.stringify(list.map(e => e.id)) === JSON.stringify(S.land ? TR.order.land : TR.order.port)) {
+      const rows = S.land ? TR.rows.land : TR.rows.port, aw = S.land ? rects[0][2] * 2 + 2 : rects[0][2], left = rects[0][0]; let k = 0;
+      rows.forEach(row => { const n = row.length, w = n === 1 ? aw : n === 2 ? aw / 2 - 1 : Math.floor(aw / n) - 1; row.forEach((id, c) => { if (rects[k]) { rects[k][0] = left + c * (w + 2); rects[k][2] = w; } k++; }); });
+      geo.repoTitle = TR.file;
+    }
     const clock = gateOn ? (opts.gateT || 0) : tt;
     list.forEach((e, i) => {
-      const it = e.item || {}, label = it.label || (e.gameIndex >= 0 ? (R.labels[e.id] || PDM.TITLE_BUTTONS[e.id] || e.id) : e.id);
+      const it = e.item || {}, label = it.label || (e.gameIndex >= 0 ? (R.labels[e.id] || (TR && TR.labels[e.id]) || PDM.TITLE_BUTTONS[e.id] || e.id) : e.id);
       const ga = M.groupAnim(bs.anim, gateOn, revealed, false, 0, clock, tt, i, rects[i][2], 0);
       const forced = opts.states && opts.states[e.id];
       const hover = forced === 'hover' || (!!opts.hover && !opts.window && opts.hover[0] >= rects[i][0] && opts.hover[0] < rects[i][0] + rects[i][2] && opts.hover[1] >= rects[i][1] && opts.hover[1] < rects[i][1] + rects[i][3]);

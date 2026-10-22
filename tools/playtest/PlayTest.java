@@ -70,7 +70,7 @@ public class PlayTest {
 			if (t == null) { System.out.println("[TEST] no transition " + type); return; }
 			System.out.println("[TEST] take " + type + " -> d" + t.destDepth + " b" + t.destBranch);
 			Dungeon.hero.pos = t.cell();
-			Dungeon.level.activateTransition(Dungeon.hero, t);
+			com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.takeTransition(Dungeon.level, Dungeon.hero, t);
 		});
 		sleep(5);
 	}
@@ -85,7 +85,7 @@ public class PlayTest {
 						case "start": run(() -> {
 							GamesInProgress.selectedClass = HeroClass.valueOf(p.length > 1 ? p[1] : "WARRIOR");
 							GamesInProgress.curSlot = GamesInProgress.firstEmpty();
-							Dungeon.hero = null; Dungeon.daily = Dungeon.dailyReplay = false;
+							Dungeon.hero = null; com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "daily", false); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "dailyReplay", false);
 							Dungeon.initSeed(); ActionIndicator.clearAction();
 							InterlevelScene.mode = InterlevelScene.Mode.DESCEND;
 							Game.switchScene(InterlevelScene.class);
@@ -121,7 +121,7 @@ public class PlayTest {
 							int[] w = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.whereOf(target);
 							for (LevelTransition tr : Dungeon.level.transitions) if (w != null && tr.destDepth == w[0] && tr.destBranch == w[1]) {
 								System.out.println("[TEST] take " + tr.type + " -> " + target + " (d" + tr.destDepth + " b" + tr.destBranch + ")");
-								Dungeon.hero.pos = tr.cell(); Dungeon.level.activateTransition(Dungeon.hero, tr); return; }
+								Dungeon.hero.pos = tr.cell(); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.takeTransition(Dungeon.level, Dungeon.hero, tr); return; }
 							System.out.println("[TEST] no transition to " + target);
 						}); sleep(5); break; }
 						case "sideback": go(LevelTransition.Type.BRANCH_ENTRANCE); break;

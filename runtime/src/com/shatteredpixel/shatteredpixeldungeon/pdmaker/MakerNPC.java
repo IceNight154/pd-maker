@@ -265,7 +265,11 @@ public class MakerNPC extends NPC {
 	@Override public void damage(int dmg, Object src) {
 		if (src == Dungeon.hero) HeartSystem.counter("attacked", charId);
 	}
+//#if re:actors.Char#boolean\s+add\s*\(\s*Buff @ NPC 상태 효과 막기 (반환형 차이)
 	@Override public boolean add(Buff buff) { return false; }
+//#else
+	//#| @Override public void add(Buff buff) { }   // 예전 판: add 가 값을 돌려주지 않음
+//#endif
 	@Override public boolean reset() { return true; }
 	@Override public boolean isInvulnerable(Class effect) { return true; }
 

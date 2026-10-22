@@ -248,6 +248,7 @@ public class ItemSprite extends MovieClip {
 	}
 
 	public void frame( int image ){
+		if (com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerAssets.hiresItem(this, image)) return; // >>> pdmaker
 		frame( ItemSpriteSheet.film.get( image ));
 
 		float height = ItemSpriteSheet.film.height( image );

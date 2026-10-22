@@ -182,7 +182,12 @@ public class MakerFacets {
 	static void openBag(final Item it, final Hero hero) {
 		final Inner b = inner(it);
 		if (b.items.isEmpty()) { GLog.i(it.name() + ": 비어 있다."); return; }
-		GameScene.show(new WndBag(b));   // 보통 가방 창 — 아이템을 누르면 그 자리에서 쓰기 · 장착 · "꺼내기"
+//#if re:windows.WndBag#WndBag\(\s*Bag\s+\w+\s*\) @ 가방 기능 아이템의 가방 창 (예전 판 4인자 창으로)
+		GameScene.show(new WndBag(b));
+//#else
+		//#| GameScene.show(new WndBag(b, null, WndBag.Mode.ALL, null));   // 예전 판: 가방 창 인자가 넷
+//#endif
+		// 위: 보통 가방 창 — 아이템을 누르면 그 자리에서 쓰기 · 장착 · "꺼내기"
 	}
 	/** 이 아이템을 담고 있는 가방 기능 (없으면 null) */
 	public static Inner holder(Item it) {

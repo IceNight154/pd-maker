@@ -204,7 +204,7 @@ public class MakerSwing {
 				case "sound": if (!e.ref.isEmpty()) MakerAudio.playSe(e.ref); break;
 				case "flash": { com.shatteredpixel.shatteredpixeldungeon.actors.Char ch = "hero".equals(e.anchor) ? owner.ch : charAt(anchorCell(e, tip)); if (ch != null && ch.sprite != null) ch.sprite.flash(); break; }
 				case "shake": MakerCamera.shake(this, (float) e.power, (float) Math.max(0.05, e.dur), 12f, "linear", "both"); shook = true; break;
-				case "shock": try { com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.BlastWave.blast(anchorCell(e, tip), (float) Math.max(0.5, e.size)); } catch (Throwable x) { com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.BlastWave.blast(anchorCell(e, tip)); } break;
+				case "shock": { Class<?> bw = com.shatteredpixel.shatteredpixeldungeon.items.wands.WandOfBlastWave.BlastWave.class; int ac = anchorCell(e, tip); if (MakerCompat.invoke(bw, "blast", ac, (float) Math.max(0.5, e.size)) == MakerCompat.NONE) MakerCompat.invoke(bw, "blast", ac); break; }   // 크기 인자가 없는 판도
 				case "projectile": try { com.shatteredpixel.shatteredpixeldungeon.effects.MagicMissile.boltFromChar(owner.parent, com.shatteredpixel.shatteredpixeldungeon.effects.MagicMissile.MAGIC_MISSILE, owner, cell, null); } catch (Throwable ignored) { } break;
 				case "image": { Object tx = e.ref.isEmpty() ? null : MakerRuntime.texture(e.ref); if (tx == null) { MakerRuntime.warnOnce("공격 모션 그림을 찾지 못함: " + e.ref); break; }
 					FxImage im = new FxImage(tx, e, dur, anchor(e, tip), (float) (face + (mirror ? -e.dir : e.dir))); spawned.add(im); owner.parent.add(im); break; }

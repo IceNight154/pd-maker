@@ -40,9 +40,11 @@ PDM.registerEditor({
           return box; })(),
         status,
         (() => { const g = PDM.GAME_SCAN; const part = (n, x) => `${n} ${x.total}개` + (x.added.length ? ` (+${x.added.length})` : '') + (x.removed.length ? ` (−${x.removed.length})` : '');
-          return h('div', { class: 'hint mt-3' }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
+          const an = g && g.analysis && g.analysis.summary;
+          return h('div', { class: 'hint mt-3' }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` + (an ? `분석: 소스 ${an.sourceOk}/${an.sourceFound} · 리소스 ${an.resourcesDecoded}/${an.resourcesFound} · 게임 객체 ${an.recognized} (오류 ${an.errors}${g.analysis.features.length ? ' · 구조 차이 ' + g.analysis.features.length : ''}). ` : '') : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
             h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기'),
-            h('button', { class: 'btn xs ml-2', title: '저장소에 없는 원작 영웅·캐릭터는 빼고, 저장소에만 있는 직업·몬스터는 더합니다. 직접 만든 것은 그대로 둡니다', onclick: async () => { if (!(await PDM.ui.confirm('프로젝트의 원작 영웅·캐릭터를 지금 게임 저장소에 맞출까요?\n\n저장소에 없는 원작 영웅·캐릭터는 프로젝트에서 빠지고, 저장소에만 있는 직업·몬스터가 더해집니다. (실행 취소 가능)'))) return; const r0 = await PDM.app.resolveRepo(true); if (PDM.gameScan && r0) await PDM.gameScan(r0, true); const r = await PDM.gameSyncVanilla(); PDM.log(r ? `게임 저장소에 맞췄습니다 — 캐릭터 −${r.charsRemoved} +${r.charsAdded} · 영웅 −${r.heroesRemoved} +${r.heroesAdded}` : '게임 저장소를 읽지 못했습니다', r ? 'ok' : 'err'); PDM.app.redraw(); } }, '영웅·캐릭터를 저장소에 맞추기')); })(),
+            h('button', { class: 'btn xs ml-2', title: '저장소 구조 · 소스 · 그림 · 게임 객체를 읽어 PDMaker 가 어디까지 이해하는지 보여 줍니다 (읽기 전용)', onclick: () => PDM.tabs.open('repoanalysis') }, '저장소 분석 보고서'),
+            h('button', { class: 'btn xs ml-2', title: '저장소의 이름 · 그림 · 능력치 · 분류로 맞춥니다. 사용자가 고친 칸은 그대로 두고, 저장소에 없는 것은 고른 것만 지웁니다 (먼저 보여 줌)', onclick: async () => { const r0 = await PDM.app.resolveRepo(true); if (PDM.gameScan && r0) await PDM.gameScan(r0, true); const r = await PDM.repoSync.dialog(); if (r) PDM.app.redraw(); } }, '영웅·캐릭터를 저장소에 맞추기')); })(),
         (() => {
           const box = h('div', { class: 'mt-3' });
           if (!pdm.paths || !pdm.repoBundle) return box;
@@ -67,14 +69,29 @@ PDM.registerEditor({
         const cmp = h('div', { class: 'hint mt-2' });
         const refresh = () => pdm.runtimeStatus(repo).then(s => {
           const c = s.compat;
-          st.textContent = s.web ? '웹 모드에서는 확인할 수 없습니다' : c && !c.ok ? '✕ 이 게임 저장소에는 설치할 수 없습니다' : s.pkg ? `✓ 설치됨 — 연결 줄 ${s.hooks}/${s.total - ((c && c.missing.length) || 0)}` : '✕ 설치 안 됨 — 테스트 플레이 전에 설치하세요';
-          st.style.color = c && !c.ok ? 'var(--bad)' : s.pkg && s.hooks >= s.total - ((c && c.missing.length) || 0) ? 'var(--good)' : 'var(--warn)';
+          const ad = s.adapt, rs = s.state, cantMiss = ad && ad.missing && ad.missing.length;
+          const need = rs && rs.need != null ? rs.need : s.total - ((c && c.missing.length) || 0);
+          st.textContent = s.web ? '웹 모드에서는 확인할 수 없습니다' : c && !c.ok ? '✕ 이 게임 저장소에는 설치할 수 없습니다' : cantMiss ? `✕ 이 저장소에 없는 게임 클래스 ${ad.missing.length}개 — 설치하지 않습니다` : s.pkg ? (rs && !rs.upToDate ? `△ 설치됨 — 갱신 필요 (${rs.reason})` : `✓ 설치됨 — 연결 줄 ${s.hooks}/${need}`) : '✕ 설치 안 됨 — 테스트 플레이 전에 설치하세요 (▶ 테스트 플레이가 자동으로 설치)';
+          st.style.color = (c && !c.ok) || cantMiss ? 'var(--bad)' : s.pkg && (!rs || rs.upToDate) ? 'var(--good)' : 'var(--warn)';
           cmp.innerHTML = '';
           if (c) {
-            cmp.append(h('div', {}, `게임: ${c.game || '(이름 없음)'}${c.version ? ' ' + c.version : ''} · 패키지 ${c.pkg || '?'} — 지원: Shattered Pixel Dungeon 2.5 ~ 4.0 과 그 패키지를 그대로 쓰는 모드`));
+            cmp.append(h('div', {}, `게임: ${c.game || '(이름 없음)'}${c.version ? ' ' + c.version : ''} · 패키지 ${c.pkg || '?'} — Shattered Pixel Dungeon 계열 (판 · 파생작마다 다른 부분은 설치할 때 이 저장소 구조에 맞춤)`));
             c.problems.forEach(x => cmp.append(h('div', { class: 'c-bad' }, '✕ ' + x)));
             c.warnings.forEach(x => cmp.append(h('div', { class: 'c-warn' }, '⚠ ' + x)));
-            if (c.missing.length) cmp.append(h('details', {}, h('summary', {}, `위치를 찾지 못한 연결 줄 ${c.missing.length}개`), ...c.missing.map(x => h('div', {}, '· ' + x))));
+          }
+          // 11차: 이 저장소에 맞춘 것 (게임 본체 · 옮겨진 클래스 · 다른 방식으로 동작하는 기능 · 붙일 구조가 없는 기능)
+          if (ad && !ad.error) {
+            const off = (ad.features || []).filter(f => !f.on);
+            const pt = s.patches || [], na = pt.filter(x => x.state === 'na'), alt = pt.filter(x => x.state === 'alt'), miss = pt.filter(x => x.state === 'missing' || x.state === 'nofile');
+            const rows = [];
+            if (ad.mainGame && ad.mainGame !== 'ShatteredPixelDungeon') rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge info' }, '맞춤'), `게임 본체 클래스 ${ad.mainGame} — 런타임 사본의 이름을 이것으로`));
+            (ad.relocations || []).forEach(r => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge info' }, '맞춤'), `${r.from.split('.').slice(-2).join('.')} → ${r.to} (${r.note})`)));
+            off.forEach(f => rows.push(h('div', { class: 'ra-row', title: f.cond + '\n' + f.where.join('\n') }, h('span', { class: 'badge ' + (/^직업 능력/.test(f.label) ? 'warn' : 'info') }, /^직업 능력/.test(f.label) ? '안 됨' : '다른 방식'), f.label || f.cond)));
+            na.forEach(x => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge warn' }, '구조 없음'), `${x.name} (${x.file})`)));
+            if (alt.length) rows.push(h('div', { class: 'ra-note' }, `같은 기능을 이 저장소의 다른 자리에 넣는 연결 줄 ${alt.length}개 (예: 텐구의 가면 대신 숙련의 서 · MobSpawner 대신 MobRotation)`));
+            if (cantMiss) ad.missing.forEach(m => rows.push(h('div', { class: 'ra-row' }, h('span', { class: 'badge bad' }, '없음'), `${m.cls} (${m.uses.join(', ')})`)));
+            if (miss.length) rows.push(h('details', {}, h('summary', {}, `위치를 찾지 못한 연결 줄 ${miss.length}개 — 그 기능만 동작하지 않음`), ...miss.map(x => h('div', {}, '· ' + x.file + ' — ' + x.name))));
+            if (rows.length) cmp.append(h('details', { class: 'ra-grp mt-2', open: !!cantMiss }, h('summary', { class: 'pointer' }, h('b', {}, '이 게임 저장소에 맞춤'), ' ', h('span', { class: 'ra-note' }, `다른 방식 ${off.length} · 구조 없음 ${na.length} · 다른 자리 ${alt.length}` + (cantMiss ? ` · 없는 클래스 ${ad.missing.length}` : ''))), ...rows));
           }
         }).catch(e => { st.textContent = e.message; });
         refresh();

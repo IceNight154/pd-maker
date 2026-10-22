@@ -67,7 +67,7 @@ public class MakerTalents {
 		if (hero.lvl < t.getInt("unlockLevel", 2)) return "레벨 " + t.getInt("unlockLevel", 2) + " 에 열림";
 		String r = tierRequires(tier);
 		if (r.equals("subclass") && MakerAbilities.subclassId().isEmpty()) return "전직하면 열림";
-		if (r.equals("ability") && MakerAbilities.abilityId().isEmpty() && hero.armorAbility == null) return "직업 능력을 얻으면 열림";
+		if (r.equals("ability") && MakerAbilities.abilityId().isEmpty() && !MakerAbilities.nativeAbility(hero)) return "직업 능력을 얻으면 열림";
 		return null;
 	}
 	/** 지금 전직·직업 능력에 맞는 특성인지 */
@@ -232,8 +232,8 @@ public class MakerTalents {
 		if (list.isEmpty()) { GameScene.show(new HeartUI.WndMakerSimple("특성", head.toString().trim())); return; }
 		GameScene.show(new WndOptions("특성", head.toString().trim(), labels.toArray(new String[0])) {
 			@Override protected void onSelect(int index) { detail(hero, list.get(index)); }
-			@Override protected boolean hasInfo(int index) { return true; }
-			@Override protected void onInfo(int index) { GameScene.show(new HeartUI.WndMakerSimple(list.get(index).getString("name", ""), desc(list.get(index)))); }
+			protected boolean hasInfo(int index) { return true; }
+			protected void onInfo(int index) { GameScene.show(new HeartUI.WndMakerSimple(list.get(index).getString("name", ""), desc(list.get(index)))); }
 		});
 	}
 	static void detail(final Hero hero, final JsonValue t) {

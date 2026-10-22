@@ -10,6 +10,8 @@
   const store = PDM.store;
   const K = 'title';
 
+  /** 10차: 버튼 표시 이름 — 저장소 원래 타이틀이면 그 글 (예: ARK "작전 개시"), 아니면 원작 이름 */
+  const btnName = id => { const TR = PDM.titleRepo && PDM.titleRepo(); return (TR && TR.labels[id]) || PDM.TITLE_BUTTONS[id] || id; };
   PDM.TITLE_BUTTONS = { play: '던전으로 들어가기', support: '게임을 지원하기', rankings: '랭킹', journal: '모험 일지', news: '새 소식', changes: '변경', settings: '설정', about: '소개' };
   const ICONS = ['', 'NONE', 'ENTER', 'GOLD', 'RANKINGS', 'BADGES', 'NEWS', 'CHANGES', 'PREFS', 'SHPX', 'JOURNAL', 'INFO', 'WARNING', 'TALENT', 'CATALOG', 'ALCHEMY', 'STAIRS', 'SKULL', 'BACKPACK_LRG', 'MAGNIFY', 'AUDIO', 'DISPLAY', 'LANGS', 'EXIT'];
   const EFFECTS = { none: '없음', snow: '눈', rain: '비', embers: '불티 (위로)', sparkle: '반짝임', petals: '꽃잎', fireflies: '반딧불', mana: '마나 반딧불 (mod-2 입자)' };
@@ -286,14 +288,14 @@
       h('button', { class: 'btn sm', onclick: () => store.edit(K, '버튼 편집 시작', o => { o.buttons = o.buttons || {}; o.buttons.items = o.buttons.items || []; o.buttons.items.push({ id: S.id, label: '', visible: true, icon: '' }); }) }, '이 버튼 편집하기'));
     const p = S.path, it = S.item;
     return h('div', {},
-      h('h3', {}, game ? '게임 버튼: ' + (PDM.TITLE_BUTTONS[S.id] || S.id) : '새 버튼: ' + (it.label || S.id)),
+      h('h3', {}, game ? '게임 버튼: ' + btnName(S.id) : '새 버튼: ' + (it.label || S.id)),
       row(F.text(K, [...p, 'label'], { label: game ? '글자 (비우면 게임 글)' : '글자', rerender: true }), F.bool(K, [...p, 'visible'], { label: '보이기', def: true, rerender: true }),
         F.bool(K, [...p, 'enabled'], { label: '누를 수 있음 (끄면 비활성)', def: true, rerender: true })),
       row(F.select(K, [...p, 'icon'], Object.fromEntries(ICONS.map(x => [x, x === '' ? (game ? '(원래 아이콘)' : '(없음)') : x === 'NONE' ? '(아이콘 없음)' : x])), { label: '아이콘', rerender: true }),
         F.num(K, [...p, 'size'], { label: '글자 크기 (게임 9)', min: 5, max: 16, int: true, def: 9, rerender: true }),
         F.num(K, [...p, 'focusOrder'], { label: '키보드 순서 (비우면 화면 순서)', step: 1, def: '', rerender: true }),
         h('div', { class: 'field' }, h('span', { class: 'fl' }, 'ID (바꿀 수 없음)'), h('code', {}, S.id))),
-      game && !it.action ? h('p', { class: 'hint' }, '게임 원래 동작: ' + (M.SCENES[S.id] || PDM.TITLE_BUTTONS[S.id])) : null,
+      game && !it.action ? h('p', { class: 'hint' }, '게임 원래 동작: ' + (((PDM.titleRepo && PDM.titleRepo()) || { sceneOf: {} }).sceneOf[S.id] || M.SCENES[S.id] || btnName(S.id))) : null,
       actionFields(p, it, false, t),
       bs.layout === 'free' ? h('div', {}, h('div', { class: 'fl mt-4' }, '자유 배치 (캔버스에서 끌어 옮기기 · 오른쪽 아래 모서리로 크기)'),
         row(F.num(K, [...p, 'place', 'x'], { label: '가로 위치 (0~1, 가운데)', step: 0.01, rerender: true }), F.num(K, [...p, 'place', 'y'], { label: '세로 위치 (0~1)', step: 0.01, rerender: true }),
@@ -415,7 +417,7 @@
       group('화면', treeRow('background', '🖼 배경 · 그림 레이어'), treeRow('music', '♪ 음악'), treeRow('logo', '🏷 로고'), treeRow('gate', '👆 "화면을 누르세요"'), treeRow('misc', '⚙ 버전 · 종료 · 감추기')),
       group('버튼', treeRow('buttons', '▤ 버튼 묶음 (배치 · 애니메이션 · 상태 모양)' + mark('buttons')),
         ...order.map(id => { const i = items.findIndex(x => x && x.id === id), it = i >= 0 ? items[i] : null;
-          const label = (it && it.label) || PDM.TITLE_BUTTONS[id] || id;
+          const label = (it && it.label) || btnName(id);
           return treeRow('button:' + id, `${it && it.visible === false ? '(숨김) ' : ''}${label}${M.GAME_IDS.includes(id) ? '' : ' ✦'}${mark('button:' + id)}`,
             i >= 0 ? { eye: { on: it.visible !== false, path: ['buttons', 'items', i, 'visible'] }, path: ['buttons', 'items'], index: i, up: i > 0, down: i < items.length - 1, del: !M.GAME_IDS.includes(id), dup: !M.GAME_IDS.includes(id), idPrefix: 'btn', off: it.visible === false } : { off: false }); }),
         h('button', { class: 'btn xs add', onclick: () => store.edit(K, '새 버튼', o => { o.buttons = o.buttons || {}; o.buttons.items = o.buttons.items || []; const id = M.freshId('btn', o.buttons.items); o.buttons.items.push({ id, custom: true, label: '새 버튼', visible: true, icon: 'INFO', action: 'text', title: '새 버튼', text: '' }); setTimeout(() => select('button:' + id)); }) }, '+ 버튼')),
@@ -439,6 +441,7 @@
       return [{ id: 'title', label: '타이틀 화면', icon: '🏰', order: 3, open: K }];
     },
     render(key, ctx) {
+      if (PDM.titleSyncGame) PDM.titleSyncGame();   // 10차: 저장소 원래 타이틀의 버튼 구성 (목록 · 미리보기 같게)
       const t = get();
       const { F, section, row, listEditor } = PDM.ui;
       const st = ctx.state = ctx.state || { sel: 'background', screen: 'env', outlines: true, hasSaves: false, revealed: true, force: '', winShown: null };
@@ -544,9 +547,32 @@
         row(F.bool(K, ['enabled'], { label: '이 설정 사용 (끄면 게임 원래 타이틀)', def: true, rerender: true }),
           h('div', { class: 'hstack' }, h('span', { class: 'hint' }, '빠른 시작:'), preset('game', '지금 게임 기본'), preset('spd', '예전 아치 모양'), preset('showcase', '예시 (요소 · 창 · 효과)'), PDM.isMod2() ? preset('mod2', 'mod-2(위츨링) 기본') : null),
           h('span', { class: errs ? 'c-bad' : warns ? 'c-warn' : 'hint' }, errs || warns ? `검사: 오류 ${errs} · 경고 ${warns} (목록의 ✕ · ! 표시)` : '검사: 문제 없음')),
+        repoBox(t),   // 10차: 이 저장소의 원래 타이틀 구조 · 무엇이 원본/재현/사용자 것인지
         h('div', { class: 'tp-layout' }, tree(t, issues), center, right));
     }
   });
+  /** 10차: 원래 타이틀 구조 상자 — 원본 요소 · 비슷하게 재현한 요소 · 사용자가 만든 요소를 나눠 보여 줌 */
+  function repoBox(t) {
+    const TR = PDM.titleRepo && PDM.titleRepo(), R = PDM.REPO_ANALYSIS, T = R && R.objects && R.objects.title;
+    if (!T) return null;
+    const bs = t.buttons || {}, items = bs.items || [], ids = (T.buttons || []).map(b => b.id);
+    const foreign = items.filter(it => it && it.id && !it.custom && !(typeof it.action === 'string' && it.action) && !ids.includes(it.id) && (PDM.titleModel.STD_BUTTONS.some(b => b[0] === it.id)));
+    const row = (what, kind, txt) => h('div', { class: 'ra-row' }, h('span', { class: 'badge ' + ({ 원본: 'good', 재현: 'info', 사용자: 'warn', 미지원: 'bad' })[kind] }, kind), h('b', { style: { minWidth: '92px' } }, what), h('span', { class: 'ra-note grow' }, txt));
+    const rows = [
+      row('구조', TR ? '원본' : '원본', TR ? `이 저장소의 TitleScene (${T.file.split('/').pop()}:${T.line}) — 원작과 다른 타이틀이라 미리보기를 이 구조로 그림` : `원작과 같은 구조 (${T.file.split('/').pop()}:${T.line})`),
+      row('배경', '재현', `${(T.background || []).join(', ') || '(없음)'} — 같은 그림을 미리보기 규칙으로 움직임 (속도 · 입자는 비슷하게만)`),
+      row('로고', '원본', `banners.png ${T.logo ? T.logo.land : '?'} 칸 ${JSON.stringify((T.logoRect || {}).land || [])}` + (T.logo && T.logo.land !== T.logo.port ? ` · 세로 ${T.logo.port}` : '')),
+      T.glow ? row('빛 글자', '재현', `${T.glow.land} 그림은 원본 · 깜빡임은 비슷하게`) : null,
+      row('횃불', '재현', `자리 원본 (${(T.torches.land || []).map(p => (p.fromRight ? '오른쪽 끝-' : '') + p.x + ',' + p.y).join(' / ')}) · 불꽃 입자는 무작위라 같은 모양이 아님`),
+      row('버튼', '원본', `${T.buttons.length}개 — ${T.buttons.map(b => `${b.label || b.key}(${b.icon || '-'})`).join(' · ')} · 가로 ${T.rows.land.map(r => r.length).join('-')} · 세로 ${T.rows.port.map(r => r.length).join('-')}`),
+      row('누르면', '미지원', T.buttons.map(b => `${b.label || b.key} → ${b.window || b.scene || '?'}`).join(' · ') + ' — 하위 화면은 미리보기에서 열지 않음 (게임 화면 이름만)'),
+      row('음악', '원본', (T.musicFound || T.music || []).map(m => `${m.key} = ${m.file || '?'}${m.found === false ? ' (파일 없음)' : ''}`).join(', ') || '없음'),
+      (t.elements || []).length || (t.windows || []).length || items.some(it => it && it.custom) ? row('내가 만든 것', '사용자', `요소 ${(t.elements || []).length} · 창 ${(t.windows || []).length} · 버튼 ${items.filter(it => it && it.custom).length} (title.json — 저장소를 다시 읽어도 그대로)`) : null,
+      foreign.length ? row('맞지 않는 설정', '미지원', `title.json 의 버튼 설정 ${foreign.map(x => x.id).join(', ')} 은(는) 이 저장소에 없는 원작 버튼 — 미리보기에 나오지 않음 (지우지 않음)`) : null,
+      t.enabled !== false && R && R.runtime && R.runtime.classCheck && R.runtime.classCheck.missing.length ? row('게임에서', '미지원', `"이 설정 사용"이 켜져 있지만 이 저장소에는 PDMaker 런타임을 설치할 수 없어 (없는 클래스 ${R.runtime.classCheck.missing.length}) 게임은 원래 타이틀을 보여 줌`) : null
+    ].filter(Boolean);
+    return h('details', { class: 'ra-grp prov-box', open: !!TR || !!foreign.length }, h('summary', { class: 'pointer' }, h('b', {}, '원래 타이틀 구조 (게임 저장소)'), ' ', h('span', { class: 'ra-note' }, TR ? '원작과 다름 — 미리보기가 이 저장소의 구조를 씀' : '원작과 같음')), ...rows);
+  }
   function logoProps(t) {
     const { F, row } = PDM.ui;
     return h('div', {}, h('h3', {}, '로고'),

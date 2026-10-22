@@ -75,7 +75,7 @@ public class HeartUI {
 			PixelScene.align(icon);
 		}
 		@Override protected void onClick() { show(null); }
-		@Override protected String hoverText() { return MakerRuntime.term("sys.heartWindow", "마음"); }
+		protected String hoverText() { return MakerRuntime.term("sys.heartWindow", "마음"); }
 	}
 
 	/** 마음 창 열기 (charId 가 null 이면 가장 최근에 만난 캐릭터) */

@@ -1062,6 +1062,7 @@ public abstract class Char extends Actor {
 			sprite.showStatusWithIcon(CharSprite.NEGATIVE, Integer.toString(dmg + shielded), icon);
 		}
 
+		com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCharAI.afterDamage(this, dmg + shielded); // >>> pdmaker
 		if (HP < 0) HP = 0;
 
 		if (!isAlive()) {

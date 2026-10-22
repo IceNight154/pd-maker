@@ -9,6 +9,7 @@
  */
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
+import com.watabou.noosa.Image;
 import com.badlogic.gdx.utils.JsonValue;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Char;
@@ -122,8 +123,8 @@ public class MakerActive {
 		// ---------- 버프 아이콘 (준비됐거나 대기 중일 때만)
 		@Override public int icon() { return ready || cooldown > 0 ? BuffIndicator.UPGRADE : BuffIndicator.NONE; }
 		@Override public void tintIcon(com.watabou.noosa.Image icon) { icon.hardlight(ready ? 0xFFB35C : 0x888888); }
-		@Override public String iconTextDisplay() { return ready ? (readyLeft > 0 ? Integer.toString(readyLeft) : "") : cooldown > 0 ? Integer.toString(cooldown) : ""; }
-		@Override public String name() { JsonValue a = d(); return a == null ? "액티브" : a.getString("name", "액티브"); }
+		public String iconTextDisplay() { return ready ? (readyLeft > 0 ? Integer.toString(readyLeft) : "") : cooldown > 0 ? Integer.toString(cooldown) : ""; }
+		public String name() { JsonValue a = d(); return a == null ? "액티브" : a.getString("name", "액티브"); }
 		@Override public String desc() {
 			JsonValue a = d(); if (a == null) return "";
 			StringBuilder sb = new StringBuilder(a.getString("desc", ""));
@@ -133,14 +134,16 @@ public class MakerActive {
 		}
 
 		// ---------- 행동 버튼
-		@Override public String actionName() { return name(); }
-		@Override public int actionIcon() { JsonValue a = d(); return a == null ? 0 : MakerSpells.iconOf(a, 0); }
-		@Override public Visual secondaryVisual() {
+		public String actionName() { return name(); }
+		public int actionIcon() { JsonValue a = d(); return a == null ? 0 : MakerSpells.iconOf(a, 0); }
+		public Visual secondaryVisual() {
 			if (readyLeft <= 0) return null;
 			BitmapText t = new BitmapText(PixelScene.pixelFont); t.text(Integer.toString(readyLeft)); t.hardlight(0xFFB35C); t.scale.set(0.75f); t.measure();
 			return t;
 		}
-		@Override public int indicatorColor() { JsonValue a = d(); return a == null ? 0xFFB35C : MakerTitle.color(a.getString("color", ""), 0xFFB35C); }
+		public int indicatorColor() { JsonValue a = d(); return a == null ? 0xFFB35C : MakerTitle.color(a.getString("color", ""), 0xFFB35C); }
+		/** 예전 판 행동 버튼(ActionIndicator.Action.getIcon) — 새 판에서는 쓰지 않음 */
+		public Image getIcon() { return MakerSpells.heroIcon(actionIcon()); }
 		@Override public void doAction() {
 			final JsonValue a = d(); final Hero hero = Dungeon.hero;
 			if (a == null || !ready || hero == null) return;

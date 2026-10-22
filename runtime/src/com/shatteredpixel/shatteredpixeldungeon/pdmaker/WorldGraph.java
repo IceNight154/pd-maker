@@ -159,8 +159,10 @@ public class WorldGraph {
 
 	// ------------------------------------------------------------ 계단 연결
 
+	/** 맨 위 층 입구(지상으로 나감) — 이 종류가 없는 판은 보통 입구 (깊이 0 으로 가면 게임이 지상 처리) */
+	static final LevelTransition.Type T_SURFACE = MakerCompat.enumOf(LevelTransition.Type.class, "SURFACE", "REGULAR_ENTRANCE");
 	static boolean isEntrance(LevelTransition t) {
-		return t.type == LevelTransition.Type.REGULAR_ENTRANCE || t.type == LevelTransition.Type.SURFACE || t.type == LevelTransition.Type.BRANCH_ENTRANCE;
+		return t.type == LevelTransition.Type.REGULAR_ENTRANCE || t.type == T_SURFACE || t.type == LevelTransition.Type.BRANCH_ENTRANCE;
 	}
 	static void setDest(LevelTransition t, String target, LevelTransition.Type destType) {
 		int[] w = where.get(target);
@@ -226,7 +228,7 @@ public class WorldGraph {
 		JsonValue t = d.get("layers").get("terrain");
 		for (int i = 0; i < t.size; i++) {
 			int m = t.getInt(i);
-			if (exit ? (m == Terrain.EXIT || m == Terrain.UNLOCKED_EXIT || m == Terrain.LOCKED_EXIT) : (m == Terrain.ENTRANCE || m == Terrain.ENTRANCE_SP)) r.add(i);
+			if (exit ? (m == Terrain.EXIT || m == Terrain.UNLOCKED_EXIT || m == Terrain.LOCKED_EXIT) : (m == Terrain.ENTRANCE || m == MakerCompat.T_ENTRANCE_SP)) r.add(i);
 		}
 		// 투명 출구·입구 오브젝트 (타일 뒤에, 놓은 순서대로)
 		if (d.get("objects") != null && d.get("size") != null) {
@@ -323,7 +325,7 @@ public class WorldGraph {
 			}
 			for (JsonValue e : auto) { int c = nextFree(en, used); if (c >= 0) p.put(e, "in", c); else p.missing.add(new Object[]{e, "in"}); }
 		} else {
-			int reg = firstCell(level, LevelTransition.Type.REGULAR_ENTRANCE, LevelTransition.Type.SURFACE);
+			int reg = firstCell(level, LevelTransition.Type.REGULAR_ENTRANCE, T_SURFACE);
 			boolean regFree = !keep && reg >= 0;
 			for (JsonValue e : ins) if (isDoor(e)) {
 				if (regFree) { p.put(e, "in", reg); p.regular.add(reg); regFree = false; continue; }
@@ -438,15 +440,15 @@ public class WorldGraph {
 		for (LevelTransition t : level.transitions) {
 			if (!isEntrance(t) || P.at.containsKey(t.cell())) continue;
 			if (!ent.isEmpty() && where.containsKey(ent)) {
-				if (t.type == LevelTransition.Type.SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
+				if (t.type == T_SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
 				setDest(t, ent, LevelTransition.Type.REGULAR_EXIT);
 			} else if (back != null) {
-				if (t.type == LevelTransition.Type.SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
+				if (t.type == T_SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
 				setDest(t, (String) back[0], (LevelTransition.Type) back[1]);
 			} else if (id.equals(start)) {
-				t.type = LevelTransition.Type.SURFACE; t.destDepth = 0; t.destBranch = 0; t.destType = null;
+				t.type = T_SURFACE; t.destDepth = 0; t.destBranch = 0; t.destType = null;
 			} else if (start != null) {
-				if (t.type == LevelTransition.Type.SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
+				if (t.type == T_SURFACE) t.type = LevelTransition.Type.REGULAR_ENTRANCE;
 				setDest(t, start, LevelTransition.Type.REGULAR_ENTRANCE);
 			}
 		}

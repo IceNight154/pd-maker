@@ -20,7 +20,18 @@ PDM.titleModel = (function () {
   /** 버튼 동작 (게임이 실제로 하는 것만) */
   const ACTIONS = { text: '글 창 띄우기 (원작 모양 창)', window: '내가 만든 창 열기', newgame: '새 게임 (영웅 선택)', continue: '이어하기 (저장 슬롯 고르기)',
     scene: '게임 화면 열기 (랭킹 · 설정 …)', url: '웹 페이지 열기', quit: '게임 끄기 (PC · Android)', close: '이 창 닫기 (창 안 버튼)' };
-  const SCENES = { about: '소개', rankings: '랭킹', journal: '모험 일지', news: '새 소식', changes: '변경', settings: '설정 창', support: '지원' };
+  const SCENES = { about: '소개', rankings: '랭킹', journal: '모험 일지', news: '새 소식', changes: '변경', settings: '설정 창', support: '지원', badges: '배지' };
+  const STD_BUTTONS = GAME_BUTTONS.map(b => b.slice());
+  /** 10차: 게임 버튼 구성을 선택한 저장소의 TitleScene 에 맞춤 (편집기 미리보기만 — 런타임 MakerTitleModel 은 원작 구성). null = 원작 구성.
+   *  def = { buttons: [[id, 글 키, 아이콘]], order: { land: [id…], port: [id…] } } — 배열을 그 자리에서 바꿈 (내보낸 참조 유지) */
+  let ORDER = null;
+  function setGame(def) {
+    const list = def && def.buttons && def.buttons.length ? def.buttons : STD_BUTTONS;
+    GAME_BUTTONS.splice(0, GAME_BUTTONS.length, ...list.map(b => b.slice()));
+    GAME_IDS.splice(0, GAME_IDS.length, ...GAME_BUTTONS.map(b => b[0]));
+    ORDER = def && def.order ? def.order : null;
+    return !!(def && def.buttons && def.buttons.length);
+  }
   const NO_SAVE = { disable: '누를 수 없게 (흐리게)', hide: '숨기기', newgame: '새 게임으로' };
 
   // ---------------- 버튼 상태 ----------------
@@ -186,7 +197,10 @@ PDM.titleModel = (function () {
   function buttonList(bs, ctx) {
     const items = (bs && Array.isArray(bs.items)) ? bs.items : [];
     const byId = new Map(); items.forEach(it => { if (it && typeof it.id === 'string' && !byId.has(it.id)) byId.set(it.id, it); });
-    const order = [...byId.keys()]; GAME_IDS.forEach(id => { if (!byId.has(id)) order.push(id); });
+    const ids0 = ORDER && ctx && ctx.land !== undefined ? (ctx.land ? ORDER.land : ORDER.port) || GAME_IDS : GAME_IDS;   // 10차: 저장소 원래 타이틀은 방향마다 순서가 다를 수 있음
+    // 저장소 원래 타이틀: 게임 버튼은 늘 그 저장소 순서 (버튼 칸을 고쳐도 자리는 원본), 내가 만든 버튼은 뒤에 · 원작: 예전처럼 items 순서가 먼저
+    const order = ORDER && ctx && ctx.land !== undefined ? ids0.concat([...byId.keys()].filter(id => !ids0.includes(id))) : [...byId.keys()].concat(ids0.filter(id => !byId.has(id)));
+    GAME_IDS.forEach(id => { if (!order.includes(id)) order.push(id); });
     const out = [];
     order.forEach(id => {
       const it = byId.get(id) || null, gi = GAME_IDS.indexOf(id);
@@ -493,7 +507,7 @@ PDM.titleModel = (function () {
         content: [{ type: 'setting', key: 'music', gap: 2 }, { type: 'setting', key: 'musicVol', gap: 2 }, { type: 'setting', key: 'sound', gap: 2 }, { type: 'button', label: '확인', action: 'close', align: 'center', w: 60, h: 18, gap: 4 }] }];
     return t;
   }
-  return { GAME_BUTTONS, GAME_IDS, ACTIONS, SCENES, NO_SAVE, STATES, STATE_NAMES, STYLE_KEYS, BUILTIN, resolveStyle, TRIGGERS, FX_TYPES, EASES, FX_PRESETS, ease, fxNorm, fxProgress, fxValue, fxCombine, heldStep, fxDone,
+  return { setGame, STD_BUTTONS, GAME_BUTTONS, GAME_IDS, ACTIONS, SCENES, NO_SAVE, STATES, STATE_NAMES, STYLE_KEYS, BUILTIN, resolveStyle, TRIGGERS, FX_TYPES, EASES, FX_PRESETS, ease, fxNorm, fxProgress, fxValue, fxCombine, heldStep, fxDone,
     buttonList, buttonRects, logoRect, groupAnim, ELEMENT_TYPES, LAYERS, SHOW, ALIGNS, elementRect, elementShown, BINDS, bindText, CONTENT_TYPES, SETTINGS, WIN_ANIMS, contentHeight, windowLayout,
     check, freshId, newElement, newWindow, newContent, sample };
 })();

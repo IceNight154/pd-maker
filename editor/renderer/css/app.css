@@ -919,3 +919,23 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .am-ev.on { border-color: var(--accent); background: var(--accent-soft); } .am-ev:hover { background: var(--hover); }
 .am-checks ul { margin: 0; padding-left: 16px; font-size: var(--fs-sm); } .am-checks li.error { color: var(--bad); } .am-checks li.warn { color: var(--warn); }
 .am-empty { padding: var(--sp-6); }
+
+/* 9차: 게임 저장소 분석 보고서 (editors/repoanalysis.js) */
+.ra-row { display: flex; gap: var(--sp-4); align-items: center; min-height: var(--row-h); padding: 0 var(--sp-3); border-radius: var(--r-sm); font-size: var(--fs-sm); }
+.ra-row:hover, .ra-row:focus-visible { background: var(--hover); }
+.ra-row .mono { font-family: var(--mono); font-size: var(--fs-xs); }
+.ra-feat { padding: var(--sp-4) 0; border-bottom: 1px solid var(--line); }
+.ra-feat:last-child { border-bottom: 0; }
+.ra-note { color: var(--mute); font-size: var(--fs-sm); line-height: 1.5; }   /* 보이는 값 · 근거 (.hint 는 ⓘ 말풍선으로 숨겨짐) */
+.ra-feat .ra-note .mono { word-break: break-all; }
+.ra-grp { margin: var(--sp-2) 0; }
+.ra-grp > summary { padding: var(--sp-2) 0; }
+.ra-grp > summary .badge { margin-left: var(--sp-2); }
+.ra-support td { vertical-align: top; }
+.ra-support td:first-child { min-width: 170px; }
+.ra-support .badge { white-space: nowrap; }
+.ra-sum td:first-child { width: 180px; color: var(--mute); }
+
+/* 10차: 저장소 맵 — 추정 연결은 점선 · 출처 상자 */
+.wg-edge.derived { stroke-dasharray: 2 5; opacity: .8; }
+.prov-box { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 var(--sp-4); margin: 0 0 var(--sp-5); }
