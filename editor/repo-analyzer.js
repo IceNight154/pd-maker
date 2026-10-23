@@ -12,7 +12,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const JS = require('./renderer/js/javasrc.js');
 
-const VERSION = 3;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인
+const VERSION = 4;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인 · 4: 영웅 그림 구조 · 탐색 색인 · 적응 클래스 확인
 const SKIP_DIRS = new Set(['.git', '.gradle', 'build', 'node_modules', '.idea', '.vscode', '.cxx', '.externalNativeBuild']);
 const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']), AUD = new Set(['mp3', 'ogg', 'wav']), FONT = new Set(['ttf', 'otf', 'fnt']);
 const TEXT = new Set(['properties', 'json', 'xml', 'txt', 'md']);
@@ -752,6 +752,16 @@ function analyze(input, opts = {}) {
       : { s: R.runtime.missing.length ? 'partial' : 'ok', n: `연결 줄 ${R.runtime.missing.length ? '누락 ' + R.runtime.missing.length : '모두'}`, note: '설치 가능 여부 · 클래스 이름만 확인 — 빌드 · 실행은 테스트 플레이에서 확인' + (((R.runtime.classCheck || {}).adapted || []).length ? ` · 이 저장소 구조에 맞춰 적응한 클래스 ${R.runtime.classCheck.adapted.length}개 (${R.runtime.classCheck.adapted.slice(0, 4).join(', ')}${R.runtime.classCheck.adapted.length > 4 ? ' …' : ''})` : '') };
   }
 
+  // 11차: 저장소 탐색 화면용 색인 — 모든 파일(경로 · 종류 · 크기 · 그림 크기) · 클래스(파일 · 줄 · 부모 · 종류). 읽기만, 값은 원본 그대로
+  try {
+    const items = R.resources._items || {}, byFile = {};
+    Object.values(items).forEach(v => { if (v && v.file) byFile[v.file] = v; });
+    const kindOf = rel => { const e = ext(rel); return /\.java$/i.test(rel) ? 'java' : /\.kts?$/i.test(rel) ? 'kotlin' : /\.gradle(\.kts)?$/i.test(rel) ? 'gradle' : /\.properties$/i.test(rel) ? 'props' : IMG.has(e) ? 'image' : AUD.has(e) ? 'audio' : FONT.has(e) ? 'font' : TEXT.has(e) ? 'text' : 'other'; };
+    R.index = {
+      files: walk.files.map(f => { const v = byFile[f.rel], o = { p: f.rel, k: kindOf(f.rel), b: f.size }; if (v && v.w) { o.w = v.w; o.h = v.h; } if (v && v.status && v.status !== 'decoded') o.s = v.status; return o; }),
+      classes: all().filter(d => !d.local).map(d => ({ n: d.name, f: d.file, l: d.line, p: d.ext || '', k: d.kind || 'class', a: !!d.abstract, o: d.outer || '' })).sort((a, b) => a.n.localeCompare(b.n) || a.f.localeCompare(b.f)),
+    };
+  } catch (e) { R.warnings.push({ phase: '색인', reason: '파일 · 클래스 색인을 만들지 못함: ' + e.message }); }
   delete R.resources._items;
   R.durationMs = Date.now() - t0;
   R.summary = summarize(R);

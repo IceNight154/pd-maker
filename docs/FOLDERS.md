@@ -24,12 +24,14 @@ Pixel Dungeon modding/
 
 | 폴더 | 내용 | 고칠 때 |
 |---|---|---|
-| `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`, 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css` |
-| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 29개 파일에 연결 줄 62개를 넣음 (목록: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
+| `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`(저장소 분석 `repoanalysis.js` · 저장소 탐색 `repoexplorer.js`), 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css`, 저장소 분석기 `repo-analyzer.js` |
+| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 저장소 구조에 맞춰 적응한 런타임을 복사하고 원본 코드에 연결 줄을 넣음 (목록 · 개수: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
 | `runtime/src/…/pdmaker/` | 게임 쪽 Java 패키지(53개 파일) | 게임 동작을 바꿀 때. 설치하면 게임 저장소로 복사됨 |
 | `tools/sample/` | mod-2 기준 샘플 프로젝트(`sample-project/`, 저장소에는 없음)를 만드는 스크립트 | `python tools/sample/make_sample.py && node tools/sample/make_heart.js && node tools/sample/make_sounds.js && python tools/sample/make_portraits.py` |
 | `tools/data/` | 게임 소스에서 에디터 데이터를 뽑는 스크립트 | `python tools/data/extract_spd_items.py [mod-2] [원작]` → `spd-items.js`, `node tools/data/gen_terms_java.js` → `DefaultTerms.java` |
-| `tools/playtest/` | 자동 플레이 테스트(Linux 개발용) | `tools/playtest/README.md` 참고 |
+| `tools/playtest/` | 자동 플레이 테스트(Linux 개발용). `repo-project.js` = 게임 저장소 기준 프로젝트 만들기(11차 — 편집기의 새 프로젝트와 같은 과정) | `tools/playtest/README.md` 참고 |
+| `tools/tests/` | 회귀 · 저장소 · 화면 시험 (`run.js` · `repo-compat.js` · `repo-fidelity.js` · `ui-*.js`) | 설치 · 제거 시험은 임시 사본에서만 (원본 `game/` 저장소를 고치지 않음) |
+| `game/` | 게임 저장소(기준 SPD · 파생작). **읽기 전용으로 다룸** — 편집기 · 분석기 · 탐색 화면은 읽기만, 테스트 플레이 런타임은 설치기가 넣고 뺌 | 직접 고치지 않음 (파생작 원본은 그 저장소의 것) |
 | `references/` | 참고용 원본 코드(mod2-buffs: Brand·InkMark·Overheat) | 읽기만 함 |
 | `docs/` | 이 안내 | |
 

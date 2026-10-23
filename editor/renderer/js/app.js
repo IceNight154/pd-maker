@@ -381,6 +381,7 @@
   const SETTINGS_ITEMS = () => [
     { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
     { label: '게임 저장소 분석 (구조 · 지원 범위 · 문제 목록)', run: () => PDM.tabs.open('repoanalysis'), disabled: !store.isOpen },
+    { label: '게임 저장소 탐색 (파일 · 클래스 · 게임 데이터 · 번역)', run: () => PDM.tabs.open('repoexplorer'), disabled: !store.isOpen },
     { label: '확장 기능… (이벤트 · 스토리 같은 추가 기능 켜고 끄기)', run: showExtensions, disabled: !store.isOpen },
     { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
     '-',
@@ -639,6 +640,8 @@
       // 이 저장소에만 있는 직업이 프로젝트에 없으면 알려 줌 (다른 게임 저장소를 연결했을 때)
       const need = PDM.gameSyncNeeded && PDM.gameSyncNeeded();
       if (need && !need.heroes && need.fix > 0) { const r2 = await PDM.gameSyncVanilla(true); if (r2 && (r2.heroesUpdated || r2.charsUpdated)) { PDM.log(`게임 저장소에 맞춰 손대지 않은 칸만 고쳤습니다 — 영웅 ${r2.heroesUpdated} · 캐릭터 ${r2.charsUpdated}` + (r2.kept ? ` (사용자가 고친 칸 ${r2.kept}개는 그대로` + (r2.conflicts ? `, 그중 원본이 바뀐 충돌 ${r2.conflicts}` : '') + ')' : '') + ' — 저장하면 반영', r2.conflicts ? 'err' : 'ok'); drawAll(); } }
+      // 11차: 게임 저장소의 맵 (원작에 없는 층 포함) 을 맵 그래프에 기본으로 — 분석이 성공했을 때만 · 더하기만 (사라진 맵은 지우지 않고 알림)
+      if (PDM.repoMaps && PDM.REPO_ANALYSIS) { const m = PDM.repoMaps.autoSync(); if (m && (m.added.length || m.upgraded)) drawAll(); }
       if (need && need.heroes > 0) { PDM.log(`이 게임 저장소에는 프로젝트에 없는 직업 ${need.heroes}개 · 몬스터 ${need.mobs}개가 있습니다 → 프로젝트 설정 › 게임 저장소 연결 › "영웅·캐릭터를 저장소에 맞추기" 를 누르면 리소스 목록에 들어옵니다.`, 'err'); toast('게임 저장소의 영웅이 프로젝트에 없습니다 — 프로젝트 설정에서 "영웅·캐릭터를 저장소에 맞추기"', 'bad'); }
     } } catch (e) { console.error(e); PDM.log('게임 저장소를 읽다가 오류가 났습니다 (리소스 목록이 기준 목록으로 보일 수 있음): ' + (e && e.message), 'err'); }
     return r.dir;
@@ -669,6 +672,7 @@
       const r = PDM.repoSync ? await PDM.repoSync.dialog({ auto: opts.auto, keepMissing: opts.auto }) : null;
       if (r) { try { await store.save(); } catch (_) { /* 무시 */ } }
     }
+    if (PDM.repoMaps && PDM.REPO_ANALYSIS) PDM.repoMaps.autoSync();   // 11차: 저장소 맵을 맵 그래프에 (더하기만)
     PDM.log('게임 저장소: ' + dir, 'ok');
     drawAll(); PDM.tabs.refresh('project');
     return true;
@@ -843,7 +847,8 @@
       [['나중에', null], ['확인', () => inp.value.trim(), 'pri']]);
     if (rel) { store.edit('project', '게임 저장소 경로', r => { r.gameRepo = rel; r.gameRepoPinned = true; }); await store.save(); await resolveRepo(true); if (PDM.assets && PDM.assets.clear) PDM.assets.clear(); }
     // 고른 저장소가 기준 저장소와 다르면: 방금 채운 원작 영웅·캐릭터를 그 저장소에 맞춤 (없는 것은 빼고, 그 저장소에만 있는 것은 더함)
-    try { if (PDM.gameScan) await PDM.gameScan(await resolveRepo(true), true); const r = PDM.gameSyncVanilla && await PDM.gameSyncVanilla(false, { remove: 'untouched' });   // 새 프로젝트: 방금 채운 원작 묶음 중 이 저장소에 없는 것은 뺌 (손댄 것이 없으므로)
+    try { if (PDM.gameScan) await PDM.gameScan(await resolveRepo(true), true); const r = PDM.gameSyncVanilla && await PDM.gameSyncVanilla(false, { remove: 'untouched' });
+      if (PDM.repoMaps && PDM.REPO_ANALYSIS) { const m = PDM.repoMaps.autoSync(); if (m && m.added.length) await store.save(); }   // 11차: 새 프로젝트 — 저장소 맵을 맵 그래프에   // 새 프로젝트: 방금 채운 원작 묶음 중 이 저장소에 없는 것은 뺌 (손댄 것이 없으므로)
       if (r && (r.charsRemoved || r.charsAdded || r.heroesRemoved || r.heroesAdded || r.heroesHidden || r.heroesFixed)) { PDM.log(`게임 저장소에 맞춰 리소스를 고쳤습니다 — 캐릭터 −${r.charsRemoved} +${r.charsAdded} · 영웅 −${r.heroesRemoved} +${r.heroesAdded}${r.heroesHidden ? ' (감춘 직업 ' + r.heroesHidden + '개는 꺼 둠)' : ''}`, 'ok'); await store.save(); } } catch (e) { console.error(e); PDM.log('리소스를 게임 저장소에 맞추지 못했습니다: ' + e.message, 'err'); }
     pushRecent(d); drawAll(); PDM.tabs.open('world');
     PDM.log('새 프로젝트를 만들었습니다: ' + d, 'ok');

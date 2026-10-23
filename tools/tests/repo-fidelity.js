@@ -138,11 +138,54 @@ test('ARK 맵: 맵 그래프에 가져오기 → 노드 · 출처 · 유형 · �
   return `노드 ${made.length} (직접 그리기 ${hand.length} · 게임 원래 맵 ${game.length}) · 연결 원본 ${edges.filter(e => e.src.kind === 'repo-transition').length} · 추정 ${edges.filter(e => e.src.kind === 'derived').length} · 미확인/안 가져옴 ${unres.length}`;
 });
 
-test('기준 저장소 맵 회귀: 원작 층 클래스만 (추가 맵 0) · 새 프로젝트 맵 그래프는 그대로 (자동으로 가져오지 않음)', async () => {
+// 11차: 가져오기 버튼 없이 기본으로 — 프로젝트를 열거나 저장소를 바꾸면 autoSync (더하기만)
+test('ARK 맵 기본 표시: autoSync 로 원작에 없는 맵이 모두 그래프에 · 중복 없음 · 유형 · 편집 범위 · 근거 · 사용자가 지운 맵은 다시 넣지 않음 · 사라진 맵은 확인한 것만 지움 · 실패하면 되돌림', async () => {
+  need('ark'); const { P, dir } = await project('ark');
+  const nodes0 = P.store.all('node').length, extra = P.repoMaps.list().filter(s => s.extra), want = extra.flatMap(s => s.ids);
+  const r = P.repoMaps.autoSync();
+  assert.deepStrictEqual(J(r.added).sort(), J(want).sort(), `원작에 없는 맵 = 그래프 노드 (가져오기 버튼 없이) — 더함 ${r.added.length} · 원함 ${want.length}`);
+  assert.strictEqual(P.store.all('node').length - nodes0, want.length);
+  const std = P.repoMaps.plan().represented.filter(x => x.by === 'chain');
+  assert.deepStrictEqual(J(std.map(x => x.s.cls)), ['SewerLevel', 'SewerBossLevel', 'PrisonLevel', 'CavesLevel', 'CityLevel', 'HallsLevel', 'LastLevel'], '원작과 같은 층 클래스는 기본 층 노드가 대신 (따로 만들지 않음)');
+  // 유형 · 편집 범위 · 근거
+  const N = want.map(id => P.store.get('node:' + id));
+  assert.ok(N.every(n => n.src.mapTypes && n.src.mapTypes.length && n.src.editable && n.src.evidence.some(e => e.kind === 'Dungeon.newLevel()' && /Dungeon\.java$/.test(e.file) && e.line > 0)), '유형 · 편집 범위 · 근거');
+  const t = {}; N.forEach(n => n.src.mapTypes.forEach(x => { t[x] = (t[x] || 0) + 1; }));
+  assert.ok(t.fixed >= 4 && t.conditional >= 12, JSON.stringify(t));
+  assert.ok(N.filter(n => n.src.mapTypes[0] === 'fixed').every(n => n.mode === 'handmade' && n.src.editable === 'tiles') && N.filter(n => n.mode === 'game').every(n => n.src.editable === 'meta'), '고정 맵만 타일 편집');
+  // 연결은 근거가 있는 것만: 원본 LevelTransition(파일:줄) 또는 게임 기본 계단(깊이 순서, "추정" 표시)
+  const w = P.store.get('world'), E = w.edges.filter(e => want.includes(e.from) || want.includes(e.to));
+  assert.ok(E.length && E.every(e => e.src && ((e.src.kind === 'repo-transition' && e.src.file && e.src.line) || (e.src.kind === 'derived' && e.label === '추정'))), '근거 없는 연결 없음');
+  // 다시 해도 0 · 중복 없음
+  const r2 = P.repoMaps.autoSync(); assert.strictEqual(r2.added.length, 0); assert.strictEqual(new Set(P.store.get('world').nodes.map(n => n.id)).size, P.store.get('world').nodes.length, '그래프 노드 id 중복 없음');
+  // 사용자가 같은 클래스를 쓰는 노드를 따로 만들었으면 겹쳐 만들지 않음 · 사용자가 지운 저장소 맵은 다시 넣지 않음
+  const gone = want[0]; P.store.remove('node:' + gone); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== gone); ww.edges = ww.edges.filter(e => e.from !== gone && e.to !== gone); });
+  const r3 = P.repoMaps.autoSync(); assert.strictEqual(r3.added.length, 0, '지운 맵을 다시 넣지 않음'); assert.ok(P.repoMaps.plan().dismissed.some(x => x.id === gone));
+  // 사용자 편집 보존: 타일을 고친 고정 맵은 사라져도 "고침" 표시 · 확인 없이는 지우지 않음
+  const hand = N.find(n => n.mode === 'handmade' && n.id !== gone); P.store.edit('node:' + hand.id, 't', n => { n.layers.terrain[0] = n.layers.terrain[0] === 1 ? 7 : 1; });
+  const keep = P.store.get('node:' + hand.id), fake = 'g_zz_gone'; P.store.add('node:' + fake, Object.assign(J(keep), { id: fake, src: Object.assign(J(keep.src), { cls: 'GoneLevel' }) }), 't');
+  const pl = P.repoMaps.plan(); assert.deepStrictEqual(J(pl.missing.map(m => m.id)), [fake], '저장소에 없는 노드 목록'); assert.ok(pl.missing[0].touched, '고친 타일 표시');
+  P.repoMaps.autoSync(); assert.ok(P.store.has('node:' + fake), 'autoSync 는 지우지 않음');
+  const rr = P.repoMaps.sync({ remove: [fake, want[1]] }); assert.deepStrictEqual(J(rr.removed), [fake], '확인한 것 중 "저장소에 없는" 것만 지움'); assert.ok(P.store.has('node:' + want[1]));
+  // 실패하면 되돌림: 중간에 오류 → 노드 · 그래프 그대로
+  P.store.remove('node:' + want[2]); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== want[2]); ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen = ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen.filter(x => x !== want[2]); });
+  const wb = JSON.stringify(P.store.get('world')), kb = P.store.keys().slice().sort(), ed = P.store.edit;
+  let n = 0; P.store.edit = function (k, ...a) { if (k === 'world' && ++n === 2) throw new Error('일부러 실패'); return ed.call(this, k, ...a); };
+  assert.throws(() => P.repoMaps.sync({}), /되돌렸습니다/); P.store.edit = ed;
+  assert.deepStrictEqual(J(P.store.keys()).sort(), J(kb), '노드 목록 그대로'); assert.strictEqual(JSON.stringify(P.store.get('world')), wb, '그래프 그대로');
+  // 분석이 없으면 (실패) 아무것도 바꾸지 않음
+  const save = P.REPO_ANALYSIS; P.REPO_ANALYSIS = null; assert.strictEqual(P.repoMaps.autoSync(), null); P.REPO_ANALYSIS = save;
+  await P.store.save(); const re = await project(null, { dir }); assert.ok(re.P.store.get('world').repoMaps, '기록이 저장됨');
+  return `노드 ${want.length} · 유형 ${JSON.stringify(t)} · 원작 층 ${std.length}개는 기본 노드가 대신 · 연결 ${E.length}`;
+});
+
+test('기준 저장소 맵 회귀: 원작 층 클래스만 (추가 맵 0) · 새 프로젝트 맵 그래프는 그대로 (기본으로 넣을 추가 맵이 없음)', async () => {
   const r = need('base'), truth = truthLevels('base');
   assert.deepStrictEqual([...new Set(r.objects.maps.slots.map(s => s.cls))].sort(), truth.sort());
   assert.strictEqual(r.objects.maps.slots.filter(s => s.extra).length, 0); assert.ok(!r.features.some(f => f.id === 'extra-maps'));
-  const { P } = await project('base'); const w = P.store.get('world');
+  const { P } = await project('base'); const wb = JSON.stringify(P.store.get('world'));
+  const ar = P.repoMaps.autoSync(); assert.ok(!ar || ar.added.length === 0, '기본으로 넣을 맵 0'); assert.strictEqual(JSON.stringify(P.store.get('world')), wb, '맵 그래프 그대로 (기록도 더하지 않음)');
+  const w = P.store.get('world');
   assert.strictEqual(w.nodes.length, 25); assert.ok(!w.groups.some(g => g.id.startsWith('repo_')));
   row('base', '맵 · 지역', { 원본: truth.length, 인식: new Set(r.objects.maps.slots.map(s => s.cls)).size, 완전분석: Object.values(r.objects.maps.levels).filter(l => l.generator === 'fixed' || l.generator === 'procedural').length, 편집가능: Object.values(r.objects.maps.levels).filter(l => l.generator === 'fixed').length, 미지원: Object.values(r.objects.maps.levels).filter(l => l.generator === 'code' || l.generator === 'fixed-partial').length });
   return `층 클래스 ${truth.length} · 노드 25 그대로`;
@@ -331,6 +374,30 @@ test('런타임 설치기: ARK 는 이 저장소 구조에 맞춰 적응 설치 
   assert.deepStrictEqual(diff, [], '제거 뒤 사본 = 설치 전 (백업 파일 제외)');
   for (const k of ['base', 'ba']) if (fs.existsSync(dirOf(k))) assert.deepStrictEqual(I.missingClasses(dirOf(k)), [], k);
   return `사본 설치 · 연결 ${logs.filter(l => /연결|갱신|추가/.test(l)).length}줄 · 제거 후 바뀐 파일 0 · 원본 지문 그대로`;
+});
+
+// 11차: 저장소 탐색 화면의 자료 (색인 · 상속 · 쓰는 곳 · 게임 데이터 줄) — 세 저장소
+test('저장소 탐색: 파일 · 클래스 색인 = 분석 · 상속 사슬 · 그림을 쓰는 곳 · 게임 데이터(맵 · 영웅 · 몬스터 · 보스 · 아이템 · 배지 · 빌드)의 출처 · 편집 가능 표시', async () => {
+  const out = [];
+  for (const k of ['base', 'ark', 'ba']) {
+    if (!fs.existsSync(dirOf(k))) { notRun.push(REPOS[k] + ' 없음 — 탐색 시험 일부'); continue; }
+    const { P } = await project(k), X = P.repoExplorer, D = X.data(), r = P.REPO_ANALYSIS;
+    assert.strictEqual(D.idx.files.length, r.walk.files, k + ' 파일 색인 = 훑은 파일');
+    assert.strictEqual(D.idx.classes.length, r.source.types, k + ' 클래스 색인 = 형 수');
+    const hs = D.idx.classes.find(c => c.n === 'HeroSprite'); const anc = J(X.ancestry(hs).map(c => c.n));
+    assert.deepStrictEqual(anc.slice(0, 2), ['CharSprite', 'MovieClip'], k + ' HeroSprite 상속: ' + anc.join(' → '));
+    const H = r.objects.heroes.filter(x => x.sheetFound), sheet = r.resources.roots[0] + '/' + H[0].sheet;
+    assert.ok((D.uses.get(sheet) || []).some(u => /영웅/.test(u)), k + ' 영웅 시트를 쓰는 곳');
+    const rows = {}; for (const g of ['maps', 'heroes', 'mobs', 'bosses', 'items', 'badges', 'title', 'ui', 'audio', 'build']) rows[g] = X.dataRows(g);
+    assert.strictEqual(rows.heroes.length, r.objects.heroes.length, k + ' 영웅 줄');
+    assert.ok(rows.heroes.every(x => x.src && x.edit && x.file), k + ' 영웅: 출처 · 편집 · 원본 파일');
+    assert.ok(rows.mobs.length + rows.bosses.length > 50 && rows.bosses.length > 5, k + ` 몬스터 ${rows.mobs.length} · 보스 ${rows.bosses.length}`);
+    assert.ok(rows.maps.length >= r.objects.maps.slots.filter(s => !s.fallback).length && rows.maps.every(x => /고정|절차|게임 코드|일부|조건|알 수 없음/.test(x.status)), k + ' 맵 줄 · 유형');
+    assert.ok(rows.build.length === r.modules.length + 1 && rows.items.length > 100 && rows.badges.length > 50, k + ' 빌드 · 아이템 · 배지');
+    const msgs = await X.loadMessages(); assert.ok(msgs.some(m => /^actors\.hero\.heroclass\./.test(m.k)), k + ' 번역 검색 자료');
+    out.push(`${k}: 파일 ${D.idx.files.length} · 클래스 ${D.idx.classes.length} · 맵 ${rows.maps.length} · 영웅 ${rows.heroes.length} · 몬스터 ${rows.mobs.length} · 보스 ${rows.bosses.length} · 번역 ${msgs.length}`);
+  }
+  return out.join('\n    ');
 });
 
 // ================================================================ ⑨ 손상 · 누락 파일

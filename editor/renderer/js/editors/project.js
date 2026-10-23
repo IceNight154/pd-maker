@@ -44,6 +44,7 @@ PDM.registerEditor({
           return h('div', { class: 'hint mt-3' }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` + (an ? `분석: 소스 ${an.sourceOk}/${an.sourceFound} · 리소스 ${an.resourcesDecoded}/${an.resourcesFound} · 게임 객체 ${an.recognized} (오류 ${an.errors}${g.analysis.features.length ? ' · 구조 차이 ' + g.analysis.features.length : ''}). ` : '') : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
             h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기'),
             h('button', { class: 'btn xs ml-2', title: '저장소 구조 · 소스 · 그림 · 게임 객체를 읽어 PDMaker 가 어디까지 이해하는지 보여 줍니다 (읽기 전용)', onclick: () => PDM.tabs.open('repoanalysis') }, '저장소 분석 보고서'),
+            h('button', { class: 'btn xs ml-2', title: '저장소의 파일 · 클래스 · 게임 데이터 · 번역을 찾아봄 (읽기 전용)', onclick: () => PDM.tabs.open('repoexplorer') }, '저장소 탐색'),
             h('button', { class: 'btn xs ml-2', title: '저장소의 이름 · 그림 · 능력치 · 분류로 맞춥니다. 사용자가 고친 칸은 그대로 두고, 저장소에 없는 것은 고른 것만 지웁니다 (먼저 보여 줌)', onclick: async () => { const r0 = await PDM.app.resolveRepo(true); if (PDM.gameScan && r0) await PDM.gameScan(r0, true); const r = await PDM.repoSync.dialog(); if (r) PDM.app.redraw(); } }, '영웅·캐릭터를 저장소에 맞추기')); })(),
         (() => {
           const box = h('div', { class: 'mt-3' });

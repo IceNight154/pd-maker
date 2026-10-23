@@ -14,6 +14,7 @@ const env = require(path.join(__dirname, '..', 'tests', 'editor-env.js'));
   await P.store.createNew(dir, 'repo-' + path.basename(repo));
   await P.gameScan(path.resolve(repo), true);
   await P.gameSyncVanilla(false, { remove: 'untouched' });
+  if (P.repoMaps && P.REPO_ANALYSIS) P.repoMaps.autoSync();   // 편집기의 새 프로젝트와 같게: 저장소 맵을 맵 그래프에
   P.store.edit('project', '게임 저장소', p => { p.gameRepo = path.resolve(repo); });
   await P.store.save();
   const heroes = P.store.all('hero').map(h => ({ id: h.id, name: h.name, sheet: (h.sprite || {}).sheet, frame: (h.sprite || {}).frame, rowH: (h.sprite || {}).rowH, scale: (h.sprite || {}).scale, iconTier: (h.select || {}).iconTier, anims: Object.keys((h.sprite || {}).anims || {}).join(','), idle: (((h.sprite || {}).anims || {}).idle || {}).frames }));
