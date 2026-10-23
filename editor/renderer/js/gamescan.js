@@ -8,7 +8,6 @@
 // ================================================================
 (function () {
   const BASE = { items: PDM.SPD_ITEM_GROUPS, rooms: PDM.SPD_ROOMS, sprites: (PDM.SPD_ITEM_SPRITES || {}).vanilla || {} };   // 묶여 있는 원본 (다시 훑을 때 기준)
-  const J = ['core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon'];
   const EXCL = new Set('Item EquipableItem KindOfWeapon KindofMisc Generator Heap ItemStatusHandler Recipe armor/Armor armor/ClassArmor artifacts/Artifact bags/Bag potions/Potion potions/exotic/ExoticPotion potions/brews/Brew potions/elixirs/Elixir scrolls/Scroll scrolls/InventoryScroll scrolls/exotic/ExoticScroll spells/Spell spells/InventorySpell spells/TargetedSpell stones/Runestone stones/InventoryStone trinkets/Trinket wands/Wand wands/DamageWand wands/CursedWand weapon/Weapon weapon/melee/MeleeWeapon weapon/missiles/MissileWeapon weapon/missiles/darts/TippedDart keys/Key rings/Ring remains/RemainsItem journal/DocumentPage weapon/codices/Codex weapon/codices/melee/MeleeCodex weapon/codices/ranged/RangedCodex weapon/codices/cast/CastCodex bags/grimoire/Grimoire'.split(' '));
   const HOLD = { potion: 'POTION_HOLDER', scroll: 'SCROLL_HOLDER', ring: 'RING_HOLDER', stone: 'STONE_HOLDER', wand: 'WAND_HOLDER', artifact: 'ARTIFACT_HOLDER', food: 'FOOD_HOLDER', bomb: 'BOMB_HOLDER', trinket: 'TRINKET_HOLDER', spell: 'SPELL_HOLDER', weapon: 'WEAPON_HOLDER', armor: 'ARMOR_HOLDER' };
   const TOP = { artifacts: 'artifact', rings: 'ring', wands: 'wand', stones: 'stone', spells: 'spell', bombs: 'bomb', food: 'food', keys: 'key', quest: 'quest', trinkets: 'trinket', journal: 'journal', remains: 'remains' };
@@ -44,7 +43,7 @@
   async function msgRoot(repo) {
     if (msgRoots[repo]) return msgRoots[repo];
     const roots = [];
-    try { const src = await pdm.readText(pdm.join(repo, ...J, 'Assets.java')); for (const m of src.matchAll(/"([\w.\-]+)\/(?:actors\/actors|items\/items)"/g)) if (!roots.includes(m[1])) roots.push(m[1]); } catch (_) { /* 없음 */ }
+    try { const src = await pdm.readText(pdm.join(repo, ...(await PDM.javaRoot(repo)), 'Assets.java')); for (const m of src.matchAll(/"([\w.\-]+)\/(?:actors\/actors|items\/items)"/g)) if (!roots.includes(m[1])) roots.push(m[1]); } catch (_) { /* 없음 */ }
     if (!roots.length) roots.push('messages');
     return (msgRoots[repo] = roots);
   }
@@ -80,7 +79,7 @@
   PDM.gameScan = async function (repo, force) {
     if (!repo) { last = ''; PDM.REPO_ANALYSIS = null; if (PDM.GAME_SCAN) { PDM.SPD_ITEM_GROUPS = BASE.items; PDM.SPD_ROOMS = BASE.rooms; PDM.GAME_SCAN = null; return true; } return false; }
     if (repo === last && !force) return false;
-    const root = pdm.join(repo, ...J);
+    const root = pdm.join(repo, ...(await PDM.javaRoot(repo)));   // 12차: 패키지 이름을 바꾼 파생작도
     const [itemFiles, roomFiles, mobFiles] = (await Promise.all([walk(pdm.join(root, 'items')), walk(pdm.join(root, 'levels', 'rooms')), walk(pdm.join(root, 'actors', 'mobs'))])).map(javaSet);
     if (!itemFiles.size && !roomFiles.size) return false;   // 저장소를 못 읽음 → 그대로
     last = repo;

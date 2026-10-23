@@ -101,6 +101,41 @@ public class HeroSelect {
 		return sheet.equals("game:" + classOf(h).spritesheet());
 	}
 
+	/** 게임 직업 그대로인 영웅 목록 — HeroClass.values() 와 같은 순서 · 같은 수, 하나하나가 그 직업의 원작 영웅이고 선택 화면에 보이는 것(이름 · 그림 · 설명 · 해금 · 선택 화면 글자)을 고치지 않음 */
+	static boolean nativeLineup(List<JsonValue> es) {
+		if (MakerRuntime.project != null && !MakerRuntime.project.getString("startHero", "").isEmpty()) return false;
+		HeroClass[] all = HeroClass.values();
+		int k = 0;
+		for (HeroClass c : all) {
+			// 저장소의 선택 화면이 감춘 직업 (편집기가 enabled=false 를 "저장소에서" 로 표시) 은 건너뜀 — 게임 화면도 감춤
+			JsonValue own = null;
+			for (JsonValue o : MakerRuntime.heroes.values()) if (vanilla(o) && classOf(o) == c) { own = o; break; }
+			if (own == null) return false;
+			if (!own.getBoolean("enabled", true)) { if (!fromRepo(own, "enabled")) return false; continue; }
+			if (k >= es.size()) return false;
+			JsonValue h = es.get(k++);
+			if (h != own) return false;
+			if (!sel(h, "title").trim().isEmpty() || !sel(h, "desc").trim().isEmpty() || !sel(h, "info").trim().isEmpty()) return false;
+			if (!stockDesc(h) || !stockArt(h) || !stockName(h)) return false;
+			JsonValue u = h.get("unlock"); String mode = u == null ? "" : u.getString("mode", "");
+			if (!mode.isEmpty() && !mode.equals("game")) return false;
+		}
+		return k == es.size();
+	}
+	/** 그 칸을 저장소에서 읽은 값 그대로 둠 (src.fields.<k>.from = repo) */
+	static boolean fromRepo(JsonValue h, String k) {
+		JsonValue src = h.get("src"), f = src == null ? null : src.get("fields"), v = f == null ? null : f.get(k);
+		return v != null && "repo".equals(v.getString("from", ""));
+	}
+	/** 이름을 고치지 않음 — 비었거나 · 게임 직업 이름이거나 · 저장소에서 읽은 값(src.fields.name) 그대로 */
+	static boolean stockName(JsonValue h) {
+		String n = h.getString("name", "").trim();
+		if (n.isEmpty()) return true;
+		try { if (n.equalsIgnoreCase(Messages.titleCase(classOf(h).title()).trim())) return true; } catch (Throwable t) { /* 이름 없음 */ }
+		JsonValue src = h.get("src"), f = src == null ? null : src.get("fields"), nm = f == null ? null : f.get("name");
+		return nm != null && "repo".equals(nm.getString("from", "")) && n.equals(nm.getString("v", "").trim());
+	}
+
 	/** 해금 조건 (영웅 편집기 unlock { mode, badge, key, cond, text }) — 잠겨 있으면 true.
 	 *  mode: always(항상) · game(바탕 직업의 게임 규칙) · badge(게임 배지: 보스 처치·승리 등) · global(전역 스위치) · cond(조건식 — global.<이름> 등)
 	 *  정하지 않았으면 원작 영웅은 game, 그 밖은 always */
@@ -132,6 +167,9 @@ public class HeroSelect {
 		try {
 			List<JsonValue> es = entries();
 			if (es.isEmpty()) return false;
+			// 12차: 프로젝트 영웅이 게임 직업 그대로(순서 · 수 · 이름 · 그림 · 설명 · 해금을 고치지 않음)면 게임의 선택 화면을 그대로 씀
+			//       — 모드마다 버튼 배치가 다름 (ARK: 6명씩 넘기는 쪽 · 원작: 한 줄). 영웅 능력치 · 시작 아이템은 HeroRuntime 이 직업으로 찾아 적용
+			if (nativeLineup(es)) { selected = null; MakerRuntime.log("영웅 선택: 게임 직업 그대로 — 게임의 선택 화면 사용"); return false; }
 			selected = null; scene = sc; initDone = false; big = null; myInfo = null;
 			for (JsonValue h : es) {
 				HeroBtn b = new HeroBtn(sc, h);

@@ -371,7 +371,7 @@
   /** 실행 (실행 메뉴 · 도구 모음 "▶ 테스트 플레이 · 빌드 ▾ · ■") — 실행 중에는 새 실행을 막고 중지만 */
   const RUN_ITEMS = (withMain = true) => [
     ...(withMain ? [{ label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen || isRunning() }] : []),
-    { label: '▶ desktop:debug 로 실행 (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen || isRunning() },
+    { label: '▶ desktop:debug 로 실행 (INDEV — 게임의 개발자 모드)', run: () => playtest('debug'), disabled: !store.isOpen || isRunning() },
     { label: '▶ PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen || isRunning() },
     '-',
     { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen || isRunning() },
@@ -382,6 +382,7 @@
     { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
     { label: '게임 저장소 분석 (구조 · 지원 범위 · 문제 목록)', run: () => PDM.tabs.open('repoanalysis'), disabled: !store.isOpen },
     { label: '게임 저장소 탐색 (파일 · 클래스 · 게임 데이터 · 번역)', run: () => PDM.tabs.open('repoexplorer'), disabled: !store.isOpen },
+    { label: '다른 저장소 기능 가져오기 (ARK 계단 · BA 총기 …)', run: () => PDM.tabs.open('features'), disabled: !store.isOpen },
     { label: '확장 기능… (이벤트 · 스토리 같은 추가 기능 켜고 끄기)', run: showExtensions, disabled: !store.isOpen },
     { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
     '-',
@@ -634,7 +635,7 @@
       if (was4 !== PDM.gameTitle4) drawAll();
     } catch (_) { /* 무시 */ }
     // mod-2 전용 아이템(코덱스 등)은 그 저장소일 때만 목록에 보임
-    try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
+    try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, ...(await PDM.javaRoot(r.dir)), 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
     // 리소스 목록의 게임 기본 아이템·방·몬스터를 이 저장소의 실제 파일에 맞춤 (gamescan.js)
     try { if (PDM.gameScan && await PDM.gameScan(r.missing ? '' : r.dir)) { drawAll(); if (active) PDM.tabs.refresh(active.key);
       // 이 저장소에만 있는 직업이 프로젝트에 없으면 알려 줌 (다른 게임 저장소를 연결했을 때)
@@ -1015,9 +1016,11 @@
   async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
-    // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'debug' 기본 = gradle desktop:debug, INDEV 버전 | 'playtest' = PDMaker 테스트 실행)
-    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'debug';
-    if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
+    // 테스트 플레이 빌드: 프로젝트 설정 settings.playTask
+    //   'playtest' (11차 기본) = 내보낸 게임과 같은 실행 (release 서비스 · 버전에 INDEV 없음 — 원래 게임 그대로)
+    //   'debug' = gradle desktop:debug (INDEV — 게임의 개발자 모드: 시작 아이템 · 모든 직업 해금 · 로딩 화면 생략 등 게임마다 다름)
+    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'playtest';
+    if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV — 게임의 개발자 모드라 원래 게임과 다르게 동작할 수 있음)' : '> 테스트 플레이: 내보낸 게임과 같은 실행 (PLAYTEST 버전)', 'dim');
     // 실행 환경 (5차): 프로젝트 testplay → 계산한 값을 게임에 (-Dpdmaker.testenv) — 런타임 MakerTestEnv 가 창 크기 · 배율 · 안전 영역 · 배속을 적용
     const testenv = task === 'play' ? PDM.testEnv.resolve((store.get('project') || {}).testplay) : null;
     if (testenv) PDM.log('> 실행 환경: ' + PDM.testEnv.describe(testenv), 'dim');

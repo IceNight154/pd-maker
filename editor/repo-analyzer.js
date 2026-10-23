@@ -112,6 +112,8 @@ function findRoot(input) {
   if (found.length === 1) { res.root = found[0]; res.reason = '아래 폴더에서 찾은 유일한 Gradle 저장소'; return res; }
   if (found.length > 1) { res.problems.push(`이 폴더 안에 게임 저장소가 ${found.length}개 있습니다 — 하나를 고르세요`); return res; }
   if (['build.gradle', 'build.gradle.kts', 'gradlew', 'gradlew.bat'].some(f => isFile(path.join(abs, f)))) { res.root = abs; res.reason = 'settings.gradle 없는 단일 모듈 Gradle 폴더'; return res; }
+  // 12차: gradle 없는 Eclipse · Ant 안드로이드 프로젝트 (원작 Pixel Dungeon — AndroidManifest.xml + src/ + assets/)
+  if (isFile(path.join(abs, 'AndroidManifest.xml')) && isDir(path.join(abs, 'src'))) { res.root = abs; res.reason = 'gradle 없는 Eclipse · Ant 안드로이드 프로젝트 (AndroidManifest.xml · src/)'; res.layout = 'eclipse'; return res; }
   res.problems.push('Gradle 저장소를 찾지 못했습니다 (settings.gradle · build.gradle · gradlew 없음)');
   return res;
 }
@@ -263,6 +265,15 @@ function analyze(input, opts = {}) {
       effect: '런타임 설치기의 "안드로이드 SDK 가 없으면 android 모듈 건너뛰기" 연결 줄은 이 형식에 넣지 않음 (android 모듈이 빌드에 포함됨)' });
   });
 
+  // 12차: gradle 없는 Eclipse · Ant 프로젝트 (원작 Pixel Dungeon) — 저장소 자체가 모듈 하나 (src · assets · res)
+  if (fr.layout === 'eclipse') {
+    const m = R.modules.find(x => x.dir === '.') || (R.modules.push({ name: ':', dir: '.', exists: true, buildFile: '', java: [], kotlin: [], assets: [], res: [], manifest: '', dependsOn: [], libraries: [] }), R.modules[R.modules.length - 1]);
+    if (!m.java.length) m.java = ['src'];
+    if (!m.assets.length && isDir(path.join(root, 'assets'))) m.assets = ['assets'];
+    if (!m.res.length && isDir(path.join(root, 'res'))) m.res = ['res'];
+    m.manifest = m.manifest || 'AndroidManifest.xml';
+    R.features.push({ id: 'eclipse-layout', label: 'gradle 없는 Eclipse · Ant 안드로이드 프로젝트', evidence: 'AndroidManifest.xml · src/ · assets/ (settings.gradle · build.gradle 없음)', effect: '분석 · 탐색 · 프로젝트 만들기는 됨 — PDMaker 런타임 설치 · 테스트 플레이(gradle)는 안 됨' });
+  }
   // ---- 소스 루트 · 게임 모듈 · 패키지
   const javaFiles = walk.files.filter(f => /\.java$/i.test(f.rel)), ktFiles = walk.files.filter(f => /\.kts?$/i.test(f.rel) && !/\.gradle\.kts$/i.test(f.rel));
   let J = null;   // { srcDir, pkgDir(rel), pkg }

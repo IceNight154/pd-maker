@@ -286,10 +286,10 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode, testenv }) =
   const javaHome = await ensureJava();
   // 런타임이 없거나 에디터보다 오래됐으면 먼저 설치·갱신 (예전에는 이걸 안 하면 원래 게임이 그대로 실행됐음)
   if (task !== 'compile') {
-    const st = runtimeState(repo);
+    const st = runtimeState(repo, project);
     if (!st.upToDate) {
       log(`> 게임 런타임 ${st.pkg ? '갱신' : '설치'} (${st.reason})`);
-      installer.install(repo, runtimeSrc(), l => log('  ' + l));
+      installer.install(repo, runtimeSrc(), l => log('  ' + l), project || null);
     } else log('> 게임 런타임: 최신');
   }
   // 영웅·아이템에 적은 코드 → pdmaker/gen/*.java (컴파일 때도 항상 새로 만듦)
@@ -309,7 +309,7 @@ ipcMain.handle('game:run', wrap(async ({ repo, project, task, mode, testenv }) =
   log(`> JAVA_HOME = ${javaHome || '(시스템 기본값)'}`);
   const proc = gameProc = spawn(cmd, full, { cwd: repo, env });
   // 생성 코드(gen/*.java)의 컴파일 오류 → 어느 영웅/아이템의 어느 칸 몇째 줄인지 덧붙임
-  const genDir = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'pdmaker', 'gen');
+  const genDir = path.join(installer.javaDir(repo), 'pdmaker', 'gen');   // 12차: 패키지 이름을 바꾼 파생작도
   const explain = l => {
     const m = l.match(/pdmaker[\\/]gen[\\/]((?:[\w]+[\\/])*(?:H|I)_\w+\.java):(\d+)/);
     if (!m) return;
@@ -380,8 +380,8 @@ function newestFile(dir, re) {
 }
 function prepareRuntime(repo, project) {
   repairRepo(repo);
-  const st = runtimeState(repo);
-  if (!st.upToDate) { log(`> 게임 런타임 ${st.pkg ? '갱신' : '설치'} (${st.reason})`); installer.install(repo, runtimeSrc(), l => log('  ' + l)); }
+  const st = runtimeState(repo, project);
+  if (!st.upToDate) { log(`> 게임 런타임 ${st.pkg ? '갱신' : '설치'} (${st.reason})`); installer.install(repo, runtimeSrc(), l => log('  ' + l), project || null); }
   if (project) installer.generate(repo, project, l => log('  ' + l));
   if (project) installer.applyGameId(repo, project, l => log('  ' + l));
 }
@@ -569,7 +569,7 @@ async function prepareApk(repo, project, signing) {
     '  afterEvaluate { p ->',
     "    if (p.plugins.hasPlugin('com.android.application') && p.hasProperty('pdmStore')) {",
     "      def keep = new File(p.layout.buildDirectory.get().asFile, 'pdmaker-keep.pro'); keep.parentFile.mkdirs()",
-    "      keep.text = '-keep class com.shatteredpixel.shatteredpixeldungeon.pdmaker.** { *; }\\n'",
+    `      keep.text = '-keep class ${require('./runtime-adapt').gamePackage(repo)}.pdmaker.** { *; }\\n'`,   // 12차: 게임 패키지 이름 (파생작)
     "      def sc = p.android.signingConfigs.create('pdm')",
     "      sc.storeFile = p.file(p.property('pdmStore')); sc.storePassword = p.property('pdmStorePass'); sc.keyAlias = p.property('pdmAlias'); sc.keyPassword = p.property('pdmKeyPass')",
     "      def rel = p.android.buildTypes.getByName('release')",
@@ -605,9 +605,9 @@ ipcMain.handle('runtime:install', wrap(arg => {
 }));
 ipcMain.handle('runtime:uninstall', wrap(repo => { const lines = []; installer.uninstall(repo, l => { lines.push(l); log(l); }); return lines; }));
 /** 설치된 런타임이 에디터의 것과 같은지 (이 저장소에 맞춘 사본 + 연결 줄 수 — runtime-installer.state) */
-function runtimeState(repo) { return installer.state(repo, runtimeSrc()); }
+function runtimeState(repo, project) { return installer.state(repo, runtimeSrc(), project || undefined); }
 ipcMain.handle('runtime:status', wrap(repo => {
-  const d = path.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon');
+  const d = installer.javaDir(repo);
   const pkg = fs.existsSync(path.join(d, 'pdmaker', 'MakerRuntime.java'));
   let hooks = 0;
   for (const f of [...new Set(installer.PATCHES.map(p => p.file))]) {
@@ -636,3 +636,29 @@ function analyzeRepo(opts) {
   });
 }
 ipcMain.handle('repo:analyze', wrap(opts => analyzeRepo(opts || {})));
+// 12차: 다른 저장소의 기능 찾기 · 가져오기 (repo-features.js — 원본 저장소는 읽기만 · 꾸러미는 프로젝트 features/ 에)
+const features = require('./repo-features.js');
+ipcMain.handle('features:repos', wrap(({ repo }) => {
+  // 가져올 수 있는 저장소: 지금 게임 저장소 옆(game/)의 Pixel Dungeon 계열 저장소 (Dungeon.java 가 있는 것)
+  const dirs = new Set(); const add = d => { try { for (const e of fs.readdirSync(d, { withFileTypes: true })) if (e.isDirectory() && !e.name.startsWith('.')) dirs.add(path.join(d, e.name)); } catch (_) { /* 없음 */ } };
+  if (repo) add(path.dirname(path.resolve(repo)));
+  add(path.join(__dirname, '..', 'game'));
+  const out = [];
+  for (const d of dirs) { if (repo && path.resolve(d) === path.resolve(repo)) continue; try { if (!fs.existsSync(path.join(require('./runtime-adapt').gameJavaDir(d), 'Dungeon.java'))) continue; } catch (_) { continue; } let label = path.basename(d); try { const m = /appName\s*=\s*['"]([^'"]+)['"]/.exec(fs.readFileSync(path.join(d, 'build.gradle'), 'utf8')); if (m) label = m[1]; } catch (_) { /* 이름 없음 */ } out.push({ dir: d, label, name: path.basename(d) }); }
+  return out.sort((a, b) => a.label.localeCompare(b.label));
+}));
+ipcMain.handle('features:catalog', wrap(({ source, target }) => features.catalog(source, target)));
+ipcMain.handle('features:closure', wrap(({ source, target, ids }) => features.closure(source, target, ids)));
+ipcMain.handle('features:import', wrap(({ source, target, ids, project, label, id }) => {
+  const p = features.pack(source, target, ids, { label, id, created: new Date().toISOString() });
+  const dir = features.savePack(project, p);
+  log(`> 기능 가져옴: ${p.feature.label} — 클래스 ${p.feature.classes.length} · 멤버 ${p.feature.members.length} · 리소스 ${p.feature.assets.length} · 글자 ${p.feature.messages.length} → ${dir}`);
+  const f = p.feature; return { id: f.id, label: f.label, classes: f.classes.length, members: f.members.length, replaced: f.replaced, conflicts: f.conflicts, missing: f.missing, dir };
+}));
+ipcMain.handle('features:list', wrap(({ project }) => features.listPacks(project).map(f => ({ id: f.id, label: f.label, enabled: f.enabled !== false, source: f.source, created: f.created, classes: (f.classes || []).length, members: (f.members || []).length, assets: (f.assets || []).length, messages: (f.messages || []).length, replaced: f.replaced || [], conflicts: f.conflicts || [], lines: f.lines }))));
+ipcMain.handle('features:set', wrap(({ project, id, enabled, remove }) => {
+  const f = features.listPacks(project).find(x => x.id === id); if (!f) throw new Error('기능을 찾지 못했습니다: ' + id);
+  if (remove) { fs.rmSync(f.dir, { recursive: true }); log(`> 가져온 기능 지움: ${f.label} (다음 테스트 플레이 때 게임 저장소에서도 빠짐)`); return true; }
+  const j = path.join(f.dir, 'feature.json'), o = JSON.parse(fs.readFileSync(j, 'utf8')); o.enabled = !!enabled; fs.writeFileSync(j, JSON.stringify(o, null, 2) + '\n', 'utf8'); return true;
+}));
+ipcMain.handle('repo:javaRel', wrap(repo => path.relative(repo, installer.javaDir(repo)).split(path.sep)));

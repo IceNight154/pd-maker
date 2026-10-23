@@ -266,7 +266,8 @@
         h('button', { class: 'btn sm', title: '영웅 · 캐릭터를 저장소 값에 맞춤 — 사용자가 고친 칸은 지키고, 충돌은 보여 주고, 사라진 것은 고른 것만 지움', onclick: () => PDM.repoSync && PDM.repoSync.dialog().then(() => refresh()) }, '영웅 · 캐릭터 다시 맞추기…'),
         h('button', { class: 'btn sm', title: '저장소 맵 중 그래프에 없는 새 맵만 더함 (지우지 않음)', onclick: () => { PDM.repoMaps && PDM.repoMaps.autoSync(); refresh(); } }, '맵 다시 맞추기'),
         h('button', { class: 'btn sm', onclick: () => PDM.repoMaps && PDM.repoMaps.confirmMissing().then(() => refresh()) }, '저장소에 없는 맵…'),
-        h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('repoanalysis') }, '분석 보고서')));
+        h('button', { class: 'btn sm', onclick: () => PDM.tabs.open('repoanalysis') }, '분석 보고서'),
+        h('button', { class: 'btn sm', title: 'game/ 아래 다른 저장소와 비교해 기능(클래스 · 함수)을 골라 이 프로젝트에 가져옴', onclick: () => PDM.tabs.open('features') }, '다른 저장소 기능 가져오기…')));
     const search = h('input', { type: 'search', class: 'rx-search', placeholder: { files: '경로로 찾기 (예: sprites/blaze)', classes: '클래스 이름 · 파일로 찾기', data: '이름으로 찾기', texts: '번역 키 · 글자로 찾기' }[st.tab], value: st.q || '' });
     let tm = 0; search.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { st.q = search.value; st.more = 0; refresh(); setTimeout(() => { const s2 = document.querySelector('.rx-search'); if (s2) { s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length); } }, 0); }, 250); });
     page.append(h('div', { class: 'rx-tabs' }, ...TABS.map(([k, l]) => h('button', { class: 'btn sm' + (st.tab === k ? ' pri' : ''), onclick: () => { st.tab = k; st.q = ''; st.more = 0; refresh(); } }, l)), search));

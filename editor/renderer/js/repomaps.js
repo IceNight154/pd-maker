@@ -242,7 +242,7 @@
     if (l && l.file && PDM.showCodeFile) btns.unshift(['원본 코드', () => 'code']);
     const r = await PDM.ui.modal('게임 저장소 맵 — ' + s.cls, body, btns);
     if (r === 'imp') { const made = importSlots([s]); PDM.log(`맵 그래프에 넣었습니다: ${s.cls} (노드 ${made.length})`, 'ok'); PDM.tabs.open('world'); }
-    if (r === 'code') PDM.showCodeFile(l.file.replace(/^.*?\/shatteredpixeldungeon\//, ''), s.cls);
+    if (r === 'code') { const jr = PDM.javaRel((PDM.GAME_SCAN || {}).repo).slice(-3).join('/') + '/', f = String(l.file).replace(/\\/g, '/'); PDM.showCodeFile(f.includes(jr) ? f.slice(f.indexOf(jr) + jr.length) : f.replace(/^.*?\/shatteredpixeldungeon\//, ''), s.cls); }
   }
 
   /** 리소스 트리 항목 (맵 아래) */

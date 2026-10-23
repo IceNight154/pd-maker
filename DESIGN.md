@@ -1009,11 +1009,57 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ---
 
+### 17.3 파생작 적응 · 다른 저장소 기능 (12차)
+
+- **게임 패키지** (`runtime-adapt.gamePackage` · `gameJavaDir`):
+  - `Dungeon` · `levels/Level` · `actors/hero/Hero` 가 함께 있는 패키지를 게임 패키지로 봄 (SPD `com.shatteredpixel.shatteredpixeldungeon` · RKPD2 · Rat King Adventure `com.zrp200.rkpd2`).
+  - 비교 · 조건 블록은 SPD 이름 기준으로 하고, 사본 · 연결 줄 · 생성 코드는 마지막에 그 게임 패키지 이름으로 바꿈 (`toGamePkg`).
+  - 편집기의 저장소 읽기(`gamescan` · `gamehero` · 아이템 · 배지 · 타이틀 미리보기)는 `PDM.javaRoot(repo)` → `repo:javaRel` 로 그 폴더를 씀.
+- **덮어쓰는 함수 모양** (`widenOverrides`):
+  - 런타임의 `@Override` 함수를 그 형이 실제로 물려받는 게임 클래스의 선언(상속을 따라 올라감)에 맞춤.
+    - 반환형 · 인자 `int` → `long`: Experienced 의 `damageRoll()` · `attackProc(Char, long)` · `damage(long, Object)` · `Item.value()` …
+    - `protected` → `public`: RKPD2 `RenderedTextBlock.layout()`.
+  - 선언을 못 찾으면, 같은 이름 · 모양의 게임 선언이 모두 같은 쪽일 때만 맞춤. SPD · ARK · BA 에서는 바뀌는 것 없음.
+  - 런타임 소스에서 체력 · 피해를 int 로 읽는 곳은 `(int)` 를 붙여 두 쪽 모두 컴파일.
+- **판마다 다른 API**: `//#if` 조건 블록 —
+  - `PlatformSupport.INSET_ALL`(안전 영역 — Shorter · Re-ARranged · Experienced 에 없음)
+  - `WndChooseAbility(왕관, 갑옷, 영웅)`
+  - `WndInfoArmorAbility(직업, 능력)`
+- **영웅 선택 화면**:
+  - 프로젝트 영웅이 게임 직업 그대로면(순서 · 이름 · 그림 · 설명 · 해금 · 선택 화면 글자를 고치지 않음, 저장소가 감춘 직업은 그대로 감춤) PDMaker 는 끼어들지 않고 게임의 선택 화면을 씀 (`HeroSelect.nativeLineup`).
+  - 모드마다 버튼 배치가 다르기 때문 — ARK 는 6명씩 넘김.
+- **다른 저장소 기능** (`editor/repo-features.js` · 화면 `features.js`):
+  - **찾기**: 가져올 저장소를 지금 게임 저장소와 클래스 · 멤버(함수 · 필드 · enum 상수 · 안쪽 형 · 초기화 블록) 단위로 비교 → 새 패키지 · 새 클래스 · 바뀐/새 멤버.
+  - **필요한 것**:
+    - source 에만 있는 클래스 · 멤버를 따라감 — 이름 · import · 같은 패키지.
+    - `.이름` 으로 부른 것은 target 에 그 이름이 아예 없을 때만.
+    - 안쪽 형의 멤버는 그 형 이름을 쓸 때만.
+    - 생성자는 `new X(…)` · `super(…)` · enum 상수 `NAME(…)` 의 인자 수가 맞을 때만.
+    - 접근 범위만 넓힌 선언.
+    - 새 필드 · 상수를 쓰는 초기화 블록.
+    - 새 안쪽 형을 다루는(`instanceof` · 형 변환) 바뀐 함수.
+    - Assets 상수 · 리소스 · 번역 키 — 모드의 다른 글자 폴더(BA `new_messages`)도 게임의 `messages` 로.
+    - 새 안쪽 형이 그 파일이 이미 보는 클래스 이름과 겹치면 "이름 겹침" 으로 알림.
+  - **꾸러미**: 프로젝트 `features/<id>/` (원문 · 바꾸기 전 해시 · source 의 바로 앞 멤버).
+  - **설치**:
+    - 연결 줄보다 먼저 넣음.
+    - 새 멤버는 source 에서 바로 앞에 있던 멤버 뒤에 넣음 (정적 필드 앞쪽 참조).
+    - import 는 그 게임에 있는 것만.
+    - 게임 쪽 그 멤버가 꾸러미를 만들 때와 다르면 덮어쓰지 않고 알림.
+  - **제거 · 끄기**: `.pdmaker-feature-new` · `.pdmaker-feature-backup` 으로 바이트까지 원래대로.
+  - **확인한 것** (javac — 임시 SPD 사본):
+    - BA 총기(새 클래스 176 · 멤버 431 · 번역 3665줄) 컴파일 오류 0.
+    - ARK 계단(`Hero.handle` + `Descend`/`Ascend` + `act()` 등 12멤버) 컴파일 오류 0.
+    - 게임 안에서 적이 보일 때 계단을 누르면 SPD 는 `Move`, 가져온 뒤와 ARK 원본은 `Descend`.
+  - **한계**:
+    - 아이템 그림 시트처럼 두 게임에 다 있는 파일은 가져오지 않으므로, 그림 번호가 다른 시트를 가리킬 수 있음.
+    - 바뀐 멤버는 그 저장소의 것으로 통째로 바뀜 (예: ARK 계단은 SPD 의 `Hero.act()` 를 ARK 판으로).
+
 ## 18. 빌드 · 내보내기
 
 ### 18.1 테스트 플레이 (`main.js game:run`)
 - 순서: 게임 저장소 확인(`repairRepo`) → Java 확인 · 내려받기 → 런타임이 없거나 오래됐으면 설치(`runtimeState` — 필요한 연결점만 셈) → 사용자 코드 생성 → 게임 이름 적용 → gradle.
-- `project.settings.playTask`: `debug`(기본 — 게임 원래 `desktop:debug`, 버전 -INDEV, init 스크립트가 `pdmaker.project` 를 넘김) | `playtest`(init 스크립트의 `desktop:pdmakerPlaytest`, -PLAYTEST, 세이브 폴더 분리). 컴파일만 = `core:compileJava`.
+- `project.settings.playTask`: `playtest`(11차부터 기본 — init 스크립트의 `desktop:pdmakerPlaytest`: 내보낸(release) 게임과 같은 실행 · release 서비스 클래스 경로 · 버전 -PLAYTEST · 세이브 폴더 = 게임 이름) | `debug`(게임의 개발자 작업 `desktop:debug`, 버전 -INDEV). INDEV 면 게임이 `DeviceCompat.isDebug()` 로 개발자 모드가 되어 원래 게임과 다르게 동작함 — 예: ARK · 원작 SPD 는 시작 아이템(물약 · 주문서 40개 · 아뮬렛) · 모든 직업 해금 · 안내서 읽음 · 층 이동 로딩 화면 생략(ARK "체르노보그로 가는 중..." 같은 입장 문구, 원작 구역 소개 글이 안 보임). 그래서 기본은 PLAYTEST. 둘 다 init 스크립트가 `pdmaker.project` 를 넘김. 컴파일만 = `core:compileJava`. 테스트 플레이 알림(광원 없음 등)은 게임 기록 창이 아니라 테스트 플레이 출력에 (원래 게임의 기록 줄을 밀어내지 않게).
 - 출력 창에 gradle · 게임 로그, 생성 코드의 컴파일 오류에는 에디터 위치를 덧붙임. 실패하면 작업 표시줄 알림(§2.1).
 
 ### 18.2 게임 파일 내보내기 (`main.js game:export`)
@@ -1047,6 +1093,12 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 - **저장소 정합성 테스트** (`tools/tests/repo-fidelity.js`, 10차): 정답을 분석기와 따로 소스에서 계산 — 맵 클래스 · 고정 맵 타일 재현 · 영웅 이름 · 몬스터 이름/그림/상속 · BOSS 속성 → 보스 · 수동 분류 유지 · 업적 · 타이틀 · 재분석 충돌 · 분석 실패 · 저장소 전환 · 설치 거부. 화면은 `ui-repofidelity.js` (타이틀 버튼 자리 = 원본 setRect 계산, 오차 0 px)
 - **회귀 테스트** (`tools/tests/run.js` — Node 만 있으면 됨): 편집기 스크립트를 Node `vm` 에 불러(`editor-env.js`, 파일 기능은 임시 폴더) 확인 — 편집기 ↔ 런타임 ↔ 게임 소스 표 일치(밑그림 대응표 · 보존 타일 번호 29종 · 구멍 · 기본 레이어 · 함정), 맵 변환, 저장/불러오기 · 실행 취소, 손상 파일 · 쓰기 실패 · 백업, 검사. `node tools/tests/run.js [이름 일부]`.
 - **화면 환경별 연출 검사** (`tools/playtest/platform-matrix.sh` · `scenarios.js`, 4차): 데스크톱 판 게임을 PC · 휴대폰 가로/세로 비율 창 · 안전 영역 흉내(`eval:insets`) · 실행 중 창 돌림(`eval:winsize`)으로 띄워 같은 연출을 돌리고, `eval:layout` 이 대사창 · 글 · 이름표 · 선택지 · 일러스트의 화면/안전 영역 밖 여부를 판정. 실제 휴대폰 검증은 아님 — `docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md`.
+- **12차 시험 · 도구**:
+  - `tools/tests/repo-features.js` — 멤버 나누기 · 바꾸기/넣기(원래 순서) · enum 상수와 생성자 · 빼면 바이트까지 원래대로, BA 총기 · ARK 계단의 필요한 것, 설치기 서명, RKPD2 패키지 · Experienced long 체력 적응.
+  - `tools/tests/ui-features.js` — 기능 가져오기 화면.
+  - `tools/playtest/parity.sh <저장소> <작업 폴더>` — 같은 저장소를 PDMaker 판 · 원본 판(`build.sh` 의 `PRISTINE=1`: 복사본에서 연결 줄을 걷어 냄)으로 컴파일해 같은 단계로 실행하고, 선택 아이콘 · 시작 층 · 영웅 그림 · 화면 글자 · 그림 목록을 비교. 검사 줄이 없으면 "실행 실패"로 표시.
+  - `tools/playtest/feature-check.sh <가져올> <게임> <작업 폴더> <기능 id>…` — 기능을 임시 사본에 넣고 javac 로 컴파일한 뒤, 빼고 나서 원본과 바이트 비교.
+  - eval `stairswithenemy[,go]` — 적이 보일 때 계단을 누른 결과 행동.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.
 
 ---
