@@ -225,6 +225,8 @@ public class MakerRuntime {
 		if (id == null) return null;
 		JsonValue f = WorldGraph.node(id);
 		if (f == null) { log("노드 맵 파일이 없습니다: " + id); return null; }
+		// 11차: 게임 저장소에서 옮긴 그대로인 층 (원본 자리) — 게임 자신의 newLevel 이 그 깊이 · 갈래 · 조건으로 고른 층을 그대로 씀 (NPC · 그림 · 이벤트 · 계단 모두 원본)
+		if (WorldGraph.nativeGame(id)) return null;
 		if ("handmade".equals(f.getString("mode", "procedural"))) {
 			MakerLevel l = new MakerLevel();
 			l.nodeId = id;

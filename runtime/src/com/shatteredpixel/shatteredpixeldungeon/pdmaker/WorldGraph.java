@@ -73,7 +73,8 @@ public class WorldGraph {
 		start = world.getString("start", "");
 		if (!ids.contains(start)) start = ids.isEmpty() ? null : ids.get(0);
 		Map<String, Integer> fixed = new HashMap<>(), depth = new HashMap<>(), found = new HashMap<>();
-		for (String id : ids) { JsonValue d = data.get(id); if (d != null && d.getInt("depth", 0) > 0) fixed.put(id, d.getInt("depth", 0)); }
+		Map<String, int[]> origin = new HashMap<>();
+		for (String id : ids) { JsonValue d = data.get(id); int[] o = originOf(d); if (o != null) { origin.put(id, o); fixed.put(id, o[0]); } else if (d != null && d.getInt("depth", 0) > 0) fixed.put(id, d.getInt("depth", 0)); }
 		int order = 0;
 		if (start != null) {
 			ArrayList<String> q = new ArrayList<>();
@@ -106,13 +107,47 @@ public class WorldGraph {
 			return ids.indexOf(a) - ids.indexOf(b);
 		});
 		Map<Integer, Integer> next = new HashMap<>();
+		java.util.Set<Long> taken = new java.util.HashSet<>();
+		for (String id : ids) { int[] o = origin.get(id); if (o == null) continue; where.put(id, o); taken.add(key(o[0], o[1])); if (!byWhere.containsKey(key(o[0], o[1]))) byWhere.put(key(o[0], o[1]), id); }
 		for (String id : sorted) {
+			if (origin.containsKey(id)) continue;
 			int d = depth.get(id);
 			int n = next.containsKey(d) ? next.get(d) : 0;
+			while (taken.contains(key(d, n))) n = n == 0 ? 2 : n + 1;
 			next.put(d, n == 0 ? 2 : n + 1);
 			where.put(id, new int[]{d, n});
 			byWhere.put(key(d, n), id);
 		}
+	}
+	/** 11차: 게임 저장소의 층 노드 → 원본 자리 {깊이, 갈래} (편집기 world.js originOf 와 같은 규칙) */
+	static int[] originOf(JsonValue d) {
+		JsonValue s = d == null ? null : d.get("src");
+		if (s == null || !"repo-level".equals(s.getString("kind", "")) || s.get("depth") == null || !s.get("depth").isNumber() || s.get("branch") == null || !s.get("branch").isNumber()) return null;
+		int sd = s.getInt("depth"), sb = s.getInt("branch");
+		if (sd < 0) return null;
+		int dd = d.getInt("depth", 0);
+		if (dd > 0 && dd != sd) return null;
+		return new int[]{ sd, sb };
+	}
+	/** 11차: 게임 저장소에서 옮긴 그대로인 층 노드 — 게임 코드가 그 층을 만들고 계단도 게임 것 그대로 (원본 자리 · 게임 원래 맵 · 타일 · 오브젝트 · 이벤트를 고치지 않은 직접 그리기 노드) */
+	public static boolean nativeGame(String id) {
+		JsonValue d = node(id);
+		if (d == null || originOf(d) == null) return false;
+		String mode = d.getString("mode", "procedural");
+		if ("game".equals(mode)) return true;
+		if (!"handmade".equals(mode)) return false;
+		JsonValue s = d.get("src");
+		String h = s.getString("tilesHash", "");
+		if (h.isEmpty() || d.get("layers") == null || d.get("layers").get("terrain") == null) return false;
+		if (d.get("objects") != null && d.get("objects").size > 0) return false;
+		if (!d.getString("onEnter", "").isEmpty()) return false;
+		return h.equals(thash(d.get("layers").get("terrain")));
+	}
+	/** 타일 배열 지문 — 편집기 repomaps.js thash 와 같은 값 (FNV-1a) */
+	static String thash(JsonValue a) {
+		int x = 0x811c9dc5;
+		for (int i = 0; i < a.size; i++) { x ^= a.getInt(i) & 0xffff; x *= 16777619; }
+		return a.size + ":" + Integer.toHexString(x);
 	}
 
 	// ------------------------------------------------------------ 조회
@@ -389,6 +424,7 @@ public class WorldGraph {
 	public static void wire(Level level, boolean live) {
 		String id = current();
 		if (id == null || level == null) return;
+		if (!(level instanceof MakerLevel) && nativeGame(id)) return;   // 11차: 게임이 만든 원본 층 — 계단 목적지도 게임 코드 그대로
 		JsonValue d = node(id);
 		Ports P = ports(level, id);
 		// ---- 통로 계단 중 아직 칸이 없는 것: 새로 놓음 (출구 쪽은 조건을 만족할 때만)

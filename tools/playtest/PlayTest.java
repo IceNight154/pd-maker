@@ -90,6 +90,18 @@ public class PlayTest {
 							InterlevelScene.mode = InterlevelScene.Mode.DESCEND;
 							Game.switchScene(InterlevelScene.class);
 						}); sleep(6); break;
+						case "startbtn": run(() -> {   // 11차: 영웅 선택 화면의 게임 시작 버튼을 그대로 누름 (게임이 정한 시작 방식 — ARK: ENTER_RHODES)
+							try {
+								GamesInProgress.selectedClass = HeroClass.valueOf(p.length > 1 ? p[1] : "WARRIOR");
+								GamesInProgress.curSlot = GamesInProgress.firstEmpty();
+								try { com.shatteredpixel.shatteredpixeldungeon.SPDSettings.class.getMethod("intro", boolean.class).invoke(null, false); } catch (Exception ignored) { }
+								Object sc = Game.scene(); java.lang.reflect.Field f = sc.getClass().getDeclaredField("startBtn"); f.setAccessible(true);
+								Object b = f.get(sc); java.lang.reflect.Method m = null;
+								for (Class<?> c = b.getClass(); c != null && m == null; c = c.getSuperclass()) try { m = c.getDeclaredMethod("onClick"); } catch (NoSuchMethodException ignored) { }
+								m.setAccessible(true); m.invoke(b);
+								System.out.println("[TEST] startbtn mode=" + InterlevelScene.mode);
+							} catch (Exception e) { System.out.println("[TEST] startbtn 실패: " + e); e.printStackTrace(); }
+						}); sleep(8); break;
 						case "continue": for (int k = 0; k < 20; k++) { final boolean[] c = {false}; run(() -> {
 							try {
 								java.lang.reflect.Field f = Group.class.getDeclaredField("members"); f.setAccessible(true);

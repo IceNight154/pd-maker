@@ -31,7 +31,7 @@ const ARK = path.join(GAME, 'ARK_PD-main'), BASE = path.join(GAME, 'shattered-pi
   const browser = await chromium.launch();
   const open = async (scheme, vw = 1500, vh = 950) => {
     const page = await browser.newPage({ viewport: { width: vw, height: vh }, colorScheme: scheme });
-    const errors = []; page.on('pageerror', e => errors.push(String(e)));
+    const errors = []; page.on('pageerror', e => errors.push(String(e) + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).map(x => x.trim()).join(' < ')));
     await page.addInitScript(R => {   // 웹 모드 bridge 가 window.pdm 을 만들 때 분석기를 끼움
       let v; Object.defineProperty(window, 'pdm', { configurable: true, get: () => v, set: x => { v = x; if (x) x.analyzeRepo = async d => { const k = Object.keys(R).find(q => q.replace(/[\\/]+$/, '') === String(d).replace(/[\\/]+$/, '')); if (!k) throw new Error('분석 결과 없음 ' + d); return JSON.parse(JSON.stringify(R[k])); }; } });
     }, REP);
@@ -78,8 +78,10 @@ const ARK = path.join(GAME, 'ARK_PD-main'), BASE = path.join(GAME, 'shattered-pi
     });
     await check('③ 게임 저장소의 맵: 프로젝트를 열면 가져오기 없이 맵 그래프에 (11차) · 자세히(유형) · 직접 그리기 노드는 맵 편집기 · 게임 원래 맵은 정보 화면(근거)', async () => {
       const items = await page.evaluate(() => PDM.repoMaps.list().length); assert.ok(items >= 27);
-      const shown = await page.evaluate(() => { const L = PDM.repoMaps.list().filter(s => s.extra); return { n: L.flatMap(s => s.ids).length, ok: L.every(s => s.ids.every(id => PDM.store.has('node:' + id))) }; });
+      const shown = await page.evaluate(() => { const L = PDM.repoMaps.list().filter(s => s.extra), has = id => PDM.store.has('node:' + id) || PDM.store.all('node').some(n => n.src && n.src.slotId === id); return { n: L.flatMap(s => s.ids).length, ok: L.every(s => s.ids.every(has)), adopted: PDM.store.all('node').filter(n => n.src && n.src.adopted).map(n => n.id) }; });
       assert.ok(shown.ok && shown.n >= 30, '열자마자 원작에 없는 맵이 모두 그래프에: ' + JSON.stringify(shown));
+      assert.deepStrictEqual(shown.adopted, ['n10', 'n15', 'n20', 'n25'], 'ARK 보스 층 = 기본 보스 노드를 바꿈 (겹친 노드 없음)');
+      assert.strictEqual(await page.evaluate(() => PDM.store.get('world').start), 'g_new_rhodes_level2_d0_b2', '시작 노드 = 로도스 숙소 (Dungeon.init)');
       await page.evaluate(() => { PDM.repoMaps.details(PDM.repoMaps.list().find(s => s.cls === 'NewRhodesLevel1')); });   // 창이 닫힐 때까지 기다리지 않음
       const modal = page.locator('.modal').last(); await modal.waitFor(); const mt = await modal.innerText();
       assert.ok(/고정 맵 \(모든 칸 확정\)/.test(mt) && /35×26/.test(mt) && /맵 유형/.test(mt) && /고정/.test(mt) && !/가져오기/.test(mt), mt.slice(0, 400)); await shot(page, 'rf-map-details');

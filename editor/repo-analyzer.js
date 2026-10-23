@@ -12,7 +12,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const JS = require('./renderer/js/javasrc.js');
 
-const VERSION = 4;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인 · 4: 영웅 그림 구조 · 탐색 색인 · 적응 클래스 확인
+const VERSION = 5;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인 · 4: 영웅 그림 구조 · 탐색 색인 · 적응 클래스 확인 · 5: 시작 자리(maps.start)
 const SKIP_DIRS = new Set(['.git', '.gradle', 'build', 'node_modules', '.idea', '.vscode', '.cxx', '.externalNativeBuild']);
 const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']), AUD = new Set(['mp3', 'ogg', 'wav']), FONT = new Set(['ttf', 'otf', 'fnt']);
 const TEXT = new Set(['properties', 'json', 'xml', 'txt', 'md']);
@@ -512,6 +512,10 @@ function analyze(input, opts = {}) {
         return Object.assign({}, x, { depth: dl, fallback: fb, boss: dl.length > 0 && dl.every(n => LS.bossDepths.includes(n)) }); }),
       levels: {}, terrain: terrainMap };
     for (const sl of O.maps.slots) if (!sl.fallback) { const li = levelOf(sl.cls); if (li) O.maps.levels[sl.cls] = li; else sl.missing = true; }
+    // 11차: 새 게임이 시작하는 자리 — Dungeon.init() 의 depth = … · branch = … (원작 1 · 0, ARK 0 · 2 = 로도스 숙소)
+    { const im = JS.method(dsrc || '', /\bstatic\s+void\s+init\s*\(\s*\)\s*\{/); const b = im ? JS.scan(im.body).code : '';
+      const dm = /(?:^|[^.\w])depth\s*=\s*(\d+)\s*;/m.exec(b), bm = /(?:^|[^.\w])branch\s*=\s*(\d+)\s*;/m.exec(b);
+      if (dm) O.maps.start = { depth: +dm[1], branch: bm ? +bm[1] : 0, file: J.pkgDir + '/Dungeon.java', line: im.line + im.code.slice(0, im.code.indexOf('{') + 1 + dm.index).split('\n').length - 1, evidence: `Dungeon.init(): depth = ${dm[1]}` + (bm ? ` · branch = ${bm[1]}` : '') }; }
     O.maps.unusedLevels = all().filter(d => d.kind === 'class' && !d.abstract && isA(d, 'Level') && !O.maps.levels[d.name] && d.name !== 'DeadEndLevel').map(d => ({ cls: d.name, file: d.file, line: d.line }));
     // 보스 층 클래스에서 만드는 몬스터 → 분류 근거
     const bossSpawn = {};
