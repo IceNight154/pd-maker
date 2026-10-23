@@ -939,3 +939,20 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 /* 10차: 저장소 맵 — 추정 연결은 점선 · 출처 상자 */
 .wg-edge.derived { stroke-dasharray: 2 5; opacity: .8; }
 .prov-box { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 var(--sp-4); margin: 0 0 var(--sp-5); }
+
+/* 11차: 게임 저장소 탐색 (repoexplorer.js) */
+.rx-tabs { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.rx-search { flex: 1; min-width: 200px; }
+.rx-layout { display: flex; gap: 12px; align-items: flex-start; min-height: 0; }
+.rx-left { flex: 0 0 min(420px, 42%); max-height: calc(100vh - 260px); overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.rx-right { flex: 1; min-width: 0; max-height: calc(100vh - 260px); overflow: auto; }
+.rx-row { padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 4px; font-size: var(--fs-sm); }
+.rx-row:hover { background: var(--hover); }
+.rx-row.on { background: var(--accent-soft); }
+.rx-row.dir { color: var(--mute); }
+.rx-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.rx-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.rx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.rx-code { max-height: none; }
+.rx-img { background: repeating-conic-gradient(var(--check-a) 0% 25%, var(--check-b) 0% 50%) 50% / 16px 16px; padding: 8px; display: inline-block; }
+@media (max-width: 900px) { .rx-layout { flex-direction: column; } .rx-left { flex: none; width: 100%; max-height: 40vh; } .rx-right { max-height: none; } }

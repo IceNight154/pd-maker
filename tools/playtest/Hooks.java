@@ -58,6 +58,48 @@ public class Hooks {
 					}
 					break;
 				}
+				case "changeclick": { // changeclick,<n> — 11차: 변경 사항 화면의 n 번째 항목(ChangeButton — 판마다 패키지가 달라 이름으로 찾음)을 누름 · 그 항목의 그림 크기 · 프레임
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					int n = p.length > 1 ? Integer.parseInt(p[1]) : 0, k = 0;
+					for (com.watabou.noosa.Gizmo g : all) {
+						if (!g.getClass().getSimpleName().equals("ChangeButton") && (g.getClass().getSuperclass() == null || !g.getClass().getSuperclass().getSimpleName().equals("ChangeButton"))) continue;
+						if (k++ != n) continue;
+						Class<?> c = g.getClass(); while (!c.getSimpleName().equals("ChangeButton")) c = c.getSuperclass();
+						java.lang.reflect.Field f = c.getDeclaredField("icon"); f.setAccessible(true); com.watabou.noosa.Image ic = (com.watabou.noosa.Image) f.get(g);
+						System.out.println("[TEST] changeclick " + n + " " + g.getClass().getName() + " icon=" + ic.getClass().getSimpleName() + " size=" + ic.width + "x" + ic.height + " scale=" + ic.scale.x + " tex=" + (ic.texture == null ? null : ic.texture.width + "x" + ic.texture.height) + " frame=" + ic.frame());
+						java.lang.reflect.Method m = c.getDeclaredMethod("onClick"); m.setAccessible(true); m.invoke(g);
+						break;
+					}
+					break; }
+				case "imgstat": { // 11차: 지금 화면의 그림(Image) 모두: 클래스 · 크기 · 배율 · 텍스처 크기 · uv — 화면 그림이 원본과 같은지 비교용
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					StringBuilder sb = new StringBuilder("[TEST] imgstat");
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.watabou.noosa.Image && g.visible) { com.watabou.noosa.Image im = (com.watabou.noosa.Image) g; if (im.texture == null) continue;
+						sb.append(String.format(" | %s %.1fx%.1f s%.2f t%dx%d uv%.4f,%.4f,%.4f,%.4f", im.getClass().getSimpleName(), im.width, im.height, im.scale.x, im.texture.width, im.texture.height, im.frame().left, im.frame().top, im.frame().right, im.frame().bottom)); }
+					System.out.println(sb); break; }
+				case "herosprite": { // 11차: 게임 중 영웅 그림 — 텍스처 · 지금 프레임(픽셀) · 그려지는 크기 · 칸(16px) 대비 · 게임 코드가 그리는지
+					com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite cs = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite;
+					com.watabou.utils.RectF f = cs.frame(); float tw = cs.texture.width, th = cs.texture.height;
+					java.lang.reflect.Method nm = null; boolean nat = false;
+					try { nm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.class.getDeclaredMethod("nativeSprite", com.badlogic.gdx.utils.JsonValue.class); nm.setAccessible(true); nat = (Boolean) nm.invoke(null, com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data()); } catch (Exception e) { }
+					com.watabou.noosa.Image av = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.tier());
+					System.out.println(String.format("[TEST] herosprite native=%s tex=%dx%d frame=%d,%d,%dx%d drawn=%.1fx%.1f scale=%.2f tile=%d heightTiles=%.2f avatar=%.0fx%.0f avatarFrame=%d,%d",
+						nat, (int) tw, (int) th, Math.round(f.left * tw), Math.round(f.top * th), Math.round(f.width() * tw), Math.round(f.height() * th), cs.width() * cs.scale.x, cs.height() * cs.scale.y, cs.scale.x,
+						com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap.SIZE, cs.height() * cs.scale.y / com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap.SIZE,
+						av.width() * av.scale.x, av.height() * av.scale.y, Math.round(av.frame().left * av.texture.width), Math.round(av.frame().top * av.texture.height)));
+					break; }
+				case "selicons": { // 11차: 영웅 선택 버튼의 아이콘 — 텍스처 크기 · 프레임(픽셀) · 그려지는 크기
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton && g.visible && g.getClass().getSimpleName().equals("HeroBtn")) {
+						com.watabou.noosa.Image im = ((com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton) g).icon(); if (im == null) continue;
+						Object cl = null; try { java.lang.reflect.Field cf = g.getClass().getDeclaredField("cl"); cf.setAccessible(true); cl = cf.get(g); } catch (Exception e) { }
+						System.out.println(String.format("[TEST] selicon %s %s tex=%dx%d frame=%d,%d,%dx%d drawn=%.1fx%.1f", g.getClass().getName().replaceAll(".*\\.", ""), cl, im.texture.width, im.texture.height,
+							Math.round(im.frame().left * im.texture.width), Math.round(im.frame().top * im.texture.height), Math.round(im.frame().width() * im.texture.width), Math.round(im.frame().height() * im.texture.height), im.width() * im.scale.x, im.height() * im.scale.y));
+					}
+					break; }
 				case "buttons": { // 보이는 버튼 목록
 					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
 					walk(com.watabou.noosa.Game.scene(), all);

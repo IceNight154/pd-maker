@@ -42,14 +42,17 @@ function makePng(w, h, fill) {
 }
 /** 8비트 RGBA PNG → { w, h, alpha(x,y) } (필터 0~4) */
 function readPng(file) {
-  const b = fs.readFileSync(file); let off = 8, w, h, depth, color; const idat = [];
-  while (off < b.length) { const len = b.readUInt32BE(off), type = b.toString('latin1', off + 4, off + 8); if (type === 'IHDR') { w = b.readUInt32BE(off + 8); h = b.readUInt32BE(off + 12); depth = b[off + 16]; color = b[off + 17]; } if (type === 'IDAT') idat.push(b.subarray(off + 8, off + 8 + len)); if (type === 'IEND') break; off += 12 + len; }
-  assert.strictEqual(depth, 8, '테스트 PNG 읽기: 8비트만'); assert.strictEqual(color, 6, '테스트 PNG 읽기: RGBA 만');
-  const raw = zlib.inflateSync(Buffer.concat(idat)), bpp = 4, stride = w * bpp, px = Buffer.alloc(h * stride);
+  const b = fs.readFileSync(file); let off = 8, w, h, depth, color, trns = null; const idat = [];
+  while (off < b.length) { const len = b.readUInt32BE(off), type = b.toString('latin1', off + 4, off + 8); if (type === 'IHDR') { w = b.readUInt32BE(off + 8); h = b.readUInt32BE(off + 12); depth = b[off + 16]; color = b[off + 17]; } if (type === 'IDAT') idat.push(b.subarray(off + 8, off + 8 + len)); if (type === 'tRNS') trns = b.subarray(off + 8, off + 8 + len); if (type === 'IEND') break; off += 12 + len; }
+  // 11차: 원작 영웅 시트는 팔레트(3) PNG — 투명도만 읽으면 되므로 팔레트 · 회색 · RGB 도 (8비트)
+  assert.strictEqual(depth, 8, '테스트 PNG 읽기: 8비트만'); const BPP = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 }; assert.ok(BPP[color], '테스트 PNG 읽기: 색 형식 ' + color);
+  const raw = zlib.inflateSync(Buffer.concat(idat)), bpp = BPP[color], stride = w * bpp, px = Buffer.alloc(h * stride);
   for (let y = 0; y < h; y++) { const f = raw[y * (stride + 1)], src = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)), out = px.subarray(y * stride, (y + 1) * stride), up = y ? px.subarray((y - 1) * stride, y * stride) : null;
     for (let i = 0; i < stride; i++) { const a = i >= bpp ? out[i - bpp] : 0, u = up ? up[i] : 0, c = up && i >= bpp ? up[i - bpp] : 0; let v = src[i];
       if (f === 1) v += a; else if (f === 2) v += u; else if (f === 3) v += (a + u) >> 1; else if (f === 4) { const p = a + u - c, pa = Math.abs(p - a), pb = Math.abs(p - u), pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? u : c; } out[i] = v & 255; } }
-  return { w, h, alpha: (x, y) => px[(y * w + x) * 4 + 3] };
+  const at = (x, y) => (y * w + x) * bpp;
+  const alpha = color === 6 ? (x, y) => px[at(x, y) + 3] : color === 4 ? (x, y) => px[at(x, y) + 1] : color === 3 ? (x, y) => { const i = px[at(x, y)]; return trns && i < trns.length ? trns[i] : 255; } : () => 255;
+  return { w, h, alpha };
 }
 /** 칸 안에 보이는 픽셀이 있는지 */
 const cellHasPixels = (img, x0, y0, cw, ch) => { let n = 0; for (let y = y0; y < Math.min(img.h, y0 + ch); y++) for (let x = x0; x < Math.min(img.w, x0 + cw); x++) if (img.alpha(x, y) > 0) n++; return n; };
@@ -322,11 +325,63 @@ test('ARK_PD-main: 인식하지 못하던 원인 → 수정 확인 (아이템 �
   const te = P.GAME_SCAN.newMobs.find(m => m.cls === 'miniboss.TheEndspeaker'); assert.ok(te && !te.sprite && /코드로 고름/.test(te.spriteProblem), '그림을 코드로 고르는 TheEndspeaker 도 목록에 남음 (임시 그림 + 이유)');
   const rot = await P.gameRotation(3); assert.ok(rot && rot.list.length > 0 && rot.file === 'actors/mobs/MobRotation.java', '맵 편집기 "몬스터 스폰" 이 MobRotation 을 읽음');
   assert.ok(P.GAME_SCAN.newMobs.filter(m => m.sprite).length >= 100, '새 몬스터 그림 연결');
-  assert.ok(r.runtime.ok && r.runtime.missing.length > 0, '런타임: 설치는 되지만 연결 줄 일부 누락 (보고서에 표시)');
-  const miss = r.runtime.classCheck.missing.map(m => m.cls);
-  assert.ok(miss.includes('actors.mobs.MobSpawner'), '런타임이 쓰는 MobSpawner 가 ARK 에 없음 → 컴파일 안 됨을 알려 줌: ' + miss.join(', '));
-  assert.strictEqual(r.support[0].stages.runtime.s, 'no', '지원 범위: 게임 런타임 = 미지원 (설치 가능으로 보이지 않음)');
+  // 11차 (7acad71): 런타임 사본을 이 저장소 구조에 맞춰 적응해 설치 → 원래 이름으로는 없던 클래스(게임 본체 TomorrowRogueNight 등)는 "적응함"으로, 남는 것만 "없는 클래스"
+  //   (예전 기대: 없는 클래스가 있어 미지원 — 적응 설치가 생긴 뒤로는 사실이 아님. 실제 빌드 · 테스트 플레이는 tools/playtest 로 확인)
+  assert.ok(r.runtime.ok, '런타임 설치 가능');
+  const cc = r.runtime.classCheck;
+  assert.ok((cc.raw || []).some(m => m.cls === 'ShatteredPixelDungeon') && (cc.adapted || []).includes('ShatteredPixelDungeon'), '게임 본체 이름이 다른 것을 찾고 적응함: ' + JSON.stringify(cc.adapted));
+  assert.deepStrictEqual(cc.missing.map(m => m.cls), [], '적응하고도 없는 클래스 0');
+  assert.notStrictEqual(r.support[0].stages.runtime.s, 'no', '지원 범위: 게임 런타임 = 적응 설치 가능');
+  assert.ok(/적응한 클래스/.test(r.support[0].stages.runtime.note), '적응했다는 것을 지원 범위에 표시');
   return `그림 있는 칸: 새 격자 ${okNew}/${sample.length} · 예전 추정 격자 ${okOld}/${sample.length} · 몬스터 목록 ${rot.list.length}종 (깊이 3)`;
+});
+
+// 11차: 영웅 그림 구조 — FRAME_* 상수만이 아니라 HeroSprite.updateArmor() 가 실제로 자르는 칸 · tiers() 갑옷 줄 높이 · 동작 번호 · 선택 화면 아이콘 출처
+//   실제 시트 픽셀로 확인 (ARK: 1800×288 = 갑옷 8줄 × 36px · 줄 안 36×34 칸 50개 · 0번 칸 = 초상화)
+//   tiers = 게임이 쓰는 갑옷 줄 수: 원작 · ARK Hero.tier() 0~6 (시트의 8번째 줄은 비어 있음) · 블루 아카이브 tier() = alternativeSprite() (기본 0 — 다른 줄은 대체 그림으로 대부분 비어 있음)
+const HERO_EXPECT = {
+  base: { frame: [12, 15], rowH: 15, tiers: 7, idle0: 0, icons: { '*': { kind: 'sheet', rect: [0, 90, 12, 15] } }, iconTier: 6 },
+  ark: { frame: [36, 34], rowH: 36, tiers: 7, idle0: 41, icons: { WARRIOR: 'BLAZE', MAGE: 'AMIYA', ROGUE: 'P_RED', HUNTRESS: 'GREY', ROSECAT: 'ROSEMARI', NEARL: 'NEARL', CHEN: 'CHEN' }, iconTier: 0 },
+  ba: { frame: [12, 17], rowH: 17, tiers: 1, idle0: 0, icons: { '*': { kind: 'sheet', rect: [0, 0, 12, 17] } }, iconTier: 0 },
+};
+for (const key of Object.keys(HERO_EXPECT)) test(`${REPOS[key]}: 영웅 그림 구조 (갑옷 줄 높이 · 줄 안의 칸 · 동작 · 선택 아이콘) — 실제 시트로 · 프로젝트에 옮긴 값`, async () => {
+  const r = need(key), X = HERO_EXPECT[key], hs = r.objects.heroSprite;
+  assert.ok(hs, 'HeroSprite 구조를 읽음');
+  assert.deepStrictEqual([hs.frame, hs.rowH, hs.anims.idle.frames[0], hs.scale], [X.frame, X.rowH, X.idle0, 1], JSON.stringify(hs.evidence));
+  assert.deepStrictEqual(r.objects.heroFrame, X.frame, '보고서의 영웅 프레임 = 실제로 자르는 칸');
+  for (const a of ['idle', 'run', 'attack', 'zap', 'die', 'operate', 'fly', 'read']) assert.ok(hs.anims[a] && hs.anims[a].frames.length && hs.anims[a].fps > 0, a);
+  assert.deepStrictEqual(hs.anims.zap.frames, hs.anims.attack.frames, 'zap = attack.clone()');
+  if (key === 'ark') { assert.deepStrictEqual(hs.anims.Sattack.frames, [9, 11, 14, 16]); assert.strictEqual(hs.anims.idle.frames.length, 30); assert.strictEqual(hs.anims.idle.fps, 7); }
+  // 선택 아이콘 출처
+  const ic = r.objects.heroSelectIcons;
+  for (const [c, v] of Object.entries(X.icons)) assert.deepStrictEqual(ic[c], typeof v === 'string' ? { kind: 'icons', name: v } : v, c);
+  // 실제 시트: 모든 영웅의 모든 갑옷 줄에서, 동작이 쓰는 칸마다 그림이 있음 (줄 높이 · 칸 크기가 맞아야 함)
+  let cells = 0, filled = 0, sheets = 0;
+  const used = [...new Set(Object.values(hs.anims).flatMap(a => a.frames))];
+  for (const h of r.objects.heroes.filter(x => x.sheetFound && !x.hidden)) {
+    const img = readPng(path.join(GAME, REPOS[key], 'core/src/main/assets', h.sheet)); sheets++;
+    const cols = Math.floor(img.w / X.frame[0]), rows = Math.floor(img.h / X.rowH);
+    assert.ok(Math.max(...used) < cols, `${h.cls}: 동작 칸 번호 < 한 줄 칸 수 ${cols}`);
+    for (let row = 0; row < Math.min(rows, X.tiers); row++) for (const f of used) { cells++; if (cellHasPixels(img, f * X.frame[0], row * X.rowH, X.frame[0], X.frame[1]) > 0) filled++; }
+  }
+  assert.ok(sheets > 0 && filled === cells, `그림이 있는 칸 ${filled}/${cells} (시트 ${sheets}장)`);
+  if (key === 'ark') {
+    // 예전 해석(36×36 칸 · 원작 동작 번호 0,0,0,1… · 15/36 축소)과 비교: 원작 idle 0번 칸 = ARK 의 초상화 칸 (동작 그림이 아님)
+    const img = readPng(path.join(GAME, REPOS.ark, 'core/src/main/assets/sprites/blaze.png'));
+    assert.deepStrictEqual([img.w, img.h], [1800, 288], 'blaze.png 1800×288');
+    assert.ok(cellHasPixels(img, 41 * 36, 36, 36, 34) > 0 && cellHasPixels(img, 47 * 36, 36, 36, 34) > 0, 'idle 41 · 47 칸 (갑옷 1단계 줄)');
+  }
+  // 편집기: 저장소 맞추기가 이 값을 출처와 함께 영웅에 옮김
+  const ctx = await editorScan(key, true), P = ctx.PDM, d = fs.mkdtempSync(path.join(os.tmpdir(), 'pdm-hs-'));
+  await P.store.createNew(d, 'hs-' + key);
+  const pl = await P.repoSync.plan(), e = pl.heroes.find(x => x.cls === (key === 'ba' ? 'WARRIOR' : 'WARRIOR')) || pl.heroes[0], W = e.want;
+  assert.deepStrictEqual([W['sprite.frame'].value, W['sprite.rowH'].value, W['sprite.anims'].value.idle.frames[0], W['sprite.scale'].value, W['select.iconTier'].value], [X.frame, X.rowH, X.idle0, 1, X.iconTier]);
+  assert.strictEqual(W['sprite.anims'].from, 'repo'); assert.ok(/updateArmor/.test(W['sprite.anims'].note));
+  P.repoSync.apply(pl, { remove: [] });
+  const hr = P.store.all('hero').find(h => h.baseClass === e.cls);
+  assert.strictEqual(P.prov.status(hr, 'sprite.anims'), 'repo'); assert.strictEqual(P.prov.status(hr, 'sprite.rowH'), 'repo');
+  fs.rmSync(d, { recursive: true, force: true });
+  return `칸 ${X.frame.join('×')} · 줄 ${X.rowH} · 그림 있는 칸 ${filled}/${cells} · 시트 ${sheets}장 · 선택 아이콘 ${Object.values(ic).filter(v => v && v.kind).map(v => v.kind)[0]}`;
 });
 
 test('New-Blue-Archive-Pixel-Dungeon-main: 인식하지 못하던 원인 → 수정 확인 (new_messages 겹침 · 감춘 직업 · 병합 충돌 파일 · 그림 원본 파일)', async () => {

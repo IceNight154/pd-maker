@@ -175,8 +175,8 @@ public class HeroSelect {
 		return d.length() > 300 ? d.substring(0, 300) + "…" : d;
 	}
 
-	/** 영웅 그림의 첫 프레임 (그림이 없으면 바탕 직업 그림) */
-	static Image icon(JsonValue h) {
+	/** 영웅 버튼 아이콘: select.icon → (그림을 바꾸지 않은 영웅) 게임의 선택 버튼 아이콘 그대로 → 영웅 시트의 select.iconTier 줄 첫 프레임 */
+	static Image icon(Object sc, JsonValue h) {
 		try {
 			JsonValue sel = h.get("select");
 			String ic = sel == null ? "" : sel.getString("icon", "");
@@ -184,11 +184,36 @@ public class HeroSelect {
 				Object t = MakerRuntime.texture(ic);
 				if (t != null) { Image im = new Image(t); float k = Math.min(1f, 20f / Math.max(im.width, im.height)); im.scale.set(k); return im; }
 			}
-			// 영웅 시트의 가장 좋은 갑옷 줄(원작 선택 화면처럼), 가만히 있는 첫 프레임
-			Image img = HeroRuntime.avatarOf(h, 6);
+			// 11차: 게임의 HeroBtn 이 만드는 아이콘 (원작: 시트의 직업 갑옷 줄 · ARK: Icons 얼굴 · 블루 아카이브: 시트 맨 윗줄) — 판마다 다른 규칙을 게임 코드가 정함
+			if (sc != null && gameSheet(h)) { Image g = gameIcon(sc, classOf(h)); if (g != null) return g; }
+			// 그림을 바꾼 영웅: 영웅 시트의 select.iconTier 줄 (저장소의 선택 화면이 쓰는 줄 — 기록이 없는 예전 프로젝트는 원작처럼 6 = 직업 갑옷), 가만히 있는 첫 프레임
+			Image img = HeroRuntime.avatarOf(h, sel == null ? 6 : sel.getInt("iconTier", 6));
 			if (img != null) { if (img.height > 20) img.scale.set(20f / img.height); return img; }
 		} catch (Throwable t) { MakerRuntime.log("영웅 선택 그림 오류: " + t); }
+		if (sc != null && gameSheet(h)) { Image g = gameIcon(sc, classOf(h)); if (g != null) return g; }
 		return new Image(classOf(h).spritesheet(), 0, 90, 12, 15);
+	}
+	/** 영웅 시트가 바탕 직업의 게임 시트 그대로인가 (비었음 · spritesheet() 와 같음 · 저장소에서 옮긴 값 그대로) — 아니면 게임 아이콘을 쓰지 않음 (다른 영웅 그림을 보이지 않게) */
+	static boolean gameSheet(JsonValue h) {
+		if (HeroRuntime.zeroBase(h)) return false;
+		JsonValue sp = h.get("sprite"); String sheet = sp == null ? "" : sp.getString("sheet", "");
+		if (sheet.isEmpty() || sheet.equals("game:" + classOf(h).spritesheet())) return true;
+		JsonValue F = h.get("src") == null ? null : h.get("src").get("fields"), r = F == null ? null : F.get("sprite.sheet");
+		return r != null && !r.getString("from", "").equals("user") && sheet.equals(r.getString("v", "\u0000"));
+	}
+	/** 게임의 HeroSelectScene.HeroBtn(직업) 을 만들어 그 아이콘을 복사 (버튼은 화면에 넣지 않고 버림) */
+	static Image gameIcon(Object sc, HeroClass cl) {
+		try {
+			Class<?> bc = Class.forName(HeroSelectScene.class.getName() + "$HeroBtn");
+			java.lang.reflect.Constructor<?> c = bc.getDeclaredConstructor(HeroSelectScene.class, HeroClass.class);
+			c.setAccessible(true);
+			StyledButton b = (StyledButton) c.newInstance(sc, cl);
+			Image src = b.icon();
+			Image im = src == null ? null : new Image(src);
+			if (im != null) { im.scale.set(src.scale.x, src.scale.y); im.origin.set(src.origin.x, src.origin.y); }
+			b.destroy();
+			return im;
+		} catch (Throwable t) { MakerRuntime.log("게임 영웅 버튼 아이콘을 못 만듦: " + t); return null; }
 	}
 
 	/** 게임의 setSelectedHero(직업) 를 부른 뒤 이름·설명을 영웅 것으로 */
@@ -245,7 +270,7 @@ public class HeroSelect {
 			img.x = (Camera.main.width - img.width * k) / 2f;
 			img.y = 0;
 		} else {
-			img = ill != null ? ill : icon(h);
+			img = ill != null ? ill : icon(null, h);
 			if (ill == null) img.scale.set(1);
 			float room = Math.min((Camera.main.height * (ill != null ? 0.9f : 0.6f)) / img.height, ((Camera.main.width - left) * (ill != null ? 0.9f : 0.6f)) / img.width);
 			// 작은 도트 그림은 정수 배로 (흐려지지 않게)
@@ -411,7 +436,7 @@ public class HeroSelect {
 		HeroBtn(Object sc, JsonValue h) {
 			super(Chrome.Type.GREY_BUTTON_TR, "");
 			this.sc = sc; this.h = h; this.id = h.getString("id", ""); this.cl = classOf(h);
-			icon(HeroSelect.icon(h));
+			icon(HeroSelect.icon(sc, h));
 		}
 		boolean locked() { return HeroSelect.locked(h); }
 		@Override public void update() {

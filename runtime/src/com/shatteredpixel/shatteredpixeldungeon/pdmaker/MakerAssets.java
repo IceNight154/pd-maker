@@ -46,8 +46,33 @@ public class MakerAssets {
 	static void walk(FileHandle d, String prefix) {
 		for (FileHandle f : d.list()) {
 			if (f.isDirectory()) walk(f, prefix + f.name() + "/");
-			else if (f.extension().equalsIgnoreCase("png")) overrides.put(prefix + f.name(), f);
+			else if (f.extension().equalsIgnoreCase("png") && sizeOk(prefix + f.name(), f)) overrides.put(prefix + f.name(), f);
 		}
+	}
+	/** 11차: 바꾼 그림의 크기가 이 게임 원본과 같아야 씀 — 게임은 시트를 픽셀 칸(TextureFilm · uvRect)으로 자르므로 크기가 다르면 엉뚱한 곳이 잘림.
+	 *  (예: 원작 SPD 프로젝트에서 고친 interfaces/icons.png 256×128 · sprites/items.png 256×512 를 ARK(256×256 · 1024×1024)에서 쓰면 소개 · 변경 사항 화면 그림이 깨짐)
+	 *  통째로 그리는 그림(splashes/)과 게임에 없는 새 경로는 그대로 씀 */
+	static boolean sizeOk(String key, FileHandle f) {
+		try {
+			if (key.startsWith("splashes/")) return true;
+			FileHandle orig = com.badlogic.gdx.Gdx.files.internal(key);
+			if (!orig.exists()) return true;
+			int[] a = pngSize(f), b = pngSize(orig);
+			if (a == null || b == null || (a[0] == b[0] && a[1] == b[1])) return true;
+			MakerRuntime.warnOnce("게임 그림 바꾸기 건너뜀: assets/game/" + key + " 가 " + a[0] + "×" + a[1] + " 인데 이 게임의 원본은 " + b[0] + "×" + b[1]
+				+ " — 다른 게임 저장소용으로 만든 그림이면 칸이 어긋나 잘못 잘립니다. 이 게임 원본으로 다시 \"고치기\" 하세요 (그림 관리 › 게임 그림)");
+			return false;
+		} catch (Throwable t) { return true; }
+	}
+	/** PNG 머리말의 너비 · 높이 (PNG 가 아니면 null) */
+	static int[] pngSize(FileHandle f) {
+		byte[] h = new byte[24];
+		try (java.io.InputStream in = f.read()) {
+			int n = 0; while (n < 24) { int r = in.read(h, n, 24 - n); if (r < 0) return null; n += r; }
+		} catch (Exception e) { return null; }
+		if ((h[1] & 255) != 'P' || (h[2] & 255) != 'N' || (h[3] & 255) != 'G') return null;
+		java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(h, 16, 8);
+		return new int[]{ bb.getInt(), bb.getInt() };
 	}
 	public static boolean has(String gamePath) { if (overrides == null) scan(); return overrides.containsKey(gamePath); }
 

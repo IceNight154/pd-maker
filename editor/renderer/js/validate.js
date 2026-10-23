@@ -457,5 +457,11 @@ PDM.validateAssets = async function () {
     else add('warn', where, `${SND.test(r) ? '소리' : '그림'} 파일 "${r}" 이(가) 없습니다 — 게임에서 ${SND.test(r) ? '소리가 나지 않습니다' : '기본 그림으로 보이거나 빠집니다'}`, openOf(u.key),
       X({ kind: '없는 에셋', fix: isGame ? '게임 저장소(프로젝트 설정)가 맞는지, 다른 판의 게임 파일인지 확인하세요' : '파일을 다시 넣거나(같은 경로) 참조하는 칸에서 다른 파일을 고르세요. 이름을 바꿨다면 그림 관리의 이름 바꾸기를 쓰세요 (쓰는 곳도 함께 바뀜)' }));
   }
+  // 11차: 바꾼 게임 그림(assets/game/…)의 크기가 지금 게임 저장소의 원본과 다르면 게임이 쓰지 않음 (다른 저장소용으로 고친 그림 — 칸이 어긋남)
+  if (s.gameAssetsDir() && PDM.assets.overrideSize) for (const gr of [...(PDM.assets.overrides || [])].sort()) {
+    const z = await PDM.assets.overrideSize(gr); if (!z || z.ok) continue;
+    add('warn', '게임 그림 바꾸기 › ' + gr, `assets/game/${gr} 이(가) ${z.own.join('×')} 인데 이 게임의 원본은 ${z.game.join('×')} — 게임은 그림을 픽셀 칸으로 자르므로 이 그림을 쓰지 않습니다 (다른 게임 저장소용으로 고친 그림)`, 'sprites',
+      { kind: '게임 그림 크기', ref: 'game:' + gr, fix: '그림 관리 › 게임 그림에서 "원래대로" 한 뒤 이 게임 원본으로 다시 "고치기" 하세요' });
+  }
   return { issues: out, refs: refs.size, uses, skippedGame, dirs: lists.size, ms: Date.now() - t0 };
 };
