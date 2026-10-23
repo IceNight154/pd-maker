@@ -310,14 +310,27 @@ test('저장소 바꾸기 (ARK → 기준): 영웅 이름 · 배지 · 타이틀
   return `ARK(${arkProf}) → 기준(${P.REPO_ANALYSIS.profile.id}) · 사라진 항목 ${pl.missing.length} (지우지 않음) · 바뀐 영웅 ${res.heroesUpdated}`;
 });
 
-test('런타임 설치기: 런타임이 쓰는 게임 클래스가 없는 저장소(ARK)에는 원본 파일을 고치기 전에 멈춤 · 기준 · BA 는 그대로 설치 가능', () => {
+test('런타임 설치기: ARK 는 이 저장소 구조에 맞춰 적응 설치 (임시 사본에서만 — 원본 저장소는 건드리지 않음) · 제거하면 바이트 단위로 원래대로 · 기준 · BA 도 없는 클래스 0', () => {
+  // 11차: 7acad71 부터 설치기는 런타임 사본을 저장소 구조(게임 본체 이름 · 옮겨진 클래스 · 기능 조건 블록)에 맞춰 설치함 → ARK 설치가 성공함.
+  //       예전 시험은 "거부"를 기대하며 원본 game/ARK_PD-main 에 install 을 불러, 성공하면 원본 저장소를 고쳤음 → 사본에서만 설치 · 원본 지문 비교
   need('ark'); const I = require(path.join(ROOT, 'editor', 'runtime-installer.js'));
-  const before = A.analyze(dirOf('ark')).fingerprint, logs = [];
-  let err = null; try { I.install(dirOf('ark'), path.join(ROOT, 'runtime', 'src'), l => logs.push(l)); } catch (e) { err = e; }
-  assert.ok(err && /게임 클래스 14개/.test(err.message) && /원본 파일은 고치지 않았습니다/.test(err.message), String(err && err.message));
-  assert.strictEqual(A.analyze(dirOf('ark')).fingerprint, before, '저장소 파일이 그대로');
+  const before = A.analyze(dirOf('ark')).fingerprint, logs = [], d = path.join(tmp(), 'ark-copy');
+  // 사본: .git 과 그림 · 소리 파일은 빼고 (설치기는 Java · gradle · 글자 파일만 읽고 고침)
+  fs.cpSync(dirOf('ark'), d, { recursive: true, filter: f => !/[\\/]\.git([\\/]|$)/.test(f) && !/\.(png|jpe?g|ogg|mp3|wav|aseprite|psd)$/i.test(f) });
+  const hashAll = root => { const out = {}, walk = (x, rel) => { for (const e of fs.readdirSync(x, { withFileTypes: true })) { const r = rel ? rel + '/' + e.name : e.name; if (e.isDirectory()) walk(path.join(x, e.name), r); else out[r] = require('crypto').createHash('sha1').update(fs.readFileSync(path.join(x, e.name))).digest('hex'); } }; walk(root, ''); return out; };
+  const orig = hashAll(d);
+  assert.deepStrictEqual(I.missingClasses(d), [], '적응 후 없는 클래스 0');
+  I.install(d, path.join(ROOT, 'runtime', 'src'), l => logs.push(l));
+  assert.ok(logs.some(l => /게임 본체 클래스: TomorrowRogueNight/.test(l)), '게임 본체 이름을 이 저장소 것으로: ' + logs.filter(l => /본체|옮겨진|맞춤/.test(l)).slice(0, 3).join(' / '));
+  assert.ok(fs.existsSync(path.join(d, PKG, 'pdmaker', 'HeroRuntime.java')), '사본에 런타임 설치');
+  assert.ok(/pdmaker\.HeroRuntime\.updateArmor\(this\)/.test(fs.readFileSync(path.join(d, PKG, 'sprites/HeroSprite.java'), 'utf8')), '영웅 그림 연결 줄');
+  assert.strictEqual(A.analyze(dirOf('ark')).fingerprint, before, '원본 저장소 파일이 그대로');
+  assert.ok(!fs.existsSync(path.join(dirOf('ark'), PKG, 'pdmaker')), '원본 저장소에 pdmaker 패키지가 생기지 않음');
+  I.uninstall(d, () => { });
+  const now = hashAll(d), diff = [...new Set([...Object.keys(orig), ...Object.keys(now)])].filter(k => orig[k] !== now[k] && !/\.pdmaker-backup$/.test(k));
+  assert.deepStrictEqual(diff, [], '제거 뒤 사본 = 설치 전 (백업 파일 제외)');
   for (const k of ['base', 'ba']) if (fs.existsSync(dirOf(k))) assert.deepStrictEqual(I.missingClasses(dirOf(k)), [], k);
-  return '설치 거부: ' + err.message.split('\n')[0].slice(0, 80) + '…';
+  return `사본 설치 · 연결 ${logs.filter(l => /연결|갱신|추가/.test(l)).length}줄 · 제거 후 바뀐 파일 0 · 원본 지문 그대로`;
 });
 
 // ================================================================ ⑨ 손상 · 누락 파일

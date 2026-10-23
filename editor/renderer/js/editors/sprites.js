@@ -226,10 +226,12 @@
   /** 게임 그림 한 장 카드 (타이틀 편집기에서도 씀) */
   function gameCard(gr, label) {
     const on = PDM.assets.isOverridden(gr);
-    const info = h('span', { class: 'hint' }, '…');
+    const info = h('span', { class: 'hint' }, '…'), warn = h('div', { class: 'hint warn' });
+    // 11차: 크기가 이 게임 원본과 다르면 게임이 쓰지 않음 (다른 저장소용 그림)
+    if (on && PDM.assets.overrideSize) PDM.assets.overrideSize(gr).then(z => { if (z && !z.ok) warn.textContent = `⚠ ${z.own.join('×')} ≠ 이 게임 원본 ${z.game.join('×')} — 게임에서 쓰지 않음`; });
     return h('div', { class: 'spr-card' + (on ? ' over' : '') },
       h('div', { class: 'spr-img', ondblclick: () => editGame(gr) }, thumb('game:' + gr, 96, { info }), on ? h('span', { class: 'spr-badge' }, '바꿈') : null),
-      h('div', { class: 'spr-name', title: gr }, label || gr.split('/').pop()), info,
+      h('div', { class: 'spr-name', title: gr }, label || gr.split('/').pop()), info, warn,
       label ? h('div', { class: 'spr-uses none mono' }, gr) : null,
       h('div', { class: 'spr-btns' },
         h('button', { class: 'btn xs', onclick: () => editGame(gr), title: on ? '바꾼 그림 편집' : '원본을 프로젝트로 복사해서 편집' }, '고치기'),

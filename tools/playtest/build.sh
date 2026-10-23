@@ -14,7 +14,14 @@ node "$PDM/editor/runtime-installer.js" "$WORK/src" --install "$PROJ"
 [ -n "$NOMP3" ] && sed -i "s#music/title.mp3#music/theme_1.ogg#" "$WORK/src/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/Assets.java" || true
 cd "$WORK/src"
 find SPD-classes/src core/src/main/java desktop/src/main/java services/src services/updates/debugUpdates services/news/debugNews -name "*.java" > "$WORK/srcs.txt"
-CP=$(ls "$JARS"/*.jar "$JARS"/lw/*.jar | tr '\n' ':')
+CP=$(ls "$JARS"/*.jar "$JARS"/lw/*.jar | grep -v '/lombok' | tr '\n' ':')
 mkdir -p "$WORK/out"
-javac -nowarn -encoding UTF-8 -d "$WORK/out" -cp "$CP" @"$WORK/srcs.txt" 2>&1 | grep -v "^Note:" | tail -40
+# 11차: 저장소가 Lombok(@Getter · @Setter 로 메서드를 만듦 — ARK_PD)을 쓰면 그 jar 를 주석 처리기로 (JARS 에 lombok.jar 가 있어야 함 — gradle 의 compileOnly · annotationProcessor 와 같은 일)
+PROC=""
+if grep -rlq "^import lombok\." core/src/main/java 2>/dev/null; then
+  LB=$(ls "$JARS"/lombok*.jar 2>/dev/null | head -1)
+  [ -z "$LB" ] && { echo "이 저장소는 Lombok 을 씀 — $JARS/lombok.jar 가 필요 (core/build.gradle 의 lombok 판)"; exit 1; }
+  CP="$CP:$LB"; PROC="-processorpath $LB"
+fi
+javac -nowarn -encoding UTF-8 -d "$WORK/out" -cp "$CP" $PROC @"$WORK/srcs.txt" 2>&1 | grep -v "^Note:" | tail -40
 echo BUILD_DONE
