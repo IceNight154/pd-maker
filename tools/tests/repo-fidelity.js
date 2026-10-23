@@ -143,12 +143,26 @@ test('ARK 맵 기본 표시: autoSync 로 원작에 없는 맵이 모두 그래�
   need('ark'); const { P, dir } = await project('ark');
   const nodes0 = P.store.all('node').length, extra = P.repoMaps.list().filter(s => s.extra), want = extra.flatMap(s => s.ids);
   const r = P.repoMaps.autoSync();
-  assert.deepStrictEqual(J(r.added).sort(), J(want).sort(), `원작에 없는 맵 = 그래프 노드 (가져오기 버튼 없이) — 더함 ${r.added.length} · 원함 ${want.length}`);
-  assert.strictEqual(P.store.all('node').length - nodes0, want.length);
+  // 11차(2): ARK 가 원작 보스 층 자리(10 · 15 · 20 · 25)를 다른 클래스로 바꿈 → 손대지 않은 기본 층 노드를 그 층으로 (겹친 노드 없음)
+  assert.deepStrictEqual(J(r.adopted).sort(), ['n10', 'n15', 'n20', 'n25'], '원작 보스 층 노드를 ARK 보스 층으로');
+  assert.ok(['n10', 'n15', 'n20', 'n25'].every(id => { const n = P.store.get('node:' + id); return n.mode === 'game' && /^New\w+BossLevel$/.test(n.gameLevel) && n.src.adopted && n.src.template && n.src.template.mode === 'procedural'; }), '원래 노드는 src.template 에');
+  assert.strictEqual(r.added.length + r.adopted.length, want.length, `원작에 없는 맵 = 그래프 노드 (가져오기 버튼 없이) — 더함 ${r.added.length} · 바꿈 ${r.adopted.length} · 원함 ${want.length}`);
+  assert.strictEqual(P.store.all('node').length - nodes0, r.added.length);
+  const nodeOf = id => P.store.get('node:' + id) || P.store.all('node').find(n => n.src && n.src.slotId === id);
+  const own = want.filter(id => P.store.has('node:' + id));
+  // 시작 자리 = 게임의 Dungeon.init() (깊이 0 · 갈래 2 = 로도스 숙소) · 원본 자리 그대로 · 게임 원본 그대로인 층
+  const W = P.World.compute(P.store.get('world')), ws = P.store.get('world').start;
+  assert.deepStrictEqual([ws, W.depth[ws], W.branch[ws]], ['g_new_rhodes_level2_d0_b2', 0, 2], '시작 노드 = 로도스 숙소 (0 · 2)');
+  assert.strictEqual(P.prov.status(P.store.get('world'), 'start'), 'repo', '시작 노드 출처 = 저장소');
+  for (const [id, d, b] of [['g_new_rhodes_level1_d0_b1', 0, 1], ['g_new_rhodes_level4_d0_b4', 0, 4], ['n10', 10, 0], ['g_gavial_level_d31', 31, 0], ['n1', 1, 0], ['n9', 9, 0]]) assert.deepStrictEqual([W.depth[id], W.branch[id]], [d, b], id + ' 자리');
+  assert.ok(P.repoMaps.isNative(P.store.get('node:g_new_rhodes_level2_d0_b2')) && P.repoMaps.isNative(P.store.get('node:n10')) && !P.repoMaps.isNative(P.store.get('node:n1')), '원본 그대로 = 게임 코드가 만듦 (기본 층 노드는 PDMaker)');
+  assert.ok(P.store.get('world').edges.some(e => e.from === 'g_new_rhodes_level1_d0_b1' && e.to === 'n1' && e.src && e.src.kind === 'repo-transition'), '로도스 1 → 깊이 1 (기본 층 노드) 원본 연결');
+  const V = P.validate(), VI = V.issues || V; assert.ok(!VI.some(i => i.level === 'error' && /node:(g_new_rhodes|n10|n15|n20|n25)/.test(i.open || '')), '게임이 만드는 원본 층에는 PDMaker 타일 · 계단 검사를 하지 않음: ' + JSON.stringify(VI.filter(i => i.level === 'error').slice(0, 2)));
+  assert.strictEqual(P.World.label('g_new_rhodes_level2_d0_b2'), '깊이 0-2', '층 이름 = 게임의 깊이 · 갈래');
   const std = P.repoMaps.plan().represented.filter(x => x.by === 'chain');
   assert.deepStrictEqual(J(std.map(x => x.s.cls)), ['SewerLevel', 'SewerBossLevel', 'PrisonLevel', 'CavesLevel', 'CityLevel', 'HallsLevel', 'LastLevel'], '원작과 같은 층 클래스는 기본 층 노드가 대신 (따로 만들지 않음)');
   // 유형 · 편집 범위 · 근거
-  const N = want.map(id => P.store.get('node:' + id));
+  const N = want.map(nodeOf);
   assert.ok(N.every(n => n.src.mapTypes && n.src.mapTypes.length && n.src.editable && n.src.evidence.some(e => e.kind === 'Dungeon.newLevel()' && /Dungeon\.java$/.test(e.file) && e.line > 0)), '유형 · 편집 범위 · 근거');
   const t = {}; N.forEach(n => n.src.mapTypes.forEach(x => { t[x] = (t[x] || 0) + 1; }));
   assert.ok(t.fixed >= 4 && t.conditional >= 12, JSON.stringify(t));
@@ -157,18 +171,18 @@ test('ARK 맵 기본 표시: autoSync 로 원작에 없는 맵이 모두 그래�
   const w = P.store.get('world'), E = w.edges.filter(e => want.includes(e.from) || want.includes(e.to));
   assert.ok(E.length && E.every(e => e.src && ((e.src.kind === 'repo-transition' && e.src.file && e.src.line) || (e.src.kind === 'derived' && e.label === '추정'))), '근거 없는 연결 없음');
   // 다시 해도 0 · 중복 없음
-  const r2 = P.repoMaps.autoSync(); assert.strictEqual(r2.added.length, 0); assert.strictEqual(new Set(P.store.get('world').nodes.map(n => n.id)).size, P.store.get('world').nodes.length, '그래프 노드 id 중복 없음');
+  const r2 = P.repoMaps.autoSync(); assert.strictEqual(r2.added.length + (r2.adopted || []).length, 0); assert.strictEqual(new Set(P.store.get('world').nodes.map(n => n.id)).size, P.store.get('world').nodes.length, '그래프 노드 id 중복 없음');
   // 사용자가 같은 클래스를 쓰는 노드를 따로 만들었으면 겹쳐 만들지 않음 · 사용자가 지운 저장소 맵은 다시 넣지 않음
-  const gone = want[0]; P.store.remove('node:' + gone); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== gone); ww.edges = ww.edges.filter(e => e.from !== gone && e.to !== gone); });
+  const gone = own[0]; P.store.remove('node:' + gone); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== gone); ww.edges = ww.edges.filter(e => e.from !== gone && e.to !== gone); });
   const r3 = P.repoMaps.autoSync(); assert.strictEqual(r3.added.length, 0, '지운 맵을 다시 넣지 않음'); assert.ok(P.repoMaps.plan().dismissed.some(x => x.id === gone));
   // 사용자 편집 보존: 타일을 고친 고정 맵은 사라져도 "고침" 표시 · 확인 없이는 지우지 않음
   const hand = N.find(n => n.mode === 'handmade' && n.id !== gone); P.store.edit('node:' + hand.id, 't', n => { n.layers.terrain[0] = n.layers.terrain[0] === 1 ? 7 : 1; });
-  const keep = P.store.get('node:' + hand.id), fake = 'g_zz_gone'; P.store.add('node:' + fake, Object.assign(J(keep), { id: fake, src: Object.assign(J(keep.src), { cls: 'GoneLevel' }) }), 't');
+  const keep = P.store.get('node:' + hand.id), fake = 'g_zz_gone'; P.store.add('node:' + fake, Object.assign(J(keep), { id: fake, src: Object.assign(J(keep.src), { cls: 'GoneLevel', slotId: fake }) }), 't');
   const pl = P.repoMaps.plan(); assert.deepStrictEqual(J(pl.missing.map(m => m.id)), [fake], '저장소에 없는 노드 목록'); assert.ok(pl.missing[0].touched, '고친 타일 표시');
   P.repoMaps.autoSync(); assert.ok(P.store.has('node:' + fake), 'autoSync 는 지우지 않음');
-  const rr = P.repoMaps.sync({ remove: [fake, want[1]] }); assert.deepStrictEqual(J(rr.removed), [fake], '확인한 것 중 "저장소에 없는" 것만 지움'); assert.ok(P.store.has('node:' + want[1]));
+  const rr = P.repoMaps.sync({ remove: [fake, own[1]] }); assert.deepStrictEqual(J(rr.removed), [fake], '확인한 것 중 "저장소에 없는" 것만 지움'); assert.ok(P.store.has('node:' + own[1]));
   // 실패하면 되돌림: 중간에 오류 → 노드 · 그래프 그대로
-  P.store.remove('node:' + want[2]); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== want[2]); ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen = ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen.filter(x => x !== want[2]); });
+  P.store.remove('node:' + own[2]); P.store.edit('world', 't', ww => { ww.nodes = ww.nodes.filter(n => n.id !== own[2]); ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen = ww.repoMaps[P.REPO_ANALYSIS.profile.id].seen.filter(x => x !== own[2]); });
   const wb = JSON.stringify(P.store.get('world')), kb = P.store.keys().slice().sort(), ed = P.store.edit;
   let n = 0; P.store.edit = function (k, ...a) { if (k === 'world' && ++n === 2) throw new Error('일부러 실패'); return ed.call(this, k, ...a); };
   assert.throws(() => P.repoMaps.sync({}), /되돌렸습니다/); P.store.edit = ed;
@@ -177,6 +191,23 @@ test('ARK 맵 기본 표시: autoSync 로 원작에 없는 맵이 모두 그래�
   const save = P.REPO_ANALYSIS; P.REPO_ANALYSIS = null; assert.strictEqual(P.repoMaps.autoSync(), null); P.REPO_ANALYSIS = save;
   await P.store.save(); const re = await project(null, { dir }); assert.ok(re.P.store.get('world').repoMaps, '기록이 저장됨');
   return `노드 ${want.length} · 유형 ${JSON.stringify(t)} · 원작 층 ${std.length}개는 기본 노드가 대신 · 연결 ${E.length}`;
+});
+
+test('ARK 시작 자리 · 보스 층: 사용자가 고친 기본 층 노드는 바꾸지 않고 따로 · 사용자가 정한 시작 노드는 그대로 · 층이 밀린 기본 노드는 바꾸지 않음', async () => {
+  need('ark'); const { P } = await project('ark');
+  P.store.edit('node:n10', '사용자', n => { n.name = '내 보스 층'; });
+  // 사용자가 만든 시작 마을 → 하수도 1층 (기본 층이 한 칸씩 밀림)
+  P.store.add('node:mytown', P.make.node('mytown', 'procedural', { name: '내 마을' }), '사용자');
+  P.store.edit('world', '사용자', w => { w.nodes.push({ id: 'mytown', group: w.nodes[0].group, x: 0, y: 0 }); w.edges.push({ id: 'eu1', from: 'mytown', to: 'n1', kind: 'main', cond: '', weight: 100, label: '' }); w.start = 'mytown'; });
+  const r = P.repoMaps.autoSync();
+  assert.ok(!J(r.adopted).includes('n10') && P.store.get('node:n10').mode === 'procedural' && P.store.get('node:n10').name === '내 보스 층', '고친 n10 은 그대로');
+  assert.deepStrictEqual(J(r.adopted), [], '층이 밀린 기본 노드는 바꾸지 않음 (깊이만 같은 다른 층을 보스로 만들지 않음)');
+  assert.ok(P.store.has('node:g_new_prison_boss_level_d10'), '그 대신 저장소 층 노드를 따로');
+  const W = P.World.compute(P.store.get('world'));
+  assert.deepStrictEqual([W.depth.g_new_prison_boss_level_d10, W.branch.g_new_prison_boss_level_d10], [10, 0], '저장소 층은 원본 자리 (10 · 0)');
+  assert.ok(W.depth.n10 === 11 && W.branch.n9 !== 0, `사용자 그래프의 기본 노드는 연결대로 · 원본 자리와 겹치지 않음 (n9 ${W.depth.n9}/${W.branch.n9} · n10 ${W.depth.n10}/${W.branch.n10})`);
+  assert.strictEqual(P.store.get('world').start, 'mytown', '사용자가 정한 시작 노드 그대로'); assert.ok(['keep-user', 'conflict'].includes(r.start), r.start);
+  return `시작 ${r.start} · n9 ${W.depth.n9}/${W.branch.n9} · 저장소 10층 노드 따로`;
 });
 
 test('기준 저장소 맵 회귀: 원작 층 클래스만 (추가 맵 0) · 새 프로젝트 맵 그래프는 그대로 (기본으로 넣을 추가 맵이 없음)', async () => {

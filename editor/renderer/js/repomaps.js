@@ -19,9 +19,24 @@
   const nodeIds = (s, i) => { const ds = s.depth.length ? s.depth : [null]; return ds.map(d => 'g_' + slug(s.cls) + (d == null ? '' : '_d' + d) + (s.branch ? '_b' + s.branch : '') + (dupIdx(s, i) ? '_' + dupIdx(s, i) : '')); };
   /** 같은 클래스 · 같은 깊이가 조건만 다르게 여러 번 나올 때 구분 */
   const dupIdx = (s, i) => { const M = maps(); if (!M) return 0; const same = M.slots.filter((x, k) => k < i && !x.fallback && x.cls === s.cls && JSON.stringify(x.depth) === JSON.stringify(s.depth) && x.branch === s.branch); return same.length; };
+  /** 예전(10차)에 가져온 고정 맵: 지금 분석의 타일과 같으면 손대지 않은 것 */
+  const sameTiles = (s, n) => { const l = level(s); return !!(l && l.layout && l.layout.tiles && n.layers && JSON.stringify(n.layers.terrain) === JSON.stringify(l.layout.tiles)); };
+  /** 게임 원본 그대로인 층 노드 (런타임 WorldGraph.nativeGame 과 같은 규칙) — 게임 코드가 그 층 · 계단을 만듦 */
+  function isNative(n) {
+    if (!n || !PDM.World.originOf(n)) return false;
+    if (n.mode === 'game') return true;
+    return n.mode === 'handmade' && !!n.src.tilesHash && !(n.objects || []).length && !n.onEnter && thash((n.layers || {}).terrain || []) === n.src.tilesHash;
+  }
   /** 타일 배열 지문 (가져온 뒤 사용자가 고쳤는지) */
   const thash = a => { let x = 2166136261; for (const v of a) { x ^= v & 0xffff; x = Math.imul(x, 16777619) >>> 0; } return a.length + ':' + x.toString(16); };
-  const imported = id => PDM.store && PDM.store.has('node:' + id);
+  /** 슬롯 노드 id → 그 슬롯을 맡은 노드 (원작 층 노드를 바꿔 맡은 경우 그 노드) */
+  const slotNode = id => PDM.store ? PDM.store.all('node').find(n => n.src && n.src.slotId === id && n.id !== id) || null : null;
+  /** 손대지 않은 기본(새 프로젝트) 층 노드인가 — 키 순서와 상관없이 같은 값 */
+  const deq = (a, b) => { if (a === b) return true; if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false; const ka = Object.keys(a).filter(k => a[k] !== undefined), kb = Object.keys(b).filter(k => b[k] !== undefined); return ka.length === kb.length && ka.every(k => deq(a[k], b[k])); };
+  let DW = null, DWC = null; const tplNode = id => { DW = DW || PDM.World.defaultWorld(); return DW.data[id] || null; };
+  const WD = () => { DW = DW || PDM.World.defaultWorld(); return DWC || (DWC = PDM.World.compute(DW.world, id => DW.data[id])); };
+  const untouchedTemplate = n => { const t = n && tplNode(n.id); if (!t || (n.src && n.src.kind)) return false; const strip = o => { const c = JSON.parse(JSON.stringify(o)); delete c.format; delete c.version; return c; }; return deq(strip(n), strip(t)); };
+  const imported = id => PDM.store && (PDM.store.has('node:' + id) || !!slotNode(id));
   const level = s => (maps().levels || {})[s.cls] || null;
   /** PDMaker 지형 표에 없는 값 → { 값: 저장소 상수 이름 } */
   function unknownTerrain(tiles) {
@@ -54,7 +69,7 @@
   /** 슬롯들 가져오기 (이미 있는 노드는 건너뜀) → 만든 노드 id 들. 1) 노드 데이터 2) 그래프(그룹 · 노드 자리 · 연결) 3) 노드마다 연결 기록 */
   function importSlots(slots, o) {
     o = o || {}; const store = PDM.store, P = prof(), M = maps(); if (!M) return [];
-    const made = [], gid = 'repo_' + P.id;
+    const made = [], gid = 'repo_' + P.id, adopted = {};
     store.transaction('게임 저장소 맵 가져오기', () => {
       const w0 = store.get('world') || { nodes: [] }, baseY = Math.max(0, ...(w0.nodes || []).filter(n => n.group !== gid).map(n => n.y)) + 320;
       const place = [];
@@ -62,7 +77,7 @@
       for (const s of slots) {
         const l = level(s), how = howOf(s);
         nodeIds(s, s.i).forEach((id, k) => {
-          if (store.has('node:' + id)) return;
+          if (store.has('node:' + id) || slotNode(id)) return;
           const d = s.depth[k] != null ? s.depth[k] : null;
           const src = Object.assign({ kind: 'repo-level', profile: P.id, repo: P.label, cls: s.cls, file: l ? l.file : '', line: l ? l.line : 0, slotLine: s.line, generator: l ? l.generator : 'unknown', depths: s.depth.slice(), depth: d, branch: s.branch, conds: s.conds.slice(), boss: !!s.boss, links: [] }, facts(s));
           let nd;
@@ -77,14 +92,24 @@
             nd.mode = 'game'; nd.gameLevel = s.cls; delete nd.size; nd.layers = { terrain: [] };
             src.notes = [l && l.generator === 'fixed-partial' ? `고정 맵이지만 build() 의 ${l.layout.unresolved.length}개 문장을 해석하지 못해 타일을 확정하지 않음 — 게임이 만듦` : l && l.generator === 'code' ? 'build() 가 코드로 지도를 만듦 — 게임이 만듦' : '절차 생성 — 게임의 생성기가 만듦'];
           }
+          src.slotId = id;
+          const tid = (o.adopt || {})[id];
+          if (tid && store.has('node:' + tid)) {
+            // 11차: 원작 층 노드(손대지 않은 기본 노드)와 같은 자리를 이 저장소가 다른 층 클래스로 바꿈 (예: ARK 10층 NewPrisonBossLevel) → 그 노드를 이 층으로 (겹친 노드를 만들지 않음 · 원래 노드는 src.template 에)
+            store.edit('node:' + tid, '원작 층 노드 → 게임 저장소의 층', n => { const tpl = JSON.parse(JSON.stringify(n)); Object.keys(n).forEach(key => delete n[key]); Object.assign(n, nd, { id: tid, name: tpl.name || nd.name, label: tpl.label || '' }); n.src = Object.assign(src, { adopted: true, template: tpl }); });
+            adopted[id] = tid; made.push(tid); return;
+          }
           nd.src = src;
           store.add('node:' + id, nd, '게임 저장소 맵');
           made.push(id); place.push({ id, d, branch: s.branch || 0, dup: dupIdx(s, s.i), cls: s.cls });
         });
       }
       // 2) 그래프: 그룹 · 노드 자리 · 연결
-      const all = list().filter(s => s.ids.some(id => store.has('node:' + id)));
-      const nodeAt = (depth, branch) => { for (const s of all) { const k = s.depth.indexOf(depth); if (k >= 0 && s.branch === branch) return s.ids[k]; } return null; };
+      const real = id => adopted[id] || (store.has('node:' + id) ? id : (slotNode(id) || {}).id || id);
+      const all = list().filter(s => s.ids.some(id => store.has('node:' + real(id))));
+      // 원작과 같은 층(기본 층 노드가 대신하는 것)은 지금 그래프에서 그 깊이 · 갈래에 있는 노드로 (예: ARK 로도스 1 → 깊이 1 = 하수도 1층 노드)
+      const W0 = PDM.World.compute(store.get('world')), chainAt = (d, b) => Object.keys(W0.depth).find(id => W0.depth[id] === d && W0.branch[id] === b && !((store.get('node:' + id) || {}).src || {}).kind) || null;
+      const nodeAt = (depth, branch) => { for (const s of all) { const k = s.depth.indexOf(depth); if (k >= 0 && s.branch === branch) return real(s.ids[k]); } return chainAt(depth, branch); };
       const linksOf = {};
       store.edit('world', '저장소 맵 그래프', w => {
         w.groups = w.groups || []; w.nodes = w.nodes || []; w.edges = w.edges || [];
@@ -94,7 +119,8 @@
           w.nodes.push({ id: p.id, group: gid, x: 40 + col * 200, y: baseY + row * 150 + (used[k] - 1) * 40, src: { kind: 'repo-level', cls: p.cls } }); });
         const have = (a, b) => w.edges.some(e => e.from === a && e.to === b);
         let eid = 1; const nextId = () => { while (w.edges.some(e => e.id === 'ge' + eid)) eid++; return 'ge' + eid++; };
-        for (const s of all) s.ids.forEach((id, k) => {
+        for (const s of all) s.ids.forEach((slotId, k) => {
+          const id = real(slotId);
           if (!made.includes(id) && !o.relink) return;
           const links = linksOf[id] = [];
           (s.level ? s.level.transitions : []).forEach(t => {
@@ -104,7 +130,7 @@
           });
           const d = s.depth[k];
           if (typeof d === 'number') { const nx = all.find(q => q.branch === s.branch && q.depth.includes(d + 1) && (JSON.stringify(q.conds) === JSON.stringify(s.conds) || !q.conds.length || !s.conds.length));
-            const to = nx ? nx.ids[nx.depth.indexOf(d + 1)] : null;
+            const to = nx ? real(nx.ids[nx.depth.indexOf(d + 1)]) : null;
             if (to && store.has('node:' + to) && !have(id, to) && !links.some(x => x.to === to)) { w.edges.push({ id: nextId(), from: id, to, kind: 'main', cond: '', weight: 100, label: '추정', src: { kind: 'derived', note: 'Dungeon.newLevel() 의 깊이 순서 — 계단 위치 · 조건은 게임 코드' } }); links.push({ type: 'depth-order', status: 'derived', to }); } }
         });
       });
@@ -121,21 +147,30 @@
   function plan() {
     const M = maps(), store = PDM.store; if (!M || !store || !store.isOpen) return null;
     const P = prof(), w = store.get('world') || {}, seen = new Set(((w.repoMaps || {})[P.id] || {}).seen || []);
-    const nodes = store.all('node'), out = { profile: P, add: [], represented: [], dismissed: [], present: [], upgrade: [], missing: [] };
+    const nodes = store.all('node'), out = { profile: P, add: [], represented: [], dismissed: [], present: [], upgrade: [], missing: [] }, W = PDM.World.compute(w);
     const want = new Set();
     for (const s of list()) {
       if (!s.extra) { out.represented.push({ s, by: 'chain', note: '원작과 같은 층 클래스 — 프로젝트의 기본 층 노드가 이 층' }); continue; }
       s.ids.forEach((id, k) => {
         want.add(id);
         const d = s.depth[k] != null ? s.depth[k] : null;
-        if (store.has('node:' + id)) { out.present.push({ s, id }); const n = store.get('node:' + id); if (!n.src || !n.src.mapTypes) out.upgrade.push({ s, id }); return; }
+        const sn = !store.has('node:' + id) && slotNode(id); if (sn) { out.present.push({ s, id, adopted: sn.id }); return; }
+        if (store.has('node:' + id)) { out.present.push({ s, id }); const n = store.get('node:' + id); if (!n.src || !n.src.mapTypes || (n.mode === 'handmade' && !n.src.tilesHash && sameTiles(s, n))) out.upgrade.push({ s, id }); return; }
         const same = nodes.find(n => n.id !== id && n.gameLevel === s.cls && (!(n.depth > 0) || d == null || n.depth === d));
         if (same) { out.represented.push({ s, id, by: same.id, note: `같은 층 클래스를 쓰는 노드 ${same.id} 가 있음 — 겹쳐 만들지 않음` }); return; }
         if (seen.has(id)) { out.dismissed.push({ s, id }); return; }
-        out.add.push({ s, id });
+        // 원작 층 노드가 같은 자리(깊이 · 갈래)에 있고 손대지 않은 기본 노드면 그 노드를 이 층으로 바꿈 (조건 없는 슬롯만 — 예: ARK 보스 층 교체)
+        // (기본 노드의 원래 자리 = 새 프로젝트 그래프에서의 자리도 같아야 함 — 사용자가 시작 노드를 바꿔 층이 밀렸으면 바꾸지 않음)
+        const tid = d != null && !s.conds.length ? Object.keys(W.depth).find(x => W.depth[x] === d && W.branch[x] === s.branch && WD().depth[x] === d && WD().branch[x] === s.branch && untouchedTemplate(store.get('node:' + x))) : null;
+        out.add.push(tid ? { s, id, adopt: tid } : { s, id });
       });
     }
-    for (const n of nodes) if (n.src && n.src.kind === 'repo-level' && n.src.profile === P.id && !want.has(n.id)) out.missing.push({ id: n.id, cls: n.src.cls, touched: n.mode === 'handmade' && !!n.src.tilesHash && thash((n.layers || {}).terrain || []) !== n.src.tilesHash });
+    const S = M.start;
+    if (S) { const sl = list().find(s => s.extra && s.depth.includes(S.depth) && s.branch === S.branch && !s.conds.length);
+      const sid = sl ? sl.ids[sl.depth.indexOf(S.depth)] : null, ad = sid && out.add.find(x => x.id === sid && x.adopt), sn = sid && !store.has('node:' + sid) && slotNode(sid);
+      const id = ad ? ad.adopt : sn ? sn.id : sid, rec = w.src && w.src.fields && w.src.fields.start;
+      out.start = Object.assign({}, S, { id, slot: sl ? sl.cls : null, need: !!id && (w.start !== id || !rec) }); }
+    for (const n of nodes) if (n.src && n.src.kind === 'repo-level' && n.src.profile === P.id && !want.has(n.src.slotId || n.id)) out.missing.push({ id: n.id, cls: n.src.cls, touched: n.mode === 'handmade' && !!n.src.tilesHash && thash((n.layers || {}).terrain || []) !== n.src.tilesHash });
     return out;
   }
   /** 계획 적용 — 한 번에 (중간에 실패하면 전부 되돌림 → 프로젝트는 그대로). opts.remove = 지울 노드 id (사용자가 확인한 것만) */
@@ -144,13 +179,16 @@
     const P = pl.profile, res = { added: [], upgraded: 0, removed: [], missing: pl.missing.length, represented: pl.represented.length, dismissed: pl.dismissed.length };
     const slots = []; pl.add.forEach(a => { if (!slots.includes(a.s)) slots.push(a.s); });
     const removeIds = (opts.remove || []).filter(id => pl.missing.some(m => m.id === id));
-    if (!slots.length && !pl.upgrade.length && !removeIds.length) return res;
+    if (!slots.length && !pl.upgrade.length && !removeIds.length && !(pl.start && pl.start.id && pl.start.need)) return res;
     const before = JSON.stringify(store.get('world') || null), had = new Set(store.keys());
     const snap = {}; [...pl.upgrade.map(u => u.id), ...removeIds].forEach(id => { if (store.has('node:' + id)) snap[id] = JSON.stringify(store.get('node:' + id)); });
     try {
       store.transaction('게임 저장소 맵을 맵 그래프에', () => {
-        if (slots.length) res.added = importSlots(slots).filter(id => pl.add.some(a => a.id === id));
-        pl.upgrade.forEach(u => { if (store.edit('node:' + u.id, '맵 유형 · 근거', n => { n.src = Object.assign(n.src || {}, facts(u.s)); })) res.upgraded++; });
+        const adopt = {}; pl.add.forEach(a => { if (a.adopt) adopt[a.id] = a.adopt; });
+        if (slots.length) { const m = importSlots(slots, { adopt }); res.added = m.filter(id => pl.add.some(a => a.id === id && !a.adopt)); res.adopted = m.filter(id => Object.values(adopt).includes(id)); }
+        pl.upgrade.forEach(u => { if (store.edit('node:' + u.id, '맵 유형 · 근거', n => { n.src = Object.assign(n.src || {}, facts(u.s)); if (n.mode === 'handmade' && !n.src.tilesHash && sameTiles(u.s, n)) n.src.tilesHash = thash(n.layers.terrain); })) res.upgraded++; });
+        // 11차: 새 게임 시작 자리 = 게임의 Dungeon.init() (ARK: 깊이 0 · 갈래 2 = 로도스 숙소). 원작 1층처럼 기본 층 노드가 대신하는 자리면 그대로 둠
+        if (pl.start && pl.start.id) store.edit('world', '시작 노드 = 게임의 시작 자리', w => { const r = PDM.prov.sync(w, 'start', { value: pl.start.id, from: 'repo', file: pl.start.file, line: pl.start.line, note: pl.start.evidence }, { legacyDefault: cur => cur === 'n1' && store.has('node:n1') && !(store.get('node:n1').src || {}).kind }); res.start = r.action; });
         removeIds.forEach(id => { store.remove('node:' + id, '저장소에 없는 맵 지움'); res.removed.push(id); });
         store.edit('world', '저장소 맵 기록', w => {
           if (removeIds.length) { w.nodes = (w.nodes || []).filter(n => !removeIds.includes(n.id)); w.edges = (w.edges || []).filter(e => !removeIds.includes(e.from) && !removeIds.includes(e.to)); }
@@ -170,7 +208,7 @@
   /** 프로젝트를 열 때 · 저장소를 바꿀 때 (분석이 성공했을 때만) — 더하기만, 지우지 않음 */
   function autoSync() {
     if (!maps()) return null;
-    try { const r = sync({}); if (r && (r.added.length || r.upgraded)) PDM.log(`게임 저장소의 맵을 맵 그래프에 넣었습니다 — 새 노드 ${r.added.length}` + (r.upgraded ? ` · 유형/근거 기록 ${r.upgraded}` : '') + (r.missing ? ` · 저장소에 없는 노드 ${r.missing} (지우지 않음 — 리소스 › 게임 저장소의 맵에서 확인)` : ''), 'ok');
+    try { const r = sync({}); if (r && (r.added.length || (r.adopted || []).length || r.upgraded || r.start === 'set')) PDM.log(`게임 저장소의 맵을 맵 그래프에 넣었습니다 — 새 노드 ${r.added.length}` + ((r.adopted || []).length ? ` · 원작 층 노드를 이 저장소의 층으로 ${r.adopted.length} (${r.adopted.join(', ')})` : '') + (r.upgraded ? ` · 유형/근거 기록 ${r.upgraded}` : '') + (r.start === 'set' ? ` · 시작 노드 = 게임의 시작 자리 (${(PDM.store.get('world') || {}).start})` : r.start === 'keep-user' || r.start === 'conflict' ? ' · 시작 노드는 사용자가 정한 것 그대로 (게임의 시작 자리와 다름)' : '') + (r.missing ? ` · 저장소에 없는 노드 ${r.missing} (지우지 않음 — 리소스 › 게임 저장소의 맵에서 확인)` : ''), 'ok');
       else if (r && r.missing) PDM.log(`이 게임 저장소에 없는 맵 노드 ${r.missing}개 — 지우지 않았습니다 (리소스 › 게임 저장소의 맵 › 저장소에 없는 맵)`, 'warn');
       return r; } catch (e) { PDM.log(String(e.message || e), 'err'); return null; }
   }
@@ -232,7 +270,8 @@
       other ? h('div', { class: 'box c-warn mb-5' }, `이 노드는 다른 게임 저장소(${src.repo || src.profile})에서 가져왔습니다. 지금 저장소에 ${src.cls} 가 ${L ? '있습니다' : '없습니다 — 게임에서는 테마 기본 생성기로 대신 만듦'}.`) : null,
       section('원본',
         h('div', { class: 'kv' }, ...[['클래스', src.cls], ['원본 파일', src.file ? `${src.file}:${src.line}` : '-'], ['만드는 방식', GEN[src.generator] || src.generator], ['원본 깊이 · 갈래', `${(src.depths || []).join(', ') || '-'} · ${src.branch}`],
-          ['조건', (src.conds || []).length ? src.conds.join(' 그리고 ') : '없음'], ['맵 유형', (src.mapTypes || []).map(t => TYPE_LABEL[t] || t).join(' · ') || '(기록 없음)'], ['편집', src.editableNote || '-'], ['가져온 저장소', `${src.repo || ''} (프로파일 ${src.profile || '?'})`]].flatMap(([k, v]) => [h('b', {}, k), h('span', { class: 'mono', style: { userSelect: 'text' } }, v)])),
+          ['조건', (src.conds || []).length ? src.conds.join(' 그리고 ') : '없음'], ['맵 유형', (src.mapTypes || []).map(t => TYPE_LABEL[t] || t).join(' · ') || '(기록 없음)'], ['편집', src.editableNote || '-'],
+          ['게임에서', isNative(nd) ? `원본 그대로 — 게임 코드가 깊이 ${src.depth} · 갈래 ${src.branch} 에 이 층을 만들고 계단도 원본 그대로` : PDM.World.originOf(nd) ? 'PDMaker 가 만듦 (타일 · 오브젝트 · 이벤트를 고침) — 원본 자리 그대로' : 'PDMaker 가 만듦 (깊이를 바꿈 — 그래프 연결로 자리 계산)'], ['가져온 저장소', `${src.repo || ''} (프로파일 ${src.profile || '?'})`]].flatMap(([k, v]) => [h('b', {}, k), h('span', { class: 'mono', style: { userSelect: 'text' } }, v)])),
         ...(src.notes || []).map(n => h('div', { class: 'ra-note' }, n)),
         ...(src.evidence || []).map(e => h('div', { class: 'ra-note mono' }, `근거 · ${e.kind} — ${e.file}:${e.line} — ${e.text}`))),
       section('PDMaker 설정', PDM.ui.row(F.text(key, ['name'], { label: '이름 (편집기 · 맵 그래프)' }), F.num(key, ['depth'], { label: '깊이 고정 (0 = 연결로 계산)', int: true, min: 0, max: 99 }), F.bool(key, ['boss'], { label: '보스 층 (표시용)' }))),
@@ -241,5 +280,5 @@
           : [h('div', { class: 'ra-note' }, '적힌 연결이 없습니다 — 게임 기본 계단')])));
   }
 
-  PDM.repoMaps = { list, importSlots, details, treeItem, nodePage, GEN, howOf, plan, sync, autoSync, confirmMissing, facts, TYPE_LABEL };
+  PDM.repoMaps = { list, importSlots, details, treeItem, nodePage, GEN, howOf, plan, sync, autoSync, confirmMissing, facts, TYPE_LABEL, isNative, thash };
 })();

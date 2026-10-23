@@ -79,6 +79,23 @@ public class Hooks {
 					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.watabou.noosa.Image && g.visible) { com.watabou.noosa.Image im = (com.watabou.noosa.Image) g; if (im.texture == null) continue;
 						sb.append(String.format(" | %s %.1fx%.1f s%.2f t%dx%d uv%.4f,%.4f,%.4f,%.4f", im.getClass().getSimpleName(), im.width, im.height, im.scale.x, im.texture.width, im.texture.height, im.frame().left, im.frame().top, im.frame().right, im.frame().bottom)); }
 					System.out.println(sb); break; }
+				case "worldmap": { // 11차: 런타임 맵 그래프 — 노드마다 깊이/갈래 (+ * = 게임 원본 그대로) · 편집기 World.compute 와 비교용
+					java.util.List<String> l = new java.util.ArrayList<>();
+					for (String id : com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.data.keySet()) { int[] w = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.whereOf(id); if (w != null) l.add(id + "@" + w[0] + "/" + w[1] + (com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.nativeGame(id) ? "*" : "")); }
+					java.util.Collections.sort(l); String st = "?"; try { java.lang.reflect.Field sf = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.class.getDeclaredField("start"); sf.setAccessible(true); st = String.valueOf(sf.get(null)); } catch (Exception ignored) { }
+					System.out.println("[TEST] worldmap start=" + st + " " + String.join(" ", l)); break; }
+				case "take": { // take,<번호> — 지금 층의 계단(LevelTransition) 하나를 게임 방식으로 탐 (where 의 순서)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level L = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t = L.transitions.get(Integer.parseInt(p[1]));
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos = t.cell();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.takeTransition(L, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, t);
+					System.out.println("[TEST] take " + t.type + " -> " + t.destDepth + "/" + t.destBranch); break; }
+				case "where": { // 11차: 지금 층 — 깊이 · 갈래 · 층 클래스 · 영웅 칸 · 맵 그래프 노드 · 계단 목적지
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level L = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					StringBuilder sb = new StringBuilder();
+					for (com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t : L.transitions) sb.append(" ").append(t.type).append("@").append(t.cell()).append("->").append(t.destDepth).append("/").append(t.destBranch);
+					System.out.println("[TEST] where depth=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth + " branch=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.branch + " level=" + L.getClass().getSimpleName() + " pos=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + " node=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.current() + " transitions:" + sb);
+					break; }
 				case "herosprite": { // 11차: 게임 중 영웅 그림 — 텍스처 · 지금 프레임(픽셀) · 그려지는 크기 · 칸(16px) 대비 · 게임 코드가 그리는지
 					com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite cs = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite;
 					com.watabou.utils.RectF f = cs.frame(); float tw = cs.texture.width, th = cs.texture.height;

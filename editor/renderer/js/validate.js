@@ -101,7 +101,8 @@ PDM.validate = function () {
   function terrainCheck(f, where, k) {
     const t = (f.layers || {}).terrain; if (!Array.isArray(t)) return;
     const bad = {}; t.forEach((v, i) => { if (v !== -1 && !PDM.TERRAIN_BY_ID[v]) (bad[v] = bad[v] || []).push(i); });
-    Object.entries(bad).forEach(([v, cells]) => add('error', where, `알 수 없는 지형 번호 ${v} — ${cells.length}칸`, k,
+    const repoT = (f.src && f.src.unknownTerrain) || {};   // 11차: 게임 저장소에서 옮긴 그 저장소만의 지형 값 (예: ARK AVOID = 32) — 게임은 알지만 PDMaker 표에 없음
+    Object.entries(bad).forEach(([v, cells]) => repoT[v] ? add('warn', where, `이 게임 저장소만의 지형 ${repoT[v]} (${v}) — ${cells.length}칸 · PDMaker 편집기에서는 그릴 수 없지만 게임에서는 원본대로`, k, { kind: '저장소 지형', path: 'layers.terrain' }) : add('error', where, `알 수 없는 지형 번호 ${v} — ${cells.length}칸`, k,
       { kind: '잘못된 타일 번호', path: 'layers.terrain', cell: { x: cells[0] % f.size.w, y: Math.floor(cells[0] / f.size.w) }, fix: '그 칸을 다른 타일로 다시 칠하세요 (예전 형식 · 손으로 고친 파일?)' }));
   }
 
@@ -131,6 +132,9 @@ PDM.validate = function () {
     if (f.entranceTo && !nodeIds.has(f.entranceTo)) add('error', where, `입구 목적지 "${f.entranceTo}" 없음`, k);
     const outs = (wd.edges || []).filter(e => e.from === n.id);
     const mains = outs.filter(e => (e.kind || 'main') === 'main');
+    // 11차: 게임 저장소의 층을 원본 그대로 둔 노드 — 게임 코드가 층 · 계단 · 지형을 만듦 → 타일 · 계단 · 연결 검사는 해당 없음
+    const native = !!(PDM.repoMaps && PDM.repoMaps.isNative && PDM.repoMaps.isNative(f));
+    if (native) { starts += objCheck(f, where, k, false); return; }
     if (f.mode === 'handmade') {
       const t = (f.layers || {}).terrain || [];
       if (t.length !== f.size.w * f.size.h) add('error', where, '타일 수가 크기와 맞지 않습니다', k);

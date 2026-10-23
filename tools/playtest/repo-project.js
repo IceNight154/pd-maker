@@ -18,5 +18,7 @@ const env = require(path.join(__dirname, '..', 'tests', 'editor-env.js'));
   P.store.edit('project', '게임 저장소', p => { p.gameRepo = path.resolve(repo); });
   await P.store.save();
   const heroes = P.store.all('hero').map(h => ({ id: h.id, name: h.name, sheet: (h.sprite || {}).sheet, frame: (h.sprite || {}).frame, rowH: (h.sprite || {}).rowH, scale: (h.sprite || {}).scale, iconTier: (h.select || {}).iconTier, anims: Object.keys((h.sprite || {}).anims || {}).join(','), idle: (((h.sprite || {}).anims || {}).idle || {}).frames }));
-  console.log(JSON.stringify({ dir, heroes }, null, 0));
+  const W = P.World.compute(P.store.get('world')), w = P.store.get('world');
+  const at = id => `${id}@${W.depth[id]}/${W.branch[id]}${P.repoMaps && P.repoMaps.isNative(P.store.get('node:' + id)) ? '*' : ''}`;
+  console.log(JSON.stringify({ dir, heroes, start: at(w.start), nodes: w.nodes.slice(0, 40).map(n => at(n.id)), all: w.nodes.map(n => at(n.id)).sort() }, null, 0));
 })().catch(e => { console.error(e); process.exit(1); });
