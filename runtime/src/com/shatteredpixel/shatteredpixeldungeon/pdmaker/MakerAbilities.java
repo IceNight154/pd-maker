@@ -171,7 +171,11 @@ public class MakerAbilities {
 		Hero hero = Dungeon.hero; if (hero == null) return;
 		if (hero.armorAbility != null) { GLog.w("이미 직업 능력이 있다."); return; }
 		if (hero.belongings.armor() == null) { GLog.w("갑옷을 입고 있어야 한다."); return; }
+//#if re:windows.WndChooseAbility#WndChooseAbility\(\s*(?:final\s+)?KingsCrown\s+\w+\s*,\s*(?:final\s+)?Armor\s+\w+\s*,\s*(?:final\s+)?Hero\b @ 직업 능력 고르기 창 (영웅을 받는 판)
 		com.watabou.noosa.Game.runOnRenderThread(() -> GameScene.show(new WndChooseAbility(new KingsCrown(), hero.belongings.armor(), hero)));
+//#else
+		//#| com.watabou.noosa.Game.runOnRenderThread(() -> GameScene.show(new WndChooseAbility(new KingsCrown(), hero.belongings.armor())));   // RKPD2 · Rat King Adventure: (왕관, 갑옷)
+//#endif
 	}
 
 	/** 데이터로 정의한 ArmorAbility */

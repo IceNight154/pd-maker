@@ -3,12 +3,16 @@
 `runtime/src/.../pdmaker/` 패키지를 게임 저장소(기준: `pd-maker/game/shattered-pixel-dungeon-master`, SPD 4.0.0)에 넣고,
 원본 코드 36개 파일에 **연결 줄 84개를 추가**하면 에디터에서 만든 프로젝트가 게임에 반영됩니다 (서비스 모듈은 파일이 있을 때만).
 
-**지원하는 게임 저장소**: Shattered Pixel Dungeon 계열 — 패키지 `com.shatteredpixel.shatteredpixeldungeon` 을 그대로 쓰는 SPD 와 그 모드. 확인한 판: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 (설치 · 컴파일 · 테스트 플레이). 판마다 다른 부분은 런타임 `MakerCompat` 이 반사로 메움.
+**지원하는 게임 저장소**: Shattered Pixel Dungeon 구조(gradle · `…/src/main/java` 아래 `Dungeon` · `levels/Level` · `actors/hero/Hero`)의 게임. 확인한 판: SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2, 파생작(12차) ARK(Rogue Nights) · Blue Archive · Re-ARranged · Shorter · RKPD2 · Rat King Adventure · Experienced Pixel Dungeon (Linux 에서 javac 컴파일 + 헤드리스 실행으로 원본과 비교 — `tools/playtest/parity.sh`). 판마다 다른 부분은 런타임 `MakerCompat` 의 반사와 설치기의 적응(`editor/runtime-adapt.js`)이 메움.
 설치 전에 `compat()` 이 저장소를 살펴서 지원하지 않는 것은 이유와 함께 알려 줍니다 (프로젝트 설정 › 게임 런타임에도 표시):
-- 원작 Pixel Dungeon(`com.watabou.pixeldungeon`) · 패키지 이름을 바꾼 파생작(예: RKPD2 `com.zrp200.rkpd2`) — 지원 안 함
-- 체력이 long 인 파생작(예: Experienced Pixel Dungeon) — 런타임이 int 체력에 맞춰져 있어 지원 안 함
-- SPD 2.5 이전(층 이동 · 갈림길 `LevelTransition.BRANCH_EXIT` 이 없음) — 지원 안 함
+- 패키지 이름을 바꾼 파생작(예: RKPD2 · Rat King Adventure `com.zrp200.rkpd2`) — **12차부터 지원**: 런타임 사본 · 연결 줄 · 생성 코드의 패키지 이름을 그 게임 패키지로 바꿔 설치
+- 체력 · 피해가 long 인 파생작(예: Experienced Pixel Dungeon) — **12차부터 지원**: 런타임이 덮어쓰는 함수의 반환형 · 인자를 게임 선언에 맞춤 (이벤트 · 스킬의 체력 계산은 int 범위까지)
+- 원작 Pixel Dungeon(`com.watabou.pixeldungeon`, gradle 없는 Eclipse 프로젝트) — 런타임을 설치하지 않음 (저장소 분석 · 탐색은 됨)
+- SPD 2.5 이전(층 이동 · 갈림길 `LevelTransition.BRANCH_EXIT` 이 없음 — 예: Summoning PD · Powered PD) — 지원 안 함
 - 연결 줄 위치를 못 찾는 모드는 설치는 되고 그 기능만 동작하지 않음 (예: SPD 2.5.4 는 시작 화면 저장 슬롯 초상화 1개)
+
+**다른 저장소에서 가져온 기능 (12차)**: 프로젝트 `features/<id>/` 의 꾸러미(편집기 › 프로젝트 › 다른 저장소 기능 가져오기)는 설치 때 **연결 줄보다 먼저** 게임 저장소에 넣습니다 — 새 클래스 파일은 `<파일>.pdmaker-feature-new` 표시와 함께, 고친 파일은 처음 한 번 `<파일>.pdmaker-feature-backup` 으로 원본을 둡니다. 제거 · 기능을 끄고 다시 설치하면 표시 · 백업으로 원래 파일(바이트 그대로)로 돌아갑니다. 켠 기능의 서명은 `pdmaker/features.sig` — 프로젝트의 기능이 바뀌면 다음 테스트 플레이 때 다시 설치합니다.
+
 연결 줄 전체 목록은 [DESIGN.md §17.2](../DESIGN.md#172-원본-코드-연결점-editorruntime-installerjs-patches) — 이 문서의 아래 목록은 처음 판 기준이라 일부만 있습니다.
 
 ## 자동 설치 (권장)

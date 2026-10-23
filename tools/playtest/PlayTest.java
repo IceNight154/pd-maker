@@ -86,7 +86,7 @@ public class PlayTest {
 							GamesInProgress.selectedClass = HeroClass.valueOf(p.length > 1 ? p[1] : "WARRIOR");
 							GamesInProgress.curSlot = GamesInProgress.firstEmpty();
 							Dungeon.hero = null; com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "daily", false); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "dailyReplay", false);
-							Dungeon.initSeed(); ActionIndicator.clearAction();
+							Dungeon.initSeed(); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.invoke(ActionIndicator.class, "clearAction");   // 예전 판: clearAction() 없음
 							InterlevelScene.mode = InterlevelScene.Mode.DESCEND;
 							Game.switchScene(InterlevelScene.class);
 						}); sleep(6); break;

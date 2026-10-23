@@ -953,6 +953,15 @@ pre.code-view > div.mark { background: var(--accent-soft); color: var(--accent);
 .rx-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .rx-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
 .rx-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+/* 12차: 다른 저장소 기능 가져오기 */
+.ft-row { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 4px; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ft-row:hover { background: var(--hover); }
+.ft-row.sel { background: var(--accent-soft); }
+.ft-item { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.ft-item:last-child { border-bottom: 0; }
+.ft-search { flex: 1; min-width: 200px; }
+.ft-src { min-width: 260px; max-width: 100%; }
+.ft-mono { font-size: var(--fs-sm); max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .rx-code { max-height: none; }
 .rx-img { background: repeating-conic-gradient(var(--check-a) 0% 25%, var(--check-b) 0% 50%) 50% / 16px 16px; padding: 8px; display: inline-block; }
 @media (max-width: 900px) { .rx-layout { flex-direction: column; } .rx-left { flex: none; width: 100%; max-height: 40vh; } .rx-right { max-height: none; } }

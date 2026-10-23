@@ -812,10 +812,10 @@ public class EventInterpreter {
 				com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hr = Dungeon.hero;
 				if (hr == null) return true;
 				String op = c.getString("op", "add"); int v = c.getInt("value", 0);
-				if (op.equals("full")) v = hr.HT; else if (op.equals("pct")) v = Math.round(hr.HT * v / 100f);
-				int hp = op.equals("set") ? v : hr.HP + v;
+				if (op.equals("full")) v = (int) hr.HT; else if (op.equals("pct")) v = Math.round(hr.HT * v / 100f);
+				int hp = op.equals("set") ? v : (int) (hr.HP + v);
 				if (hp <= 0 && c.getBoolean("kill", false)) { hr.HP = 0; stack.clear(); com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero.reallyDie(new Death(c.getString("text", ""))); return true; }
-				final int nv = Math.max(1, Math.min(hr.HT, hp)), diff = nv - hr.HP;
+				final int nv = (int) Math.max(1, Math.min(hr.HT, hp)), diff = nv - (int) hr.HP;   // (int): 체력이 long 인 파생작도
 				hr.HP = nv;
 				Game.runOnRenderThread(() -> { if (hr.sprite != null && diff != 0) hr.sprite.showStatus(diff > 0 ? com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite.POSITIVE : com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite.NEGATIVE, (diff > 0 ? "+" : "") + diff); });
 				return true;
@@ -1049,7 +1049,7 @@ public class EventInterpreter {
 			boolean match = (it instanceof MakerItem && id.equals(((MakerItem) it).makerId))
 					|| (id.startsWith("spd:") && it.getClass().getSimpleName().equals(id.substring(4)));
 			if (!match) continue;
-			int take = Math.min(n, it.quantity());
+			int take = (int) Math.min(n, it.quantity());
 			for (int i = 0; i < take; i++) it.detach(Dungeon.hero.belongings.backpack);
 			n -= take;
 		}

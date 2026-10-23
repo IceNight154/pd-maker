@@ -171,7 +171,7 @@ public class MakerCombat {
 			case "wander": ctl.wander(); break;
 			case "patrol": if (s.home >= 0 && Dungeon.level.distance(self.pos, s.home) > 4) ctl.stepTo(s.home); else ctl.wander(); break;
 			case "protect": if (Dungeon.level.distance(self.pos, t.pos) > 1) ctl.stepTo(t.pos); else ctl.waitTurn(); break;
-			case "heal": { int add = Math.min(b.amount, self.HT - self.HP); ok = add > 0; if (add > 0) { self.HP += add; if (self.sprite != null && self.sprite.visible) MakerCompat.status(self.sprite, CharSprite.POSITIVE, Integer.toString(add), "HEALING"); } ctl.waitTurn(); break; }
+			case "heal": { int add = (int) Math.min(b.amount, self.HT - self.HP); ok = add > 0; if (add > 0) { self.HP += add; if (self.sprite != null && self.sprite.visible) MakerCompat.status(self.sprite, CharSprite.POSITIVE, Integer.toString(add), "HEALING"); } ctl.waitTurn(); break; }
 			case "say": if (self.sprite != null && self.sprite.visible && !b.say.isEmpty()) self.sprite.showStatus(CharSprite.NEUTRAL, b.say); ctl.waitTurn(); break;
 			default: ctl.waitTurn();
 		}
@@ -292,7 +292,7 @@ public class MakerCombat {
 			double dmg = self.damageRoll() * a.mult + a.flat;
 			boolean crit = a.crit > 0 && Random.Float() * 100 < a.crit;
 			if (crit) dmg *= a.critMult;
-			int d = Math.max(0, (int) Math.round(dmg) - t.drRoll());
+			int d = (int) Math.max(0, (long) Math.round(dmg) - t.drRoll());
 			t.damage(d, self);
 			landed = true;
 			if (crit && t.sprite != null && t.sprite.visible) t.sprite.showStatus(CharSprite.WARNING, "!!");

@@ -137,7 +137,7 @@
     if (cache.repo === repo && cache.rows) return cache.rows;
     const rows = [];
     try {
-      const base = pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon');
+      const base = pdm.join(repo, ...(await PDM.javaRoot(repo)));
       const rd = async rel => { try { return await pdm.readText(pdm.join(base, ...rel.split('/'))); } catch (_) { return ''; } };
       const [src, banner, assetsSrc, statSrc] = await Promise.all(['Badges.java', 'effects/BadgeBanner.java', 'Assets.java', 'Statistics.java'].map(rd));
       if (!src) throw new Error('Badges.java 없음');

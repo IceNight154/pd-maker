@@ -27,7 +27,7 @@ PDM.titlePreview = (function () {
         try { const d = (await pdm.readDataURL(pdm.join(repo, ...rel))).replace(/^data:[^;,]*/, 'data:font/ttf'); const f = new FontFace(name, `url(${d})`); await f.load(); document.fonts.add(f); r.fonts = true; } catch (_) { /* 기본 글꼴 */ }
       }
       try {
-        const src = await pdm.readText(pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'ui', 'Icons.java'));
+        const src = await pdm.readText(pdm.join(repo, ...(await PDM.javaRoot(repo)), 'ui', 'Icons.java'));
         const re = /case\s+(\w+)\s*:\s*icon\.frame\(\s*icon\.texture\.uvRectBySize\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g; let m;
         while ((m = re.exec(src))) r.icons[m[1]] = [+m[2], +m[3], +m[4], +m[5]];
       } catch (_) { /* 아이콘 없이 */ }

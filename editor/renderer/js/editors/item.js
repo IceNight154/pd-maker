@@ -622,7 +622,7 @@
   /** 게임 저장소의 자바 파일 (core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/<rel>) */
   async function javaPath(rel) {
     const repo = PDM.app && PDM.app.resolveRepo ? await PDM.app.resolveRepo(true) : '';
-    return repo ? pdm.join(repo, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', ...rel.split('/')) : '';
+    return repo ? pdm.join(repo, ...(await PDM.javaRoot(repo)), ...rel.split('/')) : '';
   }
   /** 코드 파일 보기: 파일이 있으면 그 내용, 없으면 fallback(에디터가 만들 코드). 외부 편집기로 열기 버튼 */
   async function showCodeFile(rel, title, fallback) {

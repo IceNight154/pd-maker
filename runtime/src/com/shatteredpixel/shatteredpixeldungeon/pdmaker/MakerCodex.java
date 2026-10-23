@@ -41,9 +41,9 @@ public class MakerCodex extends MakerItem {
 
 	public String type() { JsonValue c = cx(); return c == null ? "melee" : c.getString("type", "melee"); }
 	public int tier() { JsonValue c = cx(); return c == null ? 1 : Math.max(1, c.getInt("tier", 1)); }
-	public int min() { JsonValue c = cx(); return c == null ? 1 : c.getInt("min", tier()) + level() * c.getInt("minPerLvl", 1); }
-	public int max() { JsonValue c = cx(); return c == null ? 4 : c.getInt("max", 4 * tier() + 2) + level() * c.getInt("maxPerLvl", tier()); }
-	public int STRReq() { JsonValue c = cx(); int s = c == null ? 0 : c.getInt("str", 0); return (s > 0 ? s : 7 + 2 * tier()) - Math.min(level(), 2); }
+	public int min() { JsonValue c = cx(); return c == null ? 1 : c.getInt("min", tier()) + (int) level() * c.getInt("minPerLvl", 1); }
+	public int max() { JsonValue c = cx(); return c == null ? 4 : c.getInt("max", 4 * tier() + 2) + (int) level() * c.getInt("maxPerLvl", tier()); }
+	public int STRReq() { JsonValue c = cx(); int s = c == null ? 0 : c.getInt("str", 0); return (s > 0 ? s : 7 + 2 * tier()) - Math.min((int) level(), 2); }
 	/** 강화 1마다 사용 횟수 ×1.5, 100회 이상이면 무한 (Codex.durabilityPerUse) */
 	public float usesMax() { JsonValue c = cx(); return (c == null ? 10 : c.getFloat("baseUses", 10)) * (float) Math.pow(1.5f, level()); }
 	public float perUse() { float u = usesMax(); return u >= 100 ? 0 : MAX_DURABILITY / Math.max(1, Math.round(u)) + 0.001f; }

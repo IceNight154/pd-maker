@@ -101,12 +101,12 @@ public abstract class MakerBow extends MeleeWeapon implements GenSupport.Coded {
 		@Override public int damageRoll(Char owner) {
 			JsonValue p = p();
 			if (bow == null || !"own".equals(p.getString("damage", "bow"))) return bow == null ? super.damageRoll(owner) : bow.damageRoll(owner);
-			int l = bow.buffedLvl();
+			int l = (int) bow.buffedLvl();
 			return Random.NormalIntRange(p.getInt("min", 1) + l * p.getInt("minPerLvl", 0), Math.max(p.getInt("min", 1), p.getInt("max", 5)) + l * p.getInt("maxPerLvl", 1));
 		}
 		@Override public boolean hasEnchant(Class<? extends com.shatteredpixel.shatteredpixeldungeon.items.weapon.Weapon.Enchantment> type, Char owner) { return bow != null ? bow.hasEnchant(type, owner) : super.hasEnchant(type, owner); }
 		@Override public int proc(Char attacker, Char defender, int damage) {
-			int d = bow != null ? bow.proc(attacker, defender, damage) : damage;
+			int d = (int) (bow != null ? bow.proc(attacker, defender, damage) : damage);
 			String hs = p().getString("hitSound", ""); if (!hs.isEmpty()) MakerAudio.playSe(hs);
 			return d;
 		}

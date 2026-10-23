@@ -7,7 +7,6 @@
 // ================================================================
 (function () {
   const h = PDM.h;
-  const J = ['core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon'];
   const cache = {}, srcCache = {};
   const repoOf = () => (PDM.GAME_SCAN || {}).repo || '';
   const strip = s => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/[^\n]*/g, m => ' '.repeat(m.length));
@@ -81,7 +80,7 @@
     if (!repo || !cls) return null;
     const ck = repo + '|' + cls; if (cache[ck]) return cache[ck];
     return (cache[ck] = (async () => {
-      const root = pdm.join(repo, ...J), read = async rel => { try { return await pdm.readText(pdm.join(root, rel)); } catch (_) { return ''; } };
+      const root = pdm.join(repo, ...(await PDM.javaRoot(repo))), read = async rel => { try { return await pdm.readText(pdm.join(root, rel)); } catch (_) { return ''; } };
       const [hc, hs, tl] = await Promise.all(['HeroClass', 'HeroSubClass', 'Talent'].map(n => read('actors/hero/' + n + '.java')));
       if (!hc || !new RegExp('\\b' + cls + '\\s*\\(').test(strip(hc))) return null;
       const msg = PDM.gameProps ? await PDM.gameProps(repo, 'actors') : {};
@@ -148,7 +147,7 @@
   PDM.gameUsages = async function (token, skip) {
     const repo = repoOf(); if (!repo) return [];
     if (!srcCache[repo]) srcCache[repo] = (async () => {
-      const root = pdm.join(repo, ...J); let files = [];
+      const root = pdm.join(repo, ...(await PDM.javaRoot(repo))); let files = [];
       try { files = (await PDM.gameWalk(root)).map(f => f.replace(/\\/g, '/')).filter(f => f.endsWith('.java') && !f.startsWith('pdmaker/')); } catch (_) { files = []; }
       const out = [];
       for (let i = 0; i < files.length; i += 40) await Promise.all(files.slice(i, i + 40).map(async f => { try { out.push([f, await pdm.readText(pdm.join(root, f))]); } catch (_) { /* 없음 */ } }));
@@ -248,6 +247,6 @@
       render(d, kind, c).forEach(x => body.appendChild(x)); });
     return box;
   };
-  PDM.gameSrc = { J, repoOf, strip, block, method, caseBodies, fmt, lc, codeView, fold, kv, mono, itemName, usageFold };
+  PDM.gameSrc = { get J() { return PDM.javaRel(repoOf()); }, repoOf, strip, block, method, caseBodies, fmt, lc, codeView, fold, kv, mono, itemName, usageFold };
   PDM.gameHeroClear = () => { Object.keys(cache).forEach(k => delete cache[k]); Object.keys(srcCache).forEach(k => delete srcCache[k]); };
 })();

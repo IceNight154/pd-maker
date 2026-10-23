@@ -40,6 +40,8 @@ function nativeFs(opts = {}) {
     async writeDataURL(p, d) { fs.mkdirSync(P.dirname(p), { recursive: true }); fs.writeFileSync(p, Buffer.from(d.split(',')[1], 'base64')); return true; },
     async paths() { return { gameRepo: '' }; },
     // 9차: 저장소 분석기 (main.js 의 repo:analyze 와 같은 모듈). opts.analyzer 를 켤 때만 — 끄면 웹 모드와 같음 (분석기 없음)
+    // 12차: main.js 의 repo:javaRel 과 같음 (패키지 이름을 바꾼 파생작 — RKPD2 의 com/zrp200/rkpd2)
+    gameJavaRel: async repo => P.relative(repo, require(P.join(__dirname, '..', '..', 'editor', 'runtime-installer.js')).javaDir(repo)).split(P.sep),
     analyzeRepo: !opts.analyzer ? undefined : async (dir, o) => require(P.join(__dirname, '..', '..', 'editor', 'repo-analyzer.js')).analyze(dir, Object.assign({ cacheDir: opts.analysisCache }, o || {})),
     on() { }
   };

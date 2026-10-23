@@ -382,6 +382,7 @@
     { label: '프로젝트 설정 (게임 저장소 · 런타임 · 게임 이름)', run: () => PDM.tabs.open('project'), disabled: !store.isOpen },
     { label: '게임 저장소 분석 (구조 · 지원 범위 · 문제 목록)', run: () => PDM.tabs.open('repoanalysis'), disabled: !store.isOpen },
     { label: '게임 저장소 탐색 (파일 · 클래스 · 게임 데이터 · 번역)', run: () => PDM.tabs.open('repoexplorer'), disabled: !store.isOpen },
+    { label: '다른 저장소 기능 가져오기 (ARK 계단 · BA 총기 …)', run: () => PDM.tabs.open('features'), disabled: !store.isOpen },
     { label: '확장 기능… (이벤트 · 스토리 같은 추가 기능 켜고 끄기)', run: showExtensions, disabled: !store.isOpen },
     { label: 'build.gradle 보기 · 고치기', run: editBuildGradle, disabled: !store.isOpen },
     '-',
@@ -634,7 +635,7 @@
       if (was4 !== PDM.gameTitle4) drawAll();
     } catch (_) { /* 무시 */ }
     // mod-2 전용 아이템(코덱스 등)은 그 저장소일 때만 목록에 보임
-    try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, 'core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon', 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
+    try { const was = PDM.gameMod2; PDM.gameMod2 = r.missing ? undefined : await pdm.exists(pdm.join(r.dir, ...(await PDM.javaRoot(r.dir)), 'items', 'weapon', 'codices')); if (was !== PDM.gameMod2) drawAll(); } catch (_) { /* 무시 */ }
     // 리소스 목록의 게임 기본 아이템·방·몬스터를 이 저장소의 실제 파일에 맞춤 (gamescan.js)
     try { if (PDM.gameScan && await PDM.gameScan(r.missing ? '' : r.dir)) { drawAll(); if (active) PDM.tabs.refresh(active.key);
       // 이 저장소에만 있는 직업이 프로젝트에 없으면 알려 줌 (다른 게임 저장소를 연결했을 때)

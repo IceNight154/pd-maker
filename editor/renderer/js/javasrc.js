@@ -166,11 +166,11 @@
   function assets(src) {
     const st = structure(src), out = { map: {}, consts: [], unresolved: [] };
     for (const t of st.types) {
-      if (t.depth === 0) continue;
+      // 12차: 바깥 형의 상수도 (원작 Pixel Dungeon 은 Assets.WARRIOR 처럼 안쪽 클래스 없이) — 열쇠는 "WARRIOR"
       const own = body(src, st, t), base = src.slice(0, t.open + 1).split('\n').length;
       const local = {};
       for (const m of own.matchAll(/static\s+final\s+String\s+(\w+)\s*=\s*([^;]+);/g)) {
-        const key = t.name + '.' + m[1], expr = m[2].trim(), line = base + own.slice(0, m.index).split('\n').length - 1;
+        const key = t.depth === 0 ? m[1] : t.name + '.' + m[1], expr = m[2].trim(), line = base + own.slice(0, m.index).split('\n').length - 1;
         let val = null;
         if (/^"[^"]*"$/.test(expr)) val = expr.slice(1, -1);
         else {   // "a" + B + "c" 처럼 이어 붙인 것 — 같은 클래스 상수만
@@ -234,8 +234,8 @@
       const top = st.types.find(x => x.depth === 0); if (top) { out.parent = top.ext; own = body(src, st, top); }
       const cm = /int\s+c\s*=\s*(?:[^;?]*\?\s*\d+\s*:\s*)?(\d+)\s*;/.exec(own); if (cm) out.texOffset = +cm[1];
     }
-    const tex = /texture\(\s*Assets\.(\w+)\.(\w+)\s*\)/.exec(own);
-    if (tex) { out.tex = tex[1] + '.' + tex[2]; out.sheet = (assetsMap || {})[out.tex] || ''; if (!out.sheet) out.problems.push(`Assets.${out.tex} 상수를 찾지 못함`); }
+    const tex = /texture\(\s*Assets\.(?:(\w+)\.)?(\w+)\s*\)/.exec(own);   // 원작 Pixel Dungeon: Assets.RAT (안쪽 클래스 없음)
+    if (tex) { out.tex = tex[1] ? tex[1] + '.' + tex[2] : tex[2]; out.sheet = (assetsMap || {})[out.tex] || ''; if (!out.sheet) out.problems.push(`Assets.${out.tex} 상수를 찾지 못함`); }
     else if (/texture\(/.test(own)) out.problems.push('그림을 코드로 고름 (texture(...) 가 상수가 아님)');
     // 프레임 크기: 숫자 · 같은 파일의 int 상수 · "return 숫자;" 한 줄짜리 메서드 (texHeight() 등)
     const numOf = e => { e = String(e).trim(); if (/^\d+$/.test(e)) return +e;
@@ -263,9 +263,9 @@
     const m = method(src || '', /String\s+spritesheet\s*\(\s*\)\s*\{/); if (!m) return out;
     const sw = /switch\s*\(\s*this\s*\)\s*\{/.exec(m.body); if (!sw) return out;
     const b = m.body.slice(sw.index + sw[0].length);
-    const re = /((?:\s*(?:case\s+\w+|default)\s*:)+)\s*return\s+Assets\.(\w+)\.(\w+)\s*;/g; let x;
+    const re = /((?:\s*(?:case\s+\w+|default)\s*:)+)\s*return\s+Assets\.(?:(\w+)\.)?(\w+)\s*;/g; let x;
     while ((x = re.exec(b))) {
-      const key = x[2] + '.' + x[3], p = (assetsMap || {})[key] || '';
+      const key = x[2] ? x[2] + '.' + x[3] : x[3], p = (assetsMap || {})[key] || '';
       for (const c of x[1].matchAll(/case\s+(\w+)/g)) { out.map[c[1]] = p; out.consts[c[1]] = key; }
       if (/default/.test(x[1])) out.def = p;
     }

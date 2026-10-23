@@ -3,6 +3,20 @@
 // ================================================================
 window.PDM = window.PDM || {};
 
+// 12차: 게임 저장소의 게임 패키지 폴더 (저장소 기준 경로 조각) — SPD 는 core/src/main/java/com/shatteredpixel/shatteredpixeldungeon,
+//   패키지 이름을 바꾼 파생작(RKPD2 · Rat King Adventure: …/com/zrp200/rkpd2)은 그 폴더. PDM.javaRoot(repo) 로 한 번 찾아 두면 PDM.javaRel(repo) 가 그 값
+(function () {
+  const SPD = ['core', 'src', 'main', 'java', 'com', 'shatteredpixel', 'shatteredpixeldungeon'], cache = {};
+  PDM.JAVA_SPD = SPD;
+  PDM.javaRel = repo => cache[repo] || SPD;
+  PDM.javaRoot = async repo => {
+    if (!repo) return SPD; if (cache[repo]) return cache[repo];
+    let rel = SPD;
+    try { if (window.pdm && pdm.gameJavaRel) { const r = await pdm.gameJavaRel(repo); if (Array.isArray(r) && r.length && r[0] !== '..') rel = r; } } catch (_) { /* 웹 모드 · 못 찾음 → SPD 자리 */ }
+    return (cache[repo] = rel);
+  };
+})();
+
 /** 디자인 토큰(CSS 변수) 값 읽기 — 캔버스처럼 CSS 를 쓸 수 없는 곳에서 (테마가 바뀌면 다음 그리기부터 반영). 없으면 fallback */
 PDM.cssVar = (name, fallback) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; } catch (_) { return fallback; } };
 /** '#rrggbb' + 불투명도 → rgba() (토큰 색을 캔버스에 옅게 칠할 때) */

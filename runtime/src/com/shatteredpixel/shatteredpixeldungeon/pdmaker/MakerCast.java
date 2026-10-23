@@ -258,8 +258,8 @@ public class MakerCast {
 				}
 				case "heal": {
 					for (Char c : targets) {
-						int amt = efInt(def, e, "amount", "amount", 0) + c.HT * e.getInt("percent", 0) / 100;
-						int before = c.HP; c.HP = Math.min(c.HT, c.HP + amt);
+						int amt = efInt(def, e, "amount", "amount", 0) + (int) (c.HT * e.getInt("percent", 0) / 100);
+						int before = (int) c.HP; c.HP = Math.min(c.HT, c.HP + amt);
 						if (c.sprite != null && c.HP > before) c.sprite.showStatus(CharSprite.POSITIVE, "+" + (c.HP - before));
 					}
 					break;
