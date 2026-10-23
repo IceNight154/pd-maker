@@ -695,6 +695,13 @@ test('실행 환경 전달: gradle init 스크립트에 그대로(따옴표 · �
   eq(read(path.join(PDMK, 'MakerCutscene.java')).match(/SPEEDS = \{([^}]*)\}/)[1].split(',').map(Number), PDM.testEnv.SPEEDS);   // 6차: 배속은 MakerCutscene
   const main = read(path.join(ROOT, 'editor', 'main.js'));
   assert.ok(/require\('\.\/playtest-init(\.js)?'\)/.test(main), 'main.js 가 같은 모듈로 init 스크립트를 씀');
+  // 11차: 기본 테스트 플레이 = 내보낸 게임과 같은 실행 — INDEV(게임의 개발자 모드: ARK 시작 아이템 · 로딩 화면 생략으로 입장 문구가 안 보임)가 아님
+  const pt = init.build('/p', null);
+  assert.ok(/'Specification-Version', d\.appVersionName \+ '-PLAYTEST'/.test(pt) && !pt.slice(pt.indexOf("register('pdmakerPlaytest'"), pt.indexOf('def dbg')).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n').includes('INDEV'), 'PDMaker 테스트 실행 버전에 INDEV 없음');
+  assert.ok(pt.includes("findByName('release')") && /rel\.runtimeClasspath/.test(pt), 'release 서비스(업데이트 · 새 소식)도 내보낸 게임처럼');
+  assert.ok(/'Specification-Title', d\.hasProperty\('appName'\) \? d\.appName/.test(pt), '세이브 폴더 = 게임 이름 (내보낸 게임과 같게)');
+  const app = read(path.join(ROOT, 'editor', 'renderer', 'js', 'app.js'));
+  assert.ok(/playTask\) \|\| 'playtest'/.test(app), '프로젝트 설정이 없으면 PDMaker 테스트 실행 (desktop:debug 아님)');
 });
 
 // ------------------------------------------------------------ ⑪ 대사 글꼴 · 연출 (5차 · 편집기 미리보기 ↔ 런타임 MakerDialogue · EventInterpreter)

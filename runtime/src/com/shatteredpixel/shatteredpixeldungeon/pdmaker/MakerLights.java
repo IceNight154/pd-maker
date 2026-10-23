@@ -102,9 +102,10 @@ public class MakerLights extends CustomTilemap {
 			if (!MakerRuntime.isActive()) return;
 			int n = count(l);
 			JsonValue ta = terrainLights();
-			pending = "[PDMaker] 광원 " + VERSION + ": " + (n > 0 || ta != null ? "이 맵의 점광원 " + n + "개" + (ta != null ? " · 지형 광원 " + ta.size + "종" : "") + " (빛 · 그림자 · 못 보는 칸은 지움)"
-				: anyDynamic() ? "이 맵에 놓인 광원은 없고, 빛나는 아이템 · 이펙트만 빛을 냅니다"
-				: "이 맵에는 점광원이 없습니다 — 빛 · 그림자는 '광원' 오브젝트나 맵 오브젝트의 '광원 켜기'로 생깁니다 (효과 레이어 · 번짐은 그림만 빛남)");
+			// 11차: 광원을 쓰지 않는 맵(원래 게임 그대로)이면 게임 기록 창에 쓰지 않고 테스트 플레이 출력에만 — 긴 알림이 게임의 입장 문구("던전의 N층으로 …")를 기록 창 밖으로 밀어냈음
+			boolean dyn = n == 0 && ta == null && anyDynamic();
+			if (n > 0 || ta != null || dyn) pending = "[PDMaker] 광원 " + VERSION + ": " + (!dyn ? "이 맵의 점광원 " + n + "개" + (ta != null ? " · 지형 광원 " + ta.size + "종" : "") + " (빛 · 그림자 · 못 보는 칸은 지움)" : "이 맵에 놓인 광원은 없고, 빛나는 아이템 · 이펙트만 빛을 냅니다");
+			else MakerRuntime.log("광원 " + VERSION + ": 이 맵에는 점광원이 없습니다 — 빛 · 그림자는 '광원' 오브젝트나 맵 오브젝트의 '광원 켜기'로 생깁니다");
 			if (!any(l)) return;
 			MakerLights t = new MakerLights();
 			t.tileX = 0; t.tileY = 0; t.tileW = l.width(); t.tileH = l.height();

@@ -92,9 +92,12 @@ public class PlayTest {
 						}); sleep(6); break;
 						case "startbtn": run(() -> {   // 11차: 영웅 선택 화면의 게임 시작 버튼을 그대로 누름 (게임이 정한 시작 방식 — ARK: ENTER_RHODES)
 							try {
-								GamesInProgress.selectedClass = HeroClass.valueOf(p.length > 1 ? p[1] : "WARRIOR");
+								String[] pp = p.length > 1 ? p[1].split(",") : new String[]{"WARRIOR"};
+								GamesInProgress.selectedClass = HeroClass.valueOf(pp[0]);
 								GamesInProgress.curSlot = GamesInProgress.firstEmpty();
-								try { com.shatteredpixel.shatteredpixeldungeon.SPDSettings.class.getMethod("intro", boolean.class).invoke(null, false); } catch (Exception ignored) { }
+								boolean keepIntro = pp.length > 1 && pp[1].equals("intro");   // startbtn:CLASS,intro = 처음 하는 판처럼 (게임의 소개 화면 그대로)
+								if (!keepIntro) try { com.shatteredpixel.shatteredpixeldungeon.SPDSettings.class.getMethod("intro", boolean.class).invoke(null, false); } catch (Exception ignored) { }
+								System.out.println("[TEST] intro=" + com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro());
 								Object sc = Game.scene(); java.lang.reflect.Field f = sc.getClass().getDeclaredField("startBtn"); f.setAccessible(true);
 								Object b = f.get(sc); java.lang.reflect.Method m = null;
 								for (Class<?> c = b.getClass(); c != null && m == null; c = c.getSuperclass()) try { m = c.getDeclaredMethod("onClick"); } catch (NoSuchMethodException ignored) { }

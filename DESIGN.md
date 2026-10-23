@@ -1013,7 +1013,7 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ### 18.1 테스트 플레이 (`main.js game:run`)
 - 순서: 게임 저장소 확인(`repairRepo`) → Java 확인 · 내려받기 → 런타임이 없거나 오래됐으면 설치(`runtimeState` — 필요한 연결점만 셈) → 사용자 코드 생성 → 게임 이름 적용 → gradle.
-- `project.settings.playTask`: `debug`(기본 — 게임 원래 `desktop:debug`, 버전 -INDEV, init 스크립트가 `pdmaker.project` 를 넘김) | `playtest`(init 스크립트의 `desktop:pdmakerPlaytest`, -PLAYTEST, 세이브 폴더 분리). 컴파일만 = `core:compileJava`.
+- `project.settings.playTask`: `playtest`(11차부터 기본 — init 스크립트의 `desktop:pdmakerPlaytest`: 내보낸(release) 게임과 같은 실행 · release 서비스 클래스 경로 · 버전 -PLAYTEST · 세이브 폴더 = 게임 이름) | `debug`(게임의 개발자 작업 `desktop:debug`, 버전 -INDEV). INDEV 면 게임이 `DeviceCompat.isDebug()` 로 개발자 모드가 되어 원래 게임과 다르게 동작함 — 예: ARK · 원작 SPD 는 시작 아이템(물약 · 주문서 40개 · 아뮬렛) · 모든 직업 해금 · 안내서 읽음 · 층 이동 로딩 화면 생략(ARK "체르노보그로 가는 중..." 같은 입장 문구, 원작 구역 소개 글이 안 보임). 그래서 기본은 PLAYTEST. 둘 다 init 스크립트가 `pdmaker.project` 를 넘김. 컴파일만 = `core:compileJava`. 테스트 플레이 알림(광원 없음 등)은 게임 기록 창이 아니라 테스트 플레이 출력에 (원래 게임의 기록 줄을 밀어내지 않게).
 - 출력 창에 gradle · 게임 로그, 생성 코드의 컴파일 오류에는 에디터 위치를 덧붙임. 실패하면 작업 표시줄 알림(§2.1).
 
 ### 18.2 게임 파일 내보내기 (`main.js game:export`)

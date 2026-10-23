@@ -111,8 +111,8 @@ PDM.registerEditor({
             h('p', { class: 'hint' }, '테스트 플레이·게임 내보내기 때 게임 저장소 맨 위 build.gradle 의 appName · appPackageName 에 적습니다 (처음 고칠 때 build.gradle.pdmaker-backup 을 남김).'),
             h('p', { class: 'hint' }, '세이브 데이터 위치 (Windows): ', h('code', {}, `%APPDATA%\\.${pkg.split('.')[1]}\\${nm}\\`), ' — 원작은 ', h('code', {}, '%APPDATA%\\.shatteredpixel\\Shattered Pixel Dungeon\\'), '. 게임 이름이나 패키지 이름을 바꾸면 세이브가 다른 폴더에 저장되어 원작·다른 프로젝트와 섞이지 않습니다. (이름을 바꾸면 이전 세이브는 예전 폴더에 남습니다.)')); })()),
       section('테스트 플레이',
-        PDM.ui.F.select('project', ['settings', 'playTask'], [['debug', 'gradle desktop:debug (기본 — 게임 원래 실행 작업 · 버전 -INDEV · 세이브는 위 게임 이름 폴더)'], ['playtest', 'PDMaker 테스트 실행 (버전 -PLAYTEST · 세이브는 "PDMaker Playtest" 폴더)']],
-          { label: '▶ 테스트 플레이 빌드 방식', hint: '두 방식 모두 이 프로젝트를 게임에 넘겨줍니다. debug 는 내보낸 게임과 같은 세이브 폴더를 쓰고, PDMaker 테스트 실행은 세이브를 따로 둡니다.' }),
+        PDM.ui.F.select('project', ['settings', 'playTask'], [['playtest', '내보낸 게임과 같게 (기본 — 원래 게임 그대로 · 버전 -PLAYTEST · 세이브는 위 게임 이름 폴더)'], ['debug', 'gradle desktop:debug (개발자 모드 · 버전 -INDEV)']],
+          { label: '▶ 테스트 플레이 빌드 방식', def: 'playtest', hint: '두 방식 모두 이 프로젝트를 게임에 넘겨줍니다. desktop:debug 는 게임의 개발자 모드라 게임마다 다르게 바뀝니다 — 예: ARK · 원작 SPD 는 시작 아이템(물약 · 주문서 40개 · 아뮬렛)을 주고 모든 직업을 열고 층 이동 로딩 화면(입장 문구)을 건너뜀. 원래 게임과 같은지 볼 때는 기본 방식을 쓰세요.' }),
         h('p', { class: 'hint' }, '▶ 테스트 플레이는 게임 저장소에서 gradle 로 게임을 실행하면서 이 프로젝트 폴더를 넘겨줍니다 (-Dpdmaker.project=…).',
           h('br'), '게임 쪽에 pdmaker 런타임 패키지가 들어가 있어야 프로젝트 데이터가 반영됩니다 (runtime/INTEGRATION.md 참고).'),
         h('p', { class: 'hint' }, '▶ 테스트 플레이를 누르면 런타임이 없거나 예전 것일 때 자동으로 설치·갱신합니다.')));

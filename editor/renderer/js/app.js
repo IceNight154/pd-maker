@@ -371,7 +371,7 @@
   /** 실행 (실행 메뉴 · 도구 모음 "▶ 테스트 플레이 · 빌드 ▾ · ■") — 실행 중에는 새 실행을 막고 중지만 */
   const RUN_ITEMS = (withMain = true) => [
     ...(withMain ? [{ label: '▶ 테스트 플레이', hint: PDM.keys.label('playtest'), run: () => playtest(), disabled: !store.isOpen || isRunning() }] : []),
-    { label: '▶ desktop:debug 로 실행 (INDEV 버전)', run: () => playtest('debug'), disabled: !store.isOpen || isRunning() },
+    { label: '▶ desktop:debug 로 실행 (INDEV — 게임의 개발자 모드)', run: () => playtest('debug'), disabled: !store.isOpen || isRunning() },
     { label: '▶ PDMaker 테스트 실행 (PLAYTEST 버전)', run: () => playtest('playtest'), disabled: !store.isOpen || isRunning() },
     '-',
     { label: '게임 코드 컴파일 확인', run: () => runGame('compile'), disabled: !store.isOpen || isRunning() },
@@ -1015,9 +1015,11 @@
   async function runGame(task, mode) {
     showBottom('log');
     const repo = await resolveRepo();
-    // 테스트 플레이 빌드: 프로젝트 설정 (settings.playTask: 'debug' 기본 = gradle desktop:debug, INDEV 버전 | 'playtest' = PDMaker 테스트 실행)
-    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'debug';
-    if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV 버전)' : '> 테스트 플레이: PDMaker 테스트 실행 (PLAYTEST 버전)', 'dim');
+    // 테스트 플레이 빌드: 프로젝트 설정 settings.playTask
+    //   'playtest' (11차 기본) = 내보낸 게임과 같은 실행 (release 서비스 · 버전에 INDEV 없음 — 원래 게임 그대로)
+    //   'debug' = gradle desktop:debug (INDEV — 게임의 개발자 모드: 시작 아이템 · 모든 직업 해금 · 로딩 화면 생략 등 게임마다 다름)
+    if (!mode) mode = (((store.get('project') || {}).settings || {}).playTask) || 'playtest';
+    if (task === 'play') PDM.log(mode === 'debug' ? '> 테스트 플레이: gradle desktop:debug (INDEV — 게임의 개발자 모드라 원래 게임과 다르게 동작할 수 있음)' : '> 테스트 플레이: 내보낸 게임과 같은 실행 (PLAYTEST 버전)', 'dim');
     // 실행 환경 (5차): 프로젝트 testplay → 계산한 값을 게임에 (-Dpdmaker.testenv) — 런타임 MakerTestEnv 가 창 크기 · 배율 · 안전 영역 · 배속을 적용
     const testenv = task === 'play' ? PDM.testEnv.resolve((store.get('project') || {}).testplay) : null;
     if (testenv) PDM.log('> 실행 환경: ' + PDM.testEnv.describe(testenv), 'dim');
