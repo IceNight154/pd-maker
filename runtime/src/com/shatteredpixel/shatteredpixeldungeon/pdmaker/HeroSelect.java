@@ -101,6 +101,41 @@ public class HeroSelect {
 		return sheet.equals("game:" + classOf(h).spritesheet());
 	}
 
+	/** 게임 직업 그대로인 영웅 목록 — HeroClass.values() 와 같은 순서 · 같은 수, 하나하나가 그 직업의 원작 영웅이고 선택 화면에 보이는 것(이름 · 그림 · 설명 · 해금 · 선택 화면 글자)을 고치지 않음 */
+	static boolean nativeLineup(List<JsonValue> es) {
+		if (MakerRuntime.project != null && !MakerRuntime.project.getString("startHero", "").isEmpty()) return false;
+		HeroClass[] all = HeroClass.values();
+		int k = 0;
+		for (HeroClass c : all) {
+			// 저장소의 선택 화면이 감춘 직업 (편집기가 enabled=false 를 "저장소에서" 로 표시) 은 건너뜀 — 게임 화면도 감춤
+			JsonValue own = null;
+			for (JsonValue o : MakerRuntime.heroes.values()) if (vanilla(o) && classOf(o) == c) { own = o; break; }
+			if (own == null) return false;
+			if (!own.getBoolean("enabled", true)) { if (!fromRepo(own, "enabled")) return false; continue; }
+			if (k >= es.size()) return false;
+			JsonValue h = es.get(k++);
+			if (h != own) return false;
+			if (!sel(h, "title").trim().isEmpty() || !sel(h, "desc").trim().isEmpty() || !sel(h, "info").trim().isEmpty()) return false;
+			if (!stockDesc(h) || !stockArt(h) || !stockName(h)) return false;
+			JsonValue u = h.get("unlock"); String mode = u == null ? "" : u.getString("mode", "");
+			if (!mode.isEmpty() && !mode.equals("game")) return false;
+		}
+		return k == es.size();
+	}
+	/** 그 칸을 저장소에서 읽은 값 그대로 둠 (src.fields.<k>.from = repo) */
+	static boolean fromRepo(JsonValue h, String k) {
+		JsonValue src = h.get("src"), f = src == null ? null : src.get("fields"), v = f == null ? null : f.get(k);
+		return v != null && "repo".equals(v.getString("from", ""));
+	}
+	/** 이름을 고치지 않음 — 비었거나 · 게임 직업 이름이거나 · 저장소에서 읽은 값(src.fields.name) 그대로 */
+	static boolean stockName(JsonValue h) {
+		String n = h.getString("name", "").trim();
+		if (n.isEmpty()) return true;
+		try { if (n.equalsIgnoreCase(Messages.titleCase(classOf(h).title()).trim())) return true; } catch (Throwable t) { /* 이름 없음 */ }
+		JsonValue src = h.get("src"), f = src == null ? null : src.get("fields"), nm = f == null ? null : f.get("name");
+		return nm != null && "repo".equals(nm.getString("from", "")) && n.equals(nm.getString("v", "").trim());
+	}
+
 	/** 해금 조건 (영웅 편집기 unlock { mode, badge, key, cond, text }) — 잠겨 있으면 true.
 	 *  mode: always(항상) · game(바탕 직업의 게임 규칙) · badge(게임 배지: 보스 처치·승리 등) · global(전역 스위치) · cond(조건식 — global.<이름> 등)
 	 *  정하지 않았으면 원작 영웅은 game, 그 밖은 always */
@@ -132,6 +167,9 @@ public class HeroSelect {
 		try {
 			List<JsonValue> es = entries();
 			if (es.isEmpty()) return false;
+			// 12차: 프로젝트 영웅이 게임 직업 그대로(순서 · 수 · 이름 · 그림 · 설명 · 해금을 고치지 않음)면 게임의 선택 화면을 그대로 씀
+			//       — 모드마다 버튼 배치가 다름 (ARK: 6명씩 넘기는 쪽 · 원작: 한 줄). 영웅 능력치 · 시작 아이템은 HeroRuntime 이 직업으로 찾아 적용
+			if (nativeLineup(es)) { selected = null; MakerRuntime.log("영웅 선택: 게임 직업 그대로 — 게임의 선택 화면 사용"); return false; }
 			selected = null; scene = sc; initDone = false; big = null; myInfo = null;
 			for (JsonValue h : es) {
 				HeroBtn b = new HeroBtn(sc, h);
@@ -175,8 +213,8 @@ public class HeroSelect {
 		return d.length() > 300 ? d.substring(0, 300) + "…" : d;
 	}
 
-	/** 영웅 그림의 첫 프레임 (그림이 없으면 바탕 직업 그림) */
-	static Image icon(JsonValue h) {
+	/** 영웅 버튼 아이콘: select.icon → (그림을 바꾸지 않은 영웅) 게임의 선택 버튼 아이콘 그대로 → 영웅 시트의 select.iconTier 줄 첫 프레임 */
+	static Image icon(Object sc, JsonValue h) {
 		try {
 			JsonValue sel = h.get("select");
 			String ic = sel == null ? "" : sel.getString("icon", "");
@@ -184,11 +222,36 @@ public class HeroSelect {
 				Object t = MakerRuntime.texture(ic);
 				if (t != null) { Image im = new Image(t); float k = Math.min(1f, 20f / Math.max(im.width, im.height)); im.scale.set(k); return im; }
 			}
-			// 영웅 시트의 가장 좋은 갑옷 줄(원작 선택 화면처럼), 가만히 있는 첫 프레임
-			Image img = HeroRuntime.avatarOf(h, 6);
+			// 11차: 게임의 HeroBtn 이 만드는 아이콘 (원작: 시트의 직업 갑옷 줄 · ARK: Icons 얼굴 · 블루 아카이브: 시트 맨 윗줄) — 판마다 다른 규칙을 게임 코드가 정함
+			if (sc != null && gameSheet(h)) { Image g = gameIcon(sc, classOf(h)); if (g != null) return g; }
+			// 그림을 바꾼 영웅: 영웅 시트의 select.iconTier 줄 (저장소의 선택 화면이 쓰는 줄 — 기록이 없는 예전 프로젝트는 원작처럼 6 = 직업 갑옷), 가만히 있는 첫 프레임
+			Image img = HeroRuntime.avatarOf(h, sel == null ? 6 : sel.getInt("iconTier", 6));
 			if (img != null) { if (img.height > 20) img.scale.set(20f / img.height); return img; }
 		} catch (Throwable t) { MakerRuntime.log("영웅 선택 그림 오류: " + t); }
+		if (sc != null && gameSheet(h)) { Image g = gameIcon(sc, classOf(h)); if (g != null) return g; }
 		return new Image(classOf(h).spritesheet(), 0, 90, 12, 15);
+	}
+	/** 영웅 시트가 바탕 직업의 게임 시트 그대로인가 (비었음 · spritesheet() 와 같음 · 저장소에서 옮긴 값 그대로) — 아니면 게임 아이콘을 쓰지 않음 (다른 영웅 그림을 보이지 않게) */
+	static boolean gameSheet(JsonValue h) {
+		if (HeroRuntime.zeroBase(h)) return false;
+		JsonValue sp = h.get("sprite"); String sheet = sp == null ? "" : sp.getString("sheet", "");
+		if (sheet.isEmpty() || sheet.equals("game:" + classOf(h).spritesheet())) return true;
+		JsonValue F = h.get("src") == null ? null : h.get("src").get("fields"), r = F == null ? null : F.get("sprite.sheet");
+		return r != null && !r.getString("from", "").equals("user") && sheet.equals(r.getString("v", "\u0000"));
+	}
+	/** 게임의 HeroSelectScene.HeroBtn(직업) 을 만들어 그 아이콘을 복사 (버튼은 화면에 넣지 않고 버림) */
+	static Image gameIcon(Object sc, HeroClass cl) {
+		try {
+			Class<?> bc = Class.forName(HeroSelectScene.class.getName() + "$HeroBtn");
+			java.lang.reflect.Constructor<?> c = bc.getDeclaredConstructor(HeroSelectScene.class, HeroClass.class);
+			c.setAccessible(true);
+			StyledButton b = (StyledButton) c.newInstance(sc, cl);
+			Image src = b.icon();
+			Image im = src == null ? null : new Image(src);
+			if (im != null) { im.scale.set(src.scale.x, src.scale.y); im.origin.set(src.origin.x, src.origin.y); }
+			b.destroy();
+			return im;
+		} catch (Throwable t) { MakerRuntime.log("게임 영웅 버튼 아이콘을 못 만듦: " + t); return null; }
 	}
 
 	/** 게임의 setSelectedHero(직업) 를 부른 뒤 이름·설명을 영웅 것으로 */
@@ -245,7 +308,7 @@ public class HeroSelect {
 			img.x = (Camera.main.width - img.width * k) / 2f;
 			img.y = 0;
 		} else {
-			img = ill != null ? ill : icon(h);
+			img = ill != null ? ill : icon(null, h);
 			if (ill == null) img.scale.set(1);
 			float room = Math.min((Camera.main.height * (ill != null ? 0.9f : 0.6f)) / img.height, ((Camera.main.width - left) * (ill != null ? 0.9f : 0.6f)) / img.width);
 			// 작은 도트 그림은 정수 배로 (흐려지지 않게)
@@ -411,7 +474,7 @@ public class HeroSelect {
 		HeroBtn(Object sc, JsonValue h) {
 			super(Chrome.Type.GREY_BUTTON_TR, "");
 			this.sc = sc; this.h = h; this.id = h.getString("id", ""); this.cl = classOf(h);
-			icon(HeroSelect.icon(h));
+			icon(HeroSelect.icon(sc, h));
 		}
 		boolean locked() { return HeroSelect.locked(h); }
 		@Override public void update() {

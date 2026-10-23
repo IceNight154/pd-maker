@@ -24,12 +24,14 @@ Pixel Dungeon modding/
 
 | 폴더 | 내용 | 고칠 때 |
 |---|---|---|
-| `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`, 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css` |
-| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 원본 코드 29개 파일에 연결 줄 62개를 넣음 (목록: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
+| `editor/` | 에디터(Electron) | 화면은 `renderer/js/editors/<편집기>.js`(저장소 분석 `repoanalysis.js` · 저장소 탐색 `repoexplorer.js`), 공용 부품은 `renderer/js/*.js`, 스타일은 `renderer/css/app.css`, 저장소 분석기 `repo-analyzer.js` · 런타임 적응 `runtime-adapt.js`(12차: 게임 패키지 · long 체력) · 다른 저장소 기능 찾기 · 가져오기 `repo-features.js`(12차 — 화면 `renderer/js/editors/features.js`) |
+| `editor/runtime-installer.js` | 게임 저장소에 런타임을 넣거나 빼는 스크립트. 저장소 구조에 맞춰 적응한 런타임을 복사하고 원본 코드에 연결 줄을 넣음 (목록 · 개수: DESIGN.md §17.2) | 새 연결 줄을 추가할 때 |
 | `runtime/src/…/pdmaker/` | 게임 쪽 Java 패키지(53개 파일) | 게임 동작을 바꿀 때. 설치하면 게임 저장소로 복사됨 |
 | `tools/sample/` | mod-2 기준 샘플 프로젝트(`sample-project/`, 저장소에는 없음)를 만드는 스크립트 | `python tools/sample/make_sample.py && node tools/sample/make_heart.js && node tools/sample/make_sounds.js && python tools/sample/make_portraits.py` |
 | `tools/data/` | 게임 소스에서 에디터 데이터를 뽑는 스크립트 | `python tools/data/extract_spd_items.py [mod-2] [원작]` → `spd-items.js`, `node tools/data/gen_terms_java.js` → `DefaultTerms.java` |
-| `tools/playtest/` | 자동 플레이 테스트(Linux 개발용) | `tools/playtest/README.md` 참고 |
+| `tools/playtest/` | 자동 플레이 테스트(Linux 개발용). `repo-project.js` = 게임 저장소 기준 프로젝트 만들기(11차 — 편집기의 새 프로젝트와 같은 과정) | `tools/playtest/README.md` 참고 |
+| `tools/tests/` | 회귀 · 저장소 · 화면 시험 (`run.js` · `repo-compat.js` · `repo-fidelity.js` · `ui-*.js`) | 설치 · 제거 시험은 임시 사본에서만 (원본 `game/` 저장소를 고치지 않음) |
+| `game/` | 게임 저장소(기준 SPD · 파생작). **읽기 전용으로 다룸** — 편집기 · 분석기 · 탐색 화면은 읽기만, 테스트 플레이 런타임은 설치기가 넣고 뺌 | 직접 고치지 않음 (파생작 원본은 그 저장소의 것) |
 | `references/` | 참고용 원본 코드(mod2-buffs: Brand·InkMark·Overheat) | 읽기만 함 |
 | `docs/` | 이 안내 | |
 
@@ -42,7 +44,10 @@ heroes/<영웅>.json  characters/<캐릭터>.json  items/<아이템>.json  event
 story/story.json  heart/heart.json  audio/sounds.json
 props/<오브젝트>.json  gameitems.json  texts.json  badges.json  (확장 기능: effects · filters · textfx · trailers · compose · quests .json)
 assets/                                 ← 그림·소리 (아래 표준 폴더)
+features/<id>/feature.json · files/java/… · files/assets/…   ← 12차: 다른 저장소에서 가져온 기능 (원본 저장소 없이도 다시 설치)
 ```
+
+- **`features/`** (12차): 편집기 › 프로젝트 › 다른 저장소 기능 가져오기 로 담은 꾸러미. `feature.json` 에 새 클래스 목록 · 바꾸거나 더하는 멤버(원문 · 바꾸기 전 해시) · Assets 상수 · 번역 줄 · 리소스 목록, `files/` 에 클래스 원문(SPD 패키지 이름 기준) · 리소스 파일. `enabled: false` 면 설치하지 않음. 테스트 플레이 · 내보내기 때 설치기가 게임 저장소에 넣고, 제거 · 끄기 → 원래 파일로.
 
 ### 그림 표준 폴더 (`assets/` 아래)
 

@@ -130,7 +130,7 @@ public class MakerCharAI {
 		if (amt <= 0 || self.HP >= self.HT || t.sinceHit <= s.getInt("regenDelay", 0)) return;
 		if (++t.tick < Math.max(1, s.getInt("regenEvery", 1))) return;
 		t.tick = 0;
-		int add = Math.min(amt, self.HT - self.HP);
+		int add = (int) Math.min(amt, self.HT - self.HP);
 		self.HP += add;
 		if (self.sprite != null && self.sprite.visible) MakerCompat.status(self.sprite, CharSprite.POSITIVE, Integer.toString(add), "HEALING");
 	}

@@ -12,7 +12,7 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 const JS = require('./renderer/js/javasrc.js');
 
-const VERSION = 3;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인
+const VERSION = 5;   // 결과 모양이 바뀌면 올림 (예전 캐시를 쓰지 않게) — 2: 런타임 클래스 확인 · 4: 영웅 그림 구조 · 탐색 색인 · 적응 클래스 확인 · 5: 시작 자리(maps.start)
 const SKIP_DIRS = new Set(['.git', '.gradle', 'build', 'node_modules', '.idea', '.vscode', '.cxx', '.externalNativeBuild']);
 const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']), AUD = new Set(['mp3', 'ogg', 'wav']), FONT = new Set(['ttf', 'otf', 'fnt']);
 const TEXT = new Set(['properties', 'json', 'xml', 'txt', 'md']);
@@ -112,6 +112,8 @@ function findRoot(input) {
   if (found.length === 1) { res.root = found[0]; res.reason = '아래 폴더에서 찾은 유일한 Gradle 저장소'; return res; }
   if (found.length > 1) { res.problems.push(`이 폴더 안에 게임 저장소가 ${found.length}개 있습니다 — 하나를 고르세요`); return res; }
   if (['build.gradle', 'build.gradle.kts', 'gradlew', 'gradlew.bat'].some(f => isFile(path.join(abs, f)))) { res.root = abs; res.reason = 'settings.gradle 없는 단일 모듈 Gradle 폴더'; return res; }
+  // 12차: gradle 없는 Eclipse · Ant 안드로이드 프로젝트 (원작 Pixel Dungeon — AndroidManifest.xml + src/ + assets/)
+  if (isFile(path.join(abs, 'AndroidManifest.xml')) && isDir(path.join(abs, 'src'))) { res.root = abs; res.reason = 'gradle 없는 Eclipse · Ant 안드로이드 프로젝트 (AndroidManifest.xml · src/)'; res.layout = 'eclipse'; return res; }
   res.problems.push('Gradle 저장소를 찾지 못했습니다 (settings.gradle · build.gradle · gradlew 없음)');
   return res;
 }
@@ -263,6 +265,15 @@ function analyze(input, opts = {}) {
       effect: '런타임 설치기의 "안드로이드 SDK 가 없으면 android 모듈 건너뛰기" 연결 줄은 이 형식에 넣지 않음 (android 모듈이 빌드에 포함됨)' });
   });
 
+  // 12차: gradle 없는 Eclipse · Ant 프로젝트 (원작 Pixel Dungeon) — 저장소 자체가 모듈 하나 (src · assets · res)
+  if (fr.layout === 'eclipse') {
+    const m = R.modules.find(x => x.dir === '.') || (R.modules.push({ name: ':', dir: '.', exists: true, buildFile: '', java: [], kotlin: [], assets: [], res: [], manifest: '', dependsOn: [], libraries: [] }), R.modules[R.modules.length - 1]);
+    if (!m.java.length) m.java = ['src'];
+    if (!m.assets.length && isDir(path.join(root, 'assets'))) m.assets = ['assets'];
+    if (!m.res.length && isDir(path.join(root, 'res'))) m.res = ['res'];
+    m.manifest = m.manifest || 'AndroidManifest.xml';
+    R.features.push({ id: 'eclipse-layout', label: 'gradle 없는 Eclipse · Ant 안드로이드 프로젝트', evidence: 'AndroidManifest.xml · src/ · assets/ (settings.gradle · build.gradle 없음)', effect: '분석 · 탐색 · 프로젝트 만들기는 됨 — PDMaker 런타임 설치 · 테스트 플레이(gradle)는 안 됨' });
+  }
   // ---- 소스 루트 · 게임 모듈 · 패키지
   const javaFiles = walk.files.filter(f => /\.java$/i.test(f.rel)), ktFiles = walk.files.filter(f => /\.kts?$/i.test(f.rel) && !/\.gradle\.kts$/i.test(f.rel));
   let J = null;   // { srcDir, pkgDir(rel), pkg }
@@ -482,9 +493,17 @@ function analyze(input, opts = {}) {
           spriteKind: !sheet ? 'none' : sheets.map[n] ? 'direct' : 'default', skinSheets: skins.length };
       });
       O.heroFrame = frame;
+      // 11차: HeroSprite 의 실제 구조 (갑옷 줄 높이 · 줄 안의 칸 · 동작) · 선택 화면 아이콘의 출처
+      const hsp = JS.heroSprite(readJ('sprites/HeroSprite.java'));
+      if (hsp) { O.heroSprite = Object.assign(hsp, { file: J.pkgDir + '/sprites/HeroSprite.java' }); if (hsp.frame) O.heroFrame = hsp.frame; }
+      const icons = JS.heroSelectIcons(hs);
+      if (Object.keys(icons).length) O.heroSelectIcons = Object.assign(icons, { file: J.pkgDir + '/scenes/HeroSelectScene.java' });
+      if (hsp && hsp.rowH && hsp.frame && hsp.rowH !== hsp.frame[1]) R.features.push({ id: 'hero-tier-rows', label: `영웅 갑옷 줄 ${hsp.rowH}px 안에 ${hsp.frame[0]}×${hsp.frame[1]} 칸`, evidence: hsp.evidence.frame + ' · ' + hsp.evidence.rowH, effect: '영웅 그림을 갑옷 줄 높이와 칸 크기를 따로 잘라 씀 (예전: 줄 높이 = 칸 높이로 가정 → 아래 줄이 섞임)' });
+      if (Object.values(icons).some(x => x && x.kind === 'icons')) R.features.push({ id: 'hero-select-icons', label: '영웅 선택 버튼이 얼굴 아이콘(Icons)', evidence: 'HeroSelectScene.HeroBtn: ' + [...new Set(Object.values(icons).filter(x => x && x.kind === 'icons').map(x => 'Icons.' + x.name))].slice(0, 8).join(', '), effect: '시트를 바꾸지 않은 영웅은 게임의 선택 버튼 아이콘을 그대로 씀 (예전: 시트의 직업 갑옷 줄 → 최대 갑옷 모습)' });
       const odd = O.heroes.filter(x => x.sheet && !x.conventional);
       if (odd.length) R.features.push({ id: 'hero-sheet-switch', label: '영웅 시트 파일 이름이 직업 이름과 다름', evidence: odd.slice(0, 6).map(x => `${x.cls} → ${x.sheet}`).join(', ') + (odd.length > 6 ? ` 외 ${odd.length - 6}` : '') + ' (HeroClass.spritesheet())', effect: '영웅 그림을 spritesheet() 의 실제 파일로 연결 (예전: sprites/<직업>.png 로 가정 → 그림 없음)' });
-      if (frame && (frame[0] !== 12 || frame[1] !== 15)) R.features.push({ id: 'hero-frame', label: `영웅 프레임 ${frame[0]}×${frame[1]}`, evidence: J.pkgDir + '/sprites/HeroSprite.java', effect: '영웅 그림 칸 크기를 이 값으로' });
+      const hf = O.heroFrame;
+      if (hf && (hf[0] !== 12 || hf[1] !== 15)) R.features.push({ id: 'hero-frame', label: `영웅 프레임 ${hf[0]}×${hf[1]}`, evidence: J.pkgDir + '/sprites/HeroSprite.java' + (hsp ? ' — ' + hsp.evidence.frame : ''), effect: '영웅 그림 칸 크기를 이 값으로' });
       if (/Dungeon\.hero\s*\.\s*\w*[Ss]kin|switch\s*\(\s*Dungeon\.hero\./.test((JS.method(hc, /String\s+spritesheet\s*\(\s*\)\s*\{/) || {}).body || '')) R.features.push({ id: 'hero-skin', label: '게임 중 바뀌는 영웅 그림(스킨)', evidence: 'HeroClass.spritesheet() 가 Dungeon.hero 값으로 다른 시트를 고름', effect: '편집기는 기본 시트만 연결 — 스킨 시트는 미지원 (원본 코드 그대로 동작)' });
     }
 
@@ -504,6 +523,10 @@ function analyze(input, opts = {}) {
         return Object.assign({}, x, { depth: dl, fallback: fb, boss: dl.length > 0 && dl.every(n => LS.bossDepths.includes(n)) }); }),
       levels: {}, terrain: terrainMap };
     for (const sl of O.maps.slots) if (!sl.fallback) { const li = levelOf(sl.cls); if (li) O.maps.levels[sl.cls] = li; else sl.missing = true; }
+    // 11차: 새 게임이 시작하는 자리 — Dungeon.init() 의 depth = … · branch = … (원작 1 · 0, ARK 0 · 2 = 로도스 숙소)
+    { const im = JS.method(dsrc || '', /\bstatic\s+void\s+init\s*\(\s*\)\s*\{/); const b = im ? JS.scan(im.body).code : '';
+      const dm = /(?:^|[^.\w])depth\s*=\s*(\d+)\s*;/m.exec(b), bm = /(?:^|[^.\w])branch\s*=\s*(\d+)\s*;/m.exec(b);
+      if (dm) O.maps.start = { depth: +dm[1], branch: bm ? +bm[1] : 0, file: J.pkgDir + '/Dungeon.java', line: im.line + im.code.slice(0, im.code.indexOf('{') + 1 + dm.index).split('\n').length - 1, evidence: `Dungeon.init(): depth = ${dm[1]}` + (bm ? ` · branch = ${bm[1]}` : '') }; }
     O.maps.unusedLevels = all().filter(d => d.kind === 'class' && !d.abstract && isA(d, 'Level') && !O.maps.levels[d.name] && d.name !== 'DeadEndLevel').map(d => ({ cls: d.name, file: d.file, line: d.line }));
     // 보스 층 클래스에서 만드는 몬스터 → 분류 근거
     const bossSpawn = {};
@@ -730,6 +753,10 @@ function analyze(input, opts = {}) {
     const pkgPath = J.pkg.split('.').join('/') + '/', known = new Set();
     for (const f of javaFiles) { const i = f.rel.indexOf('/java/' + pkgPath); if (i >= 0) known.add(f.rel.slice(i + 6 + pkgPath.length, -5)); }
     for (const [cls, at] of uses) if (!known.has(cls.split('.').join('/'))) cc.missing.push({ cls, uses: at });
+    // 11차: 설치기는 런타임 사본을 이 저장소 구조에 맞춰 적응한 뒤 설치함 (게임 본체 이름 · 옮겨진 클래스 · 기능 조건 블록) → 적응하고도 남는 것만 "없는 클래스"
+    //       (원래 이름으로 없던 것은 raw 에 — 적응으로 해결된 것은 adapted)
+    if (cc.missing.length) { try { const left = inst.missingClasses(root, opts.runtimeSrc || path.join(__dirname, '..', 'runtime', 'src')); const keep = new Set(left.map(m => m.cls));
+      cc.raw = cc.missing; cc.adapted = cc.missing.filter(m => !keep.has(m.cls)).map(m => m.cls); cc.missing = left.map(m => ({ cls: m.cls, uses: (m.uses || []).slice(0, 5) })); } catch (e) { cc.adaptError = String(e && e.message || e); } }
     if (cc.missing.length) R.warnings.push({ phase: '런타임 호환', reason: `PDMaker 런타임이 쓰는 게임 클래스 ${cc.missing.length}개가 이 저장소에 없습니다 (${cc.missing.slice(0, 4).map(x => x.cls).join(', ')}${cc.missing.length > 4 ? ' …' : ''}) — 런타임을 설치하면 컴파일되지 않습니다` });
   });
   // 지원 범위의 런타임 줄을 compat 결과로 다시
@@ -737,9 +764,19 @@ function analyze(input, opts = {}) {
     const cm = ((R.runtime.classCheck || {}).missing || []).length;
     R.support[0].stages.runtime = !R.runtime.ok ? { s: 'no', n: '설치 불가', note: R.runtime.problems.join(' · ') }
       : cm ? { s: 'no', n: `없는 클래스 ${cm}`, note: '런타임이 이름으로 부르는 게임 클래스가 없어 컴파일되지 않음 (보고서 "게임 런타임 설치" 참고)' }
-      : { s: R.runtime.missing.length ? 'partial' : 'ok', n: `연결 줄 ${R.runtime.missing.length ? '누락 ' + R.runtime.missing.length : '모두'}`, note: '설치 가능 여부 · 클래스 이름만 확인 — 빌드 · 실행은 테스트 플레이에서 확인' };
+      : { s: R.runtime.missing.length ? 'partial' : 'ok', n: `연결 줄 ${R.runtime.missing.length ? '누락 ' + R.runtime.missing.length : '모두'}`, note: '설치 가능 여부 · 클래스 이름만 확인 — 빌드 · 실행은 테스트 플레이에서 확인' + (((R.runtime.classCheck || {}).adapted || []).length ? ` · 이 저장소 구조에 맞춰 적응한 클래스 ${R.runtime.classCheck.adapted.length}개 (${R.runtime.classCheck.adapted.slice(0, 4).join(', ')}${R.runtime.classCheck.adapted.length > 4 ? ' …' : ''})` : '') };
   }
 
+  // 11차: 저장소 탐색 화면용 색인 — 모든 파일(경로 · 종류 · 크기 · 그림 크기) · 클래스(파일 · 줄 · 부모 · 종류). 읽기만, 값은 원본 그대로
+  try {
+    const items = R.resources._items || {}, byFile = {};
+    Object.values(items).forEach(v => { if (v && v.file) byFile[v.file] = v; });
+    const kindOf = rel => { const e = ext(rel); return /\.java$/i.test(rel) ? 'java' : /\.kts?$/i.test(rel) ? 'kotlin' : /\.gradle(\.kts)?$/i.test(rel) ? 'gradle' : /\.properties$/i.test(rel) ? 'props' : IMG.has(e) ? 'image' : AUD.has(e) ? 'audio' : FONT.has(e) ? 'font' : TEXT.has(e) ? 'text' : 'other'; };
+    R.index = {
+      files: walk.files.map(f => { const v = byFile[f.rel], o = { p: f.rel, k: kindOf(f.rel), b: f.size }; if (v && v.w) { o.w = v.w; o.h = v.h; } if (v && v.status && v.status !== 'decoded') o.s = v.status; return o; }),
+      classes: all().filter(d => !d.local).map(d => ({ n: d.name, f: d.file, l: d.line, p: d.ext || '', k: d.kind || 'class', a: !!d.abstract, o: d.outer || '' })).sort((a, b) => a.n.localeCompare(b.n) || a.f.localeCompare(b.f)),
+    };
+  } catch (e) { R.warnings.push({ phase: '색인', reason: '파일 · 클래스 색인을 만들지 못함: ' + e.message }); }
   delete R.resources._items;
   R.durationMs = Date.now() - t0;
   R.summary = summarize(R);

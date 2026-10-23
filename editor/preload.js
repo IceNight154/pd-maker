@@ -43,6 +43,15 @@ contextBridge.exposeInMainWorld('pdmNative', {
   repoBundle: from => call('repo:bundle', { from }),
   // 게임 저장소 분석 (9차 — 읽기 전용 · 결과는 캐시)
   analyzeRepo: (dir, opts) => call('repo:analyze', Object.assign({ dir }, opts || {})),
+  // 12차: 게임 패키지 폴더 (저장소 기준 경로 조각 — 패키지 이름을 바꾼 파생작도)
+  gameJavaRel: repo => call('repo:javaRel', repo),
+  // 12차: 다른 저장소의 기능 찾기 · 가져오기
+  featureRepos: repo => call('features:repos', { repo }),
+  featureCatalog: (source, target) => call('features:catalog', { source, target }),
+  featureClosure: (source, target, ids) => call('features:closure', { source, target, ids }),
+  featureImport: opts => call('features:import', opts),
+  featureList: project => call('features:list', { project }),
+  featureSet: (project, id, o) => call('features:set', Object.assign({ project, id }, o)),
   // 테마 (시스템 색)
   themeGet: () => call('theme:get'),
   themeSet: mode => call('theme:set', mode),

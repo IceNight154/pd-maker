@@ -31,7 +31,7 @@ const ARK = path.join(GAME, 'ARK_PD-main'), BASE = path.join(GAME, 'shattered-pi
   const browser = await chromium.launch();
   const open = async (scheme, vw = 1500, vh = 950) => {
     const page = await browser.newPage({ viewport: { width: vw, height: vh }, colorScheme: scheme });
-    const errors = []; page.on('pageerror', e => errors.push(String(e)));
+    const errors = []; page.on('pageerror', e => errors.push(String(e) + ' @ ' + String(e.stack || '').split('\n').slice(1, 3).map(x => x.trim()).join(' < ')));
     await page.addInitScript(R => {   // 웹 모드 bridge 가 window.pdm 을 만들 때 분석기를 끼움
       let v; Object.defineProperty(window, 'pdm', { configurable: true, get: () => v, set: x => { v = x; if (x) x.analyzeRepo = async d => { const k = Object.keys(R).find(q => q.replace(/[\\/]+$/, '') === String(d).replace(/[\\/]+$/, '')); if (!k) throw new Error('분석 결과 없음 ' + d); return JSON.parse(JSON.stringify(R[k])); }; } });
     }, REP);
@@ -76,20 +76,23 @@ const ARK = path.join(GAME, 'ARK_PD-main'), BASE = path.join(GAME, 'shattered-pi
       t = await page.locator('.prov-box').first().innerText(); assert.ok(/사용자 지정 = 엘리트/.test(t), t.slice(0, 400));
       return JSON.stringify(kinds);
     });
-    await check('③ 게임 저장소의 맵: 목록 → 자세히 → 가져오기 → 맵 그래프 노드 · 직접 그리기 노드는 맵 편집기 · 게임 원래 맵은 정보 화면', async () => {
+    await check('③ 게임 저장소의 맵: 프로젝트를 열면 가져오기 없이 맵 그래프에 (11차) · 자세히(유형) · 직접 그리기 노드는 맵 편집기 · 게임 원래 맵은 정보 화면(근거)', async () => {
       const items = await page.evaluate(() => PDM.repoMaps.list().length); assert.ok(items >= 27);
+      const shown = await page.evaluate(() => { const L = PDM.repoMaps.list().filter(s => s.extra), has = id => PDM.store.has('node:' + id) || PDM.store.all('node').some(n => n.src && n.src.slotId === id); return { n: L.flatMap(s => s.ids).length, ok: L.every(s => s.ids.every(has)), adopted: PDM.store.all('node').filter(n => n.src && n.src.adopted).map(n => n.id) }; });
+      assert.ok(shown.ok && shown.n >= 30, '열자마자 원작에 없는 맵이 모두 그래프에: ' + JSON.stringify(shown));
+      assert.deepStrictEqual(shown.adopted, ['n10', 'n15', 'n20', 'n25'], 'ARK 보스 층 = 기본 보스 노드를 바꿈 (겹친 노드 없음)');
+      assert.strictEqual(await page.evaluate(() => PDM.store.get('world').start), 'g_new_rhodes_level2_d0_b2', '시작 노드 = 로도스 숙소 (Dungeon.init)');
       await page.evaluate(() => { PDM.repoMaps.details(PDM.repoMaps.list().find(s => s.cls === 'NewRhodesLevel1')); });   // 창이 닫힐 때까지 기다리지 않음
       const modal = page.locator('.modal').last(); await modal.waitFor(); const mt = await modal.innerText();
-      assert.ok(/고정 맵 \(모든 칸 확정\)/.test(mt) && /35×26/.test(mt), mt.slice(0, 400)); await shot(page, 'rf-map-details');
-      await modal.locator('button', { hasText: '맵 그래프에 가져오기' }).click(); await page.waitForTimeout(600);
-      await page.evaluate(() => PDM.repoMaps.importSlots(PDM.repoMaps.list().filter(s => s.extra))); await page.waitForTimeout(300);
+      assert.ok(/고정 맵 \(모든 칸 확정\)/.test(mt) && /35×26/.test(mt) && /맵 유형/.test(mt) && /고정/.test(mt) && !/가져오기/.test(mt), mt.slice(0, 400)); await shot(page, 'rf-map-details');
+      await modal.locator('button', { hasText: '닫기' }).click(); await page.waitForTimeout(300);
       await page.evaluate(() => PDM.tabs.open('world')); await page.waitForTimeout(800);
       const cards = await page.evaluate(() => [...document.querySelectorAll('.wg-node')].filter(e => /원본 /.test(e.innerText)).length); assert.ok(cards >= 30, '그래프 카드 ' + cards);
       await page.evaluate(() => { const b = document.querySelector('.wg-vp'); if (b) b.focus(); }); await shot(page, 'rf-map-graph');
       await page.evaluate(() => PDM.tabs.open('node:g_new_rhodes_level1_d0_b1')); await page.waitForTimeout(700);
       assert.ok(await page.evaluate(() => !!document.querySelector('.page canvas')), '직접 그리기 노드 = 맵 편집기 (캔버스)'); await shot(page, 'rf-map-rhodes');
       await page.evaluate(() => PDM.tabs.open('node:g_gavial_level_d31')); await page.waitForTimeout(500);
-      const gt = await page.evaluate(() => document.querySelector('.page').innerText); assert.ok(/게임 원래 맵/.test(gt) && /GavialLevel/.test(gt) && /extrastage_Gavial/.test(gt), gt.slice(0, 300)); await shot(page, 'rf-map-gamenode');
+      const gt = await page.evaluate(() => document.querySelector('.page').innerText); assert.ok(/게임 원래 맵/.test(gt) && /GavialLevel/.test(gt) && /extrastage_Gavial/.test(gt) && /근거 · Dungeon\.newLevel\(\)/.test(gt) && /조건부/.test(gt), gt.slice(0, 300)); await shot(page, 'rf-map-gamenode');
       return `저장소 맵 ${items} · 그래프 카드 ${cards}`;
     });
     await check('④ 배지: 항목 178 · 시트 16px · 한 줄 16칸 · 이름 글자 · 그림 없는 배지도 줄', async () => {
@@ -127,6 +130,34 @@ const ARK = path.join(GAME, 'ARK_PD-main'), BASE = path.join(GAME, 'shattered-pi
         return `${g.W}×${g.H} ${g.land ? '가로' : '세로'} · 버튼 ${g.buttons.length} · 최대 오차 ${Math.max(...g.buttons.map(b => { const w = want.B[b.id]; return Math.max(Math.abs(b.base[0] - w[0]), Math.abs(b.base[1] - w[1]), Math.abs(b.base[2] - w[2])); })).toFixed(3)}px`;
       });
     }
+    await check('⑦ 게임 저장소 탐색 (11차): 파일 검색 → 그림 미리보기 · 클래스 상속 · 게임 데이터(원본/추론 · 편집 가능) → 편집기 · 번역 검색 · 읽기 전용', async () => {
+      await page.evaluate(() => PDM.tabs.open('repoexplorer')); await page.waitForTimeout(500);
+      let t = await page.evaluate(() => document.querySelector('.page').innerText); assert.ok(/게임 저장소 탐색/.test(t) && /읽기 전용/.test(t) && /클래스 2\d{3}/.test(t), t.slice(0, 300));
+      const search = async q => { await page.locator('.rx-search').fill(q); await page.waitForTimeout(500); };
+      await search('sprites/blaze'); await page.locator('.rx-row', { hasText: 'blaze.png' }).first().click();
+      await page.waitForFunction(() => { const i = document.querySelector('.rx-img img'); return i && i.naturalWidth > 0; }, null, { timeout: 15000 });
+      const img = await page.evaluate(() => { const i = document.querySelector('.rx-img img'); return [i.naturalWidth, i.naturalHeight]; }); assert.deepStrictEqual(img, [1800, 288]);
+      t = await page.evaluate(() => document.querySelector('.rx-right').innerText); assert.ok(/쓰는 곳: 영웅 블레이즈 시트/.test(t), t.slice(0, 300)); await shot(page, 'rx-file-image');
+      await page.locator('.rx-tabs button', { hasText: '클래스' }).click(); await page.waitForTimeout(300); await search('HeroSprite');
+      await page.locator('.rx-row').filter({ hasText: /^C HeroSprite/ }).first().click(); await page.waitForFunction(() => document.querySelector('.rx-right .code-view .mark'), null, { timeout: 15000 });
+      t = await page.evaluate(() => document.querySelector('.rx-right').innerText); assert.ok(/CharSprite/.test(t) && /MovieClip/.test(t) && /updateArmor/.test(t), t.slice(0, 400)); await shot(page, 'rx-class');
+      await page.locator('.rx-tabs button', { hasText: '게임 데이터' }).click(); await page.waitForTimeout(300);
+      await page.locator('.rx-filters button', { hasText: '영웅' }).click(); await page.waitForTimeout(300);
+      const rows = await page.evaluate(() => [...document.querySelectorAll('.rx-left .rx-row')].map(e => e.innerText)); assert.ok(rows.length === 7 && rows.every(r => /원본/.test(r)), rows.join(' / '));
+      await page.locator('.rx-row', { hasText: 'WARRIOR' }).click(); await page.waitForTimeout(300);
+      t = await page.evaluate(() => document.querySelector('.rx-right').innerText); assert.ok(/36×34 · 36/.test(t) && /Icons\.BLAZE/.test(t) && /프로젝트 값의 출처/.test(t), t.slice(0, 500)); await shot(page, 'rx-data-hero');
+      await page.locator('.rx-right button', { hasText: '영웅 편집기' }).click(); await page.waitForTimeout(400);
+      assert.strictEqual(await page.evaluate(() => PDM.tabs.active), 'hero:warrior', '편집기 바로가기');
+      await page.evaluate(() => PDM.tabs.open('repoexplorer')); await page.waitForTimeout(300);
+      await page.locator('.rx-filters button', { hasText: '맵' }).first().click(); await page.waitForTimeout(300);
+      t = await page.evaluate(() => document.querySelector('.rx-left').innerText); assert.ok(/그래프에 있음/.test(t) && /기본 층 노드가 대신/.test(t) && /조건부/.test(t), t.slice(0, 300));
+      await page.locator('.rx-tabs button', { hasText: '번역' }).click(); await page.waitForTimeout(300); await search('heroclass.warrior');
+      await page.waitForFunction(() => /actors\.hero\.heroclass\.warrior/.test(document.querySelector('.rx-left').innerText), null, { timeout: 20000 });
+      t = await page.evaluate(() => document.querySelector('.rx-left').innerText); assert.ok(/블레이즈/.test(t), t.slice(0, 300)); await shot(page, 'rx-texts');
+      // 탐색은 원본 저장소를 고치지 않음 (읽기만) — 이 화면에 저장 · 쓰기 동작이 없음
+      assert.ok(!(await page.evaluate(() => [...document.querySelectorAll('.page button')].some(b => /저장소 파일 (저장|수정|삭제)/.test(b.textContent)))));
+      return `그림 ${img.join('×')} · 영웅 ${rows.length}`;
+    });
     await check('⑥ 저장소 바꾸기 (ARK → 기준): 타이틀 · 배지 · 바탕 직업 이름 · 맵 목록이 기준 저장소 것 · ARK 맵 노드는 "다른 저장소" 표시', async () => {
       await page.evaluate(async b => { PDM.store.edit('project', '게임 저장소 경로', p => { p.gameRepo = b; }); await PDM.app.resolveRepo(true); }, BASE); await page.waitForTimeout(600);   // app.setRepo 와 같은 길 (확인 창 빼고)
       const r = await page.evaluate(() => ({ prof: PDM.REPO_ANALYSIS.profile.label, warrior: PDM.heroClassName('WARRIOR'), extra: PDM.repoMaps.list().filter(s => s.extra).length, title: !!PDM.titleRepo() }));

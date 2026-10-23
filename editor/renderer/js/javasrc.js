@@ -15,6 +15,8 @@
 //    sprite(src, assetsMap, inner) → { tex, sheet, frame:[w,h], anims, texOffset, parent, problems }
 //    heroSheets(src, assetsMap) → { map: { WARRIOR: 'sprites/warrior.png' }, def, consts: { WARRIOR: 'Sprites.WARRIOR' } }
 //    heroFrame(src)            → [w, h] | null
+//    heroSprite(src)           → { frame, rowH, anims, scale } (11차: updateArmor · tiers() 구조)
+//    heroSelectIcons(src)      → { CLS: { kind:'icons'|'sheet', … } } (11차: HeroSelectScene 의 HeroBtn 아이콘)
 //    gradleProps(src)          → { appName, appPackageName, appVersionName, … } (+= 이어 붙이기 포함)
 //    gradleIncludes(src)       → { modules: [':core', …], statements: [{ line, modules }], projectDirs: { ':x': 'dir' } }
 //    gradleSrcDirs(src)        → { java: [...], assets: [...], res: [...], resources: [...] }
@@ -164,11 +166,11 @@
   function assets(src) {
     const st = structure(src), out = { map: {}, consts: [], unresolved: [] };
     for (const t of st.types) {
-      if (t.depth === 0) continue;
+      // 12차: 바깥 형의 상수도 (원작 Pixel Dungeon 은 Assets.WARRIOR 처럼 안쪽 클래스 없이) — 열쇠는 "WARRIOR"
       const own = body(src, st, t), base = src.slice(0, t.open + 1).split('\n').length;
       const local = {};
       for (const m of own.matchAll(/static\s+final\s+String\s+(\w+)\s*=\s*([^;]+);/g)) {
-        const key = t.name + '.' + m[1], expr = m[2].trim(), line = base + own.slice(0, m.index).split('\n').length - 1;
+        const key = t.depth === 0 ? m[1] : t.name + '.' + m[1], expr = m[2].trim(), line = base + own.slice(0, m.index).split('\n').length - 1;
         let val = null;
         if (/^"[^"]*"$/.test(expr)) val = expr.slice(1, -1);
         else {   // "a" + B + "c" 처럼 이어 붙인 것 — 같은 클래스 상수만
@@ -232,8 +234,8 @@
       const top = st.types.find(x => x.depth === 0); if (top) { out.parent = top.ext; own = body(src, st, top); }
       const cm = /int\s+c\s*=\s*(?:[^;?]*\?\s*\d+\s*:\s*)?(\d+)\s*;/.exec(own); if (cm) out.texOffset = +cm[1];
     }
-    const tex = /texture\(\s*Assets\.(\w+)\.(\w+)\s*\)/.exec(own);
-    if (tex) { out.tex = tex[1] + '.' + tex[2]; out.sheet = (assetsMap || {})[out.tex] || ''; if (!out.sheet) out.problems.push(`Assets.${out.tex} 상수를 찾지 못함`); }
+    const tex = /texture\(\s*Assets\.(?:(\w+)\.)?(\w+)\s*\)/.exec(own);   // 원작 Pixel Dungeon: Assets.RAT (안쪽 클래스 없음)
+    if (tex) { out.tex = tex[1] ? tex[1] + '.' + tex[2] : tex[2]; out.sheet = (assetsMap || {})[out.tex] || ''; if (!out.sheet) out.problems.push(`Assets.${out.tex} 상수를 찾지 못함`); }
     else if (/texture\(/.test(own)) out.problems.push('그림을 코드로 고름 (texture(...) 가 상수가 아님)');
     // 프레임 크기: 숫자 · 같은 파일의 int 상수 · "return 숫자;" 한 줄짜리 메서드 (texHeight() 등)
     const numOf = e => { e = String(e).trim(); if (/^\d+$/.test(e)) return +e;
@@ -261,9 +263,9 @@
     const m = method(src || '', /String\s+spritesheet\s*\(\s*\)\s*\{/); if (!m) return out;
     const sw = /switch\s*\(\s*this\s*\)\s*\{/.exec(m.body); if (!sw) return out;
     const b = m.body.slice(sw.index + sw[0].length);
-    const re = /((?:\s*(?:case\s+\w+|default)\s*:)+)\s*return\s+Assets\.(\w+)\.(\w+)\s*;/g; let x;
+    const re = /((?:\s*(?:case\s+\w+|default)\s*:)+)\s*return\s+Assets\.(?:(\w+)\.)?(\w+)\s*;/g; let x;
     while ((x = re.exec(b))) {
-      const key = x[2] + '.' + x[3], p = (assetsMap || {})[key] || '';
+      const key = x[2] ? x[2] + '.' + x[3] : x[3], p = (assetsMap || {})[key] || '';
       for (const c of x[1].matchAll(/case\s+(\w+)/g)) { out.map[c[1]] = p; out.consts[c[1]] = key; }
       if (/default/.test(x[1])) out.def = p;
     }
@@ -272,6 +274,54 @@
   function heroFrame(src) {
     const w = /FRAME_WIDTH\s*=\s*(\d+)/.exec(src || ''), h = /FRAME_HEIGHT\s*=\s*(\d+)/.exec(src || '');
     return w && h ? [+w[1], +h[1]] : null;
+  }
+
+  /** 11차: HeroSprite.java 의 실제 그림 구조 — FRAME_* 상수만이 아니라 updateArmor() 가 자르는 칸 · tiers() 줄 높이 · 동작
+   *  → { frame:[w,h], rowH, anims:{ 이름: { frames, fps, loop } }, scale, avatarX, evidence:{…} } | null
+   *  (원작: tiers() 줄 15 · 칸 12×15 · ARK: tiers() 줄 36 · 칸 36×34 · 동작 번호도 판마다 다름) */
+  function heroSprite(src) {
+    if (!src) return null;
+    const s = scan(src).code, env = {};
+    for (const m of s.matchAll(/static\s+final\s+int\s+(\w+)\s*=\s*([^;]+);/g)) { const v = evalInt(m[2], env); if (v != null) env[m[1]] = v; }
+    const out = { frame: null, rowH: null, anims: {}, scale: 1, avatarX: null, evidence: {} };
+    if (env.FRAME_WIDTH && env.FRAME_HEIGHT) { out.frame = [env.FRAME_WIDTH, env.FRAME_HEIGHT]; out.evidence.frame = 'FRAME_WIDTH · FRAME_HEIGHT'; }
+    const tr = method(src, /TextureFilm\s+tiers\s*\(\s*\)\s*\{/);
+    if (tr) { const m = /new\s+TextureFilm\s*\(([^;]*)\)\s*;/.exec(scan(tr.body).code); const a = m ? splitArgs(m[1]) : [];
+      if (a.length === 3) { const v = evalInt(a[2], env); if (v) { out.rowH = v; out.evidence.rowH = 'tiers(): new TextureFilm(' + a.map(x => x.trim()).join(', ') + ')'; } } }
+    const ua = method(src, /void\s+updateArmor\s*\(\s*\)\s*\{/);
+    if (ua) {
+      const b = scan(ua.body).code;
+      // 갑옷 줄 안에서 자르는 칸: new TextureFilm( tiers(), <단계>, W, H ) — spearForm 같은 다른 분기의 칸은 쓰지 않음
+      for (const m of b.matchAll(/new\s+TextureFilm\s*\(([^;]*)\)\s*;/g)) { const a = splitArgs(m[1]); if (a.length === 4 && /tiers\s*\(\s*\)/.test(a[0])) { const w = evalInt(a[2], env), h = evalInt(a[3], env);
+        if (w && h) { out.frame = [w, h]; out.evidence.frame = 'updateArmor(): new TextureFilm(' + a.map(x => x.trim()).join(', ') + ')'; break; } } }
+      const fps = {}, loop = {};
+      for (const m of b.matchAll(/\b(\w+)\s*=\s*new\s+Animation\s*\(([^;]*)\)\s*;/g)) { const a = splitArgs(m[2]); const f = evalInt(a[0], env); if (f != null) { fps[m[1]] = f; loop[m[1]] = /true/.test(a[1] || ''); } }
+      for (const m of b.matchAll(/\b(\w+)\s*\.\s*frames\s*\(([^;]*)\)\s*;/g)) { const a = splitArgs(m[2]).slice(1).map(x => evalInt(x, env)); if (!(m[1] in fps) || !a.length || a.some(x => x == null)) continue;
+        out.anims[m[1]] = { frames: a, fps: fps[m[1]], loop: loop[m[1]] }; }
+      for (const m of b.matchAll(/\b(\w+)\s*=\s*(\w+)\s*\.\s*clone\s*\(\s*\)\s*;/g)) if (out.anims[m[2]] && !out.anims[m[1]]) out.anims[m[1]] = JSON.parse(JSON.stringify(out.anims[m[2]]));
+      if (Object.keys(out.anims).length) out.evidence.anims = 'updateArmor(): ' + Object.keys(out.anims).join(' · ');
+    }
+    // 그림 배율: 생성자 · updateArmor 에 scale.set 이 없으면 원래 크기 (1)
+    const sc = /\bscale\s*\.\s*set\s*\(\s*([\d.]+)f?\s*\)/.exec(s); if (sc) { out.scale = +sc[1]; out.evidence.scale = 'scale.set(' + sc[1] + ')'; } else out.evidence.scale = 'scale.set 없음 → 원래 크기';
+    const av = /uvRect\s*\(\s*(\d+)\s*,\s*0\s*,\s*FRAME_WIDTH/.exec(s); if (av) out.avatarX = +av[1];
+    return out.frame ? out : null;
+  }
+  /** HeroSelectScene 의 직업 버튼 아이콘 → { CLS: { kind:'icons', name } | { kind:'sheet', rect:[x,y,w,h] } } · 기본(default) 분기는 '*' */
+  function heroSelectIcons(src) {
+    const out = {}; if (!src) return out;
+    const s = scan(src).code, at = s.search(/class\s+HeroBtn\b/); if (at < 0) return out;
+    const ctor = /HeroBtn\s*\(\s*HeroClass\s+\w+\s*\)\s*\{/.exec(s.slice(at)); if (!ctor) return out;
+    const open = at + ctor.index + ctor[0].length - 1, body = s.slice(open + 1, matchClose(s, open));
+    const one = t => { let m = /icon\s*\(\s*new\s+Image\s*\(\s*Icons\s*\.\s*(\w+)\s*\.\s*get\s*\(\s*\)\s*\)\s*\)/.exec(t) || /icon\s*\(\s*Icons\s*\.\s*get\s*\(\s*Icons\s*\.\s*(\w+)\s*\)\s*\)/.exec(t);
+      if (m) return { kind: 'icons', name: m[1] };
+      m = /icon\s*\(\s*new\s+Image\s*\(\s*\w+\s*\.\s*spritesheet\s*\(\s*\)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*\)/.exec(t);
+      return m ? { kind: 'sheet', rect: [+m[1], +m[2], +m[3], +m[4]] } : null; };
+    const sw = /switch\s*\(\s*\w+\s*\)\s*\{/.exec(body);
+    if (sw) { const b = body.slice(sw.index + sw[0].length);
+      const re = /((?:\s*(?:case\s+\w+|default)\s*:)+)([\s\S]*?)(?=\bcase\s+\w+\s*:|\bdefault\s*:|$)/g; let m;
+      while ((m = re.exec(b))) { const ic = one(m[2]); if (!ic) continue; for (const c of m[1].matchAll(/case\s+(\w+)/g)) out[c[1]] = ic; if (/default/.test(m[1])) out['*'] = ic; } }
+    else { const ic = one(body); if (ic) out['*'] = ic; }
+    return out;
   }
 
   /** build.gradle 의 ext 값들 (appName · appVersionName += '…' 등) */
@@ -606,5 +656,5 @@
   /** Statistics.java 의 public static 칸 (들여쓰기와 상관없이) → [{ name, bool }] */
   function statistics(src) { const out = []; for (const m of scan(src || '').code.matchAll(/public\s+static\s+(int|float|long|boolean)\s+(\w+)\s*[;=]/g)) out.push({ name: m[2], bool: m[1] === 'boolean' }); return out; }
 
-  return { lineIndex, scan, matchClose, structure, body, enumConstants, method, caseBodies, assets, evalInt, itemSheet, sprite, heroSheets, heroFrame, gradleProps, gradleIncludes, gradleSrcDirs, enumEntries, splitArgs, heroSkins, terrain, parseStatements, levelSlots, levelTransitions, enclosingIfs, staticLayout, bannerRects, titleScene, badges, statistics };
+  return { lineIndex, scan, matchClose, structure, body, enumConstants, method, caseBodies, assets, evalInt, itemSheet, sprite, heroSheets, heroFrame, heroSprite, heroSelectIcons, gradleProps, gradleIncludes, gradleSrcDirs, enumEntries, splitArgs, heroSkins, terrain, parseStatements, levelSlots, levelTransitions, enclosingIfs, staticLayout, bannerRects, titleScene, badges, statistics };
 });

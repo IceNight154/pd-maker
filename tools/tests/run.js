@@ -43,6 +43,40 @@ function tileSheet() {
   return v;
 }
 
+// 11차: 영웅 그림 구조 분석 — 상수 · 식 · 다른 분기(spearForm 같은 다른 칸)가 섞인 가상의 포크 · 선택 버튼 아이콘 두 방식
+test('영웅 그림 구조: HeroSprite 의 갑옷 줄 높이 · 줄 안의 칸 · 동작(상수 · clone) · 배율 · 선택 아이콘 출처를 읽음', () => {
+  const JS = require(path.join(__dirname, '..', '..', 'editor', 'renderer', 'js', 'javasrc.js'));
+  const hs = JS.heroSprite(`public class HeroSprite extends CharSprite {
+    private static final int FRAME_WIDTH = 20; private static final int FRAME_HEIGHT = 2 * 12;   // 줄 높이 24
+    private static final int CELL_H = FRAME_HEIGHT - 2; private static final int RUN_FRAMERATE = 18; private static final int IDLE_A = 5;
+    public void updateArmor() {
+      TextureFilm film;
+      if (other) { film = new TextureFilm( texture, 30, 30 ); }          // 다른 형태 — 쓰지 않음
+      else film = new TextureFilm( tiers(), Dungeon.hero.tier(), FRAME_WIDTH, CELL_H );
+      idle = new Animation( 3, true ); idle.frames( film, IDLE_A, IDLE_A + 1 );
+      run = new Animation( RUN_FRAMERATE, true ); run.frames( film, 1, 2, 3 );
+      attack = new Animation( 12, false ); attack.frames( film, 7, 8 );
+      zap = attack.clone();
+      /* die = new Animation( 99, false ); die.frames( film, 99 ); */
+      die = new Animation( 9, false ); die.frames( film, 10, 11 );
+    }
+    public static TextureFilm tiers() { if (tiers == null) { SmartTexture texture = TextureCache.get( Assets.Sprites.X ); tiers = new TextureFilm( texture, texture.width, FRAME_HEIGHT ); } return tiers; }
+  }`);
+  assert.deepStrictEqual([hs.frame, hs.rowH, hs.scale], [[20, 22], 24, 1]);
+  assert.deepStrictEqual(hs.anims.idle, { frames: [5, 6], fps: 3, loop: true });
+  assert.deepStrictEqual(hs.anims.run.fps, 18); assert.deepStrictEqual(hs.anims.zap.frames, [7, 8]); assert.deepStrictEqual(hs.anims.die, { frames: [10, 11], fps: 9, loop: false }, '주석 속 동작은 무시');
+  assert.ok(/updateArmor/.test(hs.evidence.frame) && /tiers/.test(hs.evidence.rowH));
+  // FRAME_* 만 있고 updateArmor 가 FRAME_* 로 자르면 (원작 모양) = 줄 높이 = 칸 높이
+  const sp = JS.heroSprite('class HeroSprite { static final int FRAME_WIDTH = 12; static final int FRAME_HEIGHT = 15; public void updateArmor() { TextureFilm film = new TextureFilm( tiers(), Dungeon.hero.tier(), FRAME_WIDTH, FRAME_HEIGHT ); idle = new Animation(1, true); idle.frames(film, 0, 1); }\n public static TextureFilm tiers() { tiers = new TextureFilm( texture, texture.width, FRAME_HEIGHT ); return tiers; } }');
+  assert.deepStrictEqual([sp.frame, sp.rowH], [[12, 15], 15]);
+  assert.strictEqual(JS.heroSprite('class HeroSprite { }'), null, '구조를 못 읽으면 null (추측하지 않음)');
+  // 선택 버튼: 직업마다 Icons · 시트 칸 · default
+  const ic = JS.heroSelectIcons(`class HeroSelectScene { private class HeroBtn extends StyledButton { HeroBtn(HeroClass cl) { super(X, "");
+    switch (cl) { case WARRIOR: default: icon(new Image(Icons.FACE_A.get())); break; case MAGE: icon(Icons.get(Icons.FACE_B)); break; case ROGUE: icon(new Image(cl.spritesheet(), 0, 34, 12, 17)); break; } } } }`);
+  assert.deepStrictEqual(ic, { WARRIOR: { kind: 'icons', name: 'FACE_A' }, '*': { kind: 'icons', name: 'FACE_A' }, MAGE: { kind: 'icons', name: 'FACE_B' }, ROGUE: { kind: 'sheet', rect: [0, 34, 12, 17] } });
+  assert.deepStrictEqual(JS.heroSelectIcons('class HeroSelectScene { private class HeroBtn { HeroBtn(HeroClass cl) { icon(new Image(cl.spritesheet(), 0, 90, 12, 15)); } } }'), { '*': { kind: 'sheet', rect: [0, 90, 12, 15] } });
+});
+
 test('밑그림 대응표: 편집기 PDM.TILE_LEGACY_DEFAULT = 런타임 MakerTileUnderlay.LEGACY', () => {
   const { PDM } = env.load();
   const java = [...read(path.join(PDMK, 'MakerTileUnderlay.java')).matchAll(/\{visual:(\d+),under:\[([\d,]*)\]\}/g)].map(m => ({ visual: +m[1], under: m[2] ? m[2].split(',').map(Number) : [] }));
@@ -661,6 +695,13 @@ test('실행 환경 전달: gradle init 스크립트에 그대로(따옴표 · �
   eq(read(path.join(PDMK, 'MakerCutscene.java')).match(/SPEEDS = \{([^}]*)\}/)[1].split(',').map(Number), PDM.testEnv.SPEEDS);   // 6차: 배속은 MakerCutscene
   const main = read(path.join(ROOT, 'editor', 'main.js'));
   assert.ok(/require\('\.\/playtest-init(\.js)?'\)/.test(main), 'main.js 가 같은 모듈로 init 스크립트를 씀');
+  // 11차: 기본 테스트 플레이 = 내보낸 게임과 같은 실행 — INDEV(게임의 개발자 모드: ARK 시작 아이템 · 로딩 화면 생략으로 입장 문구가 안 보임)가 아님
+  const pt = init.build('/p', null);
+  assert.ok(/'Specification-Version', d\.appVersionName \+ '-PLAYTEST'/.test(pt) && !pt.slice(pt.indexOf("register('pdmakerPlaytest'"), pt.indexOf('def dbg')).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n').includes('INDEV'), 'PDMaker 테스트 실행 버전에 INDEV 없음');
+  assert.ok(pt.includes("findByName('release')") && /rel\.runtimeClasspath/.test(pt), 'release 서비스(업데이트 · 새 소식)도 내보낸 게임처럼');
+  assert.ok(/'Specification-Title', d\.hasProperty\('appName'\) \? d\.appName/.test(pt), '세이브 폴더 = 게임 이름 (내보낸 게임과 같게)');
+  const app = read(path.join(ROOT, 'editor', 'renderer', 'js', 'app.js'));
+  assert.ok(/playTask\) \|\| 'playtest'/.test(app), '프로젝트 설정이 없으면 PDMaker 테스트 실행 (desktop:debug 아님)');
 });
 
 // ------------------------------------------------------------ ⑪ 대사 글꼴 · 연출 (5차 · 편집기 미리보기 ↔ 런타임 MakerDialogue · EventInterpreter)

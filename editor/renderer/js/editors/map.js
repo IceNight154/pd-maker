@@ -227,7 +227,7 @@
     const up = isUp(fl, kind);
     const t = fl.layers && fl.layers.terrain;
     g.clearRect(0, 0, cv.width, cv.height);
-    if ((kind !== 'node' || fl.mode !== 'procedural') && t && t.length === fl.size.w * fl.size.h) {
+    if ((kind !== 'node' || fl.mode !== 'procedural') && fl.size && t && t.length && t.length === fl.size.w * fl.size.h) {
       const s = Math.max(1, Math.floor(Math.min(cv.width / fl.size.w, cv.height / fl.size.h)));
       g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
       const ox = (cv.width - fl.size.w * s) / 2, oy = (cv.height - fl.size.h * s) / 2;
@@ -239,7 +239,7 @@
       g.fillStyle = '#ddd'; g.font = '11px sans-serif'; g.textAlign = 'center';
       const grp = groupOfNode(fl);
       const rooms = ((fl.procedural || {}).rooms || []).length + ((grp || {}).rooms || []).length;
-      g.fillText((fl.boss ? '보스 · ' : '') + '자동 생성' + (rooms ? ` + 방 ${rooms}` : ''), cv.width / 2, cv.height / 2 + 4);
+      g.fillText(kind === 'node' && fl.mode === 'game' ? (fl.boss ? '보스 · ' : '') + '게임이 만듦 · ' + (fl.gameLevel || '') : (fl.boss ? '보스 · ' : '') + '자동 생성' + (rooms ? ` + 방 ${rooms}` : ''), cv.width / 2, cv.height / 2 + 4);   // 11차: 게임 원래 맵 (타일 없음)
     }
   }
 

@@ -45,6 +45,14 @@ PDM.assets = (function () {
     return out;
   }
   const isOverridden = gr => overrides.has(gr);
+  /** 11차: 바꾼 게임 그림의 크기 vs 이 게임 원본 크기 → { own:[w,h], game:[w,h], ok } | null
+   *  게임은 시트를 픽셀 칸으로 자르므로 크기가 다르면 런타임(MakerAssets.sizeOk)이 그 그림을 쓰지 않음 — splashes/ (통째로 그리는 그림) · 원본이 없는 새 경로는 ok */
+  async function overrideSize(gr) {
+    if (!overrides.has(gr)) return null;
+    const dim = async abs => { if (!abs) return null; try { if (!(await pdm.exists(abs))) return null; const url = await pdm.readDataURL(abs); return await new Promise(res => { const im = new Image(); im.onload = () => res([im.naturalWidth, im.naturalHeight]); im.onerror = () => res(null); im.src = url; }); } catch (_) { return null; } };
+    const own = await dim(PDM.store.abs('assets/game/' + gr)), game = await dim(gamePath(gr));
+    return { own, game, ok: /^splashes\//.test(gr) || !own || !game || (own[0] === game[0] && own[1] === game[1]) };
+  }
 
   /** 그림을 둘 표준 폴더 (assets/ 아래) — 리소스 키와 용도로 정함 */
   const KIND_DIR = { npc: 'npc', companion: 'companion', mob: 'monster', boss: 'boss' };
@@ -219,5 +227,5 @@ PDM.assets = (function () {
     g.restore();
   }
 
-  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, themeWater, withUnderlay, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
+  return { resolvePath, gamePath, gameRel, scanOverrides, isOverridden, overrideSize, get overrides() { return overrides; }, folderFor, KIND_DIR, load, invalidate, clear, checkGameAssets, themeTiles, themeWater, withUnderlay, drawTerrain, drawItemSprite, drawFrame, itemGrid, itemIndex, itemSpriteName };
 })();

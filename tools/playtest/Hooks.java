@@ -58,6 +58,121 @@ public class Hooks {
 					}
 					break;
 				}
+				case "changeclick": { // changeclick,<n> — 11차: 변경 사항 화면의 n 번째 항목(ChangeButton — 판마다 패키지가 달라 이름으로 찾음)을 누름 · 그 항목의 그림 크기 · 프레임
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					int n = p.length > 1 ? Integer.parseInt(p[1]) : 0, k = 0;
+					for (com.watabou.noosa.Gizmo g : all) {
+						if (!g.getClass().getSimpleName().equals("ChangeButton") && (g.getClass().getSuperclass() == null || !g.getClass().getSuperclass().getSimpleName().equals("ChangeButton"))) continue;
+						if (k++ != n) continue;
+						Class<?> c = g.getClass(); while (!c.getSimpleName().equals("ChangeButton")) c = c.getSuperclass();
+						java.lang.reflect.Field f = c.getDeclaredField("icon"); f.setAccessible(true); com.watabou.noosa.Image ic = (com.watabou.noosa.Image) f.get(g);
+						System.out.println("[TEST] changeclick " + n + " " + g.getClass().getName() + " icon=" + ic.getClass().getSimpleName() + " size=" + ic.width + "x" + ic.height + " scale=" + ic.scale.x + " tex=" + (ic.texture == null ? null : ic.texture.width + "x" + ic.texture.height) + " frame=" + ic.frame());
+						java.lang.reflect.Method m = c.getDeclaredMethod("onClick"); m.setAccessible(true); m.invoke(g);
+						break;
+					}
+					break; }
+				case "imgstat": { // 11차: 지금 화면의 그림(Image) 모두: 클래스 · 크기 · 배율 · 텍스처 크기 · uv — 화면 그림이 원본과 같은지 비교용
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					StringBuilder sb = new StringBuilder("[TEST] imgstat");
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.watabou.noosa.Image && g.visible) { com.watabou.noosa.Image im = (com.watabou.noosa.Image) g; if (im.texture == null) continue;
+						sb.append(String.format(" | %s %.1fx%.1f s%.2f t%dx%d uv%.4f,%.4f,%.4f,%.4f", im.getClass().getSimpleName(), im.width, im.height, im.scale.x, im.texture.width, im.texture.height, im.frame().left, im.frame().top, im.frame().right, im.frame().bottom)); }
+					System.out.println(sb); break; }
+				case "worldmap": { // 11차: 런타임 맵 그래프 — 노드마다 깊이/갈래 (+ * = 게임 원본 그대로) · 편집기 World.compute 와 비교용
+					java.util.List<String> l = new java.util.ArrayList<>();
+					for (String id : com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.data.keySet()) { int[] w = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.whereOf(id); if (w != null) l.add(id + "@" + w[0] + "/" + w[1] + (com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.nativeGame(id) ? "*" : "")); }
+					java.util.Collections.sort(l); String st = "?"; try { java.lang.reflect.Field sf = com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.class.getDeclaredField("start"); sf.setAccessible(true); st = String.valueOf(sf.get(null)); } catch (Exception ignored) { }
+					System.out.println("[TEST] worldmap start=" + st + " " + String.join(" ", l)); break; }
+				case "stairswithenemy": { // stairswithenemy — 12차: 영웅 옆 칸에 적(쥐)을 두고 보이게 한 뒤, 영웅이 서 있지 않은 아래 계단을 누름(hero.handle) → 그때 정한 행동 (원작 SPD: 적이 보이면 계단으로 가지 않고 걸어감 · ARK: 계단으로)
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level lv = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					if (!(com.watabou.noosa.Game.scene() instanceof com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene) || hh.sprite == null) { System.out.println("[TEST] stairswithenemy 아직 게임 화면 아님: " + com.watabou.noosa.Game.scene().getClass().getSimpleName()); break; }
+					if (hh.fieldOfView == null || hh.fieldOfView.length != lv.length()) hh.fieldOfView = new boolean[lv.length()];
+					int exit = -1; for (int c = 0; c < lv.length(); c++) if (lv.map[c] == com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.EXIT) { exit = c; break; }
+					// 계단 가까이 (두 칸 떨어진 빈 칸) 에 영웅, 그 옆에 쥐
+					int stand = -1, foe = -1;
+					final int W = lv.width();
+					for (int d1 : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c1 = exit + d1; if (c1 < 0 || c1 >= lv.length() || !lv.passable[c1]) continue; for (int d2 : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c2 = c1 + d2; if (c2 == exit || c2 < 0 || c2 >= lv.length() || !lv.passable[c2] || com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c2) != null) continue; if (Math.abs(c2 % W - exit % W) <= 1 && Math.abs(c2 / W - exit / W) <= 1) continue; stand = c2; break; } if (stand >= 0) break; }
+					if (stand < 0) { System.out.println("[TEST] stairswithenemy 자리 없음 exit=" + exit); break; }
+					hh.pos = stand; if (hh.sprite != null) hh.sprite.place(stand);
+					for (int d : com.watabou.utils.PathFinder.NEIGHBOURS8) { int c = stand + d; if (c != exit && lv.passable[c] && com.shatteredpixel.shatteredpixeldungeon.actors.Actor.findChar(c) == null) { foe = c; break; } }
+					com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob rat = lv.createMob(); rat.pos = foe; rat.state = rat.HUNTING;   // 그 층의 몬스터 (모드마다 몬스터 클래스가 다름)
+					com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(rat);
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.observe(); hh.checkVisibleMobs();
+					boolean ok = hh.handle(exit);
+					System.out.println("[TEST] stairswithenemy visible=" + hh.visibleEnemies() + " handle=" + ok + " action=" + (hh.curAction == null ? "null" : hh.curAction.getClass().getSimpleName()));
+					if (ok && p.length > 1 && p[1].equals("go")) { rat.HP = 1; hh.next(); }   // go: 실제로 움직이게 (사람이 누른 것처럼 영웅 차례를 이어 감)
+					break; }
+				case "walkstairs": { // walkstairs,<번호> — 영웅이 그 계단 칸에 서서 게임 방식(hero.handle)으로 계단을 씀 (게임이 InterlevelScene 방식을 정함)
+					com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t = null;
+					if (p[1].matches("\\d+")) t = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.transitions.get(Integer.parseInt(p[1]));
+					else for (com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition x : com.shatteredpixel.shatteredpixeldungeon.Dungeon.level.transitions) if (x.type.name().equals(p[1])) { t = x; break; }
+					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hh = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
+					hh.pos = t.cell(); hh.sprite.place(hh.pos);
+					boolean ok = hh.handle(t.cell()); hh.next();
+					// 층을 옮기는 동안 화면 글자를 0.15초마다 기록 (로딩 화면 문구 · 도착 창)
+					new Thread(() -> { String last = ""; for (int k = 0; k < 40; k++) { try { Thread.sleep(150); } catch (InterruptedException e) { return; }
+						final String[] cur = { "" }; final Object lock = new Object();
+						com.watabou.noosa.Game.runOnRenderThread(() -> { try { java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>(); walk(com.watabou.noosa.Game.scene(), all); StringBuilder b = new StringBuilder(com.watabou.noosa.Game.scene().getClass().getSimpleName());
+							for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && g.visible) b.append(" | WINDOW ").append(g.getClass().getSimpleName());
+							for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock && g.visible) { String tx = ((com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock) g).text(); if (tx != null && tx.trim().length() > 1 && !tx.startsWith("[PDMaker]")) b.append(" | ").append(tx.replace("\n", " ").trim(), 0, Math.min(70, tx.replace("\n", " ").trim().length())); }
+							cur[0] = b.toString(); } catch (Throwable ignored) { } synchronized (lock) { lock.notifyAll(); } });
+						synchronized (lock) { try { lock.wait(500); } catch (InterruptedException e) { return; } }
+						if (!cur[0].equals(last)) { System.out.println("[TEST] trace " + cur[0]); last = cur[0]; } } }).start();
+					System.out.println("[TEST] walkstairs " + t.type + " -> " + t.destDepth + "/" + t.destBranch + " handled=" + ok); break; }
+				case "screentext": { // 지금 화면의 글자 (창 · 기록 · 로딩 문구)
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					StringBuilder sb = new StringBuilder("[TEST] screentext scene=" + com.watabou.noosa.Game.scene().getClass().getSimpleName());
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && g.visible) sb.append(" | WINDOW ").append(g.getClass().getSimpleName());
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock && g.visible) { String tx = ((com.shatteredpixel.shatteredpixeldungeon.ui.RenderedTextBlock) g).text(); if (tx != null && tx.trim().length() > 1) sb.append(" | ").append(tx.replace("\n", " ").trim()); }
+					System.out.println(sb); break; }
+				case "openexit": { // 보스 층 출구를 연 상태로 (보스를 잡은 것처럼 — 계단 문구 시험용)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level L = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level; L.locked = false;
+					for (com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t : L.transitions) if (t.type == com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition.Type.REGULAR_EXIT) com.shatteredpixel.shatteredpixeldungeon.levels.Level.set(t.cell(), com.shatteredpixel.shatteredpixeldungeon.levels.Terrain.EXIT, L);
+					System.out.println("[TEST] openexit"); break; }
+				case "lang": { // lang,<코드> — 게임 언어 바꾸기 (예: ko)
+					com.shatteredpixel.shatteredpixeldungeon.messages.Languages L = com.shatteredpixel.shatteredpixeldungeon.messages.Languages.matchCode(p[1]);
+					com.shatteredpixel.shatteredpixeldungeon.SPDSettings.language(L); com.shatteredpixel.shatteredpixeldungeon.messages.Messages.setup(L);
+					System.out.println("[TEST] lang " + L); break; }
+				case "closewnd": { // 보이는 창을 모두 닫음 (게임이 닫을 때처럼 hide)
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>(); walk(com.watabou.noosa.Game.scene(), all); int n = 0;
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.Window && g.visible) { ((com.shatteredpixel.shatteredpixeldungeon.ui.Window) g).hide(); n++; }
+					System.out.println("[TEST] closewnd " + n); break; }
+				case "take": { // take,<번호> — 지금 층의 계단(LevelTransition) 하나를 게임 방식으로 탐 (where 의 순서)
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level L = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t = L.transitions.get(Integer.parseInt(p[1]));
+					com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos = t.cell();
+					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.takeTransition(L, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero, t);
+					System.out.println("[TEST] take " + t.type + " -> " + t.destDepth + "/" + t.destBranch); break; }
+				case "where": { // 11차: 지금 층 — 깊이 · 갈래 · 층 클래스 · 영웅 칸 · 맵 그래프 노드 · 계단 목적지
+					com.shatteredpixel.shatteredpixeldungeon.levels.Level L = com.shatteredpixel.shatteredpixeldungeon.Dungeon.level;
+					StringBuilder sb = new StringBuilder();
+					for (com.shatteredpixel.shatteredpixeldungeon.levels.features.LevelTransition t : L.transitions) sb.append(" ").append(t.type).append("@").append(t.cell()).append("->").append(t.destDepth).append("/").append(t.destBranch);
+					System.out.println("[TEST] where depth=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.depth + " branch=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.branch + " level=" + L.getClass().getSimpleName() + " pos=" + com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.pos + " node=" + com.shatteredpixel.shatteredpixeldungeon.pdmaker.WorldGraph.current() + " transitions:" + sb);
+					break; }
+				case "herosprite": { // 11차: 게임 중 영웅 그림 — 텍스처 · 지금 프레임(픽셀) · 그려지는 크기 · 칸(16px) 대비 · 게임 코드가 그리는지
+					com.shatteredpixel.shatteredpixeldungeon.sprites.CharSprite cs = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.sprite;
+					com.watabou.utils.RectF f = cs.frame(); float tw = cs.texture.width, th = cs.texture.height;
+					java.lang.reflect.Method nm = null; boolean nat = false;
+					try { nm = com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.class.getDeclaredMethod("nativeSprite", com.badlogic.gdx.utils.JsonValue.class); nm.setAccessible(true); nat = (Boolean) nm.invoke(null, com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.data()); } catch (Exception e) { }
+					com.watabou.noosa.Image av = com.shatteredpixel.shatteredpixeldungeon.sprites.HeroSprite.avatar(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.tier());
+					System.out.println(String.format("[TEST] herosprite native=%s tex=%dx%d frame=%d,%d,%dx%d drawn=%.1fx%.1f scale=%.2f tile=%d heightTiles=%.2f avatar=%.0fx%.0f avatarFrame=%d,%d",
+						nat, (int) tw, (int) th, Math.round(f.left * tw), Math.round(f.top * th), Math.round(f.width() * tw), Math.round(f.height() * th), cs.width() * cs.scale.x, cs.height() * cs.scale.y, cs.scale.x,
+						com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap.SIZE, cs.height() * cs.scale.y / com.shatteredpixel.shatteredpixeldungeon.tiles.DungeonTilemap.SIZE,
+						av.width() * av.scale.x, av.height() * av.scale.y, Math.round(av.frame().left * av.texture.width), Math.round(av.frame().top * av.texture.height)));
+					break; }
+				case "selicons": { // 11차: 영웅 선택 버튼의 아이콘 — 텍스처 크기 · 프레임(픽셀) · 그려지는 크기
+					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
+					walk(com.watabou.noosa.Game.scene(), all);
+					for (com.watabou.noosa.Gizmo g : all) if (g instanceof com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton && g.visible && g.getClass().getSimpleName().equals("HeroBtn")) {
+						com.watabou.noosa.Image im = ((com.shatteredpixel.shatteredpixeldungeon.ui.StyledButton) g).icon(); if (im == null) continue;
+						Object cl = null; try { java.lang.reflect.Field cf = g.getClass().getDeclaredField("cl"); cf.setAccessible(true); cl = cf.get(g); } catch (Exception e) { }
+						System.out.println(String.format("[TEST] selicon %s %s tex=%dx%d frame=%d,%d,%dx%d drawn=%.1fx%.1f", g.getClass().getName().replaceAll(".*\\.", ""), cl, im.texture.width, im.texture.height,
+							Math.round(im.frame().left * im.texture.width), Math.round(im.frame().top * im.texture.height), Math.round(im.frame().width() * im.texture.width), Math.round(im.frame().height() * im.texture.height), im.width() * im.scale.x, im.height() * im.scale.y));
+					}
+					break; }
 				case "buttons": { // 보이는 버튼 목록
 					java.util.List<com.watabou.noosa.Gizmo> all = new java.util.ArrayList<>();
 					walk(com.watabou.noosa.Game.scene(), all);
@@ -544,7 +659,7 @@ public class Hooks {
 				case "usetest": { // usetest,<아이템 id> — 체력을 깎고 기본 행동(사용)
 					com.shatteredpixel.shatteredpixeldungeon.actors.hero.Hero hero = com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero;
 					com.shatteredpixel.shatteredpixeldungeon.items.Item it = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); it.collect();
-					hero.HP = Math.max(1, hero.HP - 15); int before = hero.HP; String act = p.length > 2 ? p[2] : it.defaultAction();
+					hero.HP = Math.max(1, hero.HP - 15); int before = (int) hero.HP; String act = p.length > 2 ? p[2] : it.defaultAction();
 					System.out.println("[TEST] usetest " + it.name() + " actions=" + it.actions(hero) + " do " + act + " (" + it.actionName(act, hero) + ") HP " + before);
 					it.execute(hero, act);
 					System.out.println("[TEST] usetest after HP " + hero.HP + " count " + (hero.belongings.getItem(it.getClass()) == null ? 0 : hero.belongings.getItem(it.getClass()).quantity()));
@@ -566,7 +681,7 @@ public class Hooks {
 					com.shatteredpixel.shatteredpixeldungeon.items.Item host = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[1]); host.identify(); host.collect();
 					com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.Inner in = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerFacets.inner(host);
 					com.shatteredpixel.shatteredpixeldungeon.items.Item x = com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerItem.create(p[2]); x.quantity(2); x.collect(in);
-					hero.HP = Math.max(1, hero.HP - 15); int before = hero.HP;
+					hero.HP = Math.max(1, hero.HP - 15); int before = (int) hero.HP;
 					System.out.println("[TEST] baguse inner=" + in.items.size() + " qty=" + x.quantity() + " actions=" + x.actions(hero) + " HP " + before);
 					x.execute(hero, x.defaultAction());
 					System.out.println("[TEST] baguse after use HP " + hero.HP + " qty=" + x.quantity() + " inner=" + in.items.size());
@@ -726,8 +841,10 @@ public class Hooks {
 					System.out.println("[TEST] interfaceSize " + p[1]); break; }
 				case "insets": { // insets,<왼>,<위>,<오른>,<아래> (화면 px) — 노치 · 상태 줄 · 내비게이션 바 흉내 (데스크톱은 원래 0). 원작 Window · GameScene 이 쓰는 getSafeInsets 를 바꾸고 화면을 다시 만듦
 					final float il = Float.parseFloat(p[1]), it = Float.parseFloat(p[2]), ir = Float.parseFloat(p[3]), ib = Float.parseFloat(p[4]);
+//#if field:com.watabou.utils.PlatformSupport#INSET_ALL @ 안전 영역 흉내 (없는 예전 판은 건너뜀)
 					com.watabou.noosa.Game.platform = new com.shatteredpixel.shatteredpixeldungeon.desktop.DesktopPlatformSupport() {
 						@Override public com.watabou.utils.RectF getSafeInsets(int level) { return new com.watabou.utils.RectF(il, it, ir, ib); } };
+//#endif
 					com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon.seamlessResetScene();
 					System.out.println("[TEST] insets " + il + "," + it + "," + ir + "," + ib); break; }
 				case "layout": { // 연출 화면 배치 검사: 대사창 · 글 · 이름표 · ▼ · 선택지 · 일러스트가 화면(그리고 안전 영역) 밖으로 나가는지 — 결과 한 줄 + 문제 목록
@@ -878,7 +995,11 @@ public class Hooks {
 					System.out.println("[TEST] gauge " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.value() + " element " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.element() + " codexPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("codexPct") + " takenPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("takenPct") + " action " + com.shatteredpixel.shatteredpixeldungeon.ui.ActionIndicator.action); break; }
 				case "element": { System.out.println("[TEST] element set " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.setElement(p[1]) + " -> " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerGauge.element() + " takenPct " + com.shatteredpixel.shatteredpixeldungeon.pdmaker.HeroRuntime.bonus("takenPct")); break; }
 //#if has:actors.hero.abilities.ArmorAbility
+//#if re:windows.WndInfoArmorAbility#WndInfoArmorAbility\(\s*HeroClass @ 직업 능력 정보 창 (직업을 받는 판)
 				case "abinfo": { com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoArmorAbility(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass, com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass.armorAbilities()[1])); break; }
+//#else
+				//#| case "abinfo": { com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.show(new com.shatteredpixel.shatteredpixeldungeon.windows.WndInfoArmorAbility(com.shatteredpixel.shatteredpixeldungeon.Dungeon.hero.heroClass.armorAbilities()[1])); break; }
+//#endif
 //#else
 				//#| case "abinfo": { System.out.println("[TEST] unsupported: 직업 능력 없음"); break; }
 //#endif
@@ -942,7 +1063,7 @@ public class Hooks {
 						if (c < 0) break;
 						r.pos = c; r.HP = r.HT = 12; com.shatteredpixel.shatteredpixeldungeon.scenes.GameScene.add(r);
 						int hits = 0;
-						while (r.isAlive() && hits < 40) { hits++; int before = r.HP; h.attack(r); if (r.isAlive() && r.buff(com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Burning.class) != null) System.out.println("[TEST]   burning!"); }
+						while (r.isAlive() && hits < 40) { hits++; int before = (int) r.HP; h.attack(r); if (r.isAlive() && r.buff(com.shatteredpixel.shatteredpixeldungeon.actors.buffs.Burning.class) != null) System.out.println("[TEST]   burning!"); }
 						System.out.println("[TEST] rat " + k + " dead=" + !r.isAlive() + " hits " + hits + " heroHP " + h.HP + "/" + h.HT);
 					}
 					break; }

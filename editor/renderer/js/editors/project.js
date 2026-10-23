@@ -44,6 +44,7 @@ PDM.registerEditor({
           return h('div', { class: 'hint mt-3' }, g ? `리소스 목록을 이 저장소의 파일에 맞췄습니다 — ${part('게임 아이템', g.items)}, ${part('게임 방', g.rooms)}${g.newMobs.length ? ', 새 몬스터 ' + g.newMobs.length : ''}. ` + (an ? `분석: 소스 ${an.sourceOk}/${an.sourceFound} · 리소스 ${an.resourcesDecoded}/${an.resourcesFound} · 게임 객체 ${an.recognized} (오류 ${an.errors}${g.analysis.features.length ? ' · 구조 차이 ' + g.analysis.features.length : ''}). ` : '') : '리소스 목록의 게임 기본 항목은 묶여 있는 기준 목록입니다 (저장소를 찾으면 그 파일에 맞춥니다). ',
             h('button', { class: 'btn xs', onclick: async () => { const r = await PDM.app.resolveRepo(true); if (PDM.gameScan && r) { await PDM.gameScan(r, true); PDM.app.redraw(); PDM.tabs.refresh('project'); } } }, '게임 저장소 다시 읽기'),
             h('button', { class: 'btn xs ml-2', title: '저장소 구조 · 소스 · 그림 · 게임 객체를 읽어 PDMaker 가 어디까지 이해하는지 보여 줍니다 (읽기 전용)', onclick: () => PDM.tabs.open('repoanalysis') }, '저장소 분석 보고서'),
+            h('button', { class: 'btn xs ml-2', title: '저장소의 파일 · 클래스 · 게임 데이터 · 번역을 찾아봄 (읽기 전용)', onclick: () => PDM.tabs.open('repoexplorer') }, '저장소 탐색'),
             h('button', { class: 'btn xs ml-2', title: '저장소의 이름 · 그림 · 능력치 · 분류로 맞춥니다. 사용자가 고친 칸은 그대로 두고, 저장소에 없는 것은 고른 것만 지웁니다 (먼저 보여 줌)', onclick: async () => { const r0 = await PDM.app.resolveRepo(true); if (PDM.gameScan && r0) await PDM.gameScan(r0, true); const r = await PDM.repoSync.dialog(); if (r) PDM.app.redraw(); } }, '영웅·캐릭터를 저장소에 맞추기')); })(),
         (() => {
           const box = h('div', { class: 'mt-3' });
@@ -110,8 +111,8 @@ PDM.registerEditor({
             h('p', { class: 'hint' }, '테스트 플레이·게임 내보내기 때 게임 저장소 맨 위 build.gradle 의 appName · appPackageName 에 적습니다 (처음 고칠 때 build.gradle.pdmaker-backup 을 남김).'),
             h('p', { class: 'hint' }, '세이브 데이터 위치 (Windows): ', h('code', {}, `%APPDATA%\\.${pkg.split('.')[1]}\\${nm}\\`), ' — 원작은 ', h('code', {}, '%APPDATA%\\.shatteredpixel\\Shattered Pixel Dungeon\\'), '. 게임 이름이나 패키지 이름을 바꾸면 세이브가 다른 폴더에 저장되어 원작·다른 프로젝트와 섞이지 않습니다. (이름을 바꾸면 이전 세이브는 예전 폴더에 남습니다.)')); })()),
       section('테스트 플레이',
-        PDM.ui.F.select('project', ['settings', 'playTask'], [['debug', 'gradle desktop:debug (기본 — 게임 원래 실행 작업 · 버전 -INDEV · 세이브는 위 게임 이름 폴더)'], ['playtest', 'PDMaker 테스트 실행 (버전 -PLAYTEST · 세이브는 "PDMaker Playtest" 폴더)']],
-          { label: '▶ 테스트 플레이 빌드 방식', hint: '두 방식 모두 이 프로젝트를 게임에 넘겨줍니다. debug 는 내보낸 게임과 같은 세이브 폴더를 쓰고, PDMaker 테스트 실행은 세이브를 따로 둡니다.' }),
+        PDM.ui.F.select('project', ['settings', 'playTask'], [['playtest', '내보낸 게임과 같게 (기본 — 원래 게임 그대로 · 버전 -PLAYTEST · 세이브는 위 게임 이름 폴더)'], ['debug', 'gradle desktop:debug (개발자 모드 · 버전 -INDEV)']],
+          { label: '▶ 테스트 플레이 빌드 방식', def: 'playtest', hint: '두 방식 모두 이 프로젝트를 게임에 넘겨줍니다. desktop:debug 는 게임의 개발자 모드라 게임마다 다르게 바뀝니다 — 예: ARK · 원작 SPD 는 시작 아이템(물약 · 주문서 40개 · 아뮬렛)을 주고 모든 직업을 열고 층 이동 로딩 화면(입장 문구)을 건너뜀. 원래 게임과 같은지 볼 때는 기본 방식을 쓰세요.' }),
         h('p', { class: 'hint' }, '▶ 테스트 플레이는 게임 저장소에서 gradle 로 게임을 실행하면서 이 프로젝트 폴더를 넘겨줍니다 (-Dpdmaker.project=…).',
           h('br'), '게임 쪽에 pdmaker 런타임 패키지가 들어가 있어야 프로젝트 데이터가 반영됩니다 (runtime/INTEGRATION.md 참고).'),
         h('p', { class: 'hint' }, '▶ 테스트 플레이를 누르면 런타임이 없거나 예전 것일 때 자동으로 설치·갱신합니다.')));

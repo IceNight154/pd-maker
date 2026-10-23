@@ -17,6 +17,7 @@
 package com.shatteredpixel.shatteredpixeldungeon.pdmaker;
 
 import com.badlogic.gdx.utils.JsonValue;
+import com.badlogic.gdx.utils.JsonWriter;
 import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
 import com.shatteredpixel.shatteredpixeldungeon.actors.Char;
@@ -93,7 +94,7 @@ public class HeroRuntime {
 
 	/** HeroSprite.avatar(hero) 첫 줄: 영웅 편집기의 그림이면 그 그림의 첫 프레임 (갑옷 단계 줄) */
 	public static com.watabou.noosa.Image avatar(Hero hero) {
-		try { return MakerRuntime.isActive() && hero == Dungeon.hero ? avatarOf(data(), hero.tier()) : null; }
+		try { return MakerRuntime.isActive() && hero == Dungeon.hero && !nativeSprite(data()) ? avatarOf(data(), hero.tier()) : null; }
 		catch (Throwable t) { MakerRuntime.log("초상화 오류: " + t); return null; }
 	}
 	public static com.watabou.noosa.Image avatarOf(JsonValue h, int tier) {
@@ -107,12 +108,13 @@ public class HeroRuntime {
 		int fw = 12, fh = 15;
 		JsonValue fr = sp.get("frame");
 		if (fr != null && fr.size >= 2) { fw = fr.getInt(0); fh = fr.getInt(1); }
-		int cols = Math.max(1, img.texture.width / fw), rows = Math.max(1, img.texture.height / fh);
+		int rowH = rowH(sp, fh);   // 갑옷 한 줄의 높이 (원작 = 칸 높이 · ARK 36 줄 안에 36×34 칸)
+		int cols = Math.max(1, img.texture.width / fw), rows = Math.max(1, img.texture.height / rowH);
 		int f = 0;
 		JsonValue idle = sp.get("anims") == null ? null : sp.get("anims").get("idle");
 		if (idle != null && idle.get("frames") != null && idle.get("frames").size > 0) f = Math.max(0, idle.get("frames").getInt(0));
-		int cell = sp.getBoolean("armorRows", true) ? rowFor(sp, tier, rows) * cols + Math.min(f, cols - 1) : f;
-		img.frame((cell % cols) * fw, (cell / cols) * fh, fw, fh);
+		if (sp.getBoolean("armorRows", true)) img.frame(Math.min(f, cols - 1) * fw, rowFor(sp, tier, rows) * rowH, fw, fh);
+		else img.frame((f % cols) * fw, (f / cols) * fh, fw, fh);
 		// 큰 프레임(예: 24×30) 시트: 게임 그림과 같은 배율로 줄여 원작 초상화 칸(12×15)에 맞춤.
 		// scale 이 아니라 그림 크기(width · height) 자체를 줄임 — 게임 코드(상태 창 등)가 width · height 로 자리를 잡으므로 (scale 로 줄이면 왼쪽 위로 치우침)
 		float k = sp.getFloat("scale", 0f);
@@ -148,7 +150,7 @@ public class HeroRuntime {
 	}
 	/** 저장 슬롯의 초상화 (시작 화면 · 이어하기 창) */
 	public static com.watabou.noosa.Image slotAvatar(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info) {
-		try { return avatarOf(slotData(info), info.armorTier); } catch (Throwable t) { MakerRuntime.log("저장 슬롯 초상화 오류: " + t); return null; }
+		try { JsonValue d = slotData(info); return nativeSprite(d) ? null : avatarOf(d, info.armorTier); } catch (Throwable t) { MakerRuntime.log("저장 슬롯 초상화 오류: " + t); return null; }
 	}
 	/** 저장 슬롯의 이름: 영웅 편집기의 전직 이름 → 영웅 이름 (원작 영웅이면 null = 게임 그대로) */
 	public static String slotName(com.shatteredpixel.shatteredpixeldungeon.GamesInProgress.Info info) {
@@ -484,12 +486,14 @@ public class HeroRuntime {
 	public static boolean updateArmor(CharSprite s) {
 		try {
 			if (!MakerRuntime.isActive() || Dungeon.hero == null || data() == null) return false;
+			if (nativeSprite(data())) return false;   // 저장소 그림 그대로 → 게임 코드 (스킨 · 다른 형태 · 추가 동작 포함)
 			return applySprite(Dungeon.hero, s, false);
 		} catch (Throwable t) { MakerRuntime.log("영웅 그림 적용 실패: " + t); return false; }
 	}
 	static boolean applySprite(Hero hero, CharSprite s, boolean place) {
 		JsonValue h = data();
 		if (h == null || s == null || h.get("sprite") == null) return false;
+		if (nativeSprite(h)) return false;
 		JsonValue sp = h.get("sprite");
 		String sheet = sp.getString("sheet", "");
 		if (sheet.isEmpty()) return false;
@@ -501,10 +505,13 @@ public class HeroRuntime {
 		if (fr != null && fr.size >= 2) { fw = fr.getInt(0); fh = fr.getInt(1); }
 		TextureFilm film = new TextureFilm(s.texture, fw, fh);
 		int cols = Math.max(1, s.texture.width / fw);
-		int rows = Math.max(1, s.texture.height / fh);
+		int rowH = rowH(sp, fh);
+		int rows = Math.max(1, s.texture.height / rowH);
 		// armorRows=false (RPG Maker 시트 등): 프레임 번호를 시트 전체 기준으로 씀, 갑옷 단계 무시
 		boolean armorRows = sp.getBoolean("armorRows", true);
 		int row = armorRows ? rowFor(sp, hero.tier(), rows) : -1;
+		// 갑옷 줄 높이가 칸 높이와 다르면 (ARK: 줄 36 · 칸 36×34) 게임 HeroSprite 처럼 그 줄 안에서 칸을 자름 → 프레임 번호 = 줄 안의 번호
+		if (armorRows && rowH != fh) { film = new TextureFilm(new TextureFilm(s.texture, s.texture.width, rowH), row, fw, fh); row = -1; }
 		JsonValue anims = sp.get("anims");
 		try {
 			MovieClip.Animation idle = anim(anims, "idle", film, cols, row, new int[]{0, 0, 0, 1, 0, 0, 1, 1}, 1, true);
@@ -539,6 +546,29 @@ public class HeroRuntime {
 		heroTex = tx;
 		if (hero.isAlive()) s.idle(); else s.die();
 		if (place) s.place(hero.pos);
+		return true;
+	}
+	/** sprite.rowH: 갑옷 한 줄의 높이 (없거나 칸보다 작으면 칸 높이 — 예전 프로젝트) */
+	static int rowH(JsonValue sp, int fh) { int r = sp.getInt("rowH", 0); return r >= fh ? r : fh; }
+	/** 11차: 영웅 그림이 게임 저장소의 HeroSprite 를 그대로 옮긴 값인가 — 출처 기록(src.fields 의 sprite.*)이 모두 저장소 값이고 지금 값과 같으면 true.
+	 *  그러면 게임 코드가 그림 (스킨 · spearForm 같은 다른 형태 · Sattack 같은 추가 동작 · 초상화) — 편집기에서 그림 칸을 하나라도 고치면 false */
+	static boolean nativeSprite(JsonValue h) {
+		if (h == null || h.get("sprite") == null || h.get("src") == null || h.get("src").get("fields") == null) return false;
+		JsonValue sp = h.get("sprite"), F = h.get("src").get("fields");
+		for (String k : new String[]{ "sheet", "frame", "anims" }) if (F.get("sprite." + k) == null) return false;
+		for (JsonValue f : F) {
+			if (f.name == null || !f.name.startsWith("sprite.")) continue;
+			String from = f.getString("from", "");
+			if (!from.equals("repo") && !from.equals("derived")) return false;
+			JsonValue cur = sp.get(f.name.substring(7)), v = f.get("v");
+			if (cur == null || v == null || !cur.toJson(JsonWriter.OutputType.json).equals(v.toJson(JsonWriter.OutputType.json))) return false;
+		}
+		for (JsonValue c = sp.child; c != null; c = c.next) {
+			if (F.get("sprite." + c.name) != null) continue;
+			if (c.name.equals("armorRows")) { if (!c.asBoolean()) return false; continue; }
+			if (c.name.equals("tierRows")) { for (int i = 0; i < c.size; i++) if (c.getInt(i) != i) return false; continue; }   // 0,1,2… = 단계 그대로
+			return false;   // 출처 기록이 없는 다른 칸 (사용자가 더한 값)
+		}
 		return true;
 	}
 	/** 갑옷 단계(hero.tier(): 0 없음 · 1~5 갑옷 · 6 직업 갑옷) → 시트 행. sprite.tierRows = [0단계 행, 1단계 행, …] */

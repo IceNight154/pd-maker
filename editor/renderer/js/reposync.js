@@ -26,7 +26,16 @@
     W.name = x.nameSource === 'repo' ? { value: x.name, from: 'repo', file, line: x.line, key: x.nameKey } : { value: x.cls, from: 'derived', file, line: x.line, note: '번역 키(' + (x.nameKey || '') + ')가 없어 직업 enum 이름' };
     if (x.desc) W.desc = { value: x.desc, from: 'repo', key: x.descKey };
     if (x.sheet) W['sprite.sheet'] = { value: 'game:' + x.sheet, from: x.spriteKind === 'direct' ? 'repo' : 'derived', file, note: x.spriteKind === 'direct' ? 'HeroClass.spritesheet() 의 ' + x.cls + ' 분기 (' + (x.sheetConst || '') + ')' : 'spritesheet() 의 기본(default) 분기' };
-    const fr = R.objects.heroFrame; if (fr) W['sprite.frame'] = { value: fr.slice(), from: 'repo', file: 'sprites/HeroSprite.java', note: 'FRAME_WIDTH · FRAME_HEIGHT' };
+    const fr = R.objects.heroFrame, HS = R.objects.heroSprite, hsf = 'sprites/HeroSprite.java';
+    if (fr) W['sprite.frame'] = { value: fr.slice(), from: 'repo', file: hsf, note: HS ? HS.evidence.frame : 'FRAME_WIDTH · FRAME_HEIGHT' };
+    // 11차: 갑옷 줄 높이 · 동작 · 배율도 HeroSprite 에서 (ARK: 줄 36 · 칸 36×34 · idle 41~48 …) — 없으면 예전처럼 원작 동작 · 자동 배율
+    if (HS && HS.rowH) W['sprite.rowH'] = { value: HS.rowH, from: 'repo', file: hsf, note: HS.evidence.rowH };
+    if (HS && Object.keys(HS.anims).length) W['sprite.anims'] = { value: Object.fromEntries(Object.entries(HS.anims).map(([k, a]) => [k, { frames: a.frames.slice(), fps: a.fps, loop: a.loop }])), from: 'repo', file: hsf, note: HS.evidence.anims };
+    if (HS) W['sprite.scale'] = { value: HS.scale, from: /scale\.set\(/.test(HS.evidence.scale) ? 'repo' : 'derived', file: hsf, note: HS.evidence.scale };
+    const IC = R.objects.heroSelectIcons, ic = IC && (IC[x.cls] || IC['*']);
+    if (ic) W['select.iconTier'] = ic.kind === 'sheet'
+      ? { value: Math.round(ic.rect[1] / ((HS && HS.rowH) || (fr && fr[1]) || 15)), from: 'repo', file: 'scenes/HeroSelectScene.java', note: `HeroBtn: new Image(spritesheet(), ${ic.rect.join(', ')}) — 시트의 이 줄` }
+      : { value: 0, from: 'derived', file: 'scenes/HeroSelectScene.java', note: `HeroBtn: Icons.${ic.name} (얼굴 아이콘) — 시트를 바꾸지 않으면 게임 아이콘을 그대로 쓰고, 바꾸면 시트의 첫 줄(갑옷 없음)` };
     if (fr && sheetH && sheetH[x.cls]) { const used = sheetH[x.cls]; W['sprite.tierRows'] = { value: [0, 1, 2, 3, 4, 5, 6].map(i => used[Math.min(i, used.length - 1)]), from: 'derived', note: '시트에서 그림이 있는 줄' }; }
     return W;
   }
@@ -55,7 +64,8 @@
     return base && base.game === cls ? PDM.prov.getPath(base, path) : PDM.prov.getPath(PDM.make.vanillaChar(e), path);
   }
   function legacyHero(cls, path) {
-    if (!spdHero(cls)) return undefined;
+    // 원작에 없는 직업(ARK 의 CHEN 등)은 새로 만들 때 원작 영웅 그림 설정(동작 · 자동 배율)을 본떴음 → 그 값이면 기본값
+    if (!spdHero(cls)) { if (!/^sprite\.(anims|scale|rowH)$/.test(path)) return undefined; const w = van()['hero:warrior']; return w ? PDM.prov.getPath(w, path) : undefined; }
     const base = van()['hero:' + cls.toLowerCase()];
     return base ? PDM.prov.getPath(base, path) : undefined;
   }
@@ -70,7 +80,7 @@
     const heroes = R ? R.objects.heroes : (sc.heroes || []).map(x => Object.assign({ id: x.cls, nameSource: x.name && x.name !== x.cls ? 'repo' : 'class', spriteKind: x.sheet ? 'direct' : 'none' }, x));
     const fr = R ? R.objects.heroFrame : sc.heroFrame;
     if (fr && typeof document !== 'undefined') for (const x of heroes) { if (!x.sheet) continue; try { const im = await PDM.assets.load('game:' + x.sheet); if (!im) continue;
-      const [fw, fh] = fr, n = Math.max(1, Math.floor(im.height / fh)), cv = document.createElement('canvas'); cv.width = fw; cv.height = n * fh;
+      const fw = fr[0], fh = (R && R.objects.heroSprite && R.objects.heroSprite.rowH) || fr[1], n = Math.max(1, Math.floor(im.height / fh)), cv = document.createElement('canvas'); cv.width = fw; cv.height = n * fh;
       const g = cv.getContext('2d'); g.drawImage(im, 0, 0, fw, n * fh, 0, 0, fw, n * fh); const d = g.getImageData(0, 0, fw, n * fh).data, used = [];
       for (let r = 0; r < n; r++) { let c = 0; for (let k = r * fh * fw; k < (r + 1) * fh * fw; k++) if (d[k * 4 + 3] > 0) c++; if (c > 20) used.push(r); }
       sheetH[x.cls] = used.length ? used : [0]; } catch (_) { /* 그림 없음 */ } }

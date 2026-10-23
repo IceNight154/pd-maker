@@ -17,37 +17,45 @@ PDM.World = (function () {
    *  2) 노드 데이터의 depth 가 1 이상이면 그 값으로 고정
    *  3) 어디에서도 닿지 않는 노드는 고정값 또는 1
    *  4) branch: depth 가 같은 노드끼리 [발견 순서 → 목록 순서] 로 0, 2, 3, 4 … (1 은 게임의 광산이 씀)
+   *  5) (11차) 게임 저장소의 층 노드(src.kind = repo-level)는 원본 자리(src.depth · src.branch — 0 층 포함)에 고정.
+   *     게임 코드가 그 깊이 · 갈래로 층을 고르고 계단을 이으므로 (예: ARK 로도스 = 깊이 0 · 갈래 1~4). 사용자가 깊이를 다르게 고치면 예전 규칙
    */
+  function originOf(d) {
+    const s = d && d.src; if (!s || s.kind !== 'repo-level' || typeof s.depth !== 'number' || s.depth < 0 || typeof s.branch !== 'number') return null;
+    if (d.depth > 0 && d.depth !== s.depth) return null;
+    return [s.depth, s.branch];
+  }
   function compute(world, getData) {
     world = world || w(); getData = getData || nodeData;
     const nodes = world.nodes || [], edges = (world.edges || []).filter(e => e.from && e.to && e.from !== e.to);
     const ids = nodes.map(n => n.id);
     const start = ids.includes(world.start) ? world.start : ids[0];
-    const fixed = {}; ids.forEach(id => { const d = getData(id); if (d && d.depth > 0) fixed[id] = d.depth | 0; });
+    const fixed = {}, origin = {}; ids.forEach(id => { const d = getData(id), o = originOf(d); if (o) { origin[id] = o; fixed[id] = o[0]; } else if (d && d.depth > 0) fixed[id] = d.depth | 0; });
     const depth = {}, found = {};
     let order = 0;
     if (start) {
       // BFS 로 발견 순서
       const q = [start]; found[start] = order++;
       while (q.length) { const a = q.shift(); edges.filter(e => e.from === a).forEach(e => { if (found[e.to] === undefined && ids.includes(e.to)) { found[e.to] = order++; q.push(e.to); } }); }
-      depth[start] = fixed[start] || 1;
+      depth[start] = fixed[start] ?? 1;
       // 가장 긴 경로 (노드 수만큼 반복하면 순환이 있어도 끝남)
       for (let it = 0; it < ids.length; it++) {
         let changed = false;
         edges.forEach(e => {
           if (depth[e.from] === undefined || !ids.includes(e.to)) return;
           if (!(found[e.to] > found[e.from])) return;            // 되돌아가는 연결(순환)은 깊이 계산에서 뺌
-          const want = fixed[e.to] || Math.min(depth[e.from] + 1, 99);
-          if (depth[e.to] === undefined || (!fixed[e.to] && want > depth[e.to])) { depth[e.to] = want; changed = true; }
+          const want = fixed[e.to] ?? Math.min(depth[e.from] + 1, 99);
+          if (depth[e.to] === undefined || (fixed[e.to] === undefined && want > depth[e.to])) { depth[e.to] = want; changed = true; }
         });
         if (!changed) break;
       }
     }
-    ids.forEach(id => { if (depth[id] === undefined) depth[id] = fixed[id] || 1; });
+    ids.forEach(id => { if (depth[id] === undefined) depth[id] = fixed[id] ?? 1; });
     const idx = {}; ids.forEach((id, i) => { idx[id] = i; });
     const sorted = ids.slice().sort((a, b) => depth[a] - depth[b] || ((found[a] ?? 1e6) - (found[b] ?? 1e6)) || idx[a] - idx[b]);
     const branch = {}, next = {};
-    sorted.forEach(id => { const d = depth[id]; const n = next[d] === undefined ? 0 : next[d]; branch[id] = n; next[d] = n === 0 ? 2 : n + 1; });
+    const taken = new Set(); ids.forEach(id => { if (origin[id]) { branch[id] = origin[id][1]; taken.add(origin[id][0] + ':' + origin[id][1]); } });
+    sorted.forEach(id => { if (origin[id]) return; const d = depth[id]; let n = next[d] === undefined ? 0 : next[d]; while (taken.has(d + ':' + n)) n = n === 0 ? 2 : n + 1; branch[id] = n; next[d] = n === 0 ? 2 : n + 1; });
     return { start, depth, branch, reached: found };
   }
 
@@ -70,6 +78,8 @@ PDM.World = (function () {
     if (d.label) return d.label;
     const g = n && group(n.group);
     if (g && g.safe) return d.name || id;
+    // 11차: 게임 저장소의 층(원본 자리) — 층 번호는 게임의 깊이 그대로 (ARK 로도스 = 깊이 0)
+    const o = originOf(d); if (o) return `깊이 ${o[0]}${o[1] ? '-' + o[1] : ''}`;
     const I = info();
     const mates = (w().nodes || []).filter(x => x.group === (n && n.group));
     const minD = Math.min(...mates.map(x => I.depth[x.id]));
@@ -140,7 +150,7 @@ PDM.World = (function () {
     return { hand, exits, entrances, extraOut, extraIn };
   }
 
-  return { compute, info, node, group, groupOf, dirOf, label, fullName, themeOf, outEdges, inEdges, options, tiles, ports };
+  return { compute, originOf, info, node, group, groupOf, dirOf, label, fullName, themeOf, outEdges, inEdges, options, tiles, ports };
 })();
 
 // ---------------- 새 노드 · 기본 월드 · 예전 형식 변환 ----------------

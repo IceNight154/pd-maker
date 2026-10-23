@@ -89,6 +89,8 @@
 | `gamescan.js` · `gamehero.js` · `gameinfo.js` | 게임 저장소 소스를 읽어 목록 맞추기 · 원래 값 보여 주기 (§2.5) |
 | `javasrc.js` (`window.PDMJava`) | 공용 Java 구조 분석 (주석 · 문자열을 걷은 골격 → 괄호 짝 · 형 · 깊이 · enum · Assets · ItemSpriteSheet · 스프라이트 · gradle) — 편집기 · `editor/repo-analyzer.js` · 테스트가 같이 씀 (§2.5) |
 | `editors/repoanalysis.js` | 「게임 저장소 분석」 화면 (§2.5) |
+| `editors/repoexplorer.js` | 「게임 저장소 탐색」 화면 — 파일 · 클래스(상속) · 게임 데이터(출처 · 편집 가능) · 번역 검색, 읽기 전용 (§2.5, 11차) |
+| `repomaps.js` | 게임 저장소의 맵(`Dungeon.newLevel()`)을 맵 그래프에 — 기본 표시(`autoSync`) · 유형 · 근거 · 사라진 맵 확인 (§2.5) |
 | `spd-items.js` · `spd-chars.js` · `spd-rooms.js` · `spd-room-previews.js` · `spd-level-previews.js` | 게임 데이터 (`tools/data` · `tools/playtest` 로 뽑음) |
 | `validate.js` | 검사(F7) |
 | `theme.js` | 테마 (가장 먼저 실행) |
@@ -141,6 +143,13 @@
 
 - **저장소 분석기** (9차, `editor/repo-analyzer.js` — 읽기 전용, Electron 은 `repo:analyze` IPC → worker 스레드, 캐시 `userData/repo-analysis/`): 루트 찾기(모듈 폴더 → 상위, 여러 저장소면 후보) → 안전한 훑기(바깥 · 순환 링크 · 권한 오류 기록) → 모듈 · 빌드 → 게임 모듈(Dungeon.java) → 모든 Java 구조 분석 → 리소스 디코딩(PNG 끝까지 · 나머지 머리 · 확장자와 실제 형식) → 에셋 참조 → 상속 그래프로 게임 객체(몬스터 스프라이트 · 능력치는 부모까지, 출처 표시) → 구조 차이 `features[]`(아이템 시트 격자 · 영웅 시트 switch · 층별 몬스터 클래스 · 글자 폴더 겹침 …) → 지원 범위 `support[]`(항목 × 8단계: 발견 · 읽기 · 구조 · 의미 · 변환 · 표시 · 편집 · 런타임) → 런타임 호환(설치기 compat + 런타임이 부르는 게임 클래스가 있는지). `gamescan` 이 이 결과로 새 몬스터를 만들고 `origin { repo, file, line, extracted[] }` 을 남김. 보고: docs/PROJECT-COMPATIBILITY-ARK-BA-9.md
 - **저장소 데이터 정합성** (10차 — 선택한 저장소가 기준): 분석기 VERSION 3 이 맵 슬롯 · 고정 타일(`JS.levelSlots` · `staticLayout`) · 영웅 id/이름 키/별칭 · 몬스터 그림 종류(직접 · 상속 · 동적) · 근거 점수 분류(boss / elite / mob / npc / review + 신뢰도 · 근거) · 업적(`JS.badges`, 저장소 시트 격자 · 키 형식) · 타이틀(`JS.titleScene`) · 프로파일 지문을 냄. 리소스 칸마다 `src.fields[path] = { from: repo|derived|default, v, file, line, key, pending }` (`provenance.js`) — 지금 값 ≠ v 이면 사용자 편집. `reposync.js` 가 계획 → 확인 창 → 적용 (안 고친 칸만 바꿈 · 사용자 값 유지 · 바뀐 원본은 충돌로 보고 · 사라진 항목은 확인 후에만 삭제 · 분석 실패면 아무것도 안 바꿈). `repomaps.js` 가 저장소 층을 그래프로 가져옴: 완전히 정해진 고정 맵 = handmade 노드(원래 타일), 나머지 = `mode: "game"` 노드(`gameLevel` = 저장소 층 클래스 → 런타임이 리플렉션으로 생성, 없으면 테마 생성기). 캐릭터 종류에 `elite` · `unsorted`, 적 판정은 `PDM.isHostile`. 설치기는 런타임이 쓰는 클래스가 없으면 파일을 고치기 전에 거부. 보고: docs/ARK-PROJECT-DATA-FIDELITY-10.md
+
+- **11차 — 영웅 그림 구조 · 맵 기본 표시 · 저장소 탐색** (분석기 VERSION 4, 보고서 `docs/REPOSITORY-EXPLORATION-AND-SPRITE-FIXES-11.md`)
+  - 영웅 그림: `javasrc.heroSprite` 가 `HeroSprite.updateArmor()` 의 `new TextureFilm(tiers(), 단계, W, H)` 칸 · `tiers()` 의 갑옷 줄 높이(`rowH`) · 동작(`.frames` · `clone()`) · `scale.set` 을 읽음 (FRAME_* 상수만 보면 ARK 의 36×36 ≠ 실제 칸 36×34). `heroSelectIcons` = `HeroSelectScene.HeroBtn` 아이콘 출처(Icons 상수 / 시트 칸). 저장소 맞추기가 `sprite.frame · rowH · anims · scale` · `select.iconTier` 를 출처와 함께 옮김.
+  - 맵: 프로젝트를 열 때 · 저장소를 바꿀 때 · 새 프로젝트에서 분석이 성공하면 `PDM.repoMaps.autoSync()` — 원작에 없는 맵을 가져오기 버튼 없이 그래프에 (원작과 같은 층 클래스는 기본 층 노드가 대신 · 같은 클래스를 쓰는 사용자 노드가 있으면 겹쳐 만들지 않음 · 사용자가 지운 저장소 맵은 `world.repoMaps[프로파일].seen` 으로 기억해 다시 넣지 않음). 노드 `src.mapTypes`(fixed · partial · game-generated · procedural + conditional) · `editable`(tiles | meta) · `evidence`[{kind, file, line, text}]. 연결은 원본 `LevelTransition`(파일:줄) 또는 게임 기본 계단(깊이 순서 — "추정" 표시)만. 저장소에서 사라진 노드는 지우지 않고 목록 · 고른 것만 `sync({ remove })`. 계획(`plan`)을 먼저 만들고 한 번에 적용 — 중간에 실패하면 노드 · 그래프를 전 상태로 되돌림.
+  - 탐색 화면(`repoexplorer`): 분석기 `R.index`(모든 파일 경로 · 종류 · 크기 · 그림 크기, 모든 클래스 파일 · 줄 · 부모 · 종류)로 폴더 트리 · 경로 검색 · 종류 거르기 · 그림/소리/글자 미리보기 · 그림을 쓰는 곳, 클래스 상속(부모 사슬 · 자식) · 원본 코드, 게임 데이터(맵 · 영웅 · 몬스터 · 보스 · 아이템 · 배지 · 타이틀 · UI · 소리 · 빌드 모듈 — 원본/추론 · 편집 가능 · 근거 파일 · 편집기 바로가기 · 프로젝트 값의 출처 상태), 번역(messages 키 · 글자 검색 · 언어). 다시 맞추기 버튼은 `reposync.js` · `repomaps.js` 와 같은 규칙. game/ 원본은 고치지 않음.
+  - **시작 자리 · 원본 자리 · 게임 원본 그대로인 층** (11차 후속): 분석기 VERSION 5 가 `Dungeon.init()` 의 `depth = … · branch = …` 를 `maps.start` 로 냄 (원작 · BA 1 · 0, ARK 0 · 2 = 로도스 숙소). 저장소 맞추기가 그 자리의 노드를 맵 그래프 시작 노드로 (출처 `world.src.fields.start`, 사용자가 정한 시작 노드는 그대로). 게임 저장소의 층 노드(`src.kind = repo-level`)는 depth · branch 를 그래프 연결로 계산하지 않고 **원본 자리**에 둠 (`World.originOf` = 런타임 `WorldGraph.originOf`, 깊이 0 포함). 원본 그대로인 노드(게임 원래 맵 · 타일 · 오브젝트 · 이벤트를 고치지 않은 직접 그리기 노드 — `repomaps.isNative` = `WorldGraph.nativeGame`, 타일 지문 `tilesHash`)는 **게임의 newLevel 이 만들고 계단도 게임 것** (`createLevel` → null · `wire` 건너뜀) → NPC · 그림 · 이벤트 · 분기가 원본과 같음. 손대지 않은 기본 층 노드와 같은 자리를 저장소가 다른 클래스로 바꾸면(ARK 10 · 15 · 20 · 25층 보스) 그 기본 노드를 그 층으로 바꿈(`src.adopted` · 원래 노드 `src.template`) — 겹친 노드 없음. 기본 노드가 고쳐졌거나 층이 밀렸으면 저장소 노드를 따로 만듦. 검사(F7)는 원본 그대로인 노드에 PDMaker 타일 · 계단 검사를 하지 않고, 저장소만의 지형 값(`src.unknownTerrain`)은 오류가 아닌 경고.
+  - 분석기의 런타임 클래스 검사는 설치기의 적응 결과(`runtime-adapt.js`)로 — ARK 는 "적응 설치 가능"(게임 본체 TomorrowRogueNight 등 적응 5개).
 
 ### 2.6 새 프로젝트
 - 위치(상위 폴더)를 고르면 그 안에 **프로젝트 이름 폴더**를 만듦 (윈도우에서 못 쓰는 글자는 뺌, 끌 수 있음, 만들 경로 미리 보기, 비어 있지 않은 폴더면 물어봄). 창에서 게임 이름 · 패키지 이름(§18.3), 이어서 게임 저장소 경로.
@@ -504,7 +513,7 @@ CSS 를 쓰던 곳(화면 필터의 코드 층 · 글자 연출)의 굽는 부�
 - **완전히 새 영웅** (`baseClass` 빈 값 — 새 영웅의 기본): 안에서는 WARRIOR 로 돌지만 `HeroRuntime.stripClass` 가 직업이 준 것을 모두 걷어 냄(장비 · 가방 · 퀵슬롯 · 감정 · 직업 특성). 특성 창은 항상 영웅 편집기 것, 가면은 전직이 없으면 "전직이 없다", 왕관은 빈 목록.
 - **영웅 선택 화면**: 연결 줄 `HeroSelectScene` → `HeroSelect.addButtons` — 게임 직업 대신 프로젝트 영웅(enabled 전부, `startHero` 가 있으면 그것만). 누르면 바탕 직업으로 `setSelectedHero` 후 글자를 영웅 것으로. `select`: illust(그림 한 장 또는 시트 애니메이션) · `fit` right(오른쪽 영역, 작은 도트는 정수 배) / full(화면 높이 가득) · `icon`(버튼 아이콘) · `title`/`desc`/`info`(비우면 영웅 이름 · 설명, 원작 영웅은 게임 글). 새 영웅은 정보 버튼이 영웅 설명 창.
 - **해금 조건** `unlock`(`HeroSelect.locked/lockText`): always · game(원작 규칙) · badge · global(전역 스위치) · cond. 정하지 않으면 원작 영웅 = game, 그 밖 = always.
-- **영웅 시트**: 연결 줄 `HeroSprite.updateArmor` → `HeroRuntime.updateArmor`(갑옷을 바꿔도 영웅 편집기 시트 · 프레임 크기 유지), `sprite.anims.dead`(die 뒤 이어서 반복), 추가 애니메이션은 이벤트 명령 `anim { target, anim }`.
+- **영웅 시트**: (11차) 영웅 그림이 저장소에서 옮긴 값 그대로면(`src.fields` 의 `sprite.*` 가 모두 저장소 값과 같음 — `HeroRuntime.nativeSprite`) 게임 `HeroSprite` 코드가 그림 (스킨 · spearForm · Sattack · 초상화). 하나라도 고치면 PDMaker 가 그림: `sprite.rowH`(갑옷 한 줄의 높이 — 칸 높이와 다르면 그 줄 안에서 칸을 자름), 저장소 배율(`scale` 1 = 원래 크기, 0 = 예전 자동 축소). 선택 버튼은 시트를 바꾸지 않은 영웅이면 게임 `HeroBtn` 아이콘 그대로, 바꾼 영웅은 그 시트의 `select.iconTier` 줄. 연결 줄 `HeroSprite.updateArmor` → `HeroRuntime.updateArmor`(갑옷을 바꿔도 영웅 편집기 시트 · 프레임 크기 유지), `sprite.anims.dead`(die 뒤 이어서 반복), 추가 애니메이션은 이벤트 명령 `anim { target, anim }`.
 - **초상화 · 저장 슬롯**: `HeroSprite.avatar` → `HeroRuntime.avatar`(상태 창 · 영웅 창). 저장할 때 `GamesInProgress.set` → `setSlot`, 읽을 때 `Dungeon.preview` → `HeroRuntime.preview` → 시작 화면 슬롯 · 이어하기 창이 영웅 그림 · 이름(전직 이름 → 영웅 이름).
 
 ---
@@ -1000,11 +1009,57 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 
 ---
 
+### 17.3 파생작 적응 · 다른 저장소 기능 (12차)
+
+- **게임 패키지** (`runtime-adapt.gamePackage` · `gameJavaDir`):
+  - `Dungeon` · `levels/Level` · `actors/hero/Hero` 가 함께 있는 패키지를 게임 패키지로 봄 (SPD `com.shatteredpixel.shatteredpixeldungeon` · RKPD2 · Rat King Adventure `com.zrp200.rkpd2`).
+  - 비교 · 조건 블록은 SPD 이름 기준으로 하고, 사본 · 연결 줄 · 생성 코드는 마지막에 그 게임 패키지 이름으로 바꿈 (`toGamePkg`).
+  - 편집기의 저장소 읽기(`gamescan` · `gamehero` · 아이템 · 배지 · 타이틀 미리보기)는 `PDM.javaRoot(repo)` → `repo:javaRel` 로 그 폴더를 씀.
+- **덮어쓰는 함수 모양** (`widenOverrides`):
+  - 런타임의 `@Override` 함수를 그 형이 실제로 물려받는 게임 클래스의 선언(상속을 따라 올라감)에 맞춤.
+    - 반환형 · 인자 `int` → `long`: Experienced 의 `damageRoll()` · `attackProc(Char, long)` · `damage(long, Object)` · `Item.value()` …
+    - `protected` → `public`: RKPD2 `RenderedTextBlock.layout()`.
+  - 선언을 못 찾으면, 같은 이름 · 모양의 게임 선언이 모두 같은 쪽일 때만 맞춤. SPD · ARK · BA 에서는 바뀌는 것 없음.
+  - 런타임 소스에서 체력 · 피해를 int 로 읽는 곳은 `(int)` 를 붙여 두 쪽 모두 컴파일.
+- **판마다 다른 API**: `//#if` 조건 블록 —
+  - `PlatformSupport.INSET_ALL`(안전 영역 — Shorter · Re-ARranged · Experienced 에 없음)
+  - `WndChooseAbility(왕관, 갑옷, 영웅)`
+  - `WndInfoArmorAbility(직업, 능력)`
+- **영웅 선택 화면**:
+  - 프로젝트 영웅이 게임 직업 그대로면(순서 · 이름 · 그림 · 설명 · 해금 · 선택 화면 글자를 고치지 않음, 저장소가 감춘 직업은 그대로 감춤) PDMaker 는 끼어들지 않고 게임의 선택 화면을 씀 (`HeroSelect.nativeLineup`).
+  - 모드마다 버튼 배치가 다르기 때문 — ARK 는 6명씩 넘김.
+- **다른 저장소 기능** (`editor/repo-features.js` · 화면 `features.js`):
+  - **찾기**: 가져올 저장소를 지금 게임 저장소와 클래스 · 멤버(함수 · 필드 · enum 상수 · 안쪽 형 · 초기화 블록) 단위로 비교 → 새 패키지 · 새 클래스 · 바뀐/새 멤버.
+  - **필요한 것**:
+    - source 에만 있는 클래스 · 멤버를 따라감 — 이름 · import · 같은 패키지.
+    - `.이름` 으로 부른 것은 target 에 그 이름이 아예 없을 때만.
+    - 안쪽 형의 멤버는 그 형 이름을 쓸 때만.
+    - 생성자는 `new X(…)` · `super(…)` · enum 상수 `NAME(…)` 의 인자 수가 맞을 때만.
+    - 접근 범위만 넓힌 선언.
+    - 새 필드 · 상수를 쓰는 초기화 블록.
+    - 새 안쪽 형을 다루는(`instanceof` · 형 변환) 바뀐 함수.
+    - Assets 상수 · 리소스 · 번역 키 — 모드의 다른 글자 폴더(BA `new_messages`)도 게임의 `messages` 로.
+    - 새 안쪽 형이 그 파일이 이미 보는 클래스 이름과 겹치면 "이름 겹침" 으로 알림.
+  - **꾸러미**: 프로젝트 `features/<id>/` (원문 · 바꾸기 전 해시 · source 의 바로 앞 멤버).
+  - **설치**:
+    - 연결 줄보다 먼저 넣음.
+    - 새 멤버는 source 에서 바로 앞에 있던 멤버 뒤에 넣음 (정적 필드 앞쪽 참조).
+    - import 는 그 게임에 있는 것만.
+    - 게임 쪽 그 멤버가 꾸러미를 만들 때와 다르면 덮어쓰지 않고 알림.
+  - **제거 · 끄기**: `.pdmaker-feature-new` · `.pdmaker-feature-backup` 으로 바이트까지 원래대로.
+  - **확인한 것** (javac — 임시 SPD 사본):
+    - BA 총기(새 클래스 176 · 멤버 431 · 번역 3665줄) 컴파일 오류 0.
+    - ARK 계단(`Hero.handle` + `Descend`/`Ascend` + `act()` 등 12멤버) 컴파일 오류 0.
+    - 게임 안에서 적이 보일 때 계단을 누르면 SPD 는 `Move`, 가져온 뒤와 ARK 원본은 `Descend`.
+  - **한계**:
+    - 아이템 그림 시트처럼 두 게임에 다 있는 파일은 가져오지 않으므로, 그림 번호가 다른 시트를 가리킬 수 있음.
+    - 바뀐 멤버는 그 저장소의 것으로 통째로 바뀜 (예: ARK 계단은 SPD 의 `Hero.act()` 를 ARK 판으로).
+
 ## 18. 빌드 · 내보내기
 
 ### 18.1 테스트 플레이 (`main.js game:run`)
 - 순서: 게임 저장소 확인(`repairRepo`) → Java 확인 · 내려받기 → 런타임이 없거나 오래됐으면 설치(`runtimeState` — 필요한 연결점만 셈) → 사용자 코드 생성 → 게임 이름 적용 → gradle.
-- `project.settings.playTask`: `debug`(기본 — 게임 원래 `desktop:debug`, 버전 -INDEV, init 스크립트가 `pdmaker.project` 를 넘김) | `playtest`(init 스크립트의 `desktop:pdmakerPlaytest`, -PLAYTEST, 세이브 폴더 분리). 컴파일만 = `core:compileJava`.
+- `project.settings.playTask`: `playtest`(11차부터 기본 — init 스크립트의 `desktop:pdmakerPlaytest`: 내보낸(release) 게임과 같은 실행 · release 서비스 클래스 경로 · 버전 -PLAYTEST · 세이브 폴더 = 게임 이름) | `debug`(게임의 개발자 작업 `desktop:debug`, 버전 -INDEV). INDEV 면 게임이 `DeviceCompat.isDebug()` 로 개발자 모드가 되어 원래 게임과 다르게 동작함 — 예: ARK · 원작 SPD 는 시작 아이템(물약 · 주문서 40개 · 아뮬렛) · 모든 직업 해금 · 안내서 읽음 · 층 이동 로딩 화면 생략(ARK "체르노보그로 가는 중..." 같은 입장 문구, 원작 구역 소개 글이 안 보임). 그래서 기본은 PLAYTEST. 둘 다 init 스크립트가 `pdmaker.project` 를 넘김. 컴파일만 = `core:compileJava`. 테스트 플레이 알림(광원 없음 등)은 게임 기록 창이 아니라 테스트 플레이 출력에 (원래 게임의 기록 줄을 밀어내지 않게).
 - 출력 창에 gradle · 게임 로그, 생성 코드의 컴파일 오류에는 에디터 위치를 덧붙임. 실패하면 작업 표시줄 알림(§2.1).
 
 ### 18.2 게임 파일 내보내기 (`main.js game:export`)
@@ -1034,9 +1089,16 @@ GameMaker `.gmplugin` 매니페스트 방식 (`editors/plugins.js` · `plugin-ap
 - **편집기 셸 · 이벤트 UI 테스트** (`tools/tests/ui-editor.js`): 패널 접기 · 기억 · 좁은 창 · 입력 중 단축키 · 상태 줄 · 저장 상태 · 이벤트 명령 속성 창 편집과 실행 취소 · 번호 · ⚠ · 명령 찾기 · 미리보기 · 탭 전환 뒤 창 이벤트 수. **화면 캡처** (`tools/tests/ui-shots.js <폴더> [접두어]`): 시작 · 맵 · 영역 선택 · 이벤트 · 대사창을 넓은 창 · 좁은 창으로 (개선 전후 비교). **게임 안 연출 확인**: 헤드리스 플레이 `eval:event:[…]` + `eval:cutinfo`(이벤트 실행 중 · 페이드 · 일러스트 번호마다 불투명도 · 크기 · 자리 · 떠 있는 창 · 영웅 자리).
 - **맵 편집기 UI 테스트** (`tools/tests/ui-map.js` — 웹 모드 + Playwright · Chromium, `NODE_PATH=$(npm root -g)`): 실제 마우스 · 키보드로 영역 고르기 · 복사 · 붙여넣기 · 잘라내기 · 실행 취소, 여러 오브젝트 이동 · 일괄 수정 · 삭제 · 방향키, 검사 결과에서 칸으로 이동, 다시 그릴 때 창 이벤트가 쌓이지 않는지, 80×80 맵 그리기 시간.
 - **저장소 호환 테스트** (`tools/tests/repo-compat.js`, 9차): 합성 저장소(손상 파일 · 링크 · 캐시 · worker) + `game/` 의 실제 저장소 세 개 — 원본 ↔ 변환 결과 비교 · 중복 없음 · 원본 그대로 · 기준 저장소 회귀. 없는 저장소는 "실행하지 못함"(실패). 화면은 `ui-repoanalysis.js`
+- **11차 시험**: `repo-compat.js` 세 저장소 영웅 시트를 실제 픽셀로 칸 · 줄 검사(ARK 2352/2352 · 원작 882/882 · BA 231/231) · 프로젝트에 옮긴 값 · ARK 적응 설치. `repo-fidelity.js` 런타임 설치기 시험은 **임시 사본에서만** 설치 · 제거 후 바이트 비교 (예전 시험은 원본 `game/ARK_PD-main` 에 설치했음) · 맵 기본 표시 · 탐색 자료. `ui-repofidelity.js` ⑦ 탐색 화면. 게임: `tools/playtest/repo-project.js <저장소> <폴더>` 로 저장소 기준 프로젝트를 만들고 `eval:herosprite` · `selicons` · `imgstat` · `changeclick,<n>` 로 원본 게임과 비교 (Lombok 쓰는 저장소는 `$JARS/lombok.jar`).
 - **저장소 정합성 테스트** (`tools/tests/repo-fidelity.js`, 10차): 정답을 분석기와 따로 소스에서 계산 — 맵 클래스 · 고정 맵 타일 재현 · 영웅 이름 · 몬스터 이름/그림/상속 · BOSS 속성 → 보스 · 수동 분류 유지 · 업적 · 타이틀 · 재분석 충돌 · 분석 실패 · 저장소 전환 · 설치 거부. 화면은 `ui-repofidelity.js` (타이틀 버튼 자리 = 원본 setRect 계산, 오차 0 px)
 - **회귀 테스트** (`tools/tests/run.js` — Node 만 있으면 됨): 편집기 스크립트를 Node `vm` 에 불러(`editor-env.js`, 파일 기능은 임시 폴더) 확인 — 편집기 ↔ 런타임 ↔ 게임 소스 표 일치(밑그림 대응표 · 보존 타일 번호 29종 · 구멍 · 기본 레이어 · 함정), 맵 변환, 저장/불러오기 · 실행 취소, 손상 파일 · 쓰기 실패 · 백업, 검사. `node tools/tests/run.js [이름 일부]`.
 - **화면 환경별 연출 검사** (`tools/playtest/platform-matrix.sh` · `scenarios.js`, 4차): 데스크톱 판 게임을 PC · 휴대폰 가로/세로 비율 창 · 안전 영역 흉내(`eval:insets`) · 실행 중 창 돌림(`eval:winsize`)으로 띄워 같은 연출을 돌리고, `eval:layout` 이 대사창 · 글 · 이름표 · 선택지 · 일러스트의 화면/안전 영역 밖 여부를 판정. 실제 휴대폰 검증은 아님 — `docs/UI-UNIFICATION-AND-PLATFORM-TESTS.md`.
+- **12차 시험 · 도구**:
+  - `tools/tests/repo-features.js` — 멤버 나누기 · 바꾸기/넣기(원래 순서) · enum 상수와 생성자 · 빼면 바이트까지 원래대로, BA 총기 · ARK 계단의 필요한 것, 설치기 서명, RKPD2 패키지 · Experienced long 체력 적응.
+  - `tools/tests/ui-features.js` — 기능 가져오기 화면.
+  - `tools/playtest/parity.sh <저장소> <작업 폴더>` — 같은 저장소를 PDMaker 판 · 원본 판(`build.sh` 의 `PRISTINE=1`: 복사본에서 연결 줄을 걷어 냄)으로 컴파일해 같은 단계로 실행하고, 선택 아이콘 · 시작 층 · 영웅 그림 · 화면 글자 · 그림 목록을 비교. 검사 줄이 없으면 "실행 실패"로 표시.
+  - `tools/playtest/feature-check.sh <가져올> <게임> <작업 폴더> <기능 id>…` — 기능을 임시 사본에 넣고 javac 로 컴파일한 뒤, 빼고 나서 원본과 바이트 비교.
+  - eval `stairswithenemy[,go]` — 적이 보일 때 계단을 누른 결과 행동.
 - **웹 모드 검증**: `editor/renderer/index.html?project=<경로>` 를 웹 서버로 열어 편집기 동작 · 미리보기를 브라우저(Playwright)로 확인.
 
 ---

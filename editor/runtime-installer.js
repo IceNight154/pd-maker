@@ -1,7 +1,9 @@
 // ================================================================
 //  게임 런타임 설치기 — pdmaker 패키지를 게임 저장소에 넣고, 원본 코드에 연결 줄을 추가합니다 (목록: 아래 PATCHES · DESIGN.md §17.2).
-//  · 지원하는 게임: Shattered Pixel Dungeon 계열 (패키지 com.shatteredpixel.shatteredpixeldungeon) — 확인한 판 SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2.
-//    compat() 가 설치 전에 저장소를 살펴서 지원하지 않는 게임(원작 Pixel Dungeon · 패키지를 바꾼 파생작 · 체력이 long 인 파생작 …)은 이유와 함께 알려 줌.
+//  · 지원하는 게임: Shattered Pixel Dungeon 구조의 게임 — 확인한 판 SPD 2.5.4 · 3.0.2 · 3.3.8 · 4.0.0 · 4.0.2 ·
+//    12차: 패키지 이름을 바꾼 파생작(RKPD2 · Rat King Adventure — 패키지를 그 이름으로 바꿔 설치) · 체력이 long 인 파생작(Experienced — 덮어쓰는 함수 모양을 맞춤).
+//    compat() 가 설치 전에 저장소를 살펴서 지원하지 않는 게임(원작 Pixel Dungeon · SPD 2.5 이전 …)은 이유와 함께 알려 줌.
+//  · 12차: 프로젝트 features/ 의 "다른 저장소에서 가져온 기능"(repo-features.js)을 연결 줄보다 먼저 넣고, 제거하면 원래 파일로 되돌림.
 //  · 추가한 줄에는 모두 "// >>> pdmaker" 표시가 붙어 있어서, 제거(uninstall)하면 깨끗이 되돌아갑니다.
 //  · 원본 줄은 고치거나 지우지 않습니다 (줄을 "추가"만 함).
 //  사용: node runtime-installer.js <게임저장소> [--uninstall]   또는 main.js 에서 require
@@ -107,8 +109,8 @@ const PATCHES = [
   // ---- 캐릭터 AI · 체력 (MakerCharAI — 제자리 고정 · 코드로 직접 · 체력 무한 · 지속 회복) ----
   { file: 'actors/mobs/Mob.java', name: '캐릭터 AI: 제자리 고정 · 코드로 직접 · 지속 회복', anchor: /protected boolean act\(\)\s*\{\s*\n\s*super\.act\(\);[^\n]*\n/, where: 'after',
     line: `{ Boolean pdmAi = ${PKG}.MakerCharAI.act(this); if (pdmAi != null) return pdmAi; }` },
-  { file: 'actors/Char.java', name: '캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로)', anchor: /\n([ \t]*)if \(HP < 0\) HP = 0;/, where: 'before',
-    line: `${PKG}.MakerCharAI.afterDamage(this, dmg + shielded);` },
+  { file: 'actors/Char.java', name: '캐릭터 체력 무한 (피해 숫자는 뜨고 체력은 그대로)', anchor: [/\n([ \t]*)if \(HP < 0\) HP = 0;/, /\n([ \t]*)if \(HP < 0 && [^\n]*\) HP = 0;/], where: 'before',   // RKA: if (HP < 0 && buff(NoDeath.class) == null) HP = 0;
+    line: `${PKG}.MakerCharAI.afterDamage(this, (int) (dmg + shielded));` },   // (int): 피해가 long 인 파생작도
   { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (세로)', needs: /\bwaterOfs\b/, anchor: /\n([ \t]*)waterOfs -= 5 \* Game\.elapsed;/, where: 'before',
     line: `waterOfs = ${PKG}.LevelHooks.waterFlowY(waterOfs);` },
   { file: 'scenes/GameScene.java', name: '테마 물 = 흐르는 사용자 타일: 그 속도로 (가로)', needs: /\bwaterOfs\b/, anchor: /\n([ \t]*)water\.offsetTo\(\s*0,\s*waterOfs\s*\);[^\n]*\n/, where: 'after',
@@ -119,12 +121,13 @@ const PATCHES = [
     line: `${PKG}.MakerCharAI.restore(this, bundle);` },
   { file: 'actors/mobs/Mob.java', name: '샌드백: 받은 피해를 살펴보기에', anchor: /public String info\(\)\s*\{\s*\n\s*String desc = description\(\);[^\n]*\n/, where: 'after',
     line: `desc += ${PKG}.MakerCharAI.damageInfo(this);` },
-  { file: 'sprites/CharSprite.java', name: '무기 공격 모션 (무기 그림이 휘둘러짐 — 아이템 편집기 › 공격 모션)', anchor: /public (?:synchronized )?void attack\(\s*int cell,\s*Callback callback\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/, where: 'after',
+  { file: 'sprites/CharSprite.java', name: '무기 공격 모션 (무기 그림이 휘둘러짐 — 아이템 편집기 › 공격 모션)', anchor: [/public (?:synchronized )?void attack\(\s*int cell,\s*Callback callback\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/,
+      /public (?:synchronized )?void attack\(\s*int cell\s*\)\s*\{[^}]*?play\(\s*attack\s*\);[^\n]*\n/], where: 'after',   // RKPD2: attack(cell, callback) 가 attack(cell) 을 부름
     line: `${PKG}.MakerSwing.onAttack(this, cell);` },
   { file: 'sprites/ItemSprite.java', name: '세밀한 아이템 그림 (배율 적용으로 키운 PNG — 한 칸 크기로 그림)', anchor: /public void frame\(\s*int image\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.MakerAssets.hiresItem(this, image)) return;` },
   { file: 'items/Gold.java', name: '금화 양 배율 (드랍 테이블 › 금화)',
-    anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*Random\.(?:IntRange|Int)\b[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount(quantity);` },
+    anchor: /public Item random\(\)\s*\{[^\n]*\n[^\n]*quantity\s*=\s*[^\n;]*?\b(?:Random|Dungeon)\.(?:IntRange|Int)\b[^\n]*\n/, where: 'after', line: `quantity = ${PKG}.MakerDrops.goldAmount((int) quantity);` },   // RKPD2: Random.round(1.5f*Random.IntRange(…)) · Experienced: Dungeon.IntRange
   { file: 'sprites/ItemSprite.java', name: '아이템 그림 배율 (바닥에 놓였을 때)',
     anchor: /public void link\(\s*Heap heap\s*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.MakerItem.heapScale(this, heap);` },
   // ---- 영웅 코드 (영웅 편집기의 "코드" 칸 · 세부 능력치) ----
@@ -132,19 +135,19 @@ const PATCHES = [
     line: `if (${PKG}.HeroRuntime.wrap(1)) return ${PKG}.HeroRuntime.attackSkill(this, target, attackSkill(target));` },
   { file: 'actors/hero/Hero.java', name: '영웅 코드: 회피', anchor: /public int defenseSkill\(\s*Char enemy\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.HeroRuntime.wrap(2)) return ${PKG}.HeroRuntime.defenseSkill(this, enemy, defenseSkill(enemy));` },
-  { file: 'actors/hero/Hero.java', name: '영웅 코드: 피해', anchor: /public int damageRoll\(\)\s*\{[^\n]*\n/, where: 'after',
-    line: `if (${PKG}.HeroRuntime.wrap(3)) return ${PKG}.HeroRuntime.damageRoll(this, damageRoll());` },
-  { file: 'actors/hero/Hero.java', name: '영웅 코드: 방어', anchor: /public int drRoll\(\)\s*\{[^\n]*\n/, where: 'after',
-    line: `if (${PKG}.HeroRuntime.wrap(4)) return ${PKG}.HeroRuntime.drRoll(this, drRoll());` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 피해', anchor: /public (?:int|long) damageRoll\(\)\s*\{[^\n]*\n/, where: 'after',   // long: Experienced Pixel Dungeon
+    line: `if (${PKG}.HeroRuntime.wrap(3)) return ${PKG}.HeroRuntime.damageRoll(this, (int) damageRoll());` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 방어', anchor: /public (?:int|long) drRoll\(\)\s*\{[^\n]*\n/, where: 'after',
+    line: `if (${PKG}.HeroRuntime.wrap(4)) return ${PKG}.HeroRuntime.drRoll(this, (int) drRoll());` },
   { file: 'actors/hero/Hero.java', name: '영웅 코드: 속도', anchor: /public float speed\(\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.HeroRuntime.wrap(5)) return ${PKG}.HeroRuntime.speed(this, speed());` },
-  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 적중', anchor: /public int attackProc\(\s*final Char enemy,\s*int damage\s*\)\s*\{[^\n]*\n/, where: 'after',
-    line: `damage = ${PKG}.HeroRuntime.attackProc(this, enemy, damage);` },
-  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 받음', anchor: /public int defenseProc\(\s*Char enemy,\s*int damage\s*\)\s*\{[^\n]*\n/, where: 'after',
-    line: `damage = ${PKG}.HeroRuntime.defenseProc(this, enemy, damage);` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 적중', anchor: /public (?:int|long) attackProc\(\s*final Char enemy,\s*(?:int|long) damage\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `damage = ${PKG}.HeroRuntime.attackProc(this, enemy, (int) damage);` },
+  { file: 'actors/hero/Hero.java', name: '영웅 코드: 공격 받음', anchor: /public (?:int|long) defenseProc\(\s*Char enemy,\s*(?:int|long) damage\s*\)\s*\{[^\n]*\n/, where: 'after',
+    line: `damage = ${PKG}.HeroRuntime.defenseProc(this, enemy, (int) damage);` },
   { file: 'actors/mobs/Mob.java', name: '영웅 코드: 몬스터 처치', anchor: /public void die\(\s*Object cause\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `${PKG}.HeroRuntime.onMobDie(this, cause);` },
-  { file: 'windows/WndHero.java', name: '영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문',
+  { file: 'windows/WndHero.java', name: '영웅 정보 창의 특성 탭 → 영웅 편집기의 특성·주문', needs: /\bTalentsPane\b/,   // 특성이 없는 게임(Experienced Pixel Dungeon)은 해당 없음
     anchor: [/\n([ \t]*)pane = new TalentsPane\(\s*TalentButton\.Mode\.UPGRADE\s*\);[^\n]*\n/, /\n([ \t]*)pane = new TalentsPane\(\s*true\s*\);[^\n]*\n/], where: 'after',   // 예전 판: TalentsPane(true)
     line: `{ TalentsPane pdmPane = ${PKG}.MakerTalentsPane.forHero(); if (pdmPane != null) { pane.destroy(); pane = pdmPane; } }` },
   { file: 'actors/hero/Hero.java', name: '특성 포인트 (영웅 편집기 특성을 쓰면 그 포인트로)',
@@ -204,7 +207,7 @@ const PATCHES = [
   { file: 'GamesInProgress.java', name: '저장 슬롯: 지금 영웅 기억 (저장할 때)',
     anchor: /public static void set\(\s*int slot\b[^)]*\)\s*\{[^\n]*\n/, where: 'after', line: `${PKG}.HeroRuntime.setSlot(slot);` },   // 예전 판: set(slot, depth, challenges, hero)
   { file: 'scenes/StartScene.java', name: '저장 슬롯 초상화·이름 (시작 화면)',
-    anchor: /\n([ \t]*)long diff = Game\.realTime - info\.lastPlayed;/, where: 'before',
+    anchor: [/\n([ \t]*)long diff = Game\.realTime - info\.lastPlayed;/, /\n([ \t]*)depth\.text\(\s*Integer\.toString\(\s*info\.depth\s*\)\s*\);/], where: 'before',   // 예전 판(마지막 플레이 시각 없음): 층 숫자 앞
     line: `{ com.watabou.noosa.Image pdmA = ${PKG}.HeroRuntime.slotAvatar(info); if (pdmA != null && hero != null) hero.copy(pdmA); String pdmN = ${PKG}.HeroRuntime.slotName(info); if (pdmN != null) name.text(Messages.titleCase(pdmN)); }` },
   { file: 'windows/WndGameInProgress.java', name: '저장 슬롯 초상화·이름 (이어하기 창)',
     anchor: /\n([ \t]*)title\.label\(/, where: 'before',
@@ -226,12 +229,19 @@ const PATCHES = [
   { file: 'items/Item.java', name: '아이템 소리: 주울 때 (정한 소리가 있으면 원래 소리 대신)',
     anchor: /\n([ \t]*)Sample\.INSTANCE\.play\(\s*Assets\.Sounds\.ITEM\s*\);/, where: 'before',
     line: `if (!${PKG}.MakerAudio.onItemPickup(this))` },
-  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 적에게 닿을 때',
+  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 적에게 닿을 때', group: 'throwSnd', variant: 'local',
     anchor: /\n([ \t]*)if \(i != null\) i\.onThrow\(\s*cell\s*\);(?=[\s\S]*if \(i != null\) i\.onThrow\(\s*cell\s*\);)/, where: 'before',
     line: `if (i != null) ${PKG}.MakerAudio.onItemLandHit(i, cell);` },
-  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 바닥에 떨어질 때',
+  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 바닥에 떨어질 때', group: 'throwSnd', variant: 'local',
     anchor: /\n([ \t]*)if \(i != null\) i\.onThrow\(\s*cell\s*\);(?![\s\S]*if \(i != null\) i\.onThrow\(\s*cell\s*\);)/, where: 'before',
     line: `if (i != null) ${PKG}.MakerAudio.onItemLandGround(i, cell);` },
+  // 12차: 예전 SPD 구조 (RKPD2 · Rat King Adventure): Item.this.detach(…).onThrow(cell) 한 줄 — 던진 아이템(같은 종류)으로 소리
+  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 적에게 닿을 때', group: 'throwSnd', variant: 'chain',
+    anchor: /\n([ \t]*)Item\.this\.detach\(\s*user\.belongings\.backpack\s*\)\.onThrow\(\s*cell\s*\);(?=[\s\S]*Item\.this\.detach\(\s*user\.belongings\.backpack\s*\)\.onThrow\(\s*cell\s*\);)/, where: 'before',
+    line: `${PKG}.MakerAudio.onItemLandHit(Item.this, cell);` },
+  { file: 'items/Item.java', name: '아이템 소리: 던진 것이 바닥에 떨어질 때', group: 'throwSnd', variant: 'chain',
+    anchor: /\n([ \t]*)Item\.this\.detach\(\s*user\.belongings\.backpack\s*\)\.onThrow\(\s*cell\s*\);(?![\s\S]*Item\.this\.detach\(\s*user\.belongings\.backpack\s*\)\.onThrow\(\s*cell\s*\);)/, where: 'before',
+    line: `${PKG}.MakerAudio.onItemLandGround(Item.this, cell);` },
   { file: 'items/KindOfWeapon.java', name: '아이템 소리: 무기로 공격이 맞을 때 (정한 소리가 있으면 원래 타격음 대신)',
     anchor: /public void hitSound\(\s*float pitch\s*\)\s*\{[^\n]*\n/, where: 'after',
     line: `if (${PKG}.MakerAudio.onWeaponHit(this)) return;` },
@@ -270,19 +280,22 @@ const PATCHES = [
     line: `if (${PKG}.MakerCharAI.preventDeath(this)) return;` },
 ];
 
-function javaDir(repo) { return path.join(repo, ...JAVA_ROOT); }
+/** 게임 패키지 폴더 — 12차: 패키지 이름을 바꾼 파생작(RKPD2 · Rat King Adventure: com.zrp200.rkpd2)은 그 폴더 */
+function javaDir(repo) { return adapt.gameJavaDir(repo); }
+/** 저장소 최상위 기준 경로의 SPD 패키지 폴더 조각을 이 게임 패키지로 (services/… 의 연결 줄 파일) */
+const rootFile = (repo, file) => { const pk = adapt.gamePackage(repo); return path.join(repo, pk === adapt.GAME_PKG ? file : file.split('com/shatteredpixel/shatteredpixeldungeon/').join(pk.split('.').join('/') + '/')); };
 /** 연결 줄을 넣을 파일의 실제 경로 (root: true 면 저장소 최상위 기준) */
-function patchFile(repo, file) { return PATCHES.some(p => p.file === file && p.root) ? path.join(repo, file) : path.join(javaDir(repo), file); }
+function patchFile(repo, file) { return PATCHES.some(p => p.file === file && p.root) ? rootFile(repo, file) : path.join(javaDir(repo), file); }
 
 function findAnchor(src, p) {
   for (const a of [].concat(p.anchor)) { a.lastIndex = 0; const m = a.exec(src); if (m) return m; }
   return null;
 }
-function applyPatch(src, p) {
+function applyPatch(src, p, gpkg) {
   const m = findAnchor(src, p);
   if (!m) return { src, ok: false };
-  // 넣을 줄: argsFrom 이 있으면 찾은 자리에서 이름을 읽어 $1 에 (예: 함수 인자 이름이 판마다 다름)
-  let line = p.line;
+  // 넣을 줄: argsFrom 이 있으면 찾은 자리에서 이름을 읽어 $1 에 (예: 함수 인자 이름이 판마다 다름) · 12차: 게임 패키지 이름이 다르면 그 이름으로
+  let line = adapt.toGamePkg(p.line, gpkg);
   if (p.argsFrom) { const a = p.argsFrom.exec(m[0]); if (a) line = line.replace(/\$1/g, a[1]); }
   // 들여쓰기: indent 를 정했으면 그것, 캡처 그룹이 있으면 그것, 없으면 다음 줄 기준 두 탭
   let indent = p.indent !== undefined ? p.indent : m[1] !== undefined ? m[1] : '\t\t';
@@ -347,6 +360,17 @@ function uninstall(repo, log = console.log) {
   if (fs.existsSync(bgb)) { fs.copyFileSync(bgb, bg); fs.rmSync(bgb); log('build.gradle: 원래 게임 이름 · 패키지로 되돌림'); }
   const pkgDir = path.join(jd, 'pdmaker');
   if (fs.existsSync(pkgDir)) { fs.rmSync(pkgDir, { recursive: true }); log('pdmaker 패키지 제거'); }
+  // 12차: 가져온 기능 (넣은 파일 지우고 고친 파일은 원본으로)
+  require('./repo-features.js').removePacks(repo, log);
+}
+/** 프로젝트에서 켠 가져온 기능의 서명 (바뀌면 다시 설치) — 없으면 '' */
+function featuresSig(projectDir) {
+  if (!projectDir) return '';
+  const packs = require('./repo-features.js').listPacks(projectDir).filter(p => p.enabled !== false).sort((a, b) => a.id.localeCompare(b.id));
+  if (!packs.length) return '';
+  let h = 0x811c9dc5; const s = JSON.stringify(packs.map(p => { const o = Object.assign({}, p); delete o.dir; return o; }));
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return packs.length + ':' + h.toString(16);
 }
 
 /** 프로젝트의 영웅·아이템 → pdmaker/gen/*.java · 아이템은 gen/items/<분류>/<세부 종류>/ (바뀐 파일만 씀). 돌려줌: 파일 수 */
@@ -389,7 +413,7 @@ function compat(repo) {
     out.game = (/appName\s*=\s*['"]([^'"]*)['"]/.exec(g) || [])[1] || '';
     out.version = (/appVersionName\s*=\s*['"]([^'"]*)['"]/.exec(g) || [])[1] || '';
   } catch (_) { /* 없음 */ }
-  const jd = javaDir(repo);
+  const jd = javaDir(repo), gpkg = adapt.gamePackage(repo);
   if (!fs.existsSync(path.join(jd, 'Dungeon.java'))) {
     // 다른 패키지의 Dungeon.java 를 찾아 어떤 게임인지 알려 줌
     let found = null;
@@ -399,16 +423,22 @@ function compat(repo) {
     if (found) {
       const pk = (/^\s*package\s+([\w.]+)\s*;/m.exec(fs.readFileSync(found, 'utf8')) || [])[1] || '?';
       out.pkg = pk;
-      out.problems.push(`이 게임의 패키지는 ${pk} 입니다. PDMaker 는 Shattered Pixel Dungeon 계열(패키지 com.shatteredpixel.shatteredpixeldungeon — SPD 와 그 패키지를 그대로 쓰는 모드)만 지원합니다.` +
-        (/^com\.watabou\.pixeldungeon/.test(pk) ? ' (원작 Pixel Dungeon 은 구조가 달라 지원하지 않습니다)' : ' (패키지 이름을 바꾼 파생작은 지원하지 않습니다)'));
+      out.problems.push(`이 게임의 패키지는 ${pk} 입니다. PDMaker 런타임은 Shattered Pixel Dungeon 구조(gradle 의 …/src/main/java 아래 Dungeon · levels/Level · actors/hero/Hero)를 쓰는 게임에 설치됩니다.` +
+        (/^com\.watabou\.pixeldungeon/.test(pk) ? ' (원작 Pixel Dungeon 은 gradle 빌드가 없고 구조가 달라 런타임을 설치하지 않습니다 — 저장소 분석 · 탐색은 됩니다)' : ''));
     } else out.problems.push('게임 저장소가 아닙니다 (Dungeon.java 를 찾지 못함): ' + repo);
     return out;
   }
-  out.pkg = 'com.shatteredpixel.shatteredpixeldungeon';
+  out.pkg = gpkg;
+  // 12차: 패키지 이름을 바꾼 파생작 (RKPD2 · Rat King Adventure …) — 런타임 사본 · 연결 줄 · 생성 코드를 그 패키지 이름으로 바꿔 설치
+  if (gpkg !== adapt.GAME_PKG) {
+    if (/^com\.watabou\.pixeldungeon/.test(gpkg)) { out.problems.push(`원작 Pixel Dungeon 계열(${gpkg})은 구조가 달라 런타임을 설치하지 않습니다 — 저장소 분석 · 탐색은 됩니다.`); return out; }
+    out.warnings.push(`게임 패키지가 ${gpkg} 입니다 (SPD 이름을 바꾼 파생작) — PDMaker 런타임을 이 패키지 이름으로 바꿔 설치합니다.`);
+  }
   const read = rel => { try { return fs.readFileSync(path.join(jd, rel), 'utf8'); } catch (_) { return ''; } };
   // 런타임이 기대하는 게임 구조 (없으면 컴파일이 안 됨)
   const ch = read('actors/Char.java');
-  if (/public\s+long\s+HP\b/.test(ch)) out.problems.push('이 게임은 체력(HP)이 long 형입니다 (Experienced Pixel Dungeon 계열). PDMaker 런타임은 int 체력(원작 SPD)에 맞춰져 있어 컴파일되지 않습니다.');
+  // 12차: 체력 · 피해가 long 인 파생작 (Experienced Pixel Dungeon) — 런타임 사본의 덮어쓰는 함수 모양을 게임 선언에 맞춰 설치 (runtime-adapt widenOverrides)
+  if (/public\s+long\s+HP\b/.test(ch)) out.warnings.push('이 게임은 체력(HP) · 피해가 long 형입니다 (Experienced Pixel Dungeon 계열) — PDMaker 런타임의 덮어쓰는 함수를 long 으로 맞춰 설치합니다. 이벤트 · 스킬의 체력 계산은 int 범위(약 21억)까지입니다.');
   if (!/BRANCH_EXIT/.test(read('levels/features/LevelTransition.java'))) out.problems.push('층 이동 · 갈림길(LevelTransition.BRANCH_EXIT)이 없는 예전 판입니다' + (out.version ? ' (' + out.version + ')' : '') + ' — SPD 2.5 이상이 필요합니다.');
   if (!fs.existsSync(path.join(repo, 'SPD-classes'))) out.warnings.push('SPD-classes 모듈이 없습니다 — 빌드 구조가 원작과 다를 수 있습니다.');
   // 연결 줄: 파일은 있는데 넣을 위치를 못 찾는 것 (그 기능만 동작하지 않음)
@@ -454,6 +484,14 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   if (ad.env.mainGame && ad.env.mainGame !== 'ShatteredPixelDungeon') log(`게임 본체 클래스: ${ad.env.mainGame} (런타임 사본의 ShatteredPixelDungeon 이름을 이것으로)`);
   ad.env.relocations.forEach(r => log(`옮겨진 클래스: ${r.from.slice(adapt.GAME_PKG.length + 1)} → ${r.to} (${r.note})`));
   ad.features.filter(f => !f.on).forEach(f => log(`이 게임 구조에 맞춤: ${f.label || f.cond} — ${f.where.join(', ')}`));
+  // 12차: 다른 저장소에서 가져온 기능 (프로젝트 features/) — 원래 파일로 되돌린 뒤 지금 켠 것만 다시 넣음 (연결 줄보다 먼저: 연결 줄 백업이 기능까지 담게)
+  let featSig = null;
+  if (projectDir) {
+    const feats = require('./repo-features.js'), packs = feats.listPacks(projectDir).filter(p => p.enabled !== false);
+    feats.removePacks(repo, log);
+    if (packs.length) { const r = feats.applyPacks(repo, packs, log); r.problems.forEach(x => log('⚠ 가져온 기능: ' + x)); }
+    featSig = featuresSig(projectDir);
+  }
   // 1) 패키지 복사 (항상 최신으로 덮어씀 — 적응한 사본)
   const to = path.join(jd, 'pdmaker');
   fs.mkdirSync(to, { recursive: true });
@@ -464,11 +502,12 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
   let n = 0;
   for (const f of want) { const fp = path.join(to, f); if (!fs.existsSync(fp) || fs.readFileSync(fp, 'utf8') !== ad.files[f]) fs.writeFileSync(fp, ad.files[f], 'utf8'); n++; }
   log(`pdmaker 패키지 복사: ${n}개 파일 → ${to}`);
+  if (featSig !== null) fs.writeFileSync(path.join(to, 'features.sig'), featSig, 'utf8');
   // 2) 연결 줄 (이미 있으면 건너뜀)
   const results = [];
   const byFile = {};
   for (const p of PATCHES) (byFile[p.file] = byFile[p.file] || []).push(p);
-  const pp = planPatches(repo);
+  const pp = planPatches(repo), gpkg = ad.env.gamePkg;
   for (const [f, all] of Object.entries(byFile)) {
     const fp = patchFile(repo, f);
     for (const p of all) {
@@ -485,8 +524,8 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
     let src = before.split('\n').filter(l => !l.includes(MARK)).join('\n');
     let changed = src !== before;
     for (const p of list) {
-      const had = before.includes(p.line);
-      const r = applyPatch(src, p);
+      const had = before.includes(adapt.toGamePkg(p.line, gpkg));
+      const r = applyPatch(src, p, gpkg);
       if (r.ok) { src = r.src; changed = true; results.push({ file: f, name: p.name, status: had ? '갱신함' : '추가함' }); }
       else results.push({ file: f, name: p.name, status: '위치를 찾지 못함 — INTEGRATION.md 를 보고 직접 추가하세요' });
     }
@@ -502,7 +541,7 @@ function install(repo, runtimeSrc, log = console.log, projectDir = null) {
 
 /** 설치된 런타임이 이 에디터 · 이 저장소에 맞춘 것과 같은지 → { pkg, upToDate, reason, hooks, need }
  *  11차: 비교 기준은 "이 저장소에 맞춰 적응한 사본" (판마다 런타임 사본이 원본과 다를 수 있음) · 연결 줄은 이 저장소에서 넣을 수 있는 것만 셈 */
-function state(repo, runtimeSrc) {
+function state(repo, runtimeSrc, projectDir) {
   const pkgDir = path.join(javaDir(repo), 'pdmaker');
   const from = path.join(runtimeSrc || path.join(__dirname, '..', 'runtime', 'src'), ...JAVA_ROOT.slice(-3), 'pdmaker');
   if (!fs.existsSync(pkgDir)) return { pkg: false, upToDate: false, reason: 'pdmaker 패키지 없음' };
@@ -517,6 +556,8 @@ function state(repo, runtimeSrc) {
   for (const f of [...new Set(PATCHES.map(p => p.file))]) { const fp = patchFile(repo, f); if (fs.existsSync(fp)) hooks += fs.readFileSync(fp, 'utf8').split(MARK).length - 1; }
   const need = [...planPatches(repo).values()].filter(v => v.state === 'apply').length;
   if (hooks < need) return { pkg: true, upToDate: false, reason: `연결 줄 ${hooks}/${need}`, hooks, need };
+  // 12차: 가져온 기능이 프로젝트와 다름
+  if (projectDir !== undefined) { let have = ''; try { have = fs.readFileSync(path.join(pkgDir, 'features.sig'), 'utf8'); } catch (_) { /* 없음 */ } if (have !== featuresSig(projectDir)) return { pkg: true, upToDate: false, reason: '가져온 기능이 바뀜', hooks, need }; }
   return { pkg: true, upToDate: true, hooks, need };
 }
 
@@ -551,7 +592,7 @@ function applyGameId(repo, projectDir, log = console.log) {
   return { appName: name || cur.appName, appPackageName: want.appPackageName || cur.appPackageName };
 }
 
-module.exports = { install, uninstall, generate, patchFile, PATCHES, MARK, applyGameId, gameId, compat, missingClasses, plan, planPatches, state };
+module.exports = { install, uninstall, generate, featuresSig, javaDir, patchFile, PATCHES, MARK, applyGameId, gameId, compat, missingClasses, plan, planPatches, state };
 
 if (require.main === module) {
   const [repo, flag] = process.argv.slice(2);

@@ -86,10 +86,25 @@ public class PlayTest {
 							GamesInProgress.selectedClass = HeroClass.valueOf(p.length > 1 ? p[1] : "WARRIOR");
 							GamesInProgress.curSlot = GamesInProgress.firstEmpty();
 							Dungeon.hero = null; com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "daily", false); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.setStatic(Dungeon.class, "dailyReplay", false);
-							Dungeon.initSeed(); ActionIndicator.clearAction();
+							Dungeon.initSeed(); com.shatteredpixel.shatteredpixeldungeon.pdmaker.MakerCompat.invoke(ActionIndicator.class, "clearAction");   // 예전 판: clearAction() 없음
 							InterlevelScene.mode = InterlevelScene.Mode.DESCEND;
 							Game.switchScene(InterlevelScene.class);
 						}); sleep(6); break;
+						case "startbtn": run(() -> {   // 11차: 영웅 선택 화면의 게임 시작 버튼을 그대로 누름 (게임이 정한 시작 방식 — ARK: ENTER_RHODES)
+							try {
+								String[] pp = p.length > 1 ? p[1].split(",") : new String[]{"WARRIOR"};
+								GamesInProgress.selectedClass = HeroClass.valueOf(pp[0]);
+								GamesInProgress.curSlot = GamesInProgress.firstEmpty();
+								boolean keepIntro = pp.length > 1 && pp[1].equals("intro");   // startbtn:CLASS,intro = 처음 하는 판처럼 (게임의 소개 화면 그대로)
+								if (!keepIntro) try { com.shatteredpixel.shatteredpixeldungeon.SPDSettings.class.getMethod("intro", boolean.class).invoke(null, false); } catch (Exception ignored) { }
+								System.out.println("[TEST] intro=" + com.shatteredpixel.shatteredpixeldungeon.SPDSettings.intro());
+								Object sc = Game.scene(); java.lang.reflect.Field f = sc.getClass().getDeclaredField("startBtn"); f.setAccessible(true);
+								Object b = f.get(sc); java.lang.reflect.Method m = null;
+								for (Class<?> c = b.getClass(); c != null && m == null; c = c.getSuperclass()) try { m = c.getDeclaredMethod("onClick"); } catch (NoSuchMethodException ignored) { }
+								m.setAccessible(true); m.invoke(b);
+								System.out.println("[TEST] startbtn mode=" + InterlevelScene.mode);
+							} catch (Exception e) { System.out.println("[TEST] startbtn 실패: " + e); e.printStackTrace(); }
+						}); sleep(8); break;
 						case "continue": for (int k = 0; k < 20; k++) { final boolean[] c = {false}; run(() -> {
 							try {
 								java.lang.reflect.Field f = Group.class.getDeclaredField("members"); f.setAccessible(true);

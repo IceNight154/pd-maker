@@ -562,8 +562,12 @@ public class MakerDialogue {
 	/** 안전 영역 (ui 좌표: x, y, w, h) — 노치 · 상태 줄 · 내비게이션 바를 뺀 곳. 데스크톱은 화면 전체 (원작 GameScene 과 같은 getSafeInsets(INSET_ALL)) */
 	static float[] safeArea(float W, float H) {
 		com.watabou.utils.RectF in;
+//#if field:com.watabou.utils.PlatformSupport#INSET_ALL @ 기기 안전 영역 (노치 · 내비게이션 바 — 없는 예전 판은 화면 전체)
 		try { in = Game.platform.getSafeInsets(com.watabou.utils.PlatformSupport.INSET_ALL).scale(1f / PixelScene.uiCamera.zoom); }
 		catch (Throwable t) { in = new com.watabou.utils.RectF(); }
+//#else
+		//#| in = new com.watabou.utils.RectF();   // 예전 판: 안전 영역 API 가 없음 (화면 전체)
+//#endif
 		float[] te = MakerTestEnv.insets(); float z = PixelScene.uiCamera.zoom;   // 테스트 플레이 안전 영역 미리보기 (5차) — 기기 값과 큰 쪽
 		in.left = Math.max(in.left, te[0] / z); in.top = Math.max(in.top, te[1] / z); in.right = Math.max(in.right, te[2] / z); in.bottom = Math.max(in.bottom, te[3] / z);
 		return new float[]{in.left, in.top, Math.max(1, W - in.left - in.right), Math.max(1, H - in.top - in.bottom)};
